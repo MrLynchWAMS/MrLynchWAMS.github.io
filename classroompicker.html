@@ -11,9 +11,7 @@
 	<div class="g-signin2" data-onsuccess="onSignIn" data-theme="dark"></div>
 	<script>
 		function onSignIn(googleUser) {
-        var profile = googleUser.getBasicProfile();
-        var studentEmail = profile.getEmail()
-        console.log(studentEmail)
+       
         if (studentEmail.split("@")[1] != "mtps.us"){
           alert("Your not from the MTPS!")
           return
@@ -48,14 +46,18 @@
           if(first.includes(studentEmail)){
             alert("Eureka!")
           }*/
+          var studentEmail = profile.getEmail()
+          const first = ['klynch@mtps.us', 'vladb@mtps.us'];
+          const second = ['lynch.ken@gmail.com'];
 
-          var first = ['klynch@mtps.us', 'vladb@mtps.us']
-          second = ['lynch.ken@gmail.com'];
 
-          if (studentEmail.isin(first, second)){
-            alert("you win!!");
+if(first.includes("klynch")){
+  alert("Finally!")
+}
+         // if (studentEmail.isin(first, second)){
+         //   alert("you win!!");
           }
-          }
+          
         
       
 	</script>
