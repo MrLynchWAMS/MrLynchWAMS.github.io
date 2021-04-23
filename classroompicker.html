@@ -15,10 +15,10 @@
       function onSignIn(googleUser) {
         var profile = googleUser.getBasicProfile();
         var email = profile.getEmail();
-        var test = "klynch";
+        var test = "klynch@mtps.us";
         console.log("Email: " + profile.getEmail());
 
-       if(email.includes(test)){
+       if(email==test){
           alert("Pooh");
        }
       }
