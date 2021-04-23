@@ -19,24 +19,24 @@
           return
         }
         var classes = {
-          1: ["25bondarv@mtps.us", "klynch@mtps.us"],
-          2: ["bobby@mtps.us"],
-          5: ["sally@mtps.us"]
+          One: ["25bondarv@mtps.us", "klynch@mtps.us"],
+          Two: ["bobby@mtps.us"],
+          Five: ["sally@mtps.us"]
         }
         var cl = -1
         Object.keys(classes).forEach((k) => {
           console.log(k, cl, classes[k])
           if (classes[k].includes(studentEmail)){
-            k=cl
+            cl=l
           }
         })
         console.log(cl)
         switch (cl){
-          case 1:
+          case One:
             alert("First Period!");
             break;
           
-          case 2: 
+          case Two: 
             alert("Second Period");
             break;
           
