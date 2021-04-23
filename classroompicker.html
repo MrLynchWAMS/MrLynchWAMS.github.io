@@ -1,13 +1,16 @@
 <html lang="en">
-  <head>
-    <meta name="google-signin-scope" content="profile email">
-    <meta name="google-signin-client_id" content="922885153816-2gouv98kqjnb9g12g49a6ld87d4nqtng.apps.googleusercontent.com">
-    <script src="https://apis.google.com/js/platform.js" async defer></script>
-  </head>
-  <body>
-    <div class="g-signin2" data-onsuccess="onSignIn" data-theme="dark"></div>
-    <script>
-      function onSignIn(googleUser) {
+
+<head>
+	<meta name="google-signin-scope" content="profile email">
+	<meta name="google-signin-client_id" content="922885153816-2gouv98kqjnb9g12g49a6ld87d4nqtng.apps.googleusercontent.com">
+	<script src="https://apis.google.com/js/platform.js" async defer>
+	</script>
+</head>
+
+<body>
+	<div class="g-signin2" data-onsuccess="onSignIn" data-theme="dark"></div>
+	<script>
+		function onSignIn(googleUser) {
         var profile = googleUser.getBasicProfile();
         var studentEmail = profile.getEmail()
         console.log(studentEmail)
@@ -28,7 +31,7 @@
           }
         })
         console.log(cl)
-        switch (cl){
+        switch (k){
           case 1:
             alert("First Period!")
             
@@ -42,6 +45,7 @@
           
         }
       }
-    </script>
-  </body>
+	</script>
+</body>
+
 </html>
