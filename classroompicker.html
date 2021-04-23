@@ -10,6 +10,7 @@
       function onSignIn(googleUser) {
         var profile = googleUser.getBasicProfile();
         var studentEmail = profile.getEmail()
+        console.log(studentEmail)
         if (studentEmail.split("@")[1] != "mtps.us"){
           alert("Your not from the MTPS!")
           return
@@ -21,10 +22,12 @@
         }
         var cl = -1
         Object.keys(classes).forEach((k) => {
+          console.log(k, cl, classes[k])
           if (classes[k].includes(studentEmail)){
             cl = k
           }
         })
+        console.log(cl)
         switch (cl){
           case 1: {
             alert("First Period!")
