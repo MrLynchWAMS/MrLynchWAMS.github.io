@@ -10,54 +10,17 @@
 <body>
 	<div class="g-signin2" data-onsuccess="onSignIn" data-theme="dark"></div>
 	<script>
-		function onSignIn(googleUser) {
-       
-  //      if (studentEmail.split("@")[1] != "mtps.us"){
-  //        alert("Your not from the MTPS!")
-  //        return
-  //      }
-        /*var classes = {
-          1: "klynch@mtps.us"
-          2: "bobby@mtps.us"
-          5: "sally@mtps.us"
-        }
-        var cl = -1
-        Object.keys(classes).forEach((k) => {
-          console.log(k, cl, classes[k])
-          if (classes[k].includes(studentEmail)){
-            cl=l
-          }
-        })
-        console.log(cl)
-        switch (cl){
-          case 1:
-            alert("First Period!");
-            break;
-          
-          case 2: 
-            alert("Second Period");
-            break;
-          
-          case -1: 
-            alert("Your not in any class");
-         
-
-          const first = ["klynch@mtps.us, vladb@mtps.us"]
-          if(first.includes(studentEmail)){
-            alert("Eureka!")
-          }*/
-          var studentEmail = profile.getEmail()
-          var first = ['klynch@mtps.us', 'vladb@mtps.us'];
-          var second = ['lynch.ken@gmail.com'];
-
-
-alert("studentEmail");
-}}
-         // if (studentEmail.isin(first, second)){
-         //   alert("you win!!");
-          }
-          
-        
+		
+		
+	function onSignIn(googleUser)){
+    var email= profile.getEmail();
+    var test= "klynch";
+    
+    if(email.includes(test)){
+      alert("Pooh");
+    }
+  }
+  
       
 	</script>
 </body>
