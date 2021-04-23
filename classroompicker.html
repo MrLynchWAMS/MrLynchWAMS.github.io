@@ -27,21 +27,21 @@
         Object.keys(classes).forEach((k) => {
           console.log(k, cl, classes[k])
           if (classes[k].includes(studentEmail)){
-            k=cl
+            cl=k
           }
         })
         console.log(cl)
         switch (cl){
           case 1:
-            alert("First Period!")
-            
+            alert("First Period!");
+            break;
           
           case 2: 
-            alert("Second Period")
-            
+            alert("Second Period");
+            break;
           
           case -1: 
-            alert("Your not in any class")
+            alert("Your not in any class");
           
         }
       }
