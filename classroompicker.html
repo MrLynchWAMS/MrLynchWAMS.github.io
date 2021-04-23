@@ -18,10 +18,10 @@
           alert("Your not from the MTPS!")
           return
         }
-        var classes = {
-          One: "klynch@mtps.us";
-          Two: "bobby@mtps.us";
-          Five: "sally@mtps.us";
+        /*var classes = {
+          1: "klynch@mtps.us"
+          2: "bobby@mtps.us"
+          5: "sally@mtps.us"
         }
         var cl = -1
         Object.keys(classes).forEach((k) => {
@@ -32,17 +32,22 @@
         })
         console.log(cl)
         switch (cl){
-          case One:
+          case 1:
             alert("First Period!");
             break;
           
-          case Two: 
+          case 2: 
             alert("Second Period");
             break;
           
           case -1: 
             alert("Your not in any class");
-          
+          */
+
+          const first = ["klynch@mtps.us, vladb@mtps.us"]
+          if(first.includes(studentEmail)){
+            alert("Eureka!")
+          }
         }
       }
 	</script>
