@@ -12,9 +12,11 @@
 	<script>
 		
 		
-	function onSignIn(googleUser)){
-    var email= profile.getEmail();
-    var test= "klynch";
+function onSignIn(googleUser)){
+	 var profile = googleUser.getBasicProfile();		
+	 var email= profile.getEmail();
+	 var test= "klynch";
+	console.log("Email: " + profile.getEmail());
     
     if(1=1){
       alert("Pooh");
