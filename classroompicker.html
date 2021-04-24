@@ -12,21 +12,44 @@
     <div class="g-signin2" data-onsuccess="onSignIn" data-theme="dark"></div>
 
     <script>
+      
       function onSignIn(googleUser) {
         var profile = googleUser.getBasicProfile();
         var email = profile.getEmail();
         var test = ["klynch@mtps.us", "example@1.com", "alkdsjadfasdf", "jfaodfjadojf"];
         var first = ["25bondarv@mtps.us", "student-m@mtps.us", "25steenem@mtps.us", "25clarka@mtps.us", "25edwardsj@mtps.us", "25bronsteinl@mtps.us", "25hagana@mtps.us", "25hogant@mtps.us", "25mieskolainena@mtps.us", "25meintelp@mtps.us", "25manerig@mtps.us", "25boylea@mtps.us", "25rinesb@mtps.us", "25byrd-leitnerc@mtps.us", "25goettlej@mtps.us", "25byrd-leitnerh@mtps.us", "25gilhoolf@mtps.us", "25caulderc@mtps.us"];
+        var sec =["second period email addresses"];
+        var fifth = ["fifth period email addresses"];
+        var sev = ["7 emails"];
+        var eigth = ["8 emails"];
+        
+        
         console.log("Email: " + profile.getEmail());
 
        if(test.includes(email)){
           alert("Pooh");
        }
-        console.log(email);
-        
+          
         if(first.includes(email)){
+          alert("Hello Middle School Student!  You've been recommended for Honor's Bio");
           window.open("http://www.scienceclass.rocks/calc");
+          
       }
+        if(sec.includes(email)){
+          window.open("http://www.example.com");
+        }
+         if(fifth.includes(email)){
+          window.open("http://www.example.com");
+        }
+      if(sev.includes(email)){
+          window.open("http://www.example.com");
+        }   
+      if(eigth.includes(email)){
+          window.open("http://www.example.com");
+        }
+        
+        
+        
       }
     </script>
   </body>
