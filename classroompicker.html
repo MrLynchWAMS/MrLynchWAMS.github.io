@@ -10,6 +10,7 @@
 
   <body>
     <div class="g-signin2" data-onsuccess="onSignIn" data-theme="dark"></div>
+    <p id="text"></p>
 
     <script>
       
@@ -24,10 +25,11 @@
         var eigth = ["8 emails"];
         
         
-        console.log("Email: " + profile.getEmail());
+        console.log("Email: " + email);
 
        if(test.includes(email)){
-          alert("Pooh");
+          alert("New stuff will happen now!! Yay!");
+         document.getElementById("text").text = email;
        }
           
         if(first.includes(email)){
