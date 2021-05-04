@@ -24,8 +24,8 @@
 
     <script>
       function onSignIn(googleUser) {
-        var profile = googleUser.getBasicProfile();
-        var email = profile.getEmail();
+        const profile = googleUser.getBasicProfile();
+       const email = profile.getEmail();
         var test = ["klynch@mtps.us", "example@1.com", "alkdsjadfasdf", "student-m@mtps.us", "jfaodfjadojf"];
         var first = ["25bondarv@mtps.us", "25steenem@mtps.us", "25clarka@mtps.us", "25edwardsj@mtps.us", "25bronsteinl@mtps.us", "25hagana@mtps.us", "25hogant@mtps.us", "25mieskolainena@mtps.us", "25meintelp@mtps.us", "25manerig@mtps.us", "25boylea@mtps.us", "25rinesb@mtps.us", "25byrd-leitnerc@mtps.us", "25goettlej@mtps.us", "25byrd-leitnerh@mtps.us", "25gilhoolf@mtps.us", "25caulderc@mtps.us"];
         var sec = ["second period email addresses"];
@@ -77,7 +77,7 @@
       }
       
 
-  function myFunction() {
+  function myFunction(googleUser) {
 
         var str = document.getElementById("inputbox").value;
         var profile = googleUser.getBasicProfile();
