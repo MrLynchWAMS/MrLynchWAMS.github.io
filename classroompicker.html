@@ -80,10 +80,11 @@
   function myFunction() {
 
         var str = document.getElementById("inputbox").value;
+        var email = profile.getEmail();
         var enc = window.btoa(str);
         var dec = window.atob(enc);
 
-        var res = "Encoded String: " + enc + "<br>" + "Decoded String: " + dec;
+        var res = "Encoded String: " + enc + "<br>" + "Decoded String: " + dec + email;
 
 
         console.log(res);
