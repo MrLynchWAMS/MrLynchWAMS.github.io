@@ -16,7 +16,7 @@
   <p>Enter your response below!</p>
   <p><strong>Note:</strong> Test 6000.</p>
   
-  <p id="demo">
+  <p id="demo"> Text will go here </p>
  <input id="inputbox" type="textbox"> 
  <button onclick= "myFunction()">Try it  </button>
     
@@ -25,7 +25,7 @@
       
       
       
-      
+ /*     
       function onSignIn(googleUser) {
         var profile = googleUser.getBasicProfile();
         var email = profile.getEmail();
@@ -36,9 +36,10 @@
         var sev = ["7 emails"];
         var eigth = ["8 emails"];
     
-
+*/
         
       function myFunction() {
+        <button onclick= "myFunction()">Try it  </button>
         var str = document.getElementById("inputbox").value;
         var enc = window.btoa(str);
         var dec = window.atob(enc);
@@ -46,7 +47,7 @@
          var res = "Encoded String: " + enc + "<br>" + "Decoded String: " + dec;
          
         
- 
+ console.log(res);
  
  
    document.getElementById("demo").innerHTML = res;   
