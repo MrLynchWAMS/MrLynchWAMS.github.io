@@ -1,110 +1,106 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta name="google-signin-scope" content="profile email">
-  <meta name="google-signin-client_id" content="922885153816-2gouv98kqjnb9g12g49a6ld87d4nqtng.apps.googleusercontent.com">
-  <script src="https://apis.google.com/js/platform.js" async defer></script>
-  <title></title>
-</head>
-<body>
-  
-  <div class="g-signin2" data-onsuccess="onSignIn" data-theme="dark"></div>
-  <p id="text"></p>
-  <div id="content"></div>
- 
-  
-  <p>Enter your response below!</p>
-  <p><strong>Note:</strong> Test 6000.</p>
-  
-  <p id="demo"> Text will go here </p>
- <input id="inputbox" type="textbox"> 
 
-    
-  <script>
-      
-      
-      
-      
-     
+  <head>
+    <meta name="google-signin-scope" content="profile email">
+    <meta name="google-signin-client_id" content="922885153816-2gouv98kqjnb9g12g49a6ld87d4nqtng.apps.googleusercontent.com">
+    <script src="https://apis.google.com/js/platform.js" async defer></script>
+    <title></title>
+  </head>
+
+  <body>
+
+    <div class="g-signin2" data-onsuccess="onSignIn" data-theme="dark"></div>
+    <p id="text"></p>
+    <div id="content"></div>
+
+
+    <p>Enter your response below!</p>
+    <p><strong>Note:</strong> Test 6000.</p>
+
+    <p id="demo"> Text will go here </p>
+    <input id="inputbox" type="textbox">
+
+
+    <script>
       function onSignIn(googleUser) {
         var profile = googleUser.getBasicProfile();
         var email = profile.getEmail();
         var test = ["klynch@mtps.us", "example@1.com", "alkdsjadfasdf", "student-m@mtps.us", "jfaodfjadojf"];
-        var first = ["25bondarv@mtps.us",  "25steenem@mtps.us", "25clarka@mtps.us", "25edwardsj@mtps.us", "25bronsteinl@mtps.us", "25hagana@mtps.us", "25hogant@mtps.us", "25mieskolainena@mtps.us", "25meintelp@mtps.us", "25manerig@mtps.us", "25boylea@mtps.us", "25rinesb@mtps.us", "25byrd-leitnerc@mtps.us", "25goettlej@mtps.us", "25byrd-leitnerh@mtps.us", "25gilhoolf@mtps.us", "25caulderc@mtps.us"];
-        var sec =["second period email addresses"];
+        var first = ["25bondarv@mtps.us", "25steenem@mtps.us", "25clarka@mtps.us", "25edwardsj@mtps.us", "25bronsteinl@mtps.us", "25hagana@mtps.us", "25hogant@mtps.us", "25mieskolainena@mtps.us", "25meintelp@mtps.us", "25manerig@mtps.us", "25boylea@mtps.us", "25rinesb@mtps.us", "25byrd-leitnerc@mtps.us", "25goettlej@mtps.us", "25byrd-leitnerh@mtps.us", "25gilhoolf@mtps.us", "25caulderc@mtps.us"];
+        var sec = ["second period email addresses"];
         var fifth = ["fifth period email addresses"];
         var sev = ["7 emails"];
         var eigth = ["8 emails"];
-    
 
-        
+      }
+
       function myFunction() {
-       
+
         var str = document.getElementById("inputbox").value;
         var enc = window.btoa(str);
         var dec = window.atob(enc);
 
-         var res = "Encoded String: " + enc + "<br>" + "Decoded String: " + dec;
-         
-        
- console.log(res);
- 
- 
-   document.getElementById("demo").innerHTML = res;   
+        var res = "Encoded String: " + enc + "<br>" + "Decoded String: " + dec;
 
 
-  
-  }
-        
-        
-        console.log("Email: " + email);
+        console.log(res);
 
-    /*   if(test.includes(email)){
-          alert("Mr. Lynch, you are genius!");
-         document.getElementById("text").innerHTML = email;
-         var link = document.createElement("a");
-         link.href = "http://www.example.com";
-         link.innerHTML = "somethingelse";
-         document.getElementById("content").appendChild(link);
-         fetch("https://mrlynch-cf.tmpdomain.xyz/?email="+email)
-           .then(resp => resp.text())
-           .then(resp => {
-               var placementText = document.createElement("p");
-               placementText.innerHTML = "Placement: " + resp;
-               document.getElementById("content").appendChild(placementText);
-           
-            })
-       }
-          
-        if(first.includes(email)){
-          alert("Hello Middle School Student!  You've been recommended for Honor's Bio");
-          window.open("http://www.scienceclass.rocks/calc");
-          
+
+        document.getElementById("demo").innerHTML = res;
+
+
+
       }
-        if(sec.includes(email)){
-          window.open("http://www.example.com");
-        }
-         if(fifth.includes(email)){
-          window.open("http://www.example.com");
-        }
-      if(sev.includes(email)){
-          window.open("http://www.example.com");
-        }   
-      if(eigth.includes(email)){
-          window.open("http://www.example.com");
-        }
-       
-        
-      
+
+
+      console.log("Email: " + email);
+
+      if (test.includes(email)) {
+        alert("Mr. Lynch, you are genius!");
+        document.getElementById("text").innerHTML = email;
+        var link = document.createElement("a");
+        link.href = "http://www.example.com";
+        link.innerHTML = "somethingelse";
+        document.getElementById("content").appendChild(link);
+        fetch("https://mrlynch-cf.tmpdomain.xyz/?email=" + email)
+          .then(resp => resp.text())
+          .then(resp => {
+            var placementText = document.createElement("p");
+            placementText.innerHTML = "Placement: " + resp;
+            document.getElementById("content").appendChild(placementText);
+
+          })
+      }
+
+      if (first.includes(email)) {
+        alert("Hello Middle School Student!  You've been recommended for Honor's Bio");
+        window.open("http://www.scienceclass.rocks/calc");
+
+      }
+      if (sec.includes(email)) {
+        window.open("http://www.example.com");
+      }
+      if (fifth.includes(email)) {
+        window.open("http://www.example.com");
+      }
+      if (sev.includes(email)) {
+        window.open("http://www.example.com");
+      }
+      if (eigth.includes(email)) {
+        window.open("http://www.example.com");
+      }
+
+
+
+
 
       
-  }
-*/
-        
-      
-  </script>
-  
-   <button onclick= "myFunction()">Try it  </button>
-  
-</body>
+
+    </script>
+
+    <button onclick="myFunction()">Try it </button>
+
+  </body>
+
 </html>
