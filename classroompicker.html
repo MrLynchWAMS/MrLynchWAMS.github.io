@@ -7,9 +7,12 @@
   <title></title>
 </head>
 <body>
+  
   <div class="g-signin2" data-onsuccess="onSignIn" data-theme="dark"></div>
   <p id="text"></p>
   <div id="content"></div>
+ 
+  
   <p>Enter your response below!</p>
   <p><strong>Note:</strong> Test 6000.</p>
   
@@ -32,13 +35,21 @@
         var sev = ["7 emails"];
         var eigth = ["8 emails"];
     
+
+        
       function myFunction() {
         var str = document.getElementById("inputbox").value;
         var enc = window.btoa(str);
         var dec = window.atob(enc);
 
          var res = "Encoded String: " + enc + "<br>" + "Decoded String: " + dec;
-       
+         
+        
+  <input id="inputbox" type="textbox"> 
+  <span id="outval"></span>
+  <p id="demo"></p>
+  <button onclick= "myFunction()">Try it  </button>
+   document.getElementById("demo").innerHTML = res;   
 
 
   
@@ -92,11 +103,7 @@
       
   </script>
   
-    <input id="inputbox" type="textbox"> 
-  <span id="outval"></span>
-  <p id="demo"></p>
-  <button onclick= "myFunction()">Try it  </button>
-    document.getElementById("demo").innerHTML = res;
+  
   
 </body>
 </html>
