@@ -13,9 +13,22 @@
     <p id="text"></p>
     <div id = "content" />
    
-    <p>Insert your answer in the box below.</p>
+<p>Enter your response below!</p>
+
+<input id="inputbox" type=textbox />
+<span id="outval" />
+
+<button onclick="myFunction()">Try it</button>
+
+<p><strong>Note:</strong> Test 1.</p>
+
+<p id="demo"></p>
     
     <script>
+      
+      
+      
+      
       
       function onSignIn(googleUser) {
         var profile = googleUser.getBasicProfile();
@@ -27,7 +40,14 @@
         var sev = ["7 emails"];
         var eigth = ["8 emails"];
     
+      function myFunction() {
+        var str = document.getElementById("inputbox").value;
+        var enc = window.btoa(str);
+        var dec = window.atob(enc);
 
+         var res = "Encoded String: " + enc + "<br>" + "Decoded String: " + dec;
+        document.getElementById("demo").innerHTML = res;
+}
         
         
         console.log("Email: " + email);
@@ -67,10 +87,7 @@
         }
         
   
-         function doBtoa() {
-       var val = document.getElementById("inputbox").value;
-       var out = document.getElementById("outval");
-       out.appendChild(document.createTextNode(btoa(val)));
+      
 }
   
         
