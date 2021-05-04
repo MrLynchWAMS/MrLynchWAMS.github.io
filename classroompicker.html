@@ -74,12 +74,13 @@
       if (eigth.includes(email)) {
         window.open("http://www.example.com");
       }
-
+      }
       
 
   function myFunction() {
 
         var str = document.getElementById("inputbox").value;
+        var profile = googleUser.getBasicProfile();
         var email = profile.getEmail();
         var enc = window.btoa(str);
         var dec = window.atob(enc);
@@ -93,7 +94,7 @@
         document.getElementById("demo").innerHTML = res;
 
 
-  }
+  
       }
 
       
