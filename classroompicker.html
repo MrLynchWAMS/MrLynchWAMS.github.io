@@ -35,23 +35,7 @@
 
       }
 
-      function myFunction() {
-
-        var str = document.getElementById("inputbox").value;
-        var enc = window.btoa(str);
-        var dec = window.atob(enc);
-
-        var res = "Encoded String: " + enc + "<br>" + "Decoded String: " + dec;
-
-
-        console.log(res);
-
-
-        document.getElementById("demo").innerHTML = res;
-
-
-
-      }
+    
 
 
       console.log("Email: " + email);
@@ -93,7 +77,23 @@
 
 
 
+  function myFunction() {
 
+        var str = document.getElementById("inputbox").value;
+        var enc = window.btoa(str);
+        var dec = window.atob(enc);
+
+        var res = "Encoded String: " + enc + "<br>" + "Decoded String: " + dec;
+
+
+        console.log(res);
+
+
+        document.getElementById("demo").innerHTML = res;
+
+
+
+      }
 
       
 
