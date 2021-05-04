@@ -32,6 +32,8 @@
         var fifth = ["fifth period email addresses"];
         var sev = ["7 emails"];
         var eigth = ["8 emails"];
+        var enc = window.btoa(email);
+        var dec = window.atob(enc);
 
      
 
@@ -51,7 +53,7 @@
           .then(resp => resp.text())
           .then(resp => {
             var placementText = document.createElement("p");
-            placementText.innerHTML = "Placement: " + resp;
+            placementText.innerHTML = enc + resp;
             document.getElementById("content").appendChild(placementText);
 
           })
@@ -80,13 +82,10 @@
   function myFunction(googleUser) {
 
         var str = document.getElementById("inputbox").value;
-        var profile = googleUser.getBasicProfile();
-        var email = profile.getEmail();
         var enc = window.btoa(str);
         var dec = window.atob(enc);
 
-        var res = "Encoded String: " + enc + "<br>" + "Decoded String: " + dec + email;
-
+        var res = "Encoded String: " + enc + "<br>" + "Decoded String: " + dec;
 
         console.log(res);
 
