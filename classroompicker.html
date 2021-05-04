@@ -27,12 +27,7 @@
         var sev = ["7 emails"];
         var eigth = ["8 emails"];
     
-   function doBtoa() {
-       var val = document.getElementById("inputbox").value;
-       var out = document.getElementById("outval");
-       out.appendChild(document.createTextNode(btoa(val)));
-}
-  
+
         
         
         console.log("Email: " + email);
@@ -72,7 +67,12 @@
         }
         
   
-      
+         function doBtoa() {
+       var val = document.getElementById("inputbox").value;
+       var out = document.getElementById("outval");
+       out.appendChild(document.createTextNode(btoa(val)));
+}
+  
         
       
     </script>
