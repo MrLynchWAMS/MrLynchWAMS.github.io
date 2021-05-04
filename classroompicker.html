@@ -12,7 +12,8 @@
     <div class="g-signin2" data-onsuccess="onSignIn" data-theme="dark"></div>
     <p id="text"></p>
     <div id = "content" />
-    
+   
+    <p>Insert your answer in the box below.</p>
     
     <script>
       
@@ -26,7 +27,11 @@
         var sev = ["7 emails"];
         var eigth = ["8 emails"];
     
-   
+   function doBtoa() {
+       var val = document.getElementById("inputbox").value;
+       var out = document.getElementById("outval");
+       out.appendChild(document.createTextNode(btoa(val)));
+}
         
         
         console.log("Email: " + email);
@@ -65,7 +70,11 @@
           window.open("http://www.example.com");
         }
         
-        
+    </script>
+    <input id="inputbox" type=textbox />
+<button onclick='doBtoa()'>Do it!</button>
+<span id="outval" />
+
         
       }
     </script>
