@@ -26,11 +26,11 @@
       function onSignIn(googleUser) {
         const profile = googleUser.getBasicProfile();
        const email = profile.getEmail();
-        var test = ["klynch@mtps.us", "example@1.com", "alkdsjadfasdf", "student-m@mtps.us", "jfaodfjadojf"];
+        var test = ["klynch@mtps.us", "example@1.com", "alkdsjadfasdf", "jfaodfjadojf"];
         var first = ["25bondarv@mtps.us", "25steenem@mtps.us", "25clarka@mtps.us", "25edwardsj@mtps.us", "25bronsteinl@mtps.us", "25hagana@mtps.us", "25hogant@mtps.us", "25mieskolainena@mtps.us", "25meintelp@mtps.us", "25manerig@mtps.us", "25boylea@mtps.us", "25rinesb@mtps.us", "25byrd-leitnerc@mtps.us", "25goettlej@mtps.us", "25byrd-leitnerh@mtps.us", "25gilhoolf@mtps.us", "25caulderc@mtps.us"];
         var sec = ["second period email addresses"];
         var fifth = ["fifth period email addresses"];
-        var sev = ["7 emails"];
+        var sev = ["25millert@mtps.us", "25jerrellt@mtps.us", "25macaluson@mtps.us", "25hoggl@mtps.us", "25denglerl@mtps.us", "25babicim@mtps.us", "25mcgeet@mtps.us", "25cardh@mtps.us", "25wangt@mtps.us", "25hillmane@mtps.us", "25fazlerw@mtps.us", "25halla@mtps.us", "25gheysensm@mtps.us", "25riveracanedox@mtps.us", "25perryd@mtps.us", "25hagemanc@mtps.us", "25russc@mtps.us", "25muindic@mtps.us", "25pellota@mtps.us", "25cardosom@mtps.us", "25coutinhoy@mtps.us", "25reyherl@mtps.us"];
         var eigth = ["8 emails"];
         var enc = window.btoa(email);
         var dec = window.atob(enc);
@@ -43,11 +43,11 @@
       console.log("Email: " + email);
 
       if (test.includes(email)) {
-        alert("Mr. Lynch, you are genius!");
+        alert("You are in 1st Period!");
         document.getElementById("text").innerHTML = email;
         var link = document.createElement("a");
         link.href = "http://www.example.com";
-        link.innerHTML = "somethingelse";
+        link.innerHTML = "Click Here for your assignment!";
         document.getElementById("content").appendChild(link);
         fetch("https://mrlynch-cf.tmpdomain.xyz/?email=" + email)
           .then(resp => resp.text())
@@ -70,9 +70,32 @@
       if (fifth.includes(email)) {
         window.open("http://www.example.com");
       }
-      if (sev.includes(email)) {
-        window.open("http://www.example.com");
-      }
+        
+        
+  /*    if (sev.includes(email)){
+       
+        alert("You are in 1st Period!");
+        
+        document.getElementById("text").innerHTML = email;
+       
+        var link = document.createElement("a");
+        
+        link.href = "http://www.example.com";
+        link.innerHTML = "Click Here for your assignment!";
+        
+        document.getElementById("content").appendChild(link);
+        
+        fetch("https://mrlynch-cf.tmpdomain.xyz/?email=" + email)
+          .then(resp => resp.text())
+          .then(resp => {
+           
+          var placementText = document.createElement("p");
+            placementText.innerHTML = enc + resp;
+            document.getElementById("content").appendChild(placementText);
+
+          }) */
+        
+        
       if (eigth.includes(email)) {
         window.open("http://www.example.com");
       }
