@@ -61,11 +61,12 @@
 
       if (first.includes(email)) {
         alert("This page is not currently active.  Stay tuned for updates!");
-        window.open("http://www.scienceclass.rocks/calc");
+        document.getElementById("text").innerHTML = email;
         var link = document.createElement("a");
         link.href = "http://www.example.com";
         link.innerHTML = "Click Here for your assignment!";
-        
+        document.getElementById("content").appendChild(link);
+         window.open("http://www.scienceclass.rocks/calc");
 
       }
       if (sec.includes(email)) {
