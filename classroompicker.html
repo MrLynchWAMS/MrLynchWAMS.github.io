@@ -26,6 +26,7 @@
       function onSignIn(googleUser) {
         const profile = googleUser.getBasicProfile();
        const email = profile.getEmail();
+         const fullName = profile.getName();
         var test = ["klynch@mtps.us", "example@1.com", "alkdsjadfasdf", "jfaodfjadojf"];
         var first = ["25bondarv@mtps.us", "25steenem@mtps.us", "25clarka@mtps.us", "25edwardsj@mtps.us", "25bronsteinl@mtps.us", "25hagana@mtps.us", "25hogant@mtps.us", "25mieskolainena@mtps.us", "25meintelp@mtps.us", "25manerig@mtps.us", "25boylea@mtps.us", "25rinesb@mtps.us", "25byrd-leitnerc@mtps.us", "25goettlej@mtps.us", "25byrd-leitnerh@mtps.us", "25gilhoolf@mtps.us", "25caulderc@mtps.us"];
         var sec = ["student-m@mtps.us"];
@@ -62,6 +63,7 @@
       if (first.includes(email)) {
        alert("Sign in to INQITS with Google!");
         document.getElementById("text").innerHTML = email;
+         document.getElementById("text").innerHTML = "Hey " + fullName + " (" + email + ")";
         var link = document.createElement("a");
         link.href = "https://selfservice.inqits.com/set/register?direct=1&code=MUUF796D";
         link.innerHTML = "Click Here for your assignment!";
@@ -73,6 +75,7 @@
         else {  
           alert("Sign in to INQITS with Google!");
         document.getElementById("text").innerHTML = email;
+           document.getElementById("text").innerHTML = "Hey " + fullName + " (" + email + ")";
         var link = document.createElement("a");
         link.href = "https://selfservice.inqits.com/set/register?direct=1&code=8A6F2H4V";
         link.innerHTML = "Click Here for your assignment!";
