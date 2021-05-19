@@ -4,9 +4,9 @@
     async function f(){
       for (let x = 0; x < 1000000; x++){
         document.body.style.backgroundColor = "blue"
-        await new Promise(r => setTimeout(r, 50));
+        await new Promise(r => setTimeout(r, 13.333333));
         document.body.style.backgroundColor = "red"
-        await new Promise(r => setTimeout(r, 50));
+        await new Promise(r => setTimeout(r, 13.333333));
       }
     }
     f()
