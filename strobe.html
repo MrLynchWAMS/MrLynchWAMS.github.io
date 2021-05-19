@@ -1,0 +1,12 @@
+<html>
+  <body>
+    <script>
+    for (let x = 0; x < 1000; x++){
+      document.body.style.backgroundColor = "blue"
+      await new Promise(r => setTimeout(r, 50));
+      document.body.style.backgroundColor = "red"
+      await new Promise(r => setTimeout(r, 50));
+    }
+    </script>
+  </body>
+</html>
