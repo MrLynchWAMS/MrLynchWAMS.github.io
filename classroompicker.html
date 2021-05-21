@@ -60,7 +60,7 @@
                 var short = inputenc.substr(-6);
                 console.log(res);
                 console.log(short);
-                console.log(stremail);
+             
 
         document.getElementById("demo").innerHTML = res;
         document.getElementById("demo").innerHTML = inputdec;
@@ -77,9 +77,11 @@
       function myfunction(){
     var auth2 = gapi.auth2.getAuthInstance();
     var email = auth2.currentUser.get().getBasicProfile().getEmail();
-  
+    var stream = inputtext + "asdfghjklpoiuytrewqzxcvbnm" + email;
+    var streamcode = window.btoa(stream);
+        
   var inputtext = document.getElementById("inputbox").value;
-        alert (inputtext + email);
+        alert (inputtext + email + ": " + streamcode);
       }
 
     </script>
