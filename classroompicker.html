@@ -71,16 +71,15 @@
          
   
       
-      }
-function myfunction(){
+      }  
+  }
+    
+      function myfunction(){
     var auth2 = gapi.auth2.getAuthInstance();
     var email = auth2.currentUser.get().getBasicProfile().getEmail();
   
   var inputtext = document.getElementById("inputtext").value;
-  
-      
-  }
-    
+        alert (inputtext);
       }
 
     </script>
