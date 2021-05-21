@@ -33,6 +33,22 @@
         var eigth = ["25brooksem@mtps.us", "25browns@mtps.us", "25corganhaagl@mtps.us", "25crowb@mtps.us", "25delaneyc@mtps.us", "25ernstj@mtps.us", "25ferrainof@mtps.us", "25greenleafj@mtps.us", "25holmqvistg@mtps.us", "25keoughw@mtps.us", "25krisandab@mtps.us", "25leathj@mtps.us", "25maguirem@mtps.us", "25mendysb@mtps.us", "25mergenthals@mtps.us", "25palermoj@mtps.us", "25panjarlac@mtps.us", "25petroccog@mtps.us", "25reyesn@mtps.us", "25sajousm@mtps.us", "25sapnasa@mtps.us", "25thorslandc@mtps.us", ];
         var enc = window.btoa(email);
         var dec = window.atob(enc);
+     
+        
+        function myFunction(googleUser) {
+                
+                var str = document.getElementById('inputbox').value;   
+                var stremail = str + email;
+                var inputenc = window.btoa(stremail);
+                var inputdec = window.atob(inputenc);
+
+                var res = "Encoded String: " + inputenc + "<br>" + "Decoded String: " + inputdec;
+                var short = inputenc.substr(-6);
+                console.log(res);
+                console.log(short);
+
+        document.getElementById("demo").innerHTML = res;
+        document.getElementById("demo").innerHTML = inputdec;
 
      
 
@@ -58,22 +74,7 @@
       
       }}
       
-         function myFunction(googleUser) {
-         const profile = googleUser.getBasicProfile();
-         const email = profile.getEmail();
-        var str = document.getElementById('inputbox');   
-        var stremail = str + email;
-        var inputenc = window.btoa(stremail);
-        var inputdec = window.atob(inputenc);
-
-        var res = "Encoded String: " + inputenc + "<br>" + "Decoded String: " + inputdec;
-        var short = inputenc.substr(-6);
-        console.log(res);
-        console.log(short);
-
-        document.getElementById("demo").innerHTML = res;
-        document.getElementById("demo").innerHTML = short;
-
+    
       }
 
     </script>
