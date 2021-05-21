@@ -78,7 +78,7 @@
           var auth2 = gapi.auth2.getAuthInstance();
           var email = auth2.currentUser.get().getBasicProfile().getEmail();
           var inputtext = document.getElementById("inputbox").value;
-          var stream = inputbox + " :asdfghjklpoiuytrewqzxcvbnm: " + email;
+          var stream = inputtext + " :asdfghjklpoiuytrewqzxcvbnm: " + email;
           var streamcode = window.btoa(stream);
           
         alert (streamcode);
