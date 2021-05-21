@@ -14,7 +14,8 @@
     <p id="text"></p>
     <div id="content"></div>
 
-
+   <p id="demo"> Input your answer in the box below:</p>
+         <input id="inputbox" type="textbox">
 
 
 
@@ -23,6 +24,7 @@
         const profile = googleUser.getBasicProfile();
        const email = profile.getEmail();
          const fullName = profile.getName();
+       
         var test = ["example@1.com", "alkdsjadfasdf", "jfaodfjadojf"];
         var first = ["klynch@mtps.us", "25bondarv@mtps.us", "25steenem@mtps.us", "25clarka@mtps.us", "25edwardsj@mtps.us", "25bronsteinl@mtps.us", "25hagana@mtps.us", "25hogant@mtps.us", "25mieskolainena@mtps.us", "25meintelp@mtps.us", "25manerig@mtps.us", "25boylea@mtps.us", "25rinesb@mtps.us", "25byrd-leitnerc@mtps.us", "25goettlej@mtps.us", "25byrd-leitnerh@mtps.us", "25gilhoolf@mtps.us", "25caulderc@mtps.us"];
         var sec = ["25rabinowitzr@mtps.us", "25doand@mtps.us", "25fegleyz@mtps.us", "25wattala@mtps.us", "25adelia@mtps.us", "25trakisj@mtps.us", "25agarwald@mtps.us", "25grossmana@mtps.us", "25giannettoc@mtps.us", "25mansukanij@mtps.us", "25sumersona@mtps.us", "25fordi@mtps.us", "25zhengs@mtps.us", "25mannn@mtps.us", "25lopkob@mtps.us", "25meccia@mtps.us", "25rothenbergd@mtps.us", "25butanid@mtps.us", "25milsteadd@mtps.us", "25moyerl@mtps.us", "25salmonss@mtps.us", "25suchinc@mtps.us", "25cappsd@mtps.us", "25morenom@mtps.us"];
@@ -55,9 +57,7 @@
       }}
       
     function myFunction(googleUser) {
-         <p id="demo"> Input your answer in the box below:</p>
-         <input id="inputbox" type="textbox">
-     
+        var str = document.getElementById('inputbox');   
         var inputenc = window.btoa(str);
         var inputdec = window.atob(inputenc);
 
