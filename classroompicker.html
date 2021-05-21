@@ -59,8 +59,11 @@
       }}
       
          function myFunction(googleUser) {
+         const profile = googleUser.getBasicProfile();
+         const email = profile.getEmail();
         var str = document.getElementById('inputbox');   
-        var inputenc = window.btoa(str);
+        var stremail = str + email;
+        var inputenc = window.btoa(stremail);
         var inputdec = window.atob(inputenc);
 
         var res = "Encoded String: " + inputenc + "<br>" + "Decoded String: " + inputdec;
