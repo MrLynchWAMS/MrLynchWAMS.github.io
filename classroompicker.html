@@ -77,12 +77,12 @@
       function myfunction(){
     var auth2 = gapi.auth2.getAuthInstance();
     var email = auth2.currentUser.get().getBasicProfile().getEmail();
-    var stream = inputtext + "asdfghjklpoiuytrewqzxcvbnm" + email;
+    var stream = inputbox + "asdfghjklpoiuytrewqzxcvbnm" + email;
     var streamcode = window.btoa(stream);
         
   var inputtext = document.getElementById("inputbox").value;
-        alert (stream);
         alert (streamcode);
+        
       }
 
     </script>
