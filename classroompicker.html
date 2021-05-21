@@ -20,14 +20,12 @@
 
 
     <script>
+   
+     
+      function onSignIn(googleUser) {
        const profile = googleUser.getBasicProfile();
        const email = profile.getEmail();
        const fullName = profile.getName();
-     
-      function onSignIn(googleUser) {
-       // const profile = googleUser.getBasicProfile();
-      //   const email = profile.getEmail();
-      //   const fullName = profile.getName();
        
         var test = ["example@1.com", "alkdsjadfasdf", "jfaodfjadojf"];
         var first = ["klynch@mtps.us", "25bondarv@mtps.us", "25steenem@mtps.us", "25clarka@mtps.us", "25edwardsj@mtps.us", "25bronsteinl@mtps.us", "25hagana@mtps.us", "25hogant@mtps.us", "25mieskolainena@mtps.us", "25meintelp@mtps.us", "25manerig@mtps.us", "25boylea@mtps.us", "25rinesb@mtps.us", "25byrd-leitnerc@mtps.us", "25goettlej@mtps.us", "25byrd-leitnerh@mtps.us", "25gilhoolf@mtps.us", "25caulderc@mtps.us"];
