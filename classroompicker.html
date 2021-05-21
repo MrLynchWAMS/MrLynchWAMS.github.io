@@ -15,10 +15,7 @@
     <div id="content"></div>
 
 
-    <p>Sign In to receive your link!</p>
-    <p><strong>Note:</strong> Input your answer in the box below:</p>
-
-   <p id="demo"> Trial 128379128</p>
+   <p id="demo"> Input your answer in the box below:</p>
    <input id="inputbox" type="textbox">
 
 
@@ -61,7 +58,7 @@
       }*/
 
       if (first.includes(email)) {
-       alert("Sign in to INQITS with Google!");
+       //alert("Sign in to INQITS with Google!");
          document.getElementById("text").innerHTML = email;
          document.getElementById("text").innerHTML = "Hey " + fullName + " (" + email + ")" + enc;
        /* var link = document.createElement("a");
@@ -69,10 +66,26 @@
         link.innerHTML = "Click Here for your assignment!";
         document.getElementById("content").appendChild(link);
          window.open("https://selfservice.inqits.com/set/register?direct=1&code=MUUF796D");*/
+           var str = document.getElementById("inputbox").value;
+      
+        function myFunction(googleUser) {
+        var inputenc = window.btoa(str);
+        var inputdec = window.atob(enc);
+
+        var res = "Encoded String: " + enc + "<br>" + "Decoded String: " + dec;
+        var short = enc.substr(-6);
+        console.log(res);
+        console.log(short);
+
+        document.getElementById("demo").innerHTML = res;
+        document.getElementById("demo").innerHTML = short;
 
       }
         
   
+
+ /*   <p>Sign In to receive your link!</p>
+    <p><strong>Note:</strong> Input your answer in the box below:</p> */
           
           
           
@@ -150,7 +163,7 @@ console.log("5");
      
       }
       
-
+/*
  function myFunction(googleUser) {
 
         var str = document.getElementById("inputbox").value;
@@ -164,7 +177,7 @@ console.log("5");
 
         document.getElementById("demo").innerHTML = res;
         document.getElementById("demo").innerHTML = short;
-
+*/
 
   
       } 
