@@ -35,8 +35,20 @@
         var dec = window.atob(enc);
      
         
-        function myFunction(googleUser) {
+      
                 
+               
+     
+
+    
+
+
+      console.log("Email: " + email);
+
+   
+
+      if (first.includes(email)) {
+        
                 var str = document.getElementById('inputbox').value;   
                 var stremail = str + email;
                 var inputenc = window.btoa(stremail);
@@ -49,30 +61,14 @@
 
         document.getElementById("demo").innerHTML = res;
         document.getElementById("demo").innerHTML = inputdec;
-
-     
-
-    
-
-
-      console.log("Email: " + email);
-
-   
-
-      if (first.includes(email)) {
-       //alert("Sign in to INQITS with Google!");
          document.getElementById("text").innerHTML = email;
          document.getElementById("text").innerHTML = "Hey " + fullName + " (" + email + ")" + enc;
-       /* var link = document.createElement("a");
-        link.href = "https://selfservice.inqits.com/set/register?direct=1&code=MUUF796D";
-        link.innerHTML = "Click Here for your assignment!";
-        document.getElementById("content").appendChild(link);
-         window.open("https://selfservice.inqits.com/set/register?direct=1&code=MUUF796D");*/
-           var str = document.getElementById("inputbox").value;
+   
+           
          
   
       
-      }}
+      }
       
     
       }
