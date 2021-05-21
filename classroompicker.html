@@ -72,10 +72,12 @@
   
       
       }
-      function grade(i) {
-            var str = document.getElementById('inputbox').value;  
-            var stremail = str + email;
-
+function myfunction(){
+    var auth2 = gapi.auth2.getAuthInstance();
+    var email = auth2.currentUser.get().getBasicProfile().getEmail();
+  
+  var inputtext = document.getElementById("inputtext").value;
+  
       
   }
     
@@ -83,7 +85,7 @@
 
     </script>
 
- <input id="btn" type = "button" value="Submit"  onclick="grade()">
+ <input id="btn" type = "button" value="Submit"  onclick="myfunction()">
     
   </body>
 
