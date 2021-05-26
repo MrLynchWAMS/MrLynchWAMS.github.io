@@ -106,7 +106,7 @@
           var streamcode = window.btoa(stream);
           
         
-        if(prompt("Save to Clipboard?")){
+        if(confirm("Save to Clipboard?")){
           
           fallbackCopyTextToClipboard(streamcode);
         }
