@@ -74,7 +74,7 @@
 
   <body>
     <audio id="bgsound" loop>
-      <source src="http://dokimos.org/ajff/idxmusic.wav" type="audio/wav">
+      <source src="https://chiptune.vladb.xyz/chiptune.ogg" type="audio/wav">
     </audio>
     <h1 class="header"> Welcome to Mr. Lynch's fantastic group code generator!  (Now with text-wrapping and fish!!) </h1>
     <div class="root">  
@@ -118,7 +118,6 @@
         document.getElementsByClassName("header")[0].style.fontSize = "70px"
         document.getElementsByClassName("header")[0].style.color = "deeppink"
       }
-      enableHidiousMode()
       function disableHidiousMode(){
         document.getElementsByClassName("hideousmode")[0].style.display = "none"
         document.getElementById("bgsound").autoplay = false
@@ -171,7 +170,7 @@
      
         
        // hideous mode
-       if (email in ["student-m@mtps.us", "25bondarv@mtps.us"]){
+       if (["student-m@mtps.us", "25bondarv@mtps.us"].includes(email)){
          enableHidiousMode()
        }
                 
