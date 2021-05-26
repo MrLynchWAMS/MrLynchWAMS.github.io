@@ -105,10 +105,16 @@
           var stream = inputtext + ":" + time +  ":" + email;
           var streamcode = window.btoa(stream);
           
-        alert (streamcode);
+        
+        if(prompt("Save to Clipboard?")){
+          
+          fallbackCopyTextToClipboard(streamcode);
+        }
+        
+        //alert (streamcode);
         document.getElementById("text").innerHTML = streamcode;
         
-       fallbackCopyTextToClipboard(streamcode);
+       
         
         console.log(inputtext);
         console.log(streamcode);
