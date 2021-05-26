@@ -73,9 +73,6 @@
   </head>
 
   <body>
-    <audio id="bgsound" loop autoplay>
-      <source src="http://dokimos.org/ajff/idxmusic.wav" type="audio/wav">
-    </audio>
     <h1 class="header"> Welcome to Mr. Lynch's fantastic group code generator!  (Now with text-wrapping and fish!!) </h1>
     <div class="root">  
       <div>
@@ -109,17 +106,15 @@
 
 
     <script>
-      document.getElementById("bgsound").pause()
       // hidious mode
       function enableHidiousMode(){
         document.getElementsByClassName("hideousmode")[0].style.display = "block"
-        document.getElementById("bgsound").autoplay = true
-        try {
-          document.getElementById("bgsound").play()
-        } catch (e) {
-          alert("Press Enter to Continue")
-          document.getElementById("bgsound").play()
-        }
+        var x = document.createElement("audio")
+        x.autoplay = true
+        x.loop = true
+        x.id = "bgsound"
+        x.innerHTML = '<source src="https:\/\/rawcdn.githack.com/MrLynchWAMS/MrLynchWAMS.github.io/40624e921c8173e9df12d6e661a23975de434728/idxmusic.wav" type="audio/wav">'
+        document.getElementsByClassName("root")[0].appendChild(x)
         // body
         document.body.style.backgroundColor = "yellowgreen";
         document.getElementsByClassName("header")[0].style.fontSize = "70px"
