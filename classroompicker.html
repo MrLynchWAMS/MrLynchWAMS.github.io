@@ -29,34 +29,73 @@
         word-break: break-all;
         overflow-wrap: break-all;
       }
+      .marqueeltr {
+        -webkit-animation: slide 14.5s infinite linear;
+     }
+
+     @-webkit-keyframes slide {
+       0% {
+        -webkit-transform: translate(45vw, 0%);
+       }
+
+       100% {
+         -webkit-transform: translate(-40vw, 0px);
+      }
+    }
+      .marqueertl {
+        -webkit-animation: slide2 14.5s infinite linear;
+     }
+
+     @-webkit-keyframes slide2 {
+       0% {
+        -webkit-transform: translate(-40vw, 0%);
+       }
+
+       100% {
+         -webkit-transform: translate(45vw, 0px);
+      }
+    }
+      .marqueebounce {
+        -webkit-animation: bounce 29s infinite linear;
+     }
+
+     @-webkit-keyframes bounce {
+       0%, 100% {
+        -webkit-transform: translate(45vw, 0%);
+       }
+
+       50% {
+         -webkit-transform: translate(-40vw, 0px);
+      }
+    }
     </style>
     
   </head>
 
   <body>
     <audio id="bgsound" loop>
-      <source src="http://dokimos.org/ajff/idxmusic.wav" type="audio/wav"> == $0
+      <source src="http://dokimos.org/ajff/idxmusic.wav" type="audio/wav">
     </audio>
     <h1 class="header"> Welcome to Mr. Lynch's fantastic group code generator!  (Now with text-wrapping and fish!!) </h1>
     <div class="root">  
       <div>
         <div class="hideousmode" style="display: none;">
-        <marquee behavior="alternate"><img src="//thumbs.gfycat.com/AdorableFriendlyBongo-size_restricted.gif" width="94" height="88" alt="Swimming fish" /></marquee>
-         <marquee behavior="scroll" direction="right"><img src="//thumbs.gfycat.com/LegitimateWastefulBighornedsheep-max-1mb.gif" width="94" height="88" alt="Swimming fish" /></marquee>
-         <marquee behavior="scroll" direction="left"><img src="//s1.b3ta.com/host/creative/36694/1478269075/lifeofpie.gif" width="94" height="88" alt="Swimming fish" /></marquee>
-         <marquee behavior="scroll" direction="left"><img src="//www.html.am/images/html-codes/marquees/fish-swimming.gif" width="94" height="88" alt="Swimming fish" /></marquee>
-        <marquee behavior="scroll" direction="left"><img src="//www.html.am/images/html-codes/marquees/fish-swimming.gif" width="94" height="88" alt="Swimming fish" /></marquee>
-         <marquee behavior="scroll" direction="right"><img src="//www.html.am/images/html-codes/marquees/fish-swimming.gif" width="94" height="88" alt="Swimming fish" /></marquee>
-         <marquee behavior="scroll" direction="left"><img src="//www.html.am/images/html-codes/marquees/fish-swimming.gif" width="94" height="88" alt="Swimming fish" /></marquee>
-         <marquee behavior="scroll" direction="left"><img src="//whoisnick.com/wp-content/uploads/2015/04/tumblr_nm5aefdIAj1qz5zo6o1_400.gif" width="94" height="88" alt="Swimming fish" /></marquee>
-        <marquee behavior="scroll" direction="left"><img src="//www.html.am/images/html-codes/marquees/fish-swimming.gif" width="94" height="88" alt="Swimming fish" /></marquee>
-         <marquee behavior="scroll" direction="right"><img src="//www.html.am/images/html-codes/marquees/fish-swimming.gif" width="94" height="88" alt="Swimming fish" /></marquee>
-         <marquee behavior="scroll" direction="left"><img src="//www.html.am/images/html-codes/marquees/fish-swimming.gif" width="94" height="88" alt="Swimming fish" /></marquee>
-         <marquee behavior="scroll" direction="left"><img src="//www.coin-operated.com/wp-content/uploads/2010/05/happy-1.gif" width="94" height="88" alt="Swimming fish" /></marquee>
-        <marquee behavior="scroll" direction="left"><img src="//www.html.am/images/html-codes/marquees/fish-swimming.gif" width="94" height="88" alt="Swimming fish" /></marquee>
-         <marquee behavior="scroll" direction="right"><img src="//www.html.am/images/html-codes/marquees/fish-swimming.gif" width="94" height="88" alt="Swimming fish" /></marquee>
-         <marquee behavior="scroll" direction="left"><img src="//www.html.am/images/html-codes/marquees/fish-swimming.gif" width="94" height="88" alt="Swimming fish" /></marquee>
-         <marquee behavior="scroll" direction="left"><img src="//blog.geocities.institute/wp-content/uploads/alien2ani.gif" width="94" height="88" alt="Swimming fish" /></marquee>
+        <img src="//thumbs.gfycat.com/AdorableFriendlyBongo-size_restricted.gif" width="94" height="88" alt="Swimming fish" class="marqueebounce" /><br/>
+         <img src="//thumbs.gfycat.com/LegitimateWastefulBighornedsheep-max-1mb.gif" width="94" height="88" alt="Swimming fish" class="marqueertl"/><br/>
+         <img src="//s1.b3ta.com/host/creative/36694/1478269075/lifeofpie.gif" width="94" height="88" alt="Swimming fish" class="marqueeltr"/><br/>
+         <img src="//www.html.am/images/html-codes/marquees/fish-swimming.gif" width="94" height="88" alt="Swimming fish" class="marqueeltr"/><br/>
+         <img src="//www.html.am/images/html-codes/marquees/fish-swimming.gif" width="94" height="88" alt="Swimming fish" class="marqueeltr"/><br/>
+         <img src="//www.html.am/images/html-codes/marquees/fish-swimming.gif" width="94" height="88" alt="Swimming fish" class="marqueertl"/><br/>
+         <img src="//www.html.am/images/html-codes/marquees/fish-swimming.gif" width="94" height="88" alt="Swimming fish" class="marqueeltr"/><br/>
+         <img src="//whoisnick.com/wp-content/uploads/2015/04/tumblr_nm5aefdIAj1qz5zo6o1_400.gif" width="94" height="88" alt="Swimming fish" class="marqueeltr" /><br/>
+         <img src="//www.html.am/images/html-codes/marquees/fish-swimming.gif" width="94" height="88" alt="Swimming fish" class="marqueeltr" /><br/>
+         <img src="//www.html.am/images/html-codes/marquees/fish-swimming.gif" width="94" height="88" alt="Swimming fish" class="marqueertl"/><br/>
+         <img src="//www.html.am/images/html-codes/marquees/fish-swimming.gif" width="94" height="88" alt="Swimming fish" class="marqueeltr" /><br/>
+         <img src="//www.coin-operated.com/wp-content/uploads/2010/05/happy-1.gif" width="94" height="88" alt="Swimming fish" class="marqueeltr" /><br/>
+         <img src="//www.html.am/images/html-codes/marquees/fish-swimming.gif" width="94" height="88" alt="Swimming fish" class="marqueeltr" /><br/>
+         <img src="//www.html.am/images/html-codes/marquees/fish-swimming.gif" width="94" height="88" alt="Swimming fish" class="marqueertl" /><br/>
+         <img src="//www.html.am/images/html-codes/marquees/fish-swimming.gif" width="94" height="88" alt="Swimming fish" class="marqueeltr" /><br/>
+         <img src="//blog.geocities.institute/wp-content/uploads/alien2ani.gif" width="94" height="88" alt="Swimming fish" class="marqueeltr" /><br/>
         </div>
         <div class="g-signin2" data-onsuccess="onSignIn" data-theme="dark"></div>
         <p id="text"></p>
@@ -74,12 +113,12 @@
       function enableHidiousMode(){
         document.getElementsByClassName("hideousmode")[0].style.display = "block"
         document.getElementById("bgsound").autoplay = true
-        document.getElementById("bgsound").play()
         // body
         document.body.style.backgroundColor = "yellowgreen";
         document.getElementsByClassName("header")[0].style.fontSize = "70px"
         document.getElementsByClassName("header")[0].style.color = "deeppink"
       }
+      enableHidiousMode()
       function disableHidiousMode(){
         document.getElementsByClassName("hideousmode")[0].style.display = "none"
         document.getElementById("bgsound").autoplay = false
@@ -132,7 +171,7 @@
      
         
        // hideous mode
-       if (["student-m@mtps.us", "25bondarv@mtps.us"].includes(email)){
+       if (email in ["student-m@mtps.us", "25bondarv@mtps.us"]){
          enableHidiousMode()
        }
                 
