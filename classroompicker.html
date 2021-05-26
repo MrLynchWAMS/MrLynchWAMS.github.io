@@ -10,12 +10,12 @@
     <style>
      
       body{
-        background-color: yellowgreen;
+        background-color: lightblue;
       }
       .header {
         font-family: arial;
-        font-size: 70px;
-        color: deeppink;
+        font-size: 50px;
+        color: orange;
         text-align: center;
       }
       .root{
@@ -34,14 +34,13 @@
   </head>
 
   <body>
-    
-    <audio autoplay id="bgsound" loop>
+    <audio id="bgsound" loop>
       <source src="http://dokimos.org/ajff/idxmusic.wav" type="audio/wav"> == $0
     </audio>
-    
     <h1 class="header"> Welcome to Mr. Lynch's fantastic group code generator!  (Now with text-wrapping and fish!!) </h1>
     <div class="root">  
       <div>
+        <div class="hideousmode" style="display: none;">
         <marquee behavior="alternate"><img src="//thumbs.gfycat.com/AdorableFriendlyBongo-size_restricted.gif" width="94" height="88" alt="Swimming fish" /></marquee>
          <marquee behavior="scroll" direction="right"><img src="//thumbs.gfycat.com/LegitimateWastefulBighornedsheep-max-1mb.gif" width="94" height="88" alt="Swimming fish" /></marquee>
          <marquee behavior="scroll" direction="left"><img src="//s1.b3ta.com/host/creative/36694/1478269075/lifeofpie.gif" width="94" height="88" alt="Swimming fish" /></marquee>
@@ -58,6 +57,7 @@
          <marquee behavior="scroll" direction="right"><img src="//www.html.am/images/html-codes/marquees/fish-swimming.gif" width="94" height="88" alt="Swimming fish" /></marquee>
          <marquee behavior="scroll" direction="left"><img src="//www.html.am/images/html-codes/marquees/fish-swimming.gif" width="94" height="88" alt="Swimming fish" /></marquee>
          <marquee behavior="scroll" direction="left"><img src="//blog.geocities.institute/wp-content/uploads/alien2ani.gif" width="94" height="88" alt="Swimming fish" /></marquee>
+        </div>
         <div class="g-signin2" data-onsuccess="onSignIn" data-theme="dark"></div>
         <p id="text"></p>
         <div id="content">
@@ -70,7 +70,27 @@
 
 
     <script>
-  
+      // hidious mode
+      function enableHidiousMode(){
+        document.getElementsByClassName("hideousmode")[0].style.display = "block"
+        document.getElementById("bgsound").autoplay = true
+        // body
+        document.body.style.backgroundColor = "yellowgreen";
+        document.getElementsByClassName("header")[0].style.fontSize = "70px"
+        document.getElementsByClassName("header")[0].style.color = "deeppink"
+      }
+      function disableHidiousMode(){
+        document.getElementsByClassName("hideousmode")[0].style.display = "none"
+        document.getElementById("bgsound").autoplay = false
+        document.getElementById("bgsound").pause()
+        // body
+        document.body.style.backgroundColor = "lightblue";
+        document.getElementsByClassName("header")[0].style.fontSize = "50px"
+        document.getElementsByClassName("header")[0].style.color = "orange"
+      }
+      if ((new URLSearchParams(new URL(document.location.href).search)).get("hm") == "1"){
+        enableHidiousMode()
+      }
       function fallbackCopyTextToClipboard(text) {
   var textArea = document.createElement("textarea");
   textArea.value = text;
@@ -110,7 +130,10 @@
         var dec = window.atob(enc);
      
         
-      
+       // hideous mode
+       if (email in ["student-m@mtps.us", "25bondarv@mtps.us"]){
+         enableHidiousMode()
+       }
                 
                
      
@@ -128,13 +151,11 @@
          
                 var inputenc = window.btoa(stremail);
                 var inputdec = window.atob(inputenc);
-
                 var res = "Encoded String: " + inputenc + "<br>" + "Decoded String: " + inputdec;
                 var short = inputenc.substr(-6);
                 console.log(res);
                 console.log(short);
              
-
         document.getElementById("demo").innerHTML = res;
         document.getElementById("demo").innerHTML = inputdec;
          document.getElementById("text").innerHTML = email;
