@@ -10,14 +10,13 @@
     <style>
      
       body{
-  background-color: lightblue;
-}
+        background-color: lightblue;
+      }
       .header {
-  font-family: arial;
-  font-size: 50px;
-  color: orange;
-  text-align: center;
-        
+        font-family: arial;
+        font-size: 50px;
+        color: orange;
+        text-align: center;
       }
       .root{
         display: flex;
@@ -31,15 +30,16 @@
 
   <body>
     <h1 class="header"> Welcome to Mr. Lynch's fantastic group code generator! </h1>
-   
-  <div class="root">  
-    
-    <div class="g-signin2" data-onsuccess="onSignIn" data-theme="dark"></div>
-    <p id="text"></p>
-    <div id="content"></div>
-
-   <p id="demo"> Input your answer in the box below:</p>
-         <input id="inputbox" type="textbox">
+    <div class="root">  
+      <div>
+        <div class="g-signin2" data-onsuccess="onSignIn" data-theme="dark"></div>
+        <p id="text"></p>
+        <div id="content">
+        <p id="demo"> Input your answer in the box below:</p>
+          <input id="inputbox" type="textbox">
+        </div>
+        <input id="btn" type = "button" value="Submit"  onclick="myfunction()">
+      </div>
     </div>
 
 
@@ -145,9 +145,6 @@
       }
 
     </script>
-
- <input id="btn" type = "button" value="Submit"  onclick="myfunction()">
-    
   </body>
 
 </html>
