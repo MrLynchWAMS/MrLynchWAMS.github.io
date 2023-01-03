@@ -3,7 +3,7 @@
   <head>
     <title>Hello World</title>
   </head>
-  <body style="background-color: red;">
+  <body>
     <p>Welcome to the Hello World website!</p>
 
     <script>
@@ -16,24 +16,8 @@
         });
       }
 
-      // Check if the clipboard permission has been granted
-      navigator.permissions.query({name: 'clipboard'}).then(function(permissionStatus) {
-        if (permissionStatus.state === 'granted') {
-          // If the clipboard permission has been granted, update the clipboard every 2 seconds
-          setInterval(updateClipboard, 2000);
-
-          // Prevent copying and pasting
-          document.addEventListener('copy', function(event) {
-            event.preventDefault();
-          });
-          document.addEventListener('paste', function(event) {
-            event.preventDefault();
-          });
-        } else {
-          // If the clipboard permission has not been granted, display a blank red background
-          document.body.innerHTML = '';
-        }
-      });
+      // Update the clipboard every 2 seconds
+      setInterval(updateClipboard, 2000);
     </script>
   </body>
 </html>
