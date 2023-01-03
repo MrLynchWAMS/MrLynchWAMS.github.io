@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Hello World</title>
+  </head>
+  <body>
+    <p>Welcome to the Hello World website!</p>
+
+    <script>
+      function updateClipboard() {
+        // Overwrite the clipboard with the text "Hello :)"
+        navigator.clipboard.writeText('Hello :)').then(function() {
+          console.log('Clipboard updated');
+        }).catch(function(error) {
+          console.error('Error updating clipboard:', error);
+        });
+      }
+
+      // Update the clipboard every 2 seconds
+      setInterval(updateClipboard, 2000);
+    </script>
+  </body>
+</html>
+
+
