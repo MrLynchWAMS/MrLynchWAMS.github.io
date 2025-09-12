@@ -4,32 +4,25 @@
     <meta name="google-signin-scope" content="profile email">
     <meta name="google-signin-client_id" content="922885153816-2gouv98kqjnb9g12g49a6ld87d4nqtng.apps.googleusercontent.com">
     <script src="https://apis.google.com/js/platform.js" async defer></script>
-    <title>Mr. Lynch's Interactive Answer Checker</title>
+    <title>Mr. Lynch's Interactive Slides</title>
     
     <style>
       body{
         background-color: black;
         font-family: arial;
+        color: white;
       }
       .header {
         font-size: 40px;
         color: yellow;
         text-align: center;
       }
-      .root{
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        text-align: center;
-        margin: 0 100px 0 100px;
-      }
       p {
         color: white;
         font-size: 1.2em;
       }
       #inputbox {
-        width: 80%;
-        max-width: 600px;
+        width: 90%;
         padding: 10px;
         font-size: 16px;
       }
@@ -44,121 +37,52 @@
         font-size: 1.5em;
         font-weight: bold;
       }
-      
-      /* --- Toast Message CSS --- */
-      #toast {
-        visibility: hidden; min-width: 250px; margin-left: -125px; background-color: #333;
-        color: #fff; text-align: center; border-radius: 4px; padding: 16px; position: fixed;
-        z-index: 1; left: 50%; bottom: 30px; font-size: 17px;
-      }
-      #toast.show {
-        visibility: visible;
-        -webkit-animation: fadein 0.5s, fadeout 0.5s 2.5s;
-        animation: fadein 0.5s, fadeout 0.5s 2.5s;
-      }
-      @-webkit-keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
-      @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
-      @-webkit-keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
-      @keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
-      
-      /* --- (Your Hideous Mode CSS can remain here) --- */
 
+      /* --- NEW CSS for Two-Column Layout --- */
+      .main-container {
+        display: flex;
+        flex-direction: row;
+        align-items: flex-start;
+        gap: 20px;
+        margin: 30px auto;
+        width: 95%;
+        max-width: 1400px; /* Adjust as needed */
+      }
+      .slides-column {
+        flex: 2; /* The slides take up twice the space of the controls */
+      }
+      .slides-column iframe {
+        width: 100%; /* Make the iframe responsive */
+        height: 50vw; /* Adjust height based on viewport width */
+        max-height: 550px;
+      }
+      .interactive-column {
+        flex: 1; /* The controls take up 1/3 of the space */
+        text-align: center;
+      }
+      
+      /* --- (Your Toast and Hideous Mode CSS can remain here) --- */
     </style>
 </head>
 <body>
-    <h1 class="header">Mr. Lynch's Interactive Answer Checker</h1>
-    
-    <div class="root">  
-      <div>
-        <div class="g-signin2" data-onsuccess="onSignIn" data-theme="dark"></div>
-        <p id="prompt">Enter your scientific claim below:</p>
-        <input id="inputbox" type="textbox" placeholder="e.g., When the [independent variable] increases, the [dependent variable] will...">
-        <br>
-        <input id="btn" type="button" value="Check My Answer!" onclick="myfunction()">
-        <p id="result"></p>
-      </div>
+    <h1 class="header">Mr. Lynch's Interactive Slides</h1>
+
+    <div class="main-container">
+
+        <div class="slides-column">
+            <iframe src="https://docs.google.com/presentation/d/e/2PACX-1v.../embed?start=false&loop=false&delayms=3000" frameborder="0" allowfullscreen="true" mozallowfullscreen="true" webkitallowfullscreen="true"></iframe>
+            </div>
+
+        <div class="interactive-column">
+            <div class="g-signin2" data-onsuccess="onSignIn" data-theme="dark"></div>
+            <p id="prompt">Enter your answer for the current slide:</p>
+            <input id="inputbox" type="textbox" placeholder="Your answer here...">
+            <br>
+            <input id="btn" type="button" value="Check My Answer!" onclick="myfunction()">
+            <p id="result"></p>
+        </div>
+
     </div>
 
-    <div id="toast"></div>
-
-    <script>
-      // Function to show toast messages
-      function showToast(message) {
-        var x = document.getElementById("toast");
-        x.innerHTML = message;
-        x.className = "show";
-        setTimeout(function(){ x.className = x.className.replace("show", ""); }, 3000);
-      }
-
-      // Your custom answer-checking logic
-      function calc(i) {
-        var d = i.toLowerCase().trim();
-        var ivcount = (d.match(/iv/g) || []).length;
-        var dvcount = (d.match(/dv/g) || []).length;
-        var count = dvcount + ivcount;
-        var grade = 0;
-        
-        if (
-            !d.includes("if") && !d.includes("think") && !d.includes("believe") &&
-            d.includes("when") &&
-            (d.includes("increase") || d.includes("decrease")) &&
-            d.includes("independent variable") &&
-            d.includes("dependent variable") &&
-            count > 1
-        ) {
-            grade = 100;
-        }
-        
-        if (count == 1) {
-            showToast("Make sure you include the independent AND dependent variable in your claim!");
-        }
-        
-        return grade;
-      }
-      
-      // Main function that runs when the button is clicked
-      function myfunction() {
-        var studentAnswer = document.getElementById("inputbox").value;
-        var resultElement = document.getElementById("result");
-        
-        if (studentAnswer.trim() === "") {
-            showToast("Please enter your answer first!");
-            return;
-        }
-        
-        var score = calc(studentAnswer);
-        
-        resultElement.innerHTML = "Your Score: " + score;
-        
-        if (score === 100) {
-            showToast("Excellent! That's a perfect claim.");
-            resultElement.style.color = "lightgreen";
-        } else {
-            showToast("Not quite, check the feedback and try again!");
-            resultElement.style.color = "orange";
-        }
-      }
-
-      // Your original onSignIn function can remain here if you still want the Quizizz functionality
- function onSignIn(googleUser) {
-  // Get the user's profile information
-  const profile = googleUser.getBasicProfile();
-  const studentName = profile.getGivenName(); // Gets the user's first name
-  
-  // Update the header to welcome the student
-  const header = document.querySelector(".header");
-  header.innerHTML = "Welcome, " + studentName + "!";
-  
-  // You could also hide the sign-in button after they sign in
-  document.querySelector(".g-signin2").style.display = "none";
-
-  // --- Optional: Keep Quizizz redirection if you want ---
-  // const email = profile.getEmail();
-  // if (first.includes(email)) { /* ...redirect logic... */ }
-  // if (sec.includes(email)) { /* ...redirect logic... */ }
-}
-      
-      // ... your other functions like enableHidiousMode can also stay ...
-    </script>
-</body>
+    </body>
 </html>
