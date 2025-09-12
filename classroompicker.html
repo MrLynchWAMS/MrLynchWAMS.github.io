@@ -1,19 +1,17 @@
 <!DOCTYPE html>
 <html lang="en">
-
-  <head>
+<head>
     <meta name="google-signin-scope" content="profile email">
     <meta name="google-signin-client_id" content="922885153816-2gouv98kqjnb9g12g49a6ld87d4nqtng.apps.googleusercontent.com">
     <script src="https://apis.google.com/js/platform.js" async defer></script>
-    <title> Group Answer Validator </title>
+    <title>Mr. Lynch's Interactive Answer Checker</title>
     
     <style>
-     
       body{
         background-color: black;
+        font-family: arial;
       }
       .header {
-        font-family: arial;
         font-size: 40px;
         color: yellow;
         text-align: center;
@@ -22,250 +20,132 @@
         display: flex;
         justify-content: center;
         align-items: center;
+        text-align: center;
         margin: 0 100px 0 100px;
-
       }
-      div > p {
-        word-break: break-all;
-        overflow-wrap: break-all;
+      p {
+        color: white;
+        font-size: 1.2em;
       }
-      .marqueeltr {
-        -webkit-animation: slide 14.5s infinite linear;
-     }
-
-     @-webkit-keyframes slide {
-       0% {
-        -webkit-transform: translate(50vw, 0%);
-       }
-
-       100% {
-         -webkit-transform: translate(-35vw, 0px);
+      #inputbox {
+        width: 80%;
+        max-width: 600px;
+        padding: 10px;
+        font-size: 16px;
       }
-    }
-      .marqueertl {
-        -webkit-animation: slide2 14.5s infinite linear;
-     }
-
-     @-webkit-keyframes slide2 {
-       0% {
-        -webkit-transform: translate(-35vw, 0%);
-       }
-
-       100% {
-         -webkit-transform: translate(50vw, 0px);
+      #btn {
+        margin-top: 20px;
+        padding: 10px 20px;
+        font-size: 18px;
+        cursor: pointer;
       }
-    }
-      .marqueebounce {
-        -webkit-animation: bounce 29s infinite linear;
-     }
-
-     @-webkit-keyframes bounce {
-       0%, 100% {
-        -webkit-transform: translate(50vw, 0%);
-       }
-
-       50% {
-         -webkit-transform: translate(-35vw, 0px);
+      #result {
+        margin-top: 20px;
+        font-size: 1.5em;
+        font-weight: bold;
       }
-    }
-    p {
-      color: white;
-    }
+      
+      /* --- Toast Message CSS --- */
+      #toast {
+        visibility: hidden; min-width: 250px; margin-left: -125px; background-color: #333;
+        color: #fff; text-align: center; border-radius: 4px; padding: 16px; position: fixed;
+        z-index: 1; left: 50%; bottom: 30px; font-size: 17px;
+      }
+      #toast.show {
+        visibility: visible;
+        -webkit-animation: fadein 0.5s, fadeout 0.5s 2.5s;
+        animation: fadein 0.5s, fadeout 0.5s 2.5s;
+      }
+      @-webkit-keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
+      @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
+      @-webkit-keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
+      @keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
+      
+      /* --- (Your Hideous Mode CSS can remain here) --- */
+
     </style>
+</head>
+<body>
+    <h1 class="header">Mr. Lynch's Interactive Answer Checker</h1>
     
-  </head>
-
-  <body>
-    <h1 class="header"> Welcome to Mr. Lynch's fantastic group code generator! <BR/> (Now with autocopy!!) </h1>
     <div class="root">  
       <div>
-        <div class="hideousmode" style="display: none;">
-        <img src="//thumbs.gfycat.com/AdorableFriendlyBongo-size_restricted.gif" width="94" height="88" alt="Swimming fish" class="marqueebounce" /><br/>
-         <img src="//thumbs.gfycat.com/LegitimateWastefulBighornedsheep-max-1mb.gif" width="594" height="88" alt="Swimming fish" class="marqueertl"/><br/>
-         <img src="//s1.b3ta.com/host/creative/36694/1478269075/lifeofpie.gif" width="94" height="88" alt="Swimming fish" class="marqueeltr"/><br/>
-         <img src="//www.html.am/images/html-codes/marquees/fish-swimming.gif" width="94" height="88" alt="Swimming fish" class="marqueeltr"/><br/>
-         <img src="//www.html.am/images/html-codes/marquees/fish-swimming.gif" width="94" height="88" alt="Swimming fish" class="marqueeltr"/><br/>
-         <img src="//www.html.am/images/html-codes/marquees/fish-swimming.gif" width="94" height="88" alt="Swimming fish" class="marqueertl"/><br/>
-         <img src="//www.html.am/images/html-codes/marquees/fish-swimming.gif" width="94" height="88" alt="Swimming fish" class="marqueeltr"/><br/>
-         <img src="//whoisnick.com/wp-content/uploads/2015/04/tumblr_nm5aefdIAj1qz5zo6o1_400.gif" width="94" height="88" alt="Swimming fish" class="marqueeltr" /><br/>
-         <img src="//www.html.am/images/html-codes/marquees/fish-swimming.gif" width="94" height="88" alt="Swimming fish" class="marqueeltr" /><br/>
-         <img src="//www.html.am/images/html-codes/marquees/fish-swimming.gif" width="194" height="88" alt="Swimming fish" class="marqueertl"/><br/>
-         <img src="//www.html.am/images/html-codes/marquees/fish-swimming.gif" width="94" height="88" alt="Swimming fish" class="marqueeltr" /><br/>
-         <img src="//www.coin-operated.com/wp-content/uploads/2010/05/happy-1.gif" width="94" height="88" alt="Swimming fish" class="marqueeltr" /><br/>
-         <img src="//www.html.am/images/html-codes/marquees/fish-swimming.gif" width="94" height="88" alt="Swimming fish" class="marqueeltr" /><br/>
-         <img src="//www.html.am/images/html-codes/marquees/fish-swimming.gif" width="94" height="188" alt="Swimming fish" class="marqueertl" /><br/>
-         <img src="//www.html.am/images/html-codes/marquees/fish-swimming.gif" width="94" height="88" alt="Swimming fish" class="marqueeltr" /><br/>
-         <img src="//blog.geocities.institute/wp-content/uploads/alien2ani.gif" width="94" height="88" alt="Swimming fish" class="marqueeltr" /><br/>
-        </div>
         <div class="g-signin2" data-onsuccess="onSignIn" data-theme="dark"></div>
-        <p id="text"></p>
-        <div id="content">
-        <p id="demo"> Sign in with Google to be redirected:</p>
-          <input id="inputbox" type="textbox">
-        </div>
-        <input id="btn" type = "button" value="Click here to Generate your code for #5!"  onclick="myfunction()">
+        <p id="prompt">Enter your scientific claim below:</p>
+        <input id="inputbox" type="textbox" placeholder="e.g., When the [independent variable] increases, the [dependent variable] will...">
+        <br>
+        <input id="btn" type="button" value="Check My Answer!" onclick="myfunction()">
+        <p id="result"></p>
       </div>
     </div>
 
+    <div id="toast"></div>
 
     <script>
-      // hidious mode
-      function enableHidiousMode(){
-        document.getElementsByClassName("hideousmode")[0].style.display = "block"
-        var x = document.createElement("audio")
-        x.autoplay = true
-        x.loop = true
-        x.id = "bgsound"
-        x.innerHTML = '<source src="https:\/\/rawcdn.githack.com/MrLynchWAMS/MrLynchWAMS.github.io/40624e921c8173e9df12d6e661a23975de434728/idxmusic.wav" type="audio/wav">'
-        document.getElementsByClassName("root")[0].appendChild(x)
-        // body
-        document.body.style.backgroundColor = "lightsalmon";
-        document.getElementsByClassName("header")[0].style.fontSize = "70px"
-        document.getElementsByClassName("header")[0].style.color = "salmon"
+      // Function to show toast messages
+      function showToast(message) {
+        var x = document.getElementById("toast");
+        x.innerHTML = message;
+        x.className = "show";
+        setTimeout(function(){ x.className = x.className.replace("show", ""); }, 3000);
       }
-      function disableHidiousMode(){
-        document.getElementsByClassName("hideousmode")[0].style.display = "none"
-        document.getElementById("bgsound").autoplay = false
-        document.getElementById("bgsound").pause()
-        // body
-        document.body.style.backgroundColor = "lightblue";
-        document.getElementsByClassName("header")[0].style.fontSize = "50px"
-        document.getElementsByClassName("header")[0].style.color = "orange"
-      }
-      if ((new URLSearchParams(new URL(document.location.href).search)).get("hm") == "1"){
-        enableHidiousMode()
-      }
-      function fallbackCopyTextToClipboard(text) {
-  var textArea = document.createElement("textarea");
-  textArea.value = text;
-  
-  // Avoid scrolling to bottom
-  textArea.style.top = "0";
-  textArea.style.left = "0";
-  textArea.style.position = "fixed";
 
-  document.body.appendChild(textArea);
-  textArea.focus();
-  textArea.select();
-
-  try {
-    var successful = document.execCommand('copy');
-    var msg = successful ? 'successful' : 'unsuccessful';
-    console.log('Fallback: Copying text command was ' + msg);
-  } catch (err) {
-    console.error('Fallback: Oops, unable to copy', err);
-  }
-
-  document.body.removeChild(textArea);
-}
-     
-      function onSignIn(googleUser) {
-       const profile = googleUser.getBasicProfile();
-       const email = profile.getEmail();
-       const fullName = profile.getName();
-       
-        var test = ["example@1.com", "alkdsjadfasdf", "jfaodfjadojf"];
-        var first = ["26AmbrosinoL@mtps.us", "26CiollR@mtps.us", "26CornishC@mtps.us", "26CotteE@mtps.us", "26DesaiA@mtps.us", "26DonnanS@mtps.us", "26FierroN@mtps.us", "26GomesN@mtps.us", "26JanulisM@mtps.us", "26LiuK@mtps.us", "26MakopoulosE@mtps.us", "26McCloskeyC@mtps.us", "26MiceliM@mtps.us", "26MisselhornT@mtps.us", "26ProllR@mtps.us", "26UptonJ@mtps.us"];
-        var sec = ["26albayyaah@mtps.us", "26balania@mtps.us", "26bauern@mtps.us", "26caccuroc@mtps.us", "26errichettim@mtps.us", "26fujim@mtps.us", "26kashifs@mtps.us", "26leos@mtps.us", "26mcdonoughc@mtps.us", "26milsteadn@mtps.us", "26mitchellm@mtps.us", "26parsonsd@mtps.us", "26ransomc@mtps.us", "26rykaczewskil@mtps.us", "26simpsonp@mtps.us", "26sobins@mtps.us", "26velosoa@mtps.us", "26yangq@mtps.us", ];
-        var fifth = [ "26BahramS@mtps.us", "26BaraschK@mtps.us", "26BoskoQ@mtps.us", "26BoujaoudeA@mtps.us", "26BowersJ@mtps.us", "26CareyA@mtps.us", "26ColellaA@mtps.us", "26FerriE@mtps.us", "26GhobrialA@mtps.us", "26KramerJ@mtps.us", "26LewisP@mtps.us", "26LundgrenH@mtps.us", "26MarkK@mtps.us", "26RichardsS@mtps.us", "26RobertsM@mtps.us", "26ShandC@mtps.us", "26ShepardK@mtps.us", "26SinghD@mtps.us", "26TeodorakM@mtps.us", "26WijnenL@mtps.us"];
-        var sev = ["student-m@mtps.us", "26desummam@mtps.us","mstuart@mtps.us", "26BarnesO@mtps.us", "26BlongJ@mtps.us", "26BogartA@mtps.us", "26BroeringA@mtps.us", "26CelharM@mtps.us", "26ChenJ@mtps.us", "26ChrismanL@mtps.us", "26CilibertiJ@mtps.us", "26CohenZ@mtps.us", "26CoyleZ@mtps.us", "26FullerN@mtps.us", "26HartsellC@mtps.us", "26JasminL@mtps.us", "26KellyK@mtps.us", "26LynchC@mtps.us", "26MalikA@mtps.us", "26MancineB@mtps.us", "26MegillG@mtps.us", "26MitchellC@mtps.us", "26OrrH@mtps.us", "26PonnappanK@mtps.us", "26ShepherdK@mtps.us", "26SteinerC@mtps.us", "26TabacoC@mtps.us", "26VojdaniN@mtps.us", "26ZimmermannJ@mtps.us"];
-        var eight = ["klynch@mtps.us", "choneyford@mtps.us", "26carterb@mtps.us", "26chens@mtps.us", "26crossleyb@mtps.us", "26desummam@mtps.us", "26figueiredoe@mtps.us", "26jonesjayden@mtps.us", "26kima@mtps.us", "26lazarusa@mtps.us", "26liui@mtps.us", "26lukovv@mtps.us", "26malaikaniishan@mtps.us", "26muindij@mtps.us", "26oterie@mtps.us", "26seideno@mtps.us", "26stackmayal@mtps.us", "26trombleyry@mtps.us", "26wanga@mtps.us", "26zimmerl@mtps.us"];
-        var eighta = ["student-m@mtps.com"];
-        var eightb = ["example.com"];
-        var enc = window.btoa(email);
-        var dec = window.atob(enc);
-     
+      // Your custom answer-checking logic
+      function calc(i) {
+        var d = i.toLowerCase().trim();
+        var ivcount = (d.match(/iv/g) || []).length;
+        var dvcount = (d.match(/dv/g) || []).length;
+        var count = dvcount + ivcount;
+        var grade = 0;
         
-       // hideous mode
-       if (["student-m@mtps.us", "26MitchellC@mtps.us", "26rykaczewskil@mtps.us", "26caccuroc@mtps.us", "26simpsonp@mtps.us", "26DonnanS@mtps.us", "26AmbrosinoL@mtps.us", "26TabacoC@mtps.us", "26trombleyr@mtps.us", "25bondarv@mtps.us", "26barnesO@mtps.us", "26VojdaniN@mtps.us","26FigueiredoE@mtps.us", "26SinghD@mtps.us"].includes(email)){
-         enableHidiousMode()
-       }
-                
-           if (sec.includes(email)) {
-             window.open("https://quizizz.com/join?c=X5ef1_MS-cuF4yMeeHfmLMs1Zv-cl4aBZ0FGwJoiV-N6PABzyFMzbstohLfHqGLkDFNHjp4aMYSLHvM8PweawsYf__GNsSyw7GlZDAJDk0mw3TbPtCMw0f_y6t3_k08w0-gPvSHWTtvJd4MGb80W89Qbn6BoR0uMDI0k7KYQDl-FkDklzdAq0kcl-lSXf5Fh1ubjbnN3vsZHpHvLBmpTrbMHfQ.KHJW_g-dxdpYoycD_GQ9wg._Xf9B_gRtK88g01O&linktype=web");
-             console.log("2nd Period");
-           }
-if (first.includes(email)) {
-  window.open("https://quizizz.com/join?c=Fn9NxOHprR_qWDzdqGkf1HPPRnf6twqbZL4wzJ95--KxO_9wcup8pG4dlyRxTLwoss6FA9Cr7NiGM3Y1of4sEhvOW9tdu3uz3nbWBGvMXHrT4t-qLBHan55UW5wa0Fv8bRiqFu_xPf9cspl6_lmTzcE1p7fzyQWIBgLqbusFy89fmmBxV0HP-WrN84qz53dPoEc1G4NWQ61UORNji1poAfCk_A.-RZy0lfDJPfkCqEgViOv0Q.UExEeUGxlnW18B_b&linktype=web");
-console.log("1st Period");
-}
-
-
-        if (fifth.includes(email)) {
-          window.open("https://quizizz.com/join?c=uF3Cs-dRJoeYOSu-T2BOXWe48Md-uXUm39xx59N2wKv-qi8WVyYhS9Qm6DI6YbCGxuEO8EvqDXwyj2AIv71O8faLsod3mAO2aiEDCWzA9wApeOUGNQ7CL8WJHufr7Ax4yPIgE5BRz5LqWWHaSnw_s_F5OD7Tgt9kOKyjWZ_eqd88UcqKAy6q3awvX-4dUN50zeV36bEUWuvXHU4L82SRiwMUYA.V-OCgYCjdgcC8sNyCoa2iQ.H5ghk6eUxZ_-eE3W&linktype=web");
+        if (
+            !d.includes("if") && !d.includes("think") && !d.includes("believe") &&
+            d.includes("when") &&
+            (d.includes("increase") || d.includes("decrease")) &&
+            d.includes("independent variable") &&
+            d.includes("dependent variable") &&
+            count > 1
+        ) {
+            grade = 100;
         }
         
-            if (sev.includes(email)) {
-          window.open("https://quizizz.com/join?c=fNyjwNAPsOptElwQSRZuugRw6VOrPBq8iubFQZ2Lqo9Y0kZ_-uwEM4pCVyUijF1e99xqx_OI9RoLULQS8OmfjQ2VM4_HSbPjIyRxh0qP7ggAizpKAU44cMcfbpx7isGOZOGQCD0m-djpu5PJ-k-ckQfu_fSj0A5NWoEVQn67h5RXwTX3ASoEyu04Cbs5n3UGeK_vB3lp_3atlSoDx6lsag3qaw.2jkS4nyxF9RxQCTWbSylKQ.Pxoe5rWrn8IoRbiF&linktype=web");
-       console.log("7th Period");
-              console.log("https://quizizz.com/join?c=fNyjwNAPsOptElwQSRZuugRw6VOrPBq8iubFQZ2Lqo9Y0kZ_-uwEM4pCVyUijF1e99xqx_OI9RoLULQS8OmfjQ2VM4_HSbPjIyRxh0qP7ggAizpKAU44cMcfbpx7isGOZOGQCD0m-djpu5PJ-k-ckQfu_fSj0A5NWoEVQn67h5RXwTX3ASoEyu04Cbs5n3UGeK_vB3lp_3atlSoDx6lsag3qaw.2jkS4nyxF9RxQCTWbSylKQ.Pxoe5rWrn8IoRbiF&linktype=web");
-            }
+        if (count == 1) {
+            showToast("Make sure you include the independent AND dependent variable in your claim!");
+        }
         
-            if (eight.includes(email)) {
-          window.open("https://quizizz.com/join?c=NPDWJCWERVQmyQ94h6j_LC2lldstsB51dzm0Xq3Op_dgAs9yxcaRU2_UoXkYSfEiNyz5uuRRpJPJkl_xPhObNVlyLCZ8tCYvPzkgU4x-Cak-nWUxHTMh4SKEDx_qVyB-7RIaYjA9ivWyC4PClJTghdXfiCAwMkxlhf2AhrTEczugYIAC6kWqNQgva3dpvRJIekF31ooJ4UTN6WJNMEfluN51Sg.NDPZBAGxSPbBRcioHLJLFg.BHDqJimolncTMvCB&linktype=web");
-      console.log("8th Period");
-            }
-        
-        
-        
-      console.log("Email: " + email);
-        console.log("v2");
-
-   
-
-    /*  if (first.includes(email)) {
-        
-            
-         
-                var inputenc = window.btoa(stremail);
-                var inputdec = window.atob(inputenc);
-                var res = "Encoded String: " + inputenc + "<br>" + "Decoded String: " + inputdec;
-                var short = inputenc.substr(-6);
-                console.log(res);
-                console.log(short);
-             
-        document.getElementById("demo").innerHTML = res;
-        document.getElementById("demo").innerHTML = inputdec;
-         document.getElementById("text").innerHTML = email;
-         document.getElementById("text").innerHTML = "Hey " + fullName + " (" + email + ")" + enc;
-        window.open("https://edpuzzle.com/assignments/60b62022bcae4d4144ec8864/watch");
-   
-           
-         
-  
+        return grade;
+      }
       
-      }  */
-  }
-    
-      function myfunction(){
-          var auth2 = gapi.auth2.getAuthInstance();
-          var email = auth2.currentUser.get().getBasicProfile().getEmail();
-          var inputtext = document.getElementById("inputbox").value;
-          var time = new Date().getTime();
-          var stream = inputtext + ":" + time +  ":" + email;
-          var streamcode = window.btoa(stream);
-          
+      // Main function that runs when the button is clicked
+      function myfunction() {
+        var studentAnswer = document.getElementById("inputbox").value;
+        var resultElement = document.getElementById("result");
         
-        if(confirm("Save to Clipboard?")){
-          
-          fallbackCopyTextToClipboard(streamcode);
-          
-        
+        if (studentAnswer.trim() === "") {
+            showToast("Please enter your answer first!");
+            return;
         }
-          if(inputtext== "yes no"){
-            window.open("https://www.example.com");
-          }
         
-        //alert (streamcode);
-        document.getElementById("text").innerHTML = streamcode;
+        var score = calc(studentAnswer);
         
-       
+        resultElement.innerHTML = "Your Score: " + score;
         
-        console.log(inputtext);
-        console.log(streamcode);
+        if (score === 100) {
+            showToast("Excellent! That's a perfect claim.");
+            resultElement.style.color = "lightgreen";
+        } else {
+            showToast("Not quite, check the feedback and try again!");
+            resultElement.style.color = "orange";
+        }
       }
 
+      // Your original onSignIn function can remain here if you still want the Quizizz functionality
+      function onSignIn(googleUser) {
+        // ... all the code for redirecting to Quizizz ...
+        // You can keep it or remove it depending on your needs.
+      }
+      
+      // ... your other functions like enableHidiousMode can also stay ...
     </script>
-  </body>
-
+</body>
 </html>
