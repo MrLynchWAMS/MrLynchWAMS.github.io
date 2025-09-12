@@ -140,10 +140,23 @@
       }
 
       // Your original onSignIn function can remain here if you still want the Quizizz functionality
-      function onSignIn(googleUser) {
-        // ... all the code for redirecting to Quizizz ...
-        // You can keep it or remove it depending on your needs.
-      }
+ function onSignIn(googleUser) {
+  // Get the user's profile information
+  const profile = googleUser.getBasicProfile();
+  const studentName = profile.getGivenName(); // Gets the user's first name
+  
+  // Update the header to welcome the student
+  const header = document.querySelector(".header");
+  header.innerHTML = "Welcome, " + studentName + "!";
+  
+  // You could also hide the sign-in button after they sign in
+  document.querySelector(".g-signin2").style.display = "none";
+
+  // --- Optional: Keep Quizizz redirection if you want ---
+  // const email = profile.getEmail();
+  // if (first.includes(email)) { /* ...redirect logic... */ }
+  // if (sec.includes(email)) { /* ...redirect logic... */ }
+}
       
       // ... your other functions like enableHidiousMode can also stay ...
     </script>
