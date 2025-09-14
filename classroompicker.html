@@ -1,88 +1,104 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta name="google-signin-scope" content="profile email">
-    <meta name="google-signin-client_id" content="922885153816-2gouv98kqjnb9g12g49a6ld87d4nqtng.apps.googleusercontent.com">
-    <script src="https://apis.google.com/js/platform.js" async defer></script>
-    <title>Mr. Lynch's Interactive Slides</title>
-    
     <style>
-      body{
-        background-color: black;
-        font-family: arial;
-        color: white;
-      }
-      .header {
-        font-size: 40px;
-        color: yellow;
-        text-align: center;
-      }
-      p {
-        color: white;
-        font-size: 1.2em;
-      }
-      #inputbox {
-        width: 90%;
-        padding: 10px;
-        font-size: 16px;
-      }
-      #btn {
-        margin-top: 20px;
-        padding: 10px 20px;
-        font-size: 18px;
-        cursor: pointer;
-      }
-      #result {
-        margin-top: 20px;
-        font-size: 1.5em;
-        font-weight: bold;
-      }
-
-      /* --- NEW CSS for Two-Column Layout --- */
-      .main-container {
-        display: flex;
-        flex-direction: row;
-        align-items: flex-start;
-        gap: 20px;
-        margin: 30px auto;
-        width: 95%;
-        max-width: 1400px; /* Adjust as needed */
-      }
-      .slides-column {
-        flex: 2; /* The slides take up twice the space of the controls */
-      }
-      .slides-column iframe {
-        width: 100%; /* Make the iframe responsive */
-        height: 50vw; /* Adjust height based on viewport width */
-        max-height: 550px;
-      }
-      .interactive-column {
-        flex: 1; /* The controls take up 1/3 of the space */
-        text-align: center;
-      }
-      
-      /* --- (Your Toast and Hideous Mode CSS can remain here) --- */
+        /* (All your CSS from the previous step) */
+        .slide-nav { margin-top: 10px; }
+        .slide-nav button { font-size: 16px; padding: 5px 10px; }
+        .slide-nav span { margin: 0 15px; font-size: 1.2em; }
     </style>
 </head>
 <body>
     <h1 class="header">Mr. Lynch's Interactive Slides</h1>
 
     <div class="main-container">
-
         <div class="slides-column">
-            <iframe src="https://docs.google.com/presentation/d/e/2PACX-1v.../embed?start=false&loop=false&delayms=3000" frameborder="0" allowfullscreen="true" mozallowfullscreen="true" webkitallowfullscreen="true"></iframe>
+            <img id="slide-image" src="" alt="Loading Slide..." style="width:100%; border: 1px solid grey;">
+            <div class="slide-nav">
+                <button onclick="prevSlide()">Previous</button>
+                <span id="slide-counter"></span>
+                <button onclick="nextSlide()">Next</button>
             </div>
-
-        <div class="interactive-column">
-            <div class="g-signin2" data-onsuccess="onSignIn" data-theme="dark"></div>
-            <p id="prompt">Enter your answer for the current slide:</p>
-            <input id="inputbox" type="textbox" placeholder="Your answer here...">
-            <br>
-            <input id="btn" type="button" value="Check My Answer!" onclick="myfunction()">
-            <p id="result"></p>
         </div>
 
+        <div class="interactive-column">
+            </div>
     </div>
 
-    </body>
+    <script>
+    // ========================================================================
+    // JAVASCRIPT CONFIGURATION - PASTE YOUR INFO HERE
+    // ========================================================================
+    const API_KEY = "AIzaSyCdnRYchqudW2JvpaHCqbxTlNewghrMEJc";
+    const PRESENTATION_ID = "1LYl6PebqTv-KQ9aj3-lnvcZwcV_MXbn1hxVUtdG4sFo";
+
+    // List of the unique Slide IDs you copied from the URL
+    const slideIds = [
+        "g22b68d540b9_0_0", // Slide 1's ID
+        "g11f6b98ef49_0_0", // Slide 2's ID
+        "g11f6b98ef49_0_5", // Slide 3's ID
+        // ... add all your slide IDs here in order
+    ];
+    // ========================================================================
+
+    let currentSlideIndex = 0;
+
+    // This is the core function that calls the Google API
+    function updateSlideDisplay() {
+        const slideId = slideIds[currentSlideIndex];
+        const slideImageElement = document.getElementById('slide-image');
+        const slideCounterElement = document.getElementById('slide-counter');
+
+        // Show a loading message
+        slideCounterElement.innerHTML = `Loading Slide ${currentSlideIndex + 1}...`;
+        slideImageElement.src = ""; // Clear the old image
+
+        // The URL for the Google Slides API to get a thumbnail
+        const apiUrl = `https://slides.googleapis.com/v1/presentations/${PRESENTATION_ID}/pages/${slideId}/thumbnail?key=${API_KEY}`;
+
+        // Fetch the data from Google's servers
+        fetch(apiUrl)
+            .then(response => response.json())
+            .then(data => {
+                // The API gives us back a URL for the image
+                const imageUrl = data.contentUrl;
+                slideImageElement.src = imageUrl; // Set the image source
+                slideCounterElement.innerHTML = `Slide ${currentSlide-index + 1} of ${slideIds.length}`;
+            })
+            .catch(error => {
+                console.error("Error fetching slide image:", error);
+                slideCounterElement.innerHTML = "Error loading slide.";
+            });
+
+        document.getElementById('inputbox').value = "";
+        document.getElementById('result').innerHTML = "";
+    }
+
+    function nextSlide() {
+        if (currentSlideIndex < slideIds.length - 1) {
+            currentSlideIndex++;
+            updateSlideDisplay();
+        }
+    }
+
+    function prevSlide() {
+        if (currentSlideIndex > 0) {
+            currentSlideIndex--;
+            updateSlideDisplay();
+        }
+    }
+
+    // Load the first slide when the page opens
+    window.onload = function() {
+        if (!API_KEY || API_KEY === "AIzaSyCdnRYchqudW2JvpaHCqbxTlNewghrMEJc") {
+            alert("Error: API_KEY is not configured in the script.");
+            return;
+        }
+        updateSlideDisplay();
+    };
+
+    // (Your onSignIn, calc, myfunction, showToast, and other functions go here...)
+
+</script>
+</body>
 </html>
