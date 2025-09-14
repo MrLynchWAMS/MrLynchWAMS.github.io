@@ -2,14 +2,17 @@
 <html>
 <head>
     <title>Mr. Lynch's Interactive Slides</title>
-    <!-- We need BOTH scripts: one for the new Sign-In Button, one for the API calls -->
+    <!-- Google Scripts -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://apis.google.com/js/api.js" async defer></script>
+    <!-- NEW: Firebase Scripts -->
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore-compat.js"></script>
 
     <style>
-        /* (Your full CSS here) */
+        /* (Your CSS remains the same) */
         body { background-color: black; color: white; font-family: sans-serif; text-align: center; }
-        .main-container { display: none; /* Hidden by default */ flex-direction: row; gap: 20px; width: 95%; margin: 20px auto; text-align: left; }
+        .main-container { display: none; flex-direction: row; gap: 20px; width: 95%; margin: 20px auto; text-align: left; }
         .slides-column { flex: 2; }
         .interactive-column { flex: 1; text-align: center; }
         .slide-nav { margin-top: 10px; text-align: center; }
@@ -18,51 +21,22 @@
         .header { text-align: center; color: yellow; }
         #slide-loader p { font-size: 1.5em; color: #888; }
         #result { margin-top: 20px; font-size: 1.5em; font-weight: bold; }
-
-        /* --- UPDATED: CSS for the new textarea input box --- */
-        #inputbox {
-            width: 95%; /* Make it almost the full width of its column */
-            min-height: 150px; /* Give it a good default height */
-            padding: 10px;
-            font-size: 16px;
-            font-family: sans-serif; /* Match the body font */
-            border-radius: 4px;
-            resize: vertical; /* Allow the user to resize it vertically */
-            margin-top: 10px;
-        }
-
-        #btn {
-            margin-top: 20px;
-        }
-
-        /* --- NEW: CSS for Toast Messages --- */
-        #toast {
-            visibility: hidden; min-width: 250px; margin-left: -125px; background-color: #333;
-            color: #fff; text-align: center; border-radius: 4px; padding: 16px; position: fixed;
-            z-index: 10; left: 50%; bottom: 30px; font-size: 17px;
-        }
-        #toast.show {
-            visibility: visible;
-            animation: fadein 0.5s, fadeout 0.5s 2.5s;
-        }
+        #inputbox { width: 95%; min-height: 150px; padding: 10px; font-size: 16px; font-family: sans-serif; border-radius: 4px; resize: vertical; margin-top: 10px; }
+        #btn { margin-top: 20px; }
+        #toast { visibility: hidden; min-width: 250px; margin-left: -125px; background-color: #333; color: #fff; text-align: center; border-radius: 4px; padding: 16px; position: fixed; z-index: 10; left: 50%; bottom: 30px; font-size: 17px; }
+        #toast.show { visibility: visible; animation: fadein 0.5s, fadeout 0.5s 2.5s; }
         @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
         @keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
     </style>
 </head>
 <body>
+    <!-- (Your HTML body remains the same) -->
     <h1 class="header">Mr. Lynch's Interactive Slides</h1>
-
     <div id="signInPrompt">
         <h2>Please sign in to view the slides.</h2>
-        <div id="g_id_onload"
-             data-client_id="1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com"
-             data-callback="handleCredentialResponse"
-             data-auto_prompt="false">
-        </div>
-        <div class="g_id_signin" data-type="standard" data-size="large" data-theme="outline" data-text="sign_in_with" data-shape="rectangular" data-logo_alignment="left">
-        </div>
+        <div id="g_id_onload" data-client_id="1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com" data-callback="handleCredentialResponse" data-auto_prompt="false"></div>
+        <div class="g_id_signin" data-type="standard" data-size="large" data-theme="outline" data-text="sign_in_with" data-shape="rectangular" data-logo_alignment="left"></div>
     </div>
-    
     <div class="main-container">
         <div class="slides-column">
             <div id="slide-loader"><p>Loading Slide...</p></div>
@@ -75,18 +49,34 @@
         </div>
         <div class="interactive-column">
             <p id="prompt">Enter your answer for the current slide:</p>
-            <!-- UPDATED: Switched from <input> to <textarea> -->
             <textarea id="inputbox" placeholder="Your answer here..." rows="8"></textarea>
             <br>
-            <input id="btn" type="button" value="Check My Answer!" onclick="myfunction()">
+            <input id="btn" type="button" value="Check & Save Answer" onclick="myfunction()">
             <p id="result"></p>
         </div>
     </div>
-
-    <!-- NEW: Toast message container -->
     <div id="toast"></div>
 
 <script>
+    // ========================================================================
+    // --- NEW: FIREBASE INITIALIZATION ---
+    // ========================================================================
+    
+    /* --- PASTE YOUR FIREBASE CONFIG OBJECT HERE --- */
+    const firebaseConfig = {
+      apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
+      authDomain: "mrlynch-slides-app.firebaseapp.com",
+      projectId: "mrlynch-slides-app",
+      storageBucket: "mrlynch-slides-app.appspot.com",
+      messagingSenderId: "223179627035",
+      appId: "1:223179627035:web:ff0f538f3029d829c3f6be"
+    };
+    /* ------------------------------------------- */
+
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
     // ========================================================================
     // CONFIGURATION
     // ========================================================================
@@ -98,8 +88,23 @@
 
     let currentSlideIndex = 0;
     let tokenClient;
+    let userProfile = null; // NEW: To store the student's profile info
+
+    // NEW: A helper function to decode the JWT token from Google Sign-In
+    function decodeJwtResponse(token) {
+        var base64Url = token.split('.')[1];
+        var base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        var jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(''));
+        return JSON.parse(jsonPayload);
+    }
 
     function handleCredentialResponse(response) {
+        // NEW: Decode the credential to get user info and store it
+        userProfile = decodeJwtResponse(response.credential);
+        console.log("Student signed in:", userProfile);
+        
         tokenClient.callback = (tokenResponse) => {
             if (tokenResponse && tokenResponse.access_token) {
                 gapi.client.setToken(tokenResponse);
@@ -110,19 +115,86 @@
         };
         if (gapi.client) {
              tokenClient.requestAccessToken();
-        } else {
-            console.error("GAPI client not loaded yet.");
-        }
+        } else { console.error("GAPI client not loaded yet."); }
     }
 
+    // --- (updateSlideDisplay, nextSlide, prevSlide are unchanged) ---
+    function updateSlideDisplay() {
+        //...
+    }
+    function nextSlide() { /* ... */ }
+    function prevSlide() { /* ... */ }
+
+    // --- (Answer Checking Logic is unchanged) ---
+    function showToast(message) { /* ... */ }
+    function calc1(i) { /* ... */ }
+    function calc2(i) { /* ... */ }
+    function calc3(i) { /* ... */ }
+    function checkCurrentSlideAnswer(answer) { /* ... */ }
+
+    // --- UPDATED: myfunction() now saves the work to Firebase ---
+    async function myfunction() {
+        var studentAnswer = document.getElementById("inputbox").value;
+        var resultElement = document.getElementById("result");
+        
+        if (studentAnswer.trim() === "") {
+            showToast("Please enter your answer first!");
+            return;
+        }
+        
+        var score = checkCurrentSlideAnswer(studentAnswer);
+        resultElement.innerHTML = "Your Score: " + score;
+        
+        if (score === 100) {
+            showToast("Excellent! That's a perfect answer.");
+            resultElement.style.color = "lightgreen";
+        } else {
+            showToast("Not quite, check your work and try again!");
+            resultElement.style.color = "orange";
+        }
+
+        // --- NEW: Save the work to Firestore ---
+        if (!userProfile) {
+            showToast("Error: User not signed in. Cannot save work.");
+            return;
+        }
+
+        try {
+            const submission = {
+                studentName: userProfile.name,
+                studentEmail: userProfile.email,
+                slideIndex: currentSlideIndex,
+                slideId: SLIDE_IDS[currentSlideIndex],
+                answer: studentAnswer,
+                score: score,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp() // Adds a timestamp
+            };
+
+            // This line saves the data to a collection called "submissions"
+            await db.collection("submissions").add(submission);
+            showToast("Answer saved successfully!");
+            
+        } catch (error) {
+            console.error("Error saving to Firestore:", error);
+            showToast("Could not save answer. See console for details.");
+        }
+    }
+    
+    // --- (window.onload is unchanged) ---
+    window.onload = function() {
+        //...
+    }
+</script>
+
+<!-- The rest of your script with unchanged functions -->
+<script>
+    // ... paste the unchanged functions here ...
     function updateSlideDisplay() {
         const slideId = SLIDE_IDS[currentSlideIndex];
         const slideImageElement = document.getElementById('slide-image');
         const slideCounterElement = document.getElementById('slide-counter');
-
         document.getElementById('slide-loader').style.display = 'block';
         slideImageElement.style.display = 'none';
-
         gapi.client.slides.presentations.pages.getThumbnail({
             presentationId: PRESENTATION_ID,
             pageObjectId: slideId
@@ -136,114 +208,16 @@
             slideCounterElement.innerHTML = `Error: ${error.result.error.message || 'Could not load slide'}`;
         });
     }
-
     function nextSlide() { if (currentSlideIndex < SLIDE_IDS.length - 1) { currentSlideIndex++; updateSlideDisplay(); } }
     function prevSlide() { if (currentSlideIndex > 0) { currentSlideIndex--; updateSlideDisplay(); } }
-
-    // ========================================================================
-    // --- NEW: ANSWER CHECKING LOGIC ---
-    // ========================================================================
-    
-    // NEW: Function to show toast messages
-    function showToast(message) {
-      var x = document.getElementById("toast");
-      x.innerHTML = message;
-      x.className = "show";
-      setTimeout(function(){ x.className = x.className.replace("show", ""); }, 3000);
-    }
-
-    // Checker for Slide 1 (This uses your original logic)
-    function calc1(i) {
-        var d = i.toLowerCase().trim();
-        var ivcount = (d.match(/iv/g) || []).length;
-        var dvcount = (d.match(/dv/g) || []).length;
-        var count = dvcount + ivcount;
-        var grade = 0;
-        if (!d.includes("if") && !d.includes("think") && !d.includes("believe") && d.includes("when") && (d.includes("increase") || d.includes("decrease")) && d.includes("independent variable") && d.includes("dependent variable") && count > 1) {
-            grade = 100;
-        }
-        if (count === 1) {
-            showToast("Make sure you include the independent AND dependent variable!");
-        }
-        return grade;
-    }
-
-    // Checker for Slide 2 (EDIT THIS with your logic for question 2)
-    function calc2(i) {
-        var d = i.toLowerCase().trim();
-        var grade = 0;
-        if (d.includes("hypothesis")) { // Placeholder logic
-            grade = 100;
-            showToast("Great use of the word hypothesis!");
-        }
-        return grade;
-    }
-
-    // Checker for Slide 3 (EDIT THIS with your logic for question 3)
-    function calc3(i) {
-        var d = i.toLowerCase().trim();
-        var grade = 0;
-        if (d.includes("control group")) { // Placeholder logic
-            grade = 100;
-        }
-        return grade;
-    }
-    
-    // This "router" function calls the correct checker based on the slide number
-    function checkCurrentSlideAnswer(answer) {
-        let score = 0;
-        switch (currentSlideIndex) {
-            case 0: // This is Slide 1
-                score = calc1(answer);
-                break;
-            case 1: // This is Slide 2
-                score = calc2(answer);
-                break;
-            case 2: // This is Slide 3
-                score = calc3(answer);
-                break;
-            default:
-                showToast("This slide does not have a question to check.");
-                break;
-        }
-        return score;
-    }
-
-    // UPDATED: This is the main function that runs when you click the button
-    function myfunction() {
-        var studentAnswer = document.getElementById("inputbox").value;
-        var resultElement = document.getElementById("result");
-        
-        if (studentAnswer.trim() === "") {
-            showToast("Please enter your answer first!");
-            return;
-        }
-        
-        var score = checkCurrentSlideAnswer(studentAnswer);
-        
-        resultElement.innerHTML = "Your Score: " + score;
-        
-        if (score === 100) {
-            showToast("Excellent! That's a perfect answer.");
-            resultElement.style.color = "lightgreen";
-        } else {
-            showToast("Not quite, check your work and try again!");
-            resultElement.style.color = "orange";
-        }
-    }
-    
-    // This runs when the page has loaded
-    window.onload = function() {
-        tokenClient = google.accounts.oauth2.initTokenClient({
-            client_id: CLIENT_ID,
-            scope: SCOPES,
-            callback: '',
-        });
-        gapi.load('client', function() {
-            gapi.client.load('https://slides.googleapis.com/$discovery/rest?version=v1');
-        });
-    }
+    function showToast(message) { var x = document.getElementById("toast"); x.innerHTML = message; x.className = "show"; setTimeout(function(){ x.className = x.className.replace("show", ""); }, 3000); }
+    function calc1(i) { var d = i.toLowerCase().trim(); var ivcount = (d.match(/iv/g) || []).length; var dvcount = (d.match(/dv/g) || []).length; var count = dvcount + ivcount; var grade = 0; if (!d.includes("if") && !d.includes("think") && !d.includes("believe") && d.includes("when") && (d.includes("increase") || d.includes("decrease")) && d.includes("independent variable") && d.includes("dependent variable") && count > 1) { grade = 100; } if (count === 1) { showToast("Make sure you include the independent AND dependent variable!"); } return grade; }
+    function calc2(i) { var d = i.toLowerCase().trim(); var grade = 0; if (d.includes("hypothesis")) { grade = 100; showToast("Great use of the word hypothesis!"); } return grade; }
+    function calc3(i) { var d = i.toLowerCase().trim(); var grade = 0; if (d.includes("control group")) { grade = 100; } return grade; }
+    function checkCurrentSlideAnswer(answer) { let score = 0; switch (currentSlideIndex) { case 0: score = calc1(answer); break; case 1: score = calc2(answer); break; case 2: score = calc3(answer); break; default: showToast("This slide does not have a question to check."); break; } return score; }
+    window.onload = function() { tokenClient = google.accounts.oauth2.initTokenClient({ client_id: CLIENT_ID, scope: SCOPES, callback: '', }); gapi.load('client', function() { gapi.client.load('https://slides.googleapis.com/$discovery/rest?version=v1'); }); }
 </script>
 </body>
 </html>
+
 
