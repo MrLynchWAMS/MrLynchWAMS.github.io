@@ -19,6 +19,22 @@
         #slide-loader p { font-size: 1.5em; color: #888; }
         #result { margin-top: 20px; font-size: 1.5em; font-weight: bold; }
 
+        /* --- UPDATED: CSS for the new textarea input box --- */
+        #inputbox {
+            width: 95%; /* Make it almost the full width of its column */
+            min-height: 150px; /* Give it a good default height */
+            padding: 10px;
+            font-size: 16px;
+            font-family: sans-serif; /* Match the body font */
+            border-radius: 4px;
+            resize: vertical; /* Allow the user to resize it vertically */
+            margin-top: 10px;
+        }
+
+        #btn {
+            margin-top: 20px;
+        }
+
         /* --- NEW: CSS for Toast Messages --- */
         #toast {
             visibility: hidden; min-width: 250px; margin-left: -125px; background-color: #333;
@@ -59,7 +75,8 @@
         </div>
         <div class="interactive-column">
             <p id="prompt">Enter your answer for the current slide:</p>
-            <input id="inputbox" type="textbox" placeholder="Your answer here...">
+            <!-- UPDATED: Switched from <input> to <textarea> -->
+            <textarea id="inputbox" placeholder="Your answer here..." rows="8"></textarea>
             <br>
             <input id="btn" type="button" value="Check My Answer!" onclick="myfunction()">
             <p id="result"></p>
@@ -229,3 +246,4 @@
 </script>
 </body>
 </html>
+
