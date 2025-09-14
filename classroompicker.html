@@ -2,6 +2,10 @@
 <html>
 <head>
     <title>Mr. Lynch's Interactive Slides</title>
+    <!-- We need BOTH scripts: one for the new Sign-In Button, one for the API calls -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://apis.google.com/js/api.js" async defer></script>
+
     <style>
         /* (Your full CSS here) */
         body { background-color: black; color: white; font-family: sans-serif; text-align: center; }
@@ -13,20 +17,31 @@
         .slide-nav span { margin: 0 15px; font-size: 1.2em; }
         .header { text-align: center; color: yellow; }
         #slide-loader p { font-size: 1.5em; color: #888; }
-        #signin-button { font-size: 18px; padding: 12px 24px; cursor: pointer; }
     </style>
 </head>
 <body>
-    <script src="https://apis.google.com/js/api.js" async defer></script>
-
     <h1 class="header">Mr. Lynch's Interactive Slides</h1>
 
     <div id="signInPrompt">
-        <h2>Please sign in to load the slides.</h2>
-        <button id="signin-button">Sign In with Google</button>
+        <h2>Please sign in to view the slides.</h2>
+        <!-- This is the Google Sign-In button that worked before -->
+        <div id="g_id_onload"
+             data-client_id="PASTE_YOUR_OAUTH_CLIENT_ID_HERE"
+             data-callback="handleCredentialResponse"
+             data-auto_prompt="false">
+        </div>
+        <div class="g_id_signin"
+             data-type="standard"
+             data-size="large"
+             data-theme="outline"
+             data-text="sign_in_with"
+             data-shape="rectangular"
+             data-logo_alignment="left">
+        </div>
     </div>
     
     <div class="main-container">
+        <!-- (The rest of your HTML for slides and controls) -->
         <div class="slides-column">
             <div id="slide-loader"><p>Loading Slide...</p></div>
             <img id="slide-image" src="" alt="Current Slide" style="width:100%; border: 1px solid grey; display: none;">
@@ -56,41 +71,24 @@
     // ========================================================================
 
     let currentSlideIndex = 0;
-    let authInstance;
+    let tokenClient;
 
-    function handleClientLoad() {
-        gapi.load('client:auth2', initClient);
-    }
-
-    function initClient() {
-        gapi.client.init({
-            clientId: CLIENT_ID,
-            scope: SCOPES,
-            discoveryDocs: ['https://slides.googleapis.com/$discovery/rest?version=v1'],
-        }).then(function () {
-            authInstance = gapi.auth2.getAuthInstance();
-            // Listen for sign-in state changes.
-            authInstance.isSignedIn.listen(updateSigninStatus);
-        }, function(error) {
-            console.error('Error initializing client:', error);
-        });
-    }
-
-    function updateSigninStatus(isSignedIn) {
-        if (isSignedIn) {
-            document.getElementById('signInPrompt').style.display = 'none';
-            document.querySelector('.main-container').style.display = 'flex';
-            updateSlideDisplay();
-        } else {
-            document.getElementById('signInPrompt').style.display = 'block';
-            document.querySelector('.main-container').style.display = 'none';
-        }
-    }
-
-    function handleAuthClick() {
-        if (authInstance) {
-            authInstance.signIn();
-        }
+    // This is called automatically when the user signs in with the Google button
+    function handleCredentialResponse(response) {
+        // The token client (initialized below) is used to request the access token
+        tokenClient.callback = (tokenResponse) => {
+            if (tokenResponse && tokenResponse.access_token) {
+                // This is the key step: set the token for the gapi client
+                gapi.client.setToken(tokenResponse);
+                
+                // Now that we are fully authenticated, show the content and load slides
+                document.getElementById('signInPrompt').style.display = 'none';
+                document.querySelector('.main-container').style.display = 'flex';
+                updateSlideDisplay();
+            }
+        };
+        // Request the access token
+        tokenClient.requestAccessToken();
     }
 
     function updateSlideDisplay() {
@@ -101,6 +99,7 @@
         document.getElementById('slide-loader').style.display = 'block';
         slideImageElement.style.display = 'none';
 
+        // Use the gapi client to call the Slides API
         gapi.client.slides.presentations.pages.getThumbnail({
             presentationId: PRESENTATION_ID,
             pageObjectId: slideId
@@ -108,8 +107,7 @@
             document.getElementById('slide-loader').style.display = 'none';
             slideImageElement.style.display = 'block';
             
-            const imageUrl = response.result.contentUrl;
-            slideImageElement.src = imageUrl;
+            slideImageElement.src = response.result.contentUrl;
             slideCounterElement.innerHTML = `Slide ${currentSlideIndex + 1} of ${SLIDE_IDS.length}`;
         }, function(error) {
             console.error("API Error:", error);
@@ -122,12 +120,20 @@
     function prevSlide() { if (currentSlideIndex > 0) { currentSlideIndex--; updateSlideDisplay(); } }
     function myfunction() { alert("Check Answer button clicked!"); }
     
-    // --- Load the API and set up the button click ---
+    // This runs when the page has loaded
     window.onload = function() {
-        document.getElementById('signin-button').onclick = handleAuthClick;
-        handleClientLoad();
+        // Initialize the token client for the OAuth2 flow
+        tokenClient = google.accounts.oauth2.initTokenClient({
+            client_id: CLIENT_ID,
+            scope: SCOPES,
+            callback: '', // The callback is set dynamically in handleCredentialResponse
+        });
+        
+        // Load the gapi client library needed for API calls
+        gapi.load('client', function() {
+            gapi.client.load('https://slides.googleapis.com/$discovery/rest?version=v1');
+        });
     }
-
 </script>
 </body>
 </html>
