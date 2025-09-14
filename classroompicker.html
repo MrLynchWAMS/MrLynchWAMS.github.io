@@ -1,27 +1,49 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <title>Mr. Lynch's Interactive Slides</title>
     <style>
-        /* (Your CSS here...) */
-        body { background-color: black; color: white; font-family: sans-serif; }
-        .main-container { display: flex; gap: 20px; width: 95%; margin: auto; }
+        /* (Your full CSS here) */
+        body { background-color: black; color: white; font-family: sans-serif; text-align: center; }
+        .main-container { display: flex; flex-direction: row; gap: 20px; width: 95%; margin: 20px auto; text-align: left; }
         .slides-column { flex: 2; }
         .interactive-column { flex: 1; text-align: center; }
         .slide-nav { margin-top: 10px; text-align: center; }
         .slide-nav button { font-size: 16px; padding: 5px 10px; }
         .slide-nav span { margin: 0 15px; font-size: 1.2em; }
         .header { text-align: center; color: yellow; }
-        #inputbox { width: 90%; padding: 10px; font-size: 16px; }
-        #btn { margin-top: 20px; padding: 10px 20px; font-size: 18px; cursor: pointer; }
-        #result { margin-top: 20px; font-size: 1.5em; font-weight: bold; }
+        #slide-loader p { font-size: 1.5em; color: #888; }
+        #inputbox, #btn, #result, #prompt { display: none; } /* Hide controls until signed in */
     </style>
 </head>
 <body>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+
     <h1 class="header">Mr. Lynch's Interactive Slides</h1>
 
-    <div class="main-container">
+    <div id="signInPrompt">
+        <h2>Please sign in to load the slides.</h2>
+        <div id="g_id_onload"
+             data-client_id="1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com"
+             data-callback="handleCredentialResponse"
+             data-auto_prompt="false">
+        </div>
+        <div class="g_id_signin"
+             data-type="standard"
+             data-size="large"
+             data-theme="outline"
+             data-text="sign_in_with"
+             data-shape="rectangular"
+             data-logo_alignment="left">
+        </div>
+    </div>
+    
+    <div class="main-container" style="display: none;">
         <div class="slides-column">
-            <img id="slide-image" src="" alt="Loading Slide..." style="width:100%; border: 1px solid grey;">
+            <div id="slide-loader">
+                <p>Loading Slide...</p>
+            </div>
+            <img id="slide-image" src="" alt="Current Slide" style="width:100%; border: 1px solid grey; display: none;">
             <div class="slide-nav">
                 <button onclick="prevSlide()">Previous</button>
                 <span id="slide-counter"></span>
@@ -30,7 +52,7 @@
         </div>
 
         <div class="interactive-column">
-             <p id="prompt">Enter your answer for the current slide:</p>
+            <p id="prompt">Enter your answer for the current slide:</p>
             <input id="inputbox" type="textbox" placeholder="Your answer here...">
             <br>
             <input id="btn" type="button" value="Check My Answer!" onclick="myfunction()">
@@ -40,82 +62,89 @@
 
 <script>
     // ========================================================================
-    // JAVASCRIPT CONFIGURATION
+    // CONFIGURATION
     // ========================================================================
-    const API_KEY = "AIzaSyCdnRYchqudW2JvpaHCqbxTlNewghrMEJc";
     const PRESENTATION_ID = "1LYl6PebqTv-KQ9aj3-lnvcZwcV_MXbn1hxVUtdG4sFo";
-
     const slideIds = [
-        "g22b68d540b9_0_0",
-        "g11f6b98ef49_0_0",
-        "g11f6b98ef49_0_5",
+        "g22b68d540b9_0_0", "g11f6b98ef49_0_0", "g11f6b98ef49_0_5"
     ];
     // ========================================================================
 
     let currentSlideIndex = 0;
+    let googleUserToken = null; // We will store the user's access token here
 
+    // This function is called AFTER the user successfully signs in
+    function handleCredentialResponse(response) {
+        // This is the OAuth2 Access Token! This is our key to the API.
+        googleUserToken = gapi.client.getToken().access_token;
+        
+        // Hide the sign-in button and show the main content
+        document.getElementById('signInPrompt').style.display = 'none';
+        document.querySelector('.main-container').style.display = 'flex';
+        document.querySelectorAll('#inputbox, #btn, #result, #prompt').forEach(el => el.style.display = 'block');
+
+        // Now that we are authenticated, load the first slide
+        updateSlideDisplay();
+    }
+
+    // The core function to call the Google API, now with an Authorization Header
     function updateSlideDisplay() {
+        if (!googleUserToken) {
+            alert("You must be signed in to view slides.");
+            return;
+        }
+
         const slideId = slideIds[currentSlideIndex];
         const slideImageElement = document.getElementById('slide-image');
         const slideCounterElement = document.getElementById('slide-counter');
 
-        slideCounterElement.innerHTML = `Loading Slide ${currentSlideIndex + 1}...`;
-        slideImageElement.src = "";
+        document.getElementById('slide-loader').style.display = 'block';
+        slideImageElement.style.display = 'none';
 
-        const apiUrl = `https://slides.googleapis.com/v1/presentations/${PRESENTATION_ID}/pages/${slideId}/thumbnail?key=${API_KEY}`;
+        const apiUrl = `https://slides.googleapis.com/v1/presentations/${PRESENTATION_ID}/pages/${slideId}/thumbnail`;
 
-        fetch(apiUrl)
-            .then(response => response.json())
-            .then(data => {
-                if (data.contentUrl) {
-                    const imageUrl = data.contentUrl;
-                    slideImageElement.src = imageUrl;
-                     // FIX #2: Corrected the typo "currentSlide-index" to "currentSlideIndex"
-                    slideCounterElement.innerHTML = `Slide ${currentSlideIndex + 1} of ${slideIds.length}`;
-                } else {
-                    // This handles cases where the API call succeeds but returns an error message
-                    console.error("API Error:", data);
-                    slideCounterElement.innerHTML = `Error: ${data.error.message || 'Could not load slide'}`;
-                }
-            })
-            .catch(error => {
-                console.error("Fetch Error:", error);
-                slideCounterElement.innerHTML = "Error loading slide.";
-            });
+        // Fetch data using the OAuth2 token in the header
+        fetch(apiUrl, {
+            headers: {
+                'Authorization': `Bearer ${googleUserToken}`
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('slide-loader').style.display = 'none';
+            slideImageElement.style.display = 'block';
 
-        // These will now work because the elements exist in the HTML
-        document.getElementById('inputbox').value = "";
-        document.getElementById('result').innerHTML = "";
+            if (data.contentUrl) {
+                slideImageElement.src = data.contentUrl;
+                slideCounterElement.innerHTML = `Slide ${currentSlideIndex + 1} of ${slideIds.length}`;
+            } else {
+                console.error("API Error:", data);
+                slideCounterElement.innerHTML = `Error: ${data.error.message || 'Could not load slide'}`;
+            }
+        })
+        .catch(error => {
+            console.error("Fetch Error:", error);
+            slideCounterElement.innerHTML = "Error loading slide.";
+        });
     }
-
-    function nextSlide() {
-        if (currentSlideIndex < slideIds.length - 1) {
-            currentSlideIndex++;
-            updateSlideDisplay();
-        }
-    }
-
-    function prevSlide() {
-        if (currentSlideIndex > 0) {
-            currentSlideIndex--;
-            updateSlideDisplay();
-        }
-    }
-
-    window.onload = function() {
-        // FIX #1: This now correctly checks for the placeholder text, not your actual key.
-        if (!API_KEY || API_KEY === "PASTE_YOUR_API_KEY_HERE") {
-            alert("Error: API_KEY is not configured in the script.");
-            return;
-        }
-        updateSlideDisplay();
-    };
     
-    // You will need to add back your other functions like myfunction() and calc() here
-    function myfunction() {
-        // ... your answer checking logic ...
-        alert("Check Answer button clicked!");
-    }
+    // --- Navigation and other functions ---
+    function nextSlide() { if (currentSlideIndex < slideIds.length - 1) { currentSlideIndex++; updateSlideDisplay(); } }
+    function prevSlide() { if (currentSlideIndex > 0) { currentSlideIndex--; updateSlideDisplay(); } }
+    function myfunction() { alert("Check Answer button clicked!"); }
+
+    // This part initializes the Google API client, which is necessary for the new sign-in flow
+    window.onload = function() {
+        gapi.load('client', function() {
+            gapi.client.init({
+                // Add your Client ID here
+                clientId: 'PASTE_YOUR_NEW_OAUTH_CLIENT_ID_HERE',
+                // Add the readonly scope for the Slides API
+                scope: 'https://www.googleapis.com/auth/presentations.readonly',
+                discoveryDocs: ['https://slides.googleapis.com/$discovery/rest?version=v1'],
+            });
+        });
+    };
 
 </script>
 </body>
