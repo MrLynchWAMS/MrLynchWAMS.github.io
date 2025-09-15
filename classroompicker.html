@@ -4,14 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mr. Lynch's Interactive Slides</title>
-    <!-- Scripts -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Re-added Google Sign-In Script -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <!-- Firebase Scripts -->
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore-compat.js"></script>
-
     <style>
         .hidden { display: none; }
         textarea { resize: vertical; }
@@ -24,11 +20,14 @@
 <body class="bg-gray-900 text-white font-sans flex items-center justify-center min-h-screen">
 
     <div class="container mx-auto p-4">
-        <!-- Login Container -->
-        <div id="loginContainer">
+        <div id="pageLoader" class="text-center">
+            <h1 class="text-3xl font-bold text-yellow-400">Loading Assignment...</h1>
+            <p id="loadingError" class="text-red-500 mt-4"></p>
+        </div>
+
+        <div id="loginContainer" class="hidden">
             <div class="bg-gray-800 p-8 rounded-lg shadow-xl max-w-md mx-auto">
-                <h1 class="text-3xl font-bold text-yellow-400 mb-6 text-center">Student Sign-In</h1>
-                <!-- Passcode Form -->
+                <h1 id="assignmentNameLogin" class="text-3xl font-bold text-yellow-400 mb-6 text-center"></h1>
                 <div id="passcodeForm">
                     <p class="text-gray-300 mb-4">Enter your school email and the passcode provided by your teacher.</p>
                     <input type="email" id="emailInput" placeholder="School Email" class="w-full p-3 mb-4 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500">
@@ -36,7 +35,6 @@
                     <button onclick="handlePasscodeSignIn()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-colors">Sign In with Passcode</button>
                     <p id="loginError" class="text-red-500 mt-4 text-center"></p>
                 </div>
-                 <!-- Google Sign-In Option -->
                 <div class="text-center mt-6">
                     <p class="text-gray-400 mb-2">or</p>
                     <div id="g_id_onload" data-client_id="1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com" data-callback="handleCredentialResponse" data-auto_select="true" data-use_fedcm_for_prompt="false"></div>
@@ -45,7 +43,6 @@
             </div>
         </div>
 
-        <!-- Main Content (Slides & Interactive Area) -->
         <div id="mainContainer" class="hidden">
              <div class="main-content-grid grid grid-cols-1 md:grid-cols-3 gap-8">
                 <div class="slides-column md:col-span-2 bg-gray-800 p-4 rounded-lg">
@@ -70,12 +67,6 @@
     <div id="toast"></div>
 
 <script>
-    // ========================================================================
-    // CONFIGURATION
-    // ========================================================================
-    const CLIENT_ID = "1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com"; // For Google Sign-In
-    const PRESENTATION_ID = "1LYl6PebqTv-KQ9aj3-lnvcZwcV_MXbn1hxVUtdG4sFo";
-    const SLIDE_IDS = ["g22b68d540b9_0_0", "g22b68d540b9_0_5", "g22b68d540b9_0_10"];
     const firebaseConfig = {
         apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
         authDomain: "mrlynch-slides-app.firebaseapp.com",
@@ -84,22 +75,58 @@
         messagingSenderId: "223179627035",
         appId: "1:223179627035:web:ff0f538f3029d829c3f6be"
     };
-    // ========================================================================
-
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
+    let assignmentData = null;
     let currentSlideIndex = 0;
-    let userProfile = null; // Will store {name, email}
+    let userProfile = null;
+    let dynamicCheckers = {};
 
-    // Helper function to show main content
+    window.onload = async function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const assignmentId = urlParams.get('assignmentId');
+        const loader = document.getElementById('pageLoader');
+        const errorP = document.getElementById('loadingError');
+
+        if (!assignmentId) {
+            errorP.textContent = "Error: No assignment ID provided in the URL.";
+            return;
+        }
+
+        try {
+            const doc = await db.collection("assignments").doc(assignmentId).get();
+            if (!doc.exists) {
+                errorP.textContent = "Error: This assignment could not be found.";
+                return;
+            }
+            assignmentData = { id: doc.id, ...doc.data() };
+
+            // Dynamically create checker functions from stored strings
+            if (assignmentData.checkerFunctions) {
+                for (const key in assignmentData.checkerFunctions) {
+                    const funcString = assignmentData.checkerFunctions[key];
+                    const body = funcString.substring(funcString.indexOf('{') + 1, funcString.lastIndexOf('}'));
+                    dynamicCheckers[key] = new Function('answer', 'showToast', body);
+                }
+            }
+            
+            loader.classList.add('hidden');
+            document.getElementById('assignmentNameLogin').textContent = assignmentData.name;
+            document.getElementById('loginContainer').classList.remove('hidden');
+
+        } catch (error) {
+            console.error("Error loading assignment:", error);
+            errorP.textContent = "An error occurred while loading the assignment.";
+        }
+    };
+
     function showMainContent() {
         document.getElementById('loginContainer').classList.add('hidden');
         document.getElementById('mainContainer').classList.remove('hidden');
-        updateSlideDisplay(); // Load the first slide
+        updateSlideDisplay();
     }
 
-    // --- LOGIN FLOW ---
     async function handlePasscodeSignIn() {
         const email = document.getElementById('emailInput').value.toLowerCase().trim();
         const passcodeString = document.getElementById('passcodeInput').value.trim();
@@ -111,7 +138,6 @@
             return;
         }
 
-        // --- FIX: Convert passcode string to a number for the query ---
         const passcodeNumber = parseInt(passcodeString, 10);
         if (isNaN(passcodeNumber)) {
             errorP.textContent = "Passcode must be a number.";
@@ -119,7 +145,6 @@
         }
 
         try {
-            // Query using the correct data type
             const q = db.collection("students").where("email", "==", email).where("passcode", "==", passcodeNumber);
             const querySnapshot = await q.get();
 
@@ -136,17 +161,7 @@
         }
     }
 
-    // --- NEW: Google Sign-In Handler ---
-    function decodeJwtResponse(token) {
-        try {
-            const base64Url = token.split('.')[1];
-            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-            const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
-                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-            }).join(''));
-            return JSON.parse(jsonPayload);
-        } catch (e) { return null; }
-    }
+    function decodeJwtResponse(token) { try { const base64Url = token.split('.')[1]; const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/'); const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) { return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2); }).join('')); return JSON.parse(jsonPayload); } catch (e) { return null; } }
 
     function handleCredentialResponse(response) {
         const profile = decodeJwtResponse(response.credential);
@@ -158,9 +173,8 @@
         }
     }
 
-    // --- SLIDE DISPLAY LOGIC ---
     function updateSlideDisplay() {
-        const slideId = SLIDE_IDS[currentSlideIndex];
+        const slideId = assignmentData.slideIds[currentSlideIndex];
         const slideImageElement = document.getElementById('slide-image');
         const slideCounterElement = document.getElementById('slide-counter');
         const slideLoader = document.getElementById('slide-loader');
@@ -168,23 +182,22 @@
         slideLoader.classList.remove('hidden');
         slideImageElement.classList.add('hidden');
         
-        const imageUrl = `https://docs.google.com/presentation/d/${PRESENTATION_ID}/export/png?id=${PRESENTATION_ID}&pageid=${slideId}`;
+        const imageUrl = `https://docs.google.com/presentation/d/${assignmentData.presentationId}/export/png?id=${assignmentData.presentationId}&pageid=${slideId}`;
         
         slideImageElement.src = imageUrl;
         slideImageElement.onload = () => {
             slideLoader.classList.add('hidden');
             slideImageElement.classList.remove('hidden');
-            slideCounterElement.innerText = `Slide ${currentSlideIndex + 1} of ${SLIDE_IDS.length}`;
+            slideCounterElement.innerText = `Slide ${currentSlideIndex + 1} of ${assignmentData.slideIds.length}`;
         };
         slideImageElement.onerror = () => {
-            console.error("Error loading image from URL:", imageUrl);
             slideLoader.innerHTML = `<p class="text-red-500">Error loading slide. Please ensure the presentation is shared publicly ("Anyone with the link can view").</p>`;
         };
     }
 
-    // --- (Unchanged functions below) ---
-    function nextSlide() { if (currentSlideIndex < SLIDE_IDS.length - 1) { currentSlideIndex++; updateSlideDisplay(); } }
+    function nextSlide() { if (currentSlideIndex < assignmentData.slideIds.length - 1) { currentSlideIndex++; updateSlideDisplay(); } }
     function prevSlide() { if (currentSlideIndex > 0) { currentSlideIndex--; updateSlideDisplay(); } }
+
     async function myfunction() {
         var studentAnswer = document.getElementById("inputbox").value;
         var resultElement = document.getElementById("result");
@@ -204,8 +217,8 @@
             const submission = {
                 studentName: userProfile.name,
                 studentEmail: userProfile.email,
+                assignmentId: assignmentData.id, // Store which assignment this belongs to
                 slideIndex: currentSlideIndex,
-                slideId: SLIDE_IDS[currentSlideIndex],
                 answer: studentAnswer,
                 score: score,
                 timestamp: firebase.firestore.FieldValue.serverTimestamp()
@@ -217,12 +230,24 @@
             showToast("Could not save answer. See console for details.");
         }
     }
-    function showToast(message) { var x = document.getElementById("toast"); x.innerHTML = message; x.className = "show"; setTimeout(function(){ x.className = x.className.replace("show", ""); }, 3000); }
-    function calc1(i) { var d = i.toLowerCase().trim(); var ivcount = (d.match(/iv/g) || []).length; var dvcount = (d.match(/dv/g) || []).length; var count = dvcount + ivcount; var grade = 0; if (!d.includes("if") && !d.includes("think") && !d.includes("believe") && d.includes("when") && (d.includes("increase") || d.includes("decrease")) && d.includes("independent variable") && d.includes("dependent variable") && count > 1) { grade = 100; } if (count === 1) { showToast("Make sure you include the independent AND dependent variable!"); } return grade; }
-    function calc2(i) { var d = i.toLowerCase().trim(); var grade = 0; if (d.includes("hypothesis")) { grade = 100; showToast("Great use of the word hypothesis!"); } return grade; }
-    function calc3(i) { var d = i.toLowerCase().trim(); var grade = 0; if (d.includes("control group")) { grade = 100; } return grade; }
-    function checkCurrentSlideAnswer(answer) { let score = 0; switch (currentSlideIndex) { case 0: score = calc1(answer); break; case 1: score = calc2(answer); break; case 2: score = calc3(answer); break; default: showToast("This slide does not have a question to check."); break; } return score; }
 
+    function checkCurrentSlideAnswer(answer) {
+        const funcName = `calc${currentSlideIndex + 1}`;
+        if (dynamicCheckers[funcName]) {
+            try {
+                // Pass `showToast` so the dynamic function can use it
+                return dynamicCheckers[funcName](answer, showToast);
+            } catch (e) {
+                console.error(`Error executing checker function ${funcName}:`, e);
+                showToast("Error in checking logic.");
+                return 0;
+            }
+        }
+        showToast("No checking logic for this slide.");
+        return 0; // Default score if no function exists
+    }
+    
+    function showToast(message) { var x = document.getElementById("toast"); x.innerHTML = message; x.className = "show"; setTimeout(function(){ x.className = x.className.replace("show", ""); }, 3000); }
 </script>
 </body>
 </html>
