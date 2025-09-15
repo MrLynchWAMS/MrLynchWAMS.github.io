@@ -1,205 +1,205 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Mr. Lynch's Interactive Slides</title>
-    <!-- Google & Firebase Scripts -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mr. Lynch's SciFair</title>
+    <!-- Scripts -->
+    <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <script src="https://apis.google.com/js/api.js" async defer></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore-compat.js"></script>
 
     <style>
-        body { background-color: black; color: white; font-family: sans-serif; text-align: center; }
-        .main-container { display: none; flex-direction: row; gap: 20px; width: 95%; margin: 20px auto; text-align: left; }
-        .slides-column { flex: 2; }
-        .interactive-column { flex: 1; text-align: center; }
-        .slide-nav { margin-top: 10px; text-align: center; }
-        .slide-nav button { font-size: 16px; padding: 5px 10px; cursor: pointer; }
-        .slide-nav span { margin: 0 15px; font-size: 1.2em; }
-        .header { text-align: center; color: yellow; }
-        #slide-loader p { font-size: 1.5em; color: #888; }
-        #result { margin-top: 20px; font-size: 1.5em; font-weight: bold; }
-        #inputbox { width: 95%; min-height: 150px; padding: 10px; font-size: 16px; font-family: sans-serif; border-radius: 4px; resize: vertical; margin-top: 10px; color: black; }
-        #btn { margin-top: 20px; padding: 10px 20px; font-size: 18px; cursor: pointer; }
+        .hidden { display: none; }
+        textarea { resize: vertical; }
         #toast { visibility: hidden; min-width: 250px; margin-left: -125px; background-color: #333; color: #fff; text-align: center; border-radius: 4px; padding: 16px; position: fixed; z-index: 10; left: 50%; bottom: 30px; font-size: 17px; }
         #toast.show { visibility: visible; animation: fadein 0.5s, fadeout 0.5s 2.5s; }
         @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
         @keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
-        .hidden { display: none; }
-        .passcode-form input { color: black; padding: 8px; margin: 4px 0; border-radius: 4px; }
-        .passcode-form button { background-color: #4CAF50; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; }
-        .passcode-form button:hover { background-color: #45a049; }
-        .switch-link { color: #64b5f6; text-decoration: underline; cursor: pointer; margin-top: 15px; display: inline-block; }
     </style>
 </head>
-<body>
-    <h1 class="header">Mr. Lynch's Interactive Slides</h1>
-    <div id="signInContainer">
-        
-        <!-- Google Sign-In View -->
-        <div id="googleSignInView">
-            <h2>Please sign in to view the slides.</h2>
-            <div id="g_id_onload" data-client_id="1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com" data-callback="handleCredentialResponse" data-auto_select="true" data-use_fedcm_for_prompt="false"></div>
-            <div class="g_id_signin" data-type="standard" data-size="large" data-theme="outline" data-text="sign_in_with" data-shape="rectangular" data-logo_alignment="left"></div>
-            <p class="switch-link" onclick="toggleSignInView()">Sign in with Email & Passcode instead</p>
-        </div>
+<body class="bg-gray-900 text-white font-sans flex items-center justify-center min-h-screen">
 
-        <!-- Passcode Sign-In View (hidden by default) -->
-        <div id="passcodeSignInView" class="hidden">
-            <h2>Sign in with Email & Passcode</h2>
-            <div class="passcode-form">
-                <input type="email" id="emailInput" placeholder="School Email Address"><br>
-                <input type="password" id="passcodeInput" placeholder="Passcode"><br><br>
-                <button onclick="handlePasscodeSignIn()">Sign In</button>
-            </div>
-             <p id="passcode-error" style="color: red; margin-top: 10px;"></p>
-            <p class="switch-link" onclick="toggleSignInView()">Back to Google Sign-In</p>
-        </div>
-
-    </div>
-    <div class="main-container">
-        <div class="slides-column">
-            <div id="slide-loader"><p>Loading Slide...</p></div>
-            <img id="slide-image" src="" alt="Current Slide" style="width:100%; border: 1px solid grey; display: none;">
-            <div class="slide-nav">
-                <button onclick="prevSlide()">Previous</button>
-                <span id="slide-counter"></span>
-                <button onclick="nextSlide()">Next</button>
+    <div class="container mx-auto p-4">
+        <!-- Login Container -->
+        <div id="loginContainer">
+            <div class="bg-gray-800 p-8 rounded-lg shadow-xl max-w-md mx-auto">
+                <h1 class="text-3xl font-bold text-yellow-400 mb-6 text-center">Student Sign-In</h1>
+                <!-- Passcode Form -->
+                <div id="passcodeForm">
+                    <p class="text-gray-300 mb-4">Enter your school email and the passcode provided by your teacher.</p>
+                    <input type="email" id="emailInput" placeholder="School Email" class="w-full p-3 mb-4 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500">
+                    <input type="password" id="passcodeInput" placeholder="Passcode" class="w-full p-3 mb-4 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500">
+                    <button onclick="handlePasscodeSignIn()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-colors">Sign In</button>
+                    <p id="loginError" class="text-red-500 mt-4 text-center"></p>
+                </div>
+                <!-- Google Sign-In Option -->
+                <div class="text-center mt-6">
+                    <p class="text-gray-400 mb-2">or</p>
+                    <div id="g_id_onload" data-client_id="1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com" data-callback="handleCredentialResponse" data-auto_select="true" data-use_fedcm_for_prompt="false"></div>
+                    <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_black" data-text="signin_with" data-shape="rectangular" data-logo_alignment="left"></div>
+                </div>
             </div>
         </div>
-        <div class="interactive-column">
-            <p id="prompt">Enter your answer for the current slide:</p>
-            <textarea id="inputbox" placeholder="Your answer here..." rows="8"></textarea>
-            <br>
-            <input id="btn" type="button" value="Check & Save Answer" onclick="myfunction()">
-            <p id="result"></p>
+
+        <!-- Main Content (Slides & Interactive Area) -->
+        <div id="mainContainer" class="hidden">
+            <h1 class="text-3xl font-bold text-yellow-400 mb-4 text-center">Interactive Slides</h1>
+             <div class="main-content-grid grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div class="slides-column md:col-span-2 bg-gray-800 p-4 rounded-lg">
+                    <div id="slide-loader" class="text-center py-10"><p>Loading Slide...</p></div>
+                    <img id="slide-image" src="" alt="Current Slide" class="w-full border border-gray-700 rounded hidden">
+                    <div class="slide-nav flex justify-center items-center mt-4 gap-4">
+                        <button onclick="prevSlide()" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg">Previous</button>
+                        <span id="slide-counter" class="text-lg"></span>
+                        <button onclick="nextSlide()" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg">Next</button>
+                    </div>
+                </div>
+                <div class="interactive-column bg-gray-800 p-4 rounded-lg flex flex-col">
+                    <p id="prompt" class="font-semibold mb-2">Enter your answer for the current slide:</p>
+                    <textarea id="inputbox" placeholder="Your answer here..." rows="8" class="flex-grow w-full p-3 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500"></textarea>
+                    <button id="btn" onclick="myfunction()" class="w-full mt-4 bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition-colors">Check & Save Answer</button>
+                    <p id="result" class="mt-4 text-xl font-bold text-center"></p>
+                </div>
+            </div>
         </div>
     </div>
+    
     <div id="toast"></div>
 
 <script>
+    // ========================================================================
+    // CONFIGURATION
+    // ========================================================================
+    const API_KEY = "AIzaSyDg3sOkt0BPdZxaMFJOWoo6wXz4bgK-GSY"; // IMPORTANT: PASTE YOUR API KEY
+    const PRESENTATION_ID = "1LYl6PebqTv-KQ9aj3-lnvcZwcV_MXbn1hxVUtdG4sFo";
+    const SLIDE_IDS = ["g22b68d540b9_0_0", "g22b68d540b9_0_5", "g22b68d540b9_0_10"];
     const firebaseConfig = {
-      apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
-      authDomain: "mrlynch-slides-app.firebaseapp.com",
-      projectId: "mrlynch-slides-app",
-      storageBucket: "mrlynch-slides-app.appspot.com",
-      messagingSenderId: "223179627035",
-      appId: "1:223179627035:web:ff0f538f3029d829c3f6be"
+        apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
+        authDomain: "mrlynch-slides-app.firebaseapp.com",
+        projectId: "mrlynch-slides-app",
+        storageBucket: "mrlynch-slides-app.appspot.com",
+        messagingSenderId: "223179627035",
+        appId: "1:223179627035:web:ff0f538f3029d829c3f6be"
     };
+    // ========================================================================
+
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
-    const CLIENT_ID = "1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com";
-    const PRESENTATION_ID = "1LYl6PebqTv-KQ9aj3-lnvcZwcV_MXbn1hxVUtdG4sFo";
-    const SLIDE_IDS = [ "g22b68d540b9_0_0", "g22b68d540b9_0_5", "g22b68d540b9_0_10" ];
-    const SCOPES = "https://www.googleapis.com/auth/presentations.readonly";
-
     let currentSlideIndex = 0;
-    let tokenClient;
     let userProfile = null;
 
-    // --- NEW: Sign-In View Toggler ---
-    function toggleSignInView() {
-        document.getElementById('googleSignInView').classList.toggle('hidden');
-        document.getElementById('passcodeSignInView').classList.toggle('hidden');
-    }
-
     function decodeJwtResponse(token) {
-        var base64Url = token.split('.')[1];
-        var base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-        var jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
-            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-        }).join(''));
-        return JSON.parse(jsonPayload);
+        try {
+            const base64Url = token.split('.')[1];
+            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+            const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
+                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+            }).join(''));
+            return JSON.parse(jsonPayload);
+        } catch (e) {
+            console.error("Error decoding JWT", e);
+            return null;
+        }
     }
-
-    // --- Google Sign-In Handler ---
-    function handleCredentialResponse(response) {
-        userProfile = decodeJwtResponse(response.credential);
-        tokenClient.callback = (tokenResponse) => {
-            if (tokenResponse && tokenResponse.access_token) {
-                gapi.client.setToken(tokenResponse);
-                document.getElementById('signInContainer').style.display = 'none';
-                document.querySelector('.main-container').style.display = 'flex';
-                updateSlideDisplay();
-            }
-        };
-        if (gapi.client) {
-             tokenClient.requestAccessToken({ prompt: '' });
-        } else { console.error("GAPI client not loaded yet."); }
+    
+    function showMainContent() {
+        console.log("Attempting to show main content for user:", userProfile.name);
+        document.getElementById('loginContainer').classList.add('hidden');
+        document.getElementById('mainContainer').classList.remove('hidden');
+        updateSlideDisplay();
     }
-
-    // --- NEW: Passcode Sign-In Handler ---
+    
+    // --- LOGIN HANDLERS ---
     async function handlePasscodeSignIn() {
         const email = document.getElementById('emailInput').value.toLowerCase().trim();
         const passcode = document.getElementById('passcodeInput').value.trim();
-        const errorElement = document.getElementById('passcode-error');
-        errorElement.innerText = "";
+        const errorP = document.getElementById('loginError');
+        errorP.textContent = "";
 
         if (!email || !passcode) {
-            errorElement.innerText = "Please enter both email and passcode.";
+            errorP.textContent = "Please enter both email and passcode.";
             return;
         }
 
         try {
-            const studentQuery = await db.collection("students")
-                .where("email", "==", email)
-                .where("passcode", "==", passcode)
-                .limit(1)
-                .get();
+            const q = db.collection("students").where("email", "==", email).where("passcode", "==", passcode);
+            const querySnapshot = await q.get();
 
-            if (studentQuery.empty) {
-                errorElement.innerText = "Invalid email or passcode. Please try again.";
+            if (querySnapshot.empty) {
+                errorP.textContent = "Invalid email or passcode. Please try again.";
             } else {
-                const studentData = studentQuery.docs[0].data();
+                const studentData = querySnapshot.docs[0].data();
                 userProfile = {
                     name: studentData.name,
                     email: studentData.email
                 };
-                // User is authenticated, but we still need Slides API access
-                // So, we trigger a silent Google Sign-In for API access
-                handleCredentialResponse(await google.accounts.id.prompt());
+                showMainContent();
             }
         } catch (error) {
-            console.error("Error during passcode sign-in:", error);
-            errorElement.innerText = "An error occurred. Please try again.";
+            console.error("Error signing in with passcode:", error);
+            errorP.textContent = "An error occurred. Please try again later.";
         }
     }
 
+    function handleCredentialResponse(response) {
+        const profile = decodeJwtResponse(response.credential);
+        if (profile) {
+            userProfile = {
+                name: profile.name,
+                email: profile.email
+            };
+            showMainContent();
+        } else {
+            alert("Could not sign in with Google. Please try again.");
+        }
+    }
 
+    // --- SLIDE DISPLAY LOGIC ---
     function updateSlideDisplay() {
+        if (!API_KEY || API_KEY === "PASTE_YOUR_NEW_API_KEY_HERE") {
+            document.getElementById('slide-loader').innerHTML = `<p class="text-red-500">Error: API Key is not configured in the script.</p>`;
+            return;
+        }
+
         const slideId = SLIDE_IDS[currentSlideIndex];
         const slideImageElement = document.getElementById('slide-image');
         const slideCounterElement = document.getElementById('slide-counter');
-        document.getElementById('slide-loader').style.display = 'block';
-        slideImageElement.style.display = 'none';
-        gapi.client.slides.presentations.pages.getThumbnail({
-            presentationId: PRESENTATION_ID,
-            pageObjectId: slideId
-        }).then(function(response) {
-            document.getElementById('slide-loader').style.display = 'none';
-            slideImageElement.style.display = 'block';
-            slideImageElement.src = response.result.contentUrl;
-            slideCounterElement.innerHTML = `Slide ${currentSlideIndex + 1} of ${SLIDE_IDS.length}`;
-            document.getElementById('inputbox').value = '';
-            document.getElementById('result').innerHTML = '';
-        }, function(error) {
-            console.error("API Error:", error);
-            slideCounterElement.innerHTML = `Error: ${error.result.error.message || 'Could not load slide'}`;
-        });
+        const slideLoader = document.getElementById('slide-loader');
+
+        slideLoader.classList.remove('hidden');
+        slideImageElement.classList.add('hidden');
+
+        const apiUrl = `https://slides.googleapis.com/v1/presentations/${PRESENTATION_ID}/pages/${slideId}/thumbnail?key=${API_KEY}`;
+
+        fetch(apiUrl)
+            .then(response => response.json())
+            .then(data => {
+                slideLoader.classList.add('hidden');
+                if (data.contentUrl) {
+                    slideImageElement.src = data.contentUrl;
+                    slideImageElement.classList.remove('hidden');
+                    slideCounterElement.innerText = `Slide ${currentSlideIndex + 1} of ${SLIDE_IDS.length}`;
+                } else {
+                    console.error("API Error:", data);
+                    slideLoader.innerHTML = `<p class="text-red-500">Error: ${data.error.message || 'Could not load slide'}</p>`;
+                    slideLoader.classList.remove('hidden');
+                }
+            })
+            .catch(error => {
+                console.error("Fetch Error:", error);
+                slideLoader.innerHTML = `<p class="text-red-500">Error loading slide. Check console.</p>`;
+                slideLoader.classList.remove('hidden');
+            });
     }
 
+    // --- NAVIGATION ---
     function nextSlide() { if (currentSlideIndex < SLIDE_IDS.length - 1) { currentSlideIndex++; updateSlideDisplay(); } }
     function prevSlide() { if (currentSlideIndex > 0) { currentSlideIndex--; updateSlideDisplay(); } }
 
-    function showToast(message) { var x = document.getElementById("toast"); x.innerHTML = message; x.className = "show"; setTimeout(function(){ x.className = x.className.replace("show", ""); }, 3000); }
-    
-    function calc1(i) { var d = i.toLowerCase().trim(); var ivcount = (d.match(/iv/g) || []).length; var dvcount = (d.match(/dv/g) || []).length; var count = dvcount + ivcount; var grade = 0; if (!d.includes("if") && !d.includes("think") && !d.includes("believe") && d.includes("when") && (d.includes("increase") || d.includes("decrease")) && d.includes("independent variable") && d.includes("dependent variable") && count > 1) { grade = 100; } if (count === 1) { showToast("Make sure you include the independent AND dependent variable!"); } return grade; }
-    function calc2(i) { var d = i.toLowerCase().trim(); var grade = 0; if (d.includes("hypothesis")) { grade = 100; showToast("Great use of the word hypothesis!"); } return grade; }
-    function calc3(i) { var d = i.toLowerCase().trim(); var grade = 0; if (d.includes("control group")) { grade = 100; } return grade; }
-    
-    function checkCurrentSlideAnswer(answer) { let score = 0; switch (currentSlideIndex) { case 0: score = calc1(answer); break; case 1: score = calc2(answer); break; case 2: score = calc3(answer); break; default: showToast("This slide does not have a question to check."); break; } return score; }
-
+    // --- ANSWER CHECKING & SAVING ---
     async function myfunction() {
         var studentAnswer = document.getElementById("inputbox").value;
         var resultElement = document.getElementById("result");
@@ -209,13 +209,8 @@
         }
         var score = checkCurrentSlideAnswer(studentAnswer);
         resultElement.innerHTML = "Your Score: " + score;
-        if (score === 100) {
-            showToast("Excellent! That's a perfect answer.");
-            resultElement.style.color = "lightgreen";
-        } else {
-            showToast("Not quite, check your work and try again!");
-            resultElement.style.color = "orange";
-        }
+        resultElement.style.color = score === 100 ? "lightgreen" : "orange";
+
         if (!userProfile) {
             showToast("Error: User not signed in. Cannot save work.");
             return;
@@ -237,16 +232,28 @@
             showToast("Could not save answer. See console for details.");
         }
     }
+
+    function showToast(message) {
+        var x = document.getElementById("toast");
+        x.innerHTML = message;
+        x.className = "show";
+        setTimeout(function(){ x.className = x.className.replace("show", ""); }, 3000);
+    }
     
-    window.onload = function() {
-        tokenClient = google.accounts.oauth2.initTokenClient({
-            client_id: CLIENT_ID,
-            scope: SCOPES,
-            callback: '',
-        });
-        gapi.load('client', function() {
-            gapi.client.load('https://slides.googleapis.com/$discovery/rest?version=v1');
-        });
+    // --- SLIDE-SPECIFIC CHECKERS ---
+    function calc1(i) { var d = i.toLowerCase().trim(); var ivcount = (d.match(/iv/g) || []).length; var dvcount = (d.match(/dv/g) || []).length; var count = dvcount + ivcount; var grade = 0; if (!d.includes("if") && !d.includes("think") && !d.includes("believe") && d.includes("when") && (d.includes("increase") || d.includes("decrease")) && d.includes("independent variable") && d.includes("dependent variable") && count > 1) { grade = 100; } if (count === 1) { showToast("Make sure you include the independent AND dependent variable!"); } return grade; }
+    function calc2(i) { var d = i.toLowerCase().trim(); var grade = 0; if (d.includes("hypothesis")) { grade = 100; showToast("Great use of the word hypothesis!"); } return grade; }
+    function calc3(i) { var d = i.toLowerCase().trim(); var grade = 0; if (d.includes("control group")) { grade = 100; } return grade; }
+
+    function checkCurrentSlideAnswer(answer) {
+        let score = 0;
+        switch (currentSlideIndex) {
+            case 0: score = calc1(answer); break;
+            case 1: score = calc2(answer); break;
+            case 2: score = calc3(answer); break;
+            default: showToast("This slide does not have a question to check."); break;
+        }
+        return score;
     }
 </script>
 </body>
