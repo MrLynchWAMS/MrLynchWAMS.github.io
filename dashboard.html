@@ -123,8 +123,13 @@
             const studentSnapshot = await db.collection("students").get();
             const students = studentSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-            const submissionSnapshot = await db.collection("submissions").where("assignmentId", "==", assignmentId).orderBy("timestamp", "desc").get();
-            const submissions = submissionSnapshot.docs.map(doc => doc.data());
+            // --- FIX: Remove the .orderBy() from the query ---
+            const submissionSnapshot = await db.collection("submissions").where("assignmentId", "==", assignmentId).get();
+            let submissions = submissionSnapshot.docs.map(doc => doc.data());
+
+            // --- FIX: Sort the data here in the code instead ---
+            submissions.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+
 
             const classData = {};
             students.forEach(student => {
@@ -275,85 +280,82 @@
         modal.classList.remove('hidden');
     }
     
-    function showModalForAnswerHistory(studentName, qNumber, submissions) { /* ... unchanged ... */ }
-    document.getElementById('signOutButton').onclick = () => { /* ... unchanged ... */ };
-    function exportToCSV() { /* ... unchanged ... */ }
-    function splitName(fullName) { /* ... unchanged ... */ }
-    document.getElementById('exportButton').onclick = exportToCSV;
-    document.getElementById('sortOptions').onchange = function(event) { /* ... unchanged ... */ };
-</script>
-<script>
-// Unchanged utility functions
-function showModalForAnswerHistory(studentName, qNumber, submissions) {
-    modalTitle.innerText = `Answer History for ${studentName} - Question ${qNumber}`;
-    modalContent.innerHTML = '';
-    if (!submissions || submissions.length === 0) {
-        modalContent.innerHTML = '<p class="text-gray-400">No attempts found.</p>';
-        modal.classList.remove('hidden');
-        return;
-    }
-    submissions.forEach(sub => {
-        const date = sub.timestamp ? new Date(sub.timestamp.seconds * 1000).toLocaleString() : 'Timestamp not available';
-        const status = sub.score !== undefined ? `<span class="font-bold text-lg ${sub.score === 100 ? 'text-green-400' : 'text-yellow-400'}">${sub.score}/100</span>` : '';
-        const answerDiv = document.createElement('div');
-        answerDiv.className = "mb-4 p-4 bg-gray-700 rounded-lg";
-        answerDiv.innerHTML = `<div class="flex justify-between items-center mb-2"><h3 class="text-gray-400 text-sm">${date}</h3>${status}</div><p class="text-gray-300 whitespace-pre-wrap">${sub.answer}</p>`;
-        modalContent.appendChild(answerDiv);
-    });
-    modal.classList.remove('hidden');
-}
-document.getElementById('signOutButton').onclick = () => { google.accounts.id.disableAutoSelect(); location.reload(); };
-function exportToCSV() {
-    if (!processedClassData || !activeClass) {
-        alert("Data not loaded or no class selected. Please wait and try again."); return;
-    }
-    let csvContent = "data:text/csv;charset=utf-8,";
-    const numQuestions = assignmentData.slideIds.length;
-    const questionHeaders = Array.from({length: numQuestions}, (_, i) => `Score Q${i + 1}`).join(',');
-    const headers = ["Email", "Last Name", "First Name", questionHeaders, "Average Score", "Completion (%)"].join(',');
-    csvContent += headers + "\r\n";
-    const studentsToExport = [...processedClassData[activeClass]];
-    if (currentSortOrder === 'lastName') { studentsToExport.sort((a, b) => splitName(a.name).lastName.localeCompare(splitName(b.name).lastName)); } 
-    else if (currentSortOrder === 'firstName') { studentsToExport.sort((a, b) => splitName(a.name).firstName.localeCompare(splitName(b.name).firstName)); }
-    studentsToExport.forEach(student => {
-        const { firstName, lastName } = splitName(student.name);
-        let scores = []; let totalScore = 0; let attemptedQuestions = 0;
-        for (let i = 0; i < numQuestions; i++) {
-            const latestSubmission = student.submissions.find(s => s.slideIndex === i);
-            if (latestSubmission) { scores.push(latestSubmission.score); totalScore += latestSubmission.score; attemptedQuestions++; } 
-            else { scores.push(""); }
+    function showModalForAnswerHistory(studentName, qNumber, submissions) {
+        modalTitle.innerText = `Answer History for ${studentName} - Question ${qNumber}`;
+        modalContent.innerHTML = '';
+        if (!submissions || submissions.length === 0) {
+            modalContent.innerHTML = '<p class="text-gray-400">No attempts found.</p>';
+            modal.classList.remove('hidden');
+            return;
         }
-        const averageScore = attemptedQuestions > 0 ? (totalScore / attemptedQuestions).toFixed(2) : "";
-        const completionPercentage = ((attemptedQuestions / numQuestions) * 100).toFixed(2);
-        let row = [student.email, `"${lastName}"`, `"${firstName}"`, ...scores, averageScore, completionPercentage].join(',');
-        csvContent += row + "\r\n";
-    });
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    const safeClassName = activeClass.replace(/\s+/g, '_');
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `submissions_${safeClassName}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-}
-function splitName(fullName) {
-    if (!fullName) return { firstName: '', lastName: '' };
-    const parts = fullName.trim().split(' ');
-    if (parts.length === 1) return { firstName: parts[0], lastName: '' };
-    const lastName = parts.pop();
-    const firstName = parts.join(' ');
-    return { firstName, lastName };
-}
-document.getElementById('exportButton').onclick = exportToCSV;
-document.getElementById('sortOptions').onchange = function(event) {
-    currentSortOrder = event.target.value;
-    if(processedClassData) {
-        renderTables(processedClassData);
-        document.querySelectorAll('#classTablesContainer > div').forEach(t => t.classList.add('hidden'));
-        document.getElementById(`table-${activeClass.replace(/\s+/g, '-')}`).classList.remove('hidden');
+        submissions.forEach(sub => {
+            const date = sub.timestamp ? new Date(sub.timestamp.seconds * 1000).toLocaleString() : 'Timestamp not available';
+            const status = sub.score !== undefined ? `<span class="font-bold text-lg ${sub.score === 100 ? 'text-green-400' : 'text-yellow-400'}">${sub.score}/100</span>` : '';
+            const answerDiv = document.createElement('div');
+            answerDiv.className = "mb-4 p-4 bg-gray-700 rounded-lg";
+            answerDiv.innerHTML = `<div class="flex justify-between items-center mb-2"><h3 class="text-gray-400 text-sm">${date}</h3>${status}</div><p class="text-gray-300 whitespace-pre-wrap">${sub.answer}</p>`;
+            modalContent.appendChild(answerDiv);
+});
+        modal.classList.remove('hidden');
     }
-};
+    
+    document.getElementById('signOutButton').onclick = () => {
+        google.accounts.id.disableAutoSelect();
+        location.reload();
+    };
+
+    function exportToCSV() {
+        if (!processedClassData || !activeClass) {
+            alert("Data not loaded or no class selected. Please wait and try again."); return;
+        }
+        let csvContent = "data:text/csv;charset=utf-8,";
+        const numQuestions = assignmentData.slideIds.length;
+        const questionHeaders = Array.from({length: numQuestions}, (_, i) => `Score Q${i + 1}`).join(',');
+        const headers = ["Email", "Last Name", "First Name", questionHeaders, "Average Score", "Completion (%)"].join(',');
+        csvContent += headers + "\r\n";
+        const studentsToExport = [...processedClassData[activeClass]];
+        if (currentSortOrder === 'lastName') { studentsToExport.sort((a, b) => splitName(a.name).lastName.localeCompare(splitName(b.name).lastName)); } 
+        else if (currentSortOrder === 'firstName') { studentsToExport.sort((a, b) => splitName(a.name).firstName.localeCompare(splitName(b.name).firstName)); }
+        studentsToExport.forEach(student => {
+            const { firstName, lastName } = splitName(student.name);
+            let scores = []; let totalScore = 0; let attemptedQuestions = 0;
+            for (let i = 0; i < numQuestions; i++) {
+                const latestSubmission = student.submissions.find(s => s.slideIndex === i);
+                if (latestSubmission) { scores.push(latestSubmission.score); totalScore += latestSubmission.score; attemptedQuestions++; } 
+                else { scores.push(""); }
+            }
+            const averageScore = attemptedQuestions > 0 ? (totalScore / attemptedQuestions).toFixed(2) : "";
+            const completionPercentage = ((attemptedQuestions / numQuestions) * 100).toFixed(2);
+            let row = [student.email, `"${lastName}"`, `"${firstName}"`, ...scores, averageScore, completionPercentage].join(',');
+            csvContent += row + "\r\n";
+        });
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        const safeClassName = activeClass.replace(/\s+/g, '_');
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `submissions_${safeClassName}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    function splitName(fullName) {
+        if (!fullName) return { firstName: '', lastName: '' };
+        const parts = fullName.trim().split(' ');
+        if (parts.length === 1) return { firstName: parts[0], lastName: '' };
+        const lastName = parts.pop();
+        const firstName = parts.join(' ');
+        return { firstName, lastName };
+    }
+    document.getElementById('exportButton').onclick = exportToCSV;
+    document.getElementById('sortOptions').onchange = function(event) {
+        currentSortOrder = event.target.value;
+        if(processedClassData) {
+            renderTables(processedClassData);
+            document.querySelectorAll('#classTablesContainer > div').forEach(t => t.classList.add('hidden'));
+            document.getElementById(`table-${activeClass.replace(/\s+/g, '-')}`).classList.remove('hidden');
+        }
+    };
 </script>
 </body>
 </html>
