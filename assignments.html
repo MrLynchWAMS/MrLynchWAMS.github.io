@@ -33,14 +33,7 @@
         <div id="loadingState" class="text-center py-10"><p class="text-xl">Loading assignments...</p></div>
 
         <div id="assignmentsList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <!-- "Create New" Card -->
-            <div id="create-new-card" onclick="openCreateModal()" class="bg-gray-800 hover:bg-gray-700/50 border-2 border-dashed border-gray-600 rounded-lg flex items-center justify-center h-48 cursor-pointer transition-all">
-                <div class="text-center">
-                    <span class="text-5xl text-gray-500">+</span>
-                    <p class="text-xl font-semibold text-gray-400 mt-2">Create New Assignment</p>
-                </div>
-            </div>
-            <!-- Assignment cards will be dynamically added here -->
+            <!-- "Create New" Card will be dynamically handled by script -->
         </div>
     </div>
 
@@ -78,7 +71,7 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
-    function decodeJwtResponse(token) { /* ... unchanged ... */ }
+    function decodeJwtResponse(token) { try { const base64Url = token.split('.')[1]; const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/'); const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) { return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2); }).join('')); return JSON.parse(jsonPayload); } catch (e) { return null; } }
 
     function handleCredentialResponse(response) {
         const userProfile = decodeJwtResponse(response.credential);
@@ -96,14 +89,15 @@
         const listContainer = document.getElementById('assignmentsList');
         const loadingState = document.getElementById('loadingState');
         
+        // --- FIX: Clear the container completely ---
+        listContainer.innerHTML = '';
+        
         try {
             const snapshot = await db.collection("assignments").orderBy("createdAt", "desc").get();
-            // Clear previous list but keep the "Create New" card
-            listContainer.innerHTML = '';
-            listContainer.appendChild(document.getElementById('create-new-card'));
 
             if (snapshot.empty) {
                 loadingState.innerText = "No assignments found. Click '+' to create your first one!";
+                loadingState.classList.remove('hidden');
             } else {
                 loadingState.classList.add('hidden');
             }
@@ -112,10 +106,8 @@
                 const assignment = { id: doc.id, ...doc.data() };
                 const card = document.createElement('div');
                 card.className = "bg-gray-800 rounded-lg p-6 shadow-lg cursor-pointer hover:ring-2 hover:ring-yellow-500 transition-all";
-                // This link will eventually take you to the dashboard for this specific assignment
                 card.onclick = () => {
                     alert(`In the future, this will open the dashboard for "${assignment.name}".\n\nAssignment ID: ${assignment.id}`);
-                    // window.location.href = `./dashboard.html?assignmentId=${assignment.id}`;
                 };
 
                 const date = assignment.createdAt ? new Date(assignment.createdAt.seconds * 1000).toLocaleDateString() : 'No date';
@@ -123,22 +115,40 @@
                 card.innerHTML = `
                     <h3 class="text-2xl font-bold text-yellow-400 mb-2">${assignment.name}</h3>
                     <p class="text-gray-400 text-sm">Created: ${date}</p>
-                    <p class="text-gray-500 text-xs mt-4 truncate">ID: ${assignment.presentationId}</p>
+                    <p class="text-gray-500 text-xs mt-4 truncate">Presentation ID: ${assignment.presentationId}</p>
                 `;
-                // Prepend new cards so they appear before the "+" button
-                listContainer.insertBefore(card, document.getElementById('create-new-card'));
+                listContainer.appendChild(card);
             });
 
         } catch (error) {
             console.error("Error loading assignments:", error);
             loadingState.innerText = "Error loading assignments. See console for details.";
+            loadingState.classList.remove('hidden');
+        } finally {
+            // --- FIX: Add the "Create New" card at the end, after loading everything else ---
+            const createCard = document.createElement('div');
+            createCard.className = "bg-gray-800 hover:bg-gray-700/50 border-2 border-dashed border-gray-600 rounded-lg flex items-center justify-center h-48 cursor-pointer transition-all";
+            createCard.onclick = openCreateModal;
+            createCard.innerHTML = `
+                <div class="text-center">
+                    <span class="text-5xl text-gray-500">+</span>
+                    <p class="text-xl font-semibold text-gray-400 mt-2">Create New Assignment</p>
+                </div>
+            `;
+            listContainer.appendChild(createCard);
         }
     }
 
     // --- MODAL LOGIC ---
     const createModal = document.getElementById('createModal');
     function openCreateModal() { createModal.classList.remove('hidden'); }
-    function closeCreateModal() { createModal.classList.add('hidden'); }
+    function closeCreateModal() { 
+        createModal.classList.add('hidden'); 
+        // Clear inputs for next time
+        document.getElementById('assignmentName').value = '';
+        document.getElementById('slidesLink').value = '';
+        document.getElementById('modal-error').innerText = '';
+    }
 
     async function handleCreateAssignment() {
         const name = document.getElementById('assignmentName').value.trim();
@@ -151,7 +161,6 @@
             return;
         }
 
-        // Regex to extract the presentation ID from a Google Slides URL
         const presentationIdRegex = /presentation\/d\/([a-zA-Z0-9-_]+)/;
         const match = link.match(presentationIdRegex);
 
@@ -167,7 +176,6 @@
                 name: name,
                 presentationId: presentationId,
                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                // We will add slideIds and checkerFunctions here in Phase 2
             });
 
             closeCreateModal();
@@ -186,9 +194,6 @@
         location.reload();
     };
 </script>
-<!-- Unchanged utility functions -->
-<script>
-    function decodeJwtResponse(token) { try { const base64Url = token.split('.')[1]; const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/'); const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) { return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2); }).join('')); return JSON.parse(jsonPayload); } catch (e) { return null; } }
-</script>
 </body>
 </html>
+
