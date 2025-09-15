@@ -26,7 +26,7 @@
         <h1 class="text-4xl font-bold text-yellow-400 mb-4">Assignment Editor</h1>
         <p id="loading-text" class="text-lg text-gray-300">Please sign in to continue...</p>
         <div id="signInButtonContainer" class="mt-8">
-             <div id="g_id_onload" data-client_id="1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com" data-callback="handleCredentialResponse" data-auto_select="true" data-use_fedcm_for_prompt="false"></div>
+             <div id="g_id_onload" data-client_id="1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com" data-callback="handleCredentialResponse" data-auto_select="true"></div>
              <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_black" data-text="signin_with" data-shape="rectangular" data-logo_alignment="left"></div>
         </div>
         <p id="auth-error" class="text-red-500 mt-4"></p>
@@ -82,7 +82,6 @@
         if (userProfile.email.toLowerCase() === TEACHER_EMAIL.toLowerCase()) {
             document.getElementById('signInButtonContainer').classList.add('hidden');
             document.getElementById('loading-text').textContent = "Authenticating...";
-            // Get the OAuth token needed for the Slides API
             tokenClient.callback = (tokenResponse) => {
                 if (tokenResponse && tokenResponse.access_token) {
                     gapi.client.setToken(tokenResponse);
@@ -105,12 +104,11 @@
             document.getElementById('loading-text').textContent = "Error: No assignment ID provided in the URL.";
         }
         
-        // Initialize the GAPI client for API calls
         gapi.load('client', function() {
             tokenClient = google.accounts.oauth2.initTokenClient({
                 client_id: CLIENT_ID,
                 scope: SCOPES,
-                callback: '', // Will be set dynamically in handleCredentialResponse
+                callback: '',
             });
             gapi.client.load('https://slides.googleapis.com/$discovery/rest?version=v1');
         });
@@ -124,25 +122,21 @@
             loadingText.textContent = "Loading assignment data...";
             const doc = await db.collection("assignments").doc(assignmentId).get();
             if (!doc.exists) {
-                loadingText.textContent = "Error: Assignment not found.";
-                return;
+                loadingText.textContent = "Error: Assignment not found."; return;
             }
             assignmentData = { id: doc.id, ...doc.data() };
             
             loadingText.textContent = "Fetching slide information from Google...";
             
-            // --- NEW: Automatically fetch slide IDs from Google Slides API ---
             const response = await gapi.client.slides.presentations.get({
                 presentationId: assignmentData.presentationId,
             });
             
             const slides = response.result.slides;
             if (!slides || slides.length === 0) {
-                loadingText.textContent = "Error: No slides found in the presentation.";
-                return;
+                loadingText.textContent = "Error: No slides found in the presentation."; return;
             }
             assignmentData.slideIds = slides.map(slide => slide.objectId);
-            // --- END NEW ---
 
             document.getElementById('page-loader').classList.add('hidden');
             document.getElementById('editorContent').classList.remove('hidden');
@@ -179,7 +173,7 @@
                     </div>
                     <div>
                         <label for="checker-func-${index}" class="block font-semibold mb-2">Checker Function (calc${index + 1})</label>
-                        <textarea id="checker-func-${index}" class="w-full h-64 p-2 bg-gray-700 rounded" placeholder="function calc${index + 1}(answer) { ... }">${checkerFunctions[`calc${index + 1}`] || ''}</textarea>
+                        <textarea id="checker-func-${index}" class="w-full h-64 p-2 bg-gray-700 rounded" placeholder="function calc${index + 1}(answer, showToast) { ... }">${checkerFunctions[`calc${index + 1}`] || ''}</textarea>
                     </div>
                 </div>
             `;
@@ -196,12 +190,13 @@
             assignmentData.slideIds.forEach((id, index) => {
                 const funcContent = document.getElementById(`checker-func-${index}`).value;
                 if (funcContent.trim()) {
+                    // Save the entire function as a string
                     checkerFunctions[`calc${index + 1}`] = funcContent;
                 }
             });
 
             await db.collection("assignments").doc(assignmentId).update({
-                slideIds: assignmentData.slideIds, // Save the auto-fetched IDs
+                slideIds: assignmentData.slideIds,
                 checkerFunctions: checkerFunctions
             });
 
