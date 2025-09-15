@@ -81,7 +81,8 @@
     let assignmentData = null;
     let currentSlideIndex = 0;
     let userProfile = null;
-    let checkerFunctionStrings = {}; // Will store the function strings from Firebase
+    let checkerFunctionStrings = {};
+    let slideStates = []; // NEW: Array to store answers and scores
 
     window.onload = async function() {
         const urlParams = new URLSearchParams(window.location.search);
@@ -102,10 +103,11 @@
             }
             assignmentData = { id: doc.id, ...doc.data() };
 
-            // Just store the function strings, don't execute them yet
             if (assignmentData.checkerFunctions) {
                 checkerFunctionStrings = assignmentData.checkerFunctions;
             }
+            // NEW: Initialize the state array with nulls
+            slideStates = new Array(assignmentData.slideIds.length).fill(null);
             
             loader.classList.add('hidden');
             document.getElementById('assignmentNameLogin').textContent = assignmentData.name;
@@ -130,20 +132,16 @@
         errorP.textContent = "";
 
         if (!email || !passcodeString) {
-            errorP.textContent = "Please enter both email and passcode.";
-            return;
+            errorP.textContent = "Please enter both email and passcode."; return;
         }
-
         const passcodeNumber = parseInt(passcodeString, 10);
         if (isNaN(passcodeNumber)) {
-            errorP.textContent = "Passcode must be a number.";
-            return;
+            errorP.textContent = "Passcode must be a number."; return;
         }
 
         try {
             const q = db.collection("students").where("email", "==", email).where("passcode", "==", passcodeNumber);
             const querySnapshot = await q.get();
-
             if (querySnapshot.empty) {
                 errorP.textContent = "Invalid email or passcode. Please try again.";
             } else {
@@ -174,6 +172,8 @@
         const slideImageElement = document.getElementById('slide-image');
         const slideCounterElement = document.getElementById('slide-counter');
         const slideLoader = document.getElementById('slide-loader');
+        const inputBox = document.getElementById('inputbox');
+        const resultElement = document.getElementById('result');
 
         slideLoader.classList.remove('hidden');
         slideImageElement.classList.add('hidden');
@@ -185,14 +185,49 @@
             slideLoader.classList.add('hidden');
             slideImageElement.classList.remove('hidden');
             slideCounterElement.innerText = `Slide ${currentSlideIndex + 1} of ${assignmentData.slideIds.length}`;
+            
+            // NEW: Restore state for the current slide
+            const currentState = slideStates[currentSlideIndex];
+            if (currentState) {
+                inputBox.value = currentState.answer;
+                resultElement.innerHTML = "Your Score: " + currentState.score;
+                resultElement.style.color = currentState.score === 100 ? "lightgreen" : "orange";
+            } else {
+                inputBox.value = "";
+                resultElement.innerHTML = "";
+            }
         };
         slideImageElement.onerror = () => {
             slideLoader.innerHTML = `<p class="text-red-500">Error loading slide. Please ensure the presentation is shared publicly ("Anyone with the link can view").</p>`;
         };
     }
 
-    function nextSlide() { if (currentSlideIndex < assignmentData.slideIds.length - 1) { currentSlideIndex++; updateSlideDisplay(); } }
-    function prevSlide() { if (currentSlideIndex > 0) { currentSlideIndex--; updateSlideDisplay(); } }
+    function saveCurrentState() {
+        const currentAnswer = document.getElementById('inputbox').value;
+        // Only save if there's an answer. Don't overwrite a graded answer with an empty box on navigation.
+        if (currentAnswer.trim() !== "") {
+            const currentState = slideStates[currentSlideIndex];
+            // If there's no graded score for this slide yet, save the text.
+            if (!currentState || currentState.score === undefined) {
+                 slideStates[currentSlideIndex] = { answer: currentAnswer, score: undefined };
+            }
+        }
+    }
+
+    function nextSlide() { 
+        saveCurrentState();
+        if (currentSlideIndex < assignmentData.slideIds.length - 1) { 
+            currentSlideIndex++; 
+            updateSlideDisplay(); 
+        } 
+    }
+    function prevSlide() { 
+        saveCurrentState();
+        if (currentSlideIndex > 0) { 
+            currentSlideIndex--; 
+            updateSlideDisplay(); 
+        } 
+    }
 
     async function myfunction() {
         var studentAnswer = document.getElementById("inputbox").value;
@@ -204,6 +239,9 @@
         var score = checkCurrentSlideAnswer(studentAnswer);
         resultElement.innerHTML = "Your Score: " + score;
         resultElement.style.color = score === 100 ? "lightgreen" : "orange";
+
+        // NEW: Save the graded answer and score to our state
+        slideStates[currentSlideIndex] = { answer: studentAnswer, score: score };
 
         if (!userProfile) {
             showToast("Error: User not signed in. Cannot save work.");
@@ -227,26 +265,21 @@
         }
     }
 
-    // --- UPDATED: The new, more robust checker logic ---
     function checkCurrentSlideAnswer(answer) {
         const funcName = `calc${currentSlideIndex + 1}`;
         const funcString = checkerFunctionStrings[funcName];
-
         if (funcString) {
             try {
-                // Create the function from the raw string stored in Firebase
                 const checkerFunction = new Function('return ' + funcString)();
-                
-                // Call the function with the student's answer and the toast utility
                 return checkerFunction(answer, showToast);
             } catch (e) {
                 console.error(`Error executing checker function ${funcName}:`, e);
                 showToast("Error in the checking logic for this slide.");
-                return 0; // Return 0 if the teacher's code has an error
+                return 0;
             }
         }
         showToast("No checking logic for this slide.");
-        return 0; // Default score if no function exists
+        return 0;
     }
     
     function showToast(message) { var x = document.getElementById("toast"); x.innerHTML = message; x.className = "show"; setTimeout(function(){ x.className = x.className.replace("show", ""); }, 3000); }
