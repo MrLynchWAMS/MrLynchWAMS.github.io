@@ -22,17 +22,19 @@
 </head>
 <body class="bg-gray-900 text-white font-sans">
 
-    <div id="signInPrompt" class="flex flex-col items-center justify-center h-screen">
+    <div id="pageLoader" class="flex flex-col items-center justify-center h-screen">
         <h1 class="text-4xl font-bold text-yellow-400 mb-4">Teacher Dashboard</h1>
-        <p class="text-lg text-gray-300 mb-8">Please sign in to view student submissions.</p>
-        <div id="g_id_onload" data-client_id="1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com" data-callback="handleCredentialResponse" data-auto_select="true" data-use_fedcm_for_prompt="false"></div>
-        <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_black" data-text="signin_with" data-shape="rectangular" data-logo_alignment="left"></div>
+        <p id="loading-text" class="text-lg text-gray-300">Please sign in to continue...</p>
+        <div id="signInButtonContainer" class="mt-8">
+             <div id="g_id_onload" data-client_id="1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com" data-callback="handleCredentialResponse" data-auto_select="true" data-use_fedcm_for_prompt="false"></div>
+             <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_black" data-text="signin_with" data-shape="rectangular" data-logo_alignment="left"></div>
+        </div>
         <p id="auth-error" class="text-red-500 mt-4"></p>
     </div>
 
     <div id="dashboardContent" class="hidden container mx-auto p-4 md:p-8">
         <div class="flex justify-between items-center mb-6 flex-wrap gap-4">
-            <h1 class="text-3xl font-bold text-yellow-400">Student Submissions</h1>
+            <h1 id="assignmentName" class="text-3xl font-bold text-yellow-400"></h1>
             <div class="flex items-center gap-2">
                 <label for="sortOptions" class="font-semibold">Sort by:</label>
                 <select id="sortOptions" class="bg-gray-700 border border-gray-600 rounded-md p-2 text-white">
@@ -43,19 +45,18 @@
                 </select>
             </div>
             <div class="flex items-center gap-4">
+                 <a href="./assignments.html" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg">&larr; All Assignments</a>
                 <button id="exportButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Export Class to CSV</button>
                 <button id="signOutButton" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Sign Out</button>
             </div>
         </div>
         
-        <div id="loadingState" class="text-center py-10"><p class="text-xl">Loading student data...</p></div>
-
-        <div id="classDataContainer" class="hidden">
+        <div id="classDataContainer">
             <div id="classTabs" class="flex border-b border-gray-700 mb-4"></div>
             <div id="classTablesContainer"></div>
         </div>
     </div>
-
+    
     <div id="answerModal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
         <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
             <div class="flex justify-between items-center p-4 border-b border-gray-700">
@@ -68,8 +69,6 @@
 
 <script>
     const TEACHER_EMAIL = "klynch@mtps.us";
-    const CLIENT_ID = "1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com";
-    const NUM_QUESTIONS = 3;
     const firebaseConfig = {
       apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
       authDomain: "mrlynch-slides-app.firebaseapp.com",
@@ -80,23 +79,28 @@
     };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
+
+    let assignmentData = null;
     let processedClassData = null;
     let activeClass = null;
     let currentSortOrder = 'lastName';
+    let assignmentId;
 
-    function decodeJwtResponse(token) {
-        var base64Url = token.split('.')[1];
-        var base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-        var jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
-            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-        }).join(''));
-        return JSON.parse(jsonPayload);
-    }
+    window.onload = function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        assignmentId = urlParams.get('assignmentId');
+        if (!assignmentId) {
+            document.getElementById('loading-text').textContent = "Error: No assignment ID specified in URL. Please go back to the assignments page.";
+            document.getElementById('signInButtonContainer').classList.add('hidden');
+        }
+    };
+
+    function decodeJwtResponse(token) { try { const base64Url = token.split('.')[1]; const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/'); const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) { return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2); }).join('')); return JSON.parse(jsonPayload); } catch (e) { return null; } }
 
     function handleCredentialResponse(response) {
         const userProfile = decodeJwtResponse(response.credential);
         if (userProfile.email.toLowerCase() === TEACHER_EMAIL.toLowerCase()) {
-            document.getElementById('signInPrompt').classList.add('hidden');
+            document.getElementById('pageLoader').classList.add('hidden');
             document.getElementById('dashboardContent').classList.remove('hidden');
             loadAndProcessData();
         } else {
@@ -106,15 +110,20 @@
     }
 
     async function loadAndProcessData() {
-        const loadingState = document.getElementById('loadingState');
+        if (!assignmentId) return;
+        
         try {
-            const studentSnapshot = await db.collection("students").get();
-            if (studentSnapshot.empty) {
-                loadingState.innerText = "No students found in the roster. Please upload your student list first.";
-                return;
+            const assignmentDoc = await db.collection("assignments").doc(assignmentId).get();
+            if (!assignmentDoc.exists) {
+                alert("Error: Assignment not found!"); return;
             }
+            assignmentData = { id: assignmentDoc.id, ...assignmentDoc.data() };
+            document.getElementById('assignmentName').textContent = assignmentData.name;
+
+            const studentSnapshot = await db.collection("students").get();
             const students = studentSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            const submissionSnapshot = await db.collection("submissions").orderBy("timestamp", "desc").get();
+
+            const submissionSnapshot = await db.collection("submissions").where("assignmentId", "==", assignmentId).orderBy("timestamp", "desc").get();
             const submissions = submissionSnapshot.docs.map(doc => doc.data());
 
             const classData = {};
@@ -129,12 +138,10 @@
             processedClassData = classData;
             renderTabs(classData);
             renderTables(classData);
-            loadingState.classList.add('hidden');
-            document.getElementById('classDataContainer').classList.remove('hidden');
 
         } catch (error) {
             console.error("Error loading data:", error);
-            loadingState.innerText = "Error loading data. See console for details.";
+            alert("An error occurred while loading data. See console for details.");
         }
     }
 
@@ -161,6 +168,7 @@
         const tablesContainer = document.getElementById('classTablesContainer');
         tablesContainer.innerHTML = '';
         const classNames = Object.keys(classData).sort();
+        const numQuestions = assignmentData.slideIds ? assignmentData.slideIds.length : 0;
 
         classNames.forEach((className, index) => {
             const tableWrapper = document.createElement('div');
@@ -169,65 +177,49 @@
             
             const studentsInClass = [...classData[className]];
             
-            if (currentSortOrder === 'lastName') {
-                studentsInClass.sort((a, b) => splitName(a.name).lastName.localeCompare(splitName(b.name).lastName));
-            } else if (currentSortOrder === 'firstName') {
-                studentsInClass.sort((a, b) => splitName(a.name).firstName.localeCompare(splitName(b.name).firstName));
-            } else if (currentSortOrder === 'random' || currentSortOrder === 'randomHide') {
-                for (let i = studentsInClass.length - 1; i > 0; i--) {
-                    const j = Math.floor(Math.random() * (i + 1));
-                    [studentsInClass[i], studentsInClass[j]] = [studentsInClass[j], studentsInClass[i]];
-                }
+            if (currentSortOrder === 'lastName') { studentsInClass.sort((a, b) => splitName(a.name).lastName.localeCompare(splitName(b.name).lastName)); } 
+            else if (currentSortOrder === 'firstName') { studentsInClass.sort((a, b) => splitName(a.name).firstName.localeCompare(splitName(b.name).firstName)); } 
+            else if (currentSortOrder === 'random' || currentSortOrder === 'randomHide') {
+                for (let i = studentsInClass.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [studentsInClass[i], studentsInClass[j]] = [studentsInClass[j], studentsInClass[i]]; }
             }
 
             const table = document.createElement('table');
             table.className = "min-w-full";
-            let tableHTML = `
-                <thead class="bg-gray-700"><tr>
-                    <th class="p-4 text-left font-semibold">Student Name</th>
-            `;
-            for (let i = 0; i < NUM_QUESTIONS; i++) {
+            let tableHTML = `<thead class="bg-gray-700"><tr><th class="p-4 text-left font-semibold">Student Name</th>`;
+            for (let i = 0; i < numQuestions; i++) {
                 tableHTML += `<th class="p-4 font-semibold cursor-pointer" onclick="showModalByQuestion(${i + 1}, '${className}')">Q${i + 1}</th>`;
             }
-            tableHTML += `</tr></thead><tbody>`;
+            tableHTML += `</tr></thead><tbody></tbody>`;
             table.innerHTML = tableHTML;
             const tbody = table.querySelector('tbody');
 
             studentsInClass.forEach((student, studentIndex) => {
                 const tr = document.createElement('tr');
                 tr.className = "border-b border-gray-700 hover:bg-gray-700/50";
-
                 const nameTd = document.createElement('td');
                 nameTd.className = "p-4 font-medium cursor-pointer";
                 nameTd.innerText = currentSortOrder === 'randomHide' ? `Student ${studentIndex + 1}` : student.name;
                 nameTd.onclick = () => showModalByStudent(student);
                 tr.appendChild(nameTd);
 
-                for (let i = 0; i < NUM_QUESTIONS; i++) {
+                for (let i = 0; i < numQuestions; i++) {
                     const scoreTd = document.createElement('td');
                     scoreTd.className = "p-4 text-center";
                     const submissionsForQuestion = student.submissions.filter(s => s.slideIndex === i);
-                    
                     if (submissionsForQuestion.length > 0) {
                         const latestSubmission = submissionsForQuestion[0];
                         const score = latestSubmission.score || 0;
                         const color = score >= 90 ? 'bg-green-500' : score >= 60 ? 'bg-yellow-500' : 'bg-red-500';
-                        // FIX: Set a minimum width for visible feedback on low/zero scores
                         const barWidth = Math.max(score, 2); 
-
                         const scoreBarBg = document.createElement('div');
                         scoreBarBg.className = "score-bar-bg w-full h-6 rounded-md overflow-hidden cursor-pointer";
-                        // FIX: Attach event listener directly for reliability
                         scoreBarBg.onclick = () => showModalForAnswerHistory(student.name, i + 1, submissionsForQuestion);
-
                         const scoreBar = document.createElement('div');
                         scoreBar.className = `score-bar h-full rounded-md ${color}`;
                         scoreBar.style.width = `${barWidth}%`;
-                        
                         scoreBarBg.appendChild(scoreBar);
                         scoreTd.appendChild(scoreBarBg);
                     } else {
-                        // Unanswered remains a full gray bar for clear distinction
                         scoreTd.innerHTML = `<div class="score-bar-bg w-full h-6 rounded-md"><div class="score-bar h-full rounded-md bg-gray-600" style="width: 100%"></div></div>`;
                     }
                     tr.appendChild(scoreTd);
@@ -255,9 +247,10 @@
     document.getElementById('closeModal').onclick = () => modal.classList.add('hidden');
 
     function showModalByStudent(student) {
+        const numQuestions = assignmentData.slideIds.length;
         modalTitle.innerText = `Latest Answers for ${student.name}`;
         modalContent.innerHTML = '';
-        for (let i = 0; i < NUM_QUESTIONS; i++) {
+        for (let i = 0; i < numQuestions; i++) {
             const latestSub = student.submissions.find(s => s.slideIndex === i);
             const answerDiv = document.createElement('div');
             answerDiv.className = "mb-6 p-4 bg-gray-700 rounded-lg";
@@ -282,96 +275,85 @@
         modal.classList.remove('hidden');
     }
     
-    function showModalForAnswerHistory(studentName, qNumber, submissions) {
-        modalTitle.innerText = `Answer History for ${studentName} - Question ${qNumber}`;
-        modalContent.innerHTML = '';
-        if (!submissions || submissions.length === 0) {
-            modalContent.innerHTML = '<p class="text-gray-400">No attempts found.</p>';
-            modal.classList.remove('hidden');
-            return;
-        }
-        submissions.forEach(sub => {
-            const date = sub.timestamp ? new Date(sub.timestamp.seconds * 1000).toLocaleString() : 'Timestamp not available';
-            const status = sub.score !== undefined ? `<span class="font-bold text-lg ${sub.score === 100 ? 'text-green-400' : 'text-yellow-400'}">${sub.score}/100</span>` : '';
-            const answerDiv = document.createElement('div');
-            answerDiv.className = "mb-4 p-4 bg-gray-700 rounded-lg";
-            answerDiv.innerHTML = `<div class="flex justify-between items-center mb-2"><h3 class="text-gray-400 text-sm">${date}</h3>${status}</div><p class="text-gray-300 whitespace-pre-wrap">${sub.answer}</p>`;
-            modalContent.appendChild(answerDiv);
-        });
-        modal.classList.remove('hidden');
-    }
-    
-    document.getElementById('signOutButton').onclick = () => {
-        google.accounts.id.disableAutoSelect();
-        location.reload();
-    };
-
-    function exportToCSV() {
-        if (!processedClassData || !activeClass) {
-            alert("Data not loaded or no class selected. Please wait and try again.");
-            return;
-        }
-        let csvContent = "data:text/csv;charset=utf-8,";
-        const questionHeaders = Array.from({length: NUM_QUESTIONS}, (_, i) => `Score Q${i + 1}`).join(',');
-        const headers = ["Email", "Last Name", "First Name", questionHeaders, "Average Score", "Completion (%)"].join(',');
-        csvContent += headers + "\r\n";
-        
-        const studentsToExport = [...processedClassData[activeClass]];
-        if (currentSortOrder === 'lastName') {
-            studentsToExport.sort((a, b) => splitName(a.name).lastName.localeCompare(splitName(b.name).lastName));
-        } else if (currentSortOrder === 'firstName') {
-            studentsToExport.sort((a, b) => splitName(a.name).firstName.localeCompare(splitName(b.name).firstName));
-        }
-        
-        studentsToExport.forEach(student => {
-            const { firstName, lastName } = splitName(student.name);
-            let scores = [];
-            let totalScore = 0;
-            let attemptedQuestions = 0;
-            for (let i = 0; i < NUM_QUESTIONS; i++) {
-                const latestSubmission = student.submissions.find(s => s.slideIndex === i);
-                if (latestSubmission) {
-                    scores.push(latestSubmission.score);
-                    totalScore += latestSubmission.score;
-                    attemptedQuestions++;
-                } else {
-                    scores.push("");
-                }
-            }
-            const averageScore = attemptedQuestions > 0 ? (totalScore / attemptedQuestions).toFixed(2) : "";
-            const completionPercentage = ((attemptedQuestions / NUM_QUESTIONS) * 100).toFixed(2);
-            let row = [student.email, `"${lastName}"`, `"${firstName}"`, ...scores, averageScore, completionPercentage].join(',');
-            csvContent += row + "\r\n";
-        });
-        
-        const encodedUri = encodeURI(csvContent);
-        const link = document.createElement("a");
-        const safeClassName = activeClass.replace(/\s+/g, '_');
-        link.setAttribute("href", encodedUri);
-        link.setAttribute("download", `submissions_${safeClassName}.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    }
-
-    function splitName(fullName) {
-        if (!fullName) return { firstName: '', lastName: '' };
-        const parts = fullName.trim().split(' ');
-        if (parts.length === 1) return { firstName: parts[0], lastName: '' };
-        const lastName = parts.pop();
-        const firstName = parts.join(' ');
-        return { firstName, lastName };
-    }
+    function showModalForAnswerHistory(studentName, qNumber, submissions) { /* ... unchanged ... */ }
+    document.getElementById('signOutButton').onclick = () => { /* ... unchanged ... */ };
+    function exportToCSV() { /* ... unchanged ... */ }
+    function splitName(fullName) { /* ... unchanged ... */ }
     document.getElementById('exportButton').onclick = exportToCSV;
-    
-    document.getElementById('sortOptions').onchange = function(event) {
-        currentSortOrder = event.target.value;
-        if(processedClassData) {
-            renderTables(processedClassData);
-            document.querySelectorAll('#classTablesContainer > div').forEach(t => t.classList.add('hidden'));
-            document.getElementById(`table-${activeClass.replace(/\s+/g, '-')}`).classList.remove('hidden');
+    document.getElementById('sortOptions').onchange = function(event) { /* ... unchanged ... */ };
+</script>
+<script>
+// Unchanged utility functions
+function showModalForAnswerHistory(studentName, qNumber, submissions) {
+    modalTitle.innerText = `Answer History for ${studentName} - Question ${qNumber}`;
+    modalContent.innerHTML = '';
+    if (!submissions || submissions.length === 0) {
+        modalContent.innerHTML = '<p class="text-gray-400">No attempts found.</p>';
+        modal.classList.remove('hidden');
+        return;
+    }
+    submissions.forEach(sub => {
+        const date = sub.timestamp ? new Date(sub.timestamp.seconds * 1000).toLocaleString() : 'Timestamp not available';
+        const status = sub.score !== undefined ? `<span class="font-bold text-lg ${sub.score === 100 ? 'text-green-400' : 'text-yellow-400'}">${sub.score}/100</span>` : '';
+        const answerDiv = document.createElement('div');
+        answerDiv.className = "mb-4 p-4 bg-gray-700 rounded-lg";
+        answerDiv.innerHTML = `<div class="flex justify-between items-center mb-2"><h3 class="text-gray-400 text-sm">${date}</h3>${status}</div><p class="text-gray-300 whitespace-pre-wrap">${sub.answer}</p>`;
+        modalContent.appendChild(answerDiv);
+    });
+    modal.classList.remove('hidden');
+}
+document.getElementById('signOutButton').onclick = () => { google.accounts.id.disableAutoSelect(); location.reload(); };
+function exportToCSV() {
+    if (!processedClassData || !activeClass) {
+        alert("Data not loaded or no class selected. Please wait and try again."); return;
+    }
+    let csvContent = "data:text/csv;charset=utf-8,";
+    const numQuestions = assignmentData.slideIds.length;
+    const questionHeaders = Array.from({length: numQuestions}, (_, i) => `Score Q${i + 1}`).join(',');
+    const headers = ["Email", "Last Name", "First Name", questionHeaders, "Average Score", "Completion (%)"].join(',');
+    csvContent += headers + "\r\n";
+    const studentsToExport = [...processedClassData[activeClass]];
+    if (currentSortOrder === 'lastName') { studentsToExport.sort((a, b) => splitName(a.name).lastName.localeCompare(splitName(b.name).lastName)); } 
+    else if (currentSortOrder === 'firstName') { studentsToExport.sort((a, b) => splitName(a.name).firstName.localeCompare(splitName(b.name).firstName)); }
+    studentsToExport.forEach(student => {
+        const { firstName, lastName } = splitName(student.name);
+        let scores = []; let totalScore = 0; let attemptedQuestions = 0;
+        for (let i = 0; i < numQuestions; i++) {
+            const latestSubmission = student.submissions.find(s => s.slideIndex === i);
+            if (latestSubmission) { scores.push(latestSubmission.score); totalScore += latestSubmission.score; attemptedQuestions++; } 
+            else { scores.push(""); }
         }
-    };
+        const averageScore = attemptedQuestions > 0 ? (totalScore / attemptedQuestions).toFixed(2) : "";
+        const completionPercentage = ((attemptedQuestions / numQuestions) * 100).toFixed(2);
+        let row = [student.email, `"${lastName}"`, `"${firstName}"`, ...scores, averageScore, completionPercentage].join(',');
+        csvContent += row + "\r\n";
+    });
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    const safeClassName = activeClass.replace(/\s+/g, '_');
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `submissions_${safeClassName}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+function splitName(fullName) {
+    if (!fullName) return { firstName: '', lastName: '' };
+    const parts = fullName.trim().split(' ');
+    if (parts.length === 1) return { firstName: parts[0], lastName: '' };
+    const lastName = parts.pop();
+    const firstName = parts.join(' ');
+    return { firstName, lastName };
+}
+document.getElementById('exportButton').onclick = exportToCSV;
+document.getElementById('sortOptions').onchange = function(event) {
+    currentSortOrder = event.target.value;
+    if(processedClassData) {
+        renderTables(processedClassData);
+        document.querySelectorAll('#classTablesContainer > div').forEach(t => t.classList.add('hidden'));
+        document.getElementById(`table-${activeClass.replace(/\s+/g, '-')}`).classList.remove('hidden');
+    }
+};
 </script>
 </body>
 </html>
