@@ -85,6 +85,7 @@
     let activeClass = null;
     let currentSortOrder = 'lastName';
     let assignmentId;
+    let studentRoster = []; // Store the roster globally
 
     window.onload = function() {
         const urlParams = new URLSearchParams(window.location.search);
@@ -121,31 +122,52 @@
             document.getElementById('assignmentName').textContent = assignmentData.name;
 
             const studentSnapshot = await db.collection("students").get();
-            const students = studentSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            studentRoster = studentSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-            const submissionSnapshot = await db.collection("submissions").where("assignmentId", "==", assignmentId).get();
-            let submissions = submissionSnapshot.docs.map(doc => doc.data());
-            
-            submissions.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+            // --- NEW: Set up the real-time listener for submissions ---
+            db.collection("submissions").where("assignmentId", "==", assignmentId)
+              .onSnapshot(submissionSnapshot => {
+                let submissions = submissionSnapshot.docs.map(doc => doc.data());
+                
+                // Process and render the dashboard with the latest data
+                processAndRender(submissions);
 
-            const classData = {};
-            students.forEach(student => {
-                if (!classData[student.class]) {
-                    classData[student.class] = [];
-                }
-                student.submissions = submissions.filter(s => s.studentEmail === student.email);
-                classData[student.class].push(student);
-            });
-            
-            processedClassData = classData;
-            renderTabs(classData);
-            renderTables(classData);
+              }, error => {
+                console.error("Real-time listener failed:", error);
+                alert("Connection to the database was lost. Please refresh the page.");
+              });
 
         } catch (error) {
-            console.error("Error loading data:", error);
-            alert("An error occurred while loading data. See console for details.");
+            console.error("Error loading initial data:", error);
+            alert("An error occurred while loading initial data. See console for details.");
         }
     }
+
+    // NEW: Function to handle processing and rendering, called by the listener
+    function processAndRender(submissions) {
+        // Sort submissions by date (most recent first)
+        submissions.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+
+        const classData = {};
+        studentRoster.forEach(student => {
+            if (!classData[student.class]) {
+                classData[student.class] = [];
+            }
+            // Create a fresh copy to avoid stale data issues
+            const studentWithSubs = { ...student };
+            studentWithSubs.submissions = submissions.filter(s => s.studentEmail === student.email);
+            classData[student.class].push(studentWithSubs);
+        });
+        
+        processedClassData = classData;
+        
+        // Only render tabs the first time to avoid them flickering
+        if (!document.getElementById('classTabs').hasChildNodes()) {
+            renderTabs(classData);
+        }
+        renderTables(classData);
+    }
+
 
     function renderTabs(classData) {
         const tabsContainer = document.getElementById('classTabs');
@@ -157,9 +179,11 @@
             tab.className = 'tab';
             tab.innerText = className;
             tab.dataset.className = className;
-            if (index === 0) {
+            if (index === 0 && !activeClass) { // Set active class only if not already set
                 tab.classList.add('active');
                 activeClass = className;
+            } else if (className === activeClass) {
+                tab.classList.add('active');
             }
             tab.onclick = () => switchTab(className);
             tabsContainer.appendChild(tab);
@@ -172,10 +196,13 @@
         const classNames = Object.keys(classData).sort();
         const numQuestions = assignmentData.slideIds ? assignmentData.slideIds.length : 0;
 
-        classNames.forEach((className, index) => {
+        classNames.forEach(className => {
             const tableWrapper = document.createElement('div');
             tableWrapper.id = `table-${className.replace(/\s+/g, '-')}`;
-            if (index > 0) tableWrapper.classList.add('hidden');
+            // If there's an active class, hide others, otherwise show the first
+            if (activeClass ? className !== activeClass : classNames.indexOf(className) > 0) {
+                 tableWrapper.classList.add('hidden');
+            }
             
             const studentsInClass = [...classData[className]];
             
@@ -243,6 +270,11 @@
         document.getElementById(`table-${className.replace(/\s+/g, '-')}`).classList.remove('hidden');
     }
     
+    // ... (All modal, export, and utility functions are unchanged) ...
+</script>
+
+<!-- Unchanged utility functions -->
+<script>
     const modal = document.getElementById('answerModal');
     const modalTitle = document.getElementById('modalTitle');
     const modalContent = document.getElementById('modalContent');
@@ -354,6 +386,7 @@
         }
     };
 </script>
+
 </body>
 </html>
 
