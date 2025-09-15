@@ -4,85 +4,63 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Teacher Dashboard</title>
-    <!-- Tailwind CSS for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Google & Firebase Scripts -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore-compat.js"></script>
     <style>
-        /* Custom scrollbar and modal styles */
         .modal-content::-webkit-scrollbar { width: 8px; }
-        .modal-content::-webkit-scrollbar-track { background: #f1f1f1; }
-        .modal-content::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
-        .modal-content::-webkit-scrollbar-thumb:hover { background: #555; }
-        .score-bar-bg { background-color: #e5e7eb; /* gray-200 */ }
+        .modal-content::-webkit-scrollbar-track { background: #374151; }
+        .modal-content::-webkit-scrollbar-thumb { background: #9ca3af; border-radius: 4px; }
+        .modal-content::-webkit-scrollbar-thumb:hover { background: #d1d5db; }
+        .score-bar-bg { background-color: #4b5563; }
         .score-bar { transition: width 0.5s ease-in-out; }
         .hidden { display: none; }
+        .tab { cursor: pointer; padding: 10px 20px; border-bottom: 2px solid transparent; }
+        .tab.active { border-color: #f59e0b; color: #f59e0b; }
     </style>
 </head>
 <body class="bg-gray-900 text-white font-sans">
 
-    <!-- SIGN-IN PROMPT -->
     <div id="signInPrompt" class="flex flex-col items-center justify-center h-screen">
         <h1 class="text-4xl font-bold text-yellow-400 mb-4">Teacher Dashboard</h1>
         <p class="text-lg text-gray-300 mb-8">Please sign in to view student submissions.</p>
-        <!-- FIXED: Added data-use_fedcm_for_prompt="false" to prevent FedCM error -->
         <div id="g_id_onload" data-client_id="1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com" data-callback="handleCredentialResponse" data-auto_select="true" data-use_fedcm_for_prompt="false"></div>
         <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_black" data-text="signin_with" data-shape="rectangular" data-logo_alignment="left"></div>
         <p id="auth-error" class="text-red-500 mt-4"></p>
     </div>
 
-    <!-- MAIN DASHBOARD CONTENT (hidden by default) -->
     <div id="dashboardContent" class="hidden container mx-auto p-4 md:p-8">
         <div class="flex justify-between items-center mb-6 flex-wrap gap-4">
             <h1 class="text-3xl font-bold text-yellow-400">Student Submissions</h1>
             <div class="flex items-center gap-4">
-                <button id="exportButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Export to CSV</button>
+                <button id="exportButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Export Class to CSV</button>
                 <button id="signOutButton" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Sign Out</button>
             </div>
         </div>
         
-        <div id="loadingState" class="text-center py-10">
-            <p class="text-xl">Loading submissions...</p>
-        </div>
+        <div id="loadingState" class="text-center py-10"><p class="text-xl">Loading student data...</p></div>
 
-        <div id="dashboardTableContainer" class="hidden overflow-x-auto bg-gray-800 rounded-lg shadow-xl">
-            <table class="min-w-full">
-                <thead class="bg-gray-700">
-                    <tr>
-                        <th class="p-4 text-left font-semibold">Student Name</th>
-                        <!-- Headers will be dynamically added here -->
-                    </tr>
-                </thead>
-                <tbody id="dashboard-body">
-                    <!-- Student rows will be dynamically added here -->
-                </tbody>
-            </table>
+        <div id="classDataContainer" class="hidden">
+            <div id="classTabs" class="flex border-b border-gray-700 mb-4"></div>
+            <div id="classTablesContainer"></div>
         </div>
     </div>
 
-    <!-- MODAL POP-UP (hidden by default) -->
     <div id="answerModal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
-        <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-2xl">
+        <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
             <div class="flex justify-between items-center p-4 border-b border-gray-700">
                 <h2 id="modalTitle" class="text-2xl font-bold text-yellow-400">Details</h2>
                 <button id="closeModal" class="text-gray-400 hover:text-white text-3xl">&times;</button>
             </div>
-            <div id="modalContent" class="p-6 modal-content max-h-[70vh] overflow-y-auto">
-                <!-- Modal content will be dynamically added here -->
-            </div>
+            <div id="modalContent" class="p-6 modal-content overflow-y-auto"></div>
         </div>
     </div>
 
 <script>
-    // ========================================================================
-    // CONFIGURATION
-    // ========================================================================
     const TEACHER_EMAIL = "klynch@mtps.us";
     const CLIENT_ID = "1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com";
     const NUM_QUESTIONS = 3;
-
     const firebaseConfig = {
       apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
       authDomain: "mrlynch-slides-app.firebaseapp.com",
@@ -91,11 +69,10 @@
       messagingSenderId: "223179627035",
       appId: "1:223179627035:web:ff0f538f3029d829c3f6be"
     };
-    // ========================================================================
-
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
-    let processedStudentData = null;
+    let processedClassData = null;
+    let activeClass = null;
 
     function decodeJwtResponse(token) {
         var base64Url = token.split('.')[1];
@@ -106,93 +83,126 @@
         return JSON.parse(jsonPayload);
     }
 
-    // Called on successful sign-in
     function handleCredentialResponse(response) {
         const userProfile = decodeJwtResponse(response.credential);
         if (userProfile.email.toLowerCase() === TEACHER_EMAIL.toLowerCase()) {
             document.getElementById('signInPrompt').classList.add('hidden');
             document.getElementById('dashboardContent').classList.remove('hidden');
-            loadSubmissions();
+            loadAndProcessData();
         } else {
             document.getElementById('auth-error').innerText = "Access Denied. Please sign in with the teacher account.";
             google.accounts.id.disableAutoSelect();
         }
     }
 
-    // Fetches and processes all submissions from Firestore
-    async function loadSubmissions() {
+    async function loadAndProcessData() {
         const loadingState = document.getElementById('loadingState');
-        const tableContainer = document.getElementById('dashboardTableContainer');
         try {
-            const snapshot = await db.collection("submissions").orderBy("timestamp", "desc").get();
-            const submissions = snapshot.docs.map(doc => doc.data());
-            if (submissions.length === 0) {
-                loadingState.innerText = "No student submissions found.";
+            // Step 1: Fetch all students from the roster
+            const studentSnapshot = await db.collection("students").get();
+            if (studentSnapshot.empty) {
+                loadingState.innerText = "No students found in the roster. Please upload your student list first.";
                 return;
             }
-            const studentData = {};
-            submissions.forEach(sub => {
-                if (!studentData[sub.studentEmail]) {
-                    studentData[sub.studentEmail] = {
-                        name: sub.studentName,
-                        email: sub.studentEmail,
-                        submissions: []
-                    };
+            const students = studentSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+            // Step 2: Fetch all submissions
+            const submissionSnapshot = await db.collection("submissions").orderBy("timestamp", "desc").get();
+            const submissions = submissionSnapshot.docs.map(doc => doc.data());
+
+            // Step 3: Organize students by class and merge submissions
+            const classData = {};
+            students.forEach(student => {
+                if (!classData[student.class]) {
+                    classData[student.class] = [];
                 }
-                studentData[sub.studentEmail].submissions.push(sub);
+                student.submissions = submissions.filter(s => s.studentEmail === student.email);
+                classData[student.class].push(student);
             });
-            processedStudentData = studentData;
-            renderDashboard(studentData);
+            
+            processedClassData = classData;
+            renderTabs(classData);
+            renderTables(classData);
             loadingState.classList.add('hidden');
-            tableContainer.classList.remove('hidden');
+            document.getElementById('classDataContainer').classList.remove('hidden');
+
         } catch (error) {
-            console.error("Error loading submissions:", error);
-            loadingState.innerText = "Error loading submissions. See console for details.";
+            console.error("Error loading data:", error);
+            loadingState.innerText = "Error loading data. See console for details.";
         }
     }
 
-    // Renders the main table grid
-    function renderDashboard(studentData) {
-        const thead = document.querySelector('#dashboardTableContainer thead tr');
-        const tbody = document.getElementById('dashboard-body');
-        thead.innerHTML = '<th class="p-4 text-left font-semibold">Student Name</th>';
-        tbody.innerHTML = '';
-        for (let i = 0; i < NUM_QUESTIONS; i++) {
-            const th = document.createElement('th');
-            th.className = "p-4 font-semibold cursor-pointer";
-            th.innerText = `Q${i + 1}`;
-            th.onclick = () => showModalByQuestion(i + 1, studentData);
-            thead.appendChild(th);
-        }
-        for (const email in studentData) {
-            const student = studentData[email];
-            const tr = document.createElement('tr');
-            tr.className = "border-b border-gray-700 hover:bg-gray-700/50";
-            const nameTd = document.createElement('td');
-            nameTd.className = "p-4 font-medium cursor-pointer";
-            nameTd.innerText = student.name;
-            nameTd.onclick = () => showModalByStudent(student);
-            tr.appendChild(nameTd);
-            for (let i = 0; i < NUM_QUESTIONS; i++) {
-                const scoreTd = document.createElement('td');
-                scoreTd.className = "p-4 text-center";
-                const submissionsForQuestion = student.submissions.filter(s => s.slideIndex === i);
-                if (submissionsForQuestion.length > 0) {
-                    const latestSubmission = submissionsForQuestion[0];
-                    const score = latestSubmission.score || 0;
-                    const color = score >= 90 ? 'bg-green-500' : score >= 60 ? 'bg-yellow-500' : 'bg-red-500';
-                    scoreTd.innerHTML = `<div class="score-bar-bg w-full h-6 rounded-md overflow-hidden cursor-pointer"><div class="score-bar h-full rounded-md ${color}" style="width: ${score}%"></div></div>`;
-                    scoreTd.querySelector('.score-bar-bg').onclick = () => showModalForAnswerHistory(student.name, i + 1, submissionsForQuestion);
-                } else {
-                    scoreTd.innerHTML = `<span class="text-gray-500">N/A</span>`;
-                }
-                tr.appendChild(scoreTd);
+    function renderTabs(classData) {
+        const tabsContainer = document.getElementById('classTabs');
+        tabsContainer.innerHTML = '';
+        const classNames = Object.keys(classData).sort();
+        
+        classNames.forEach((className, index) => {
+            const tab = document.createElement('div');
+            tab.className = 'tab';
+            tab.innerText = className;
+            tab.dataset.className = className;
+            if (index === 0) {
+                tab.classList.add('active');
+                activeClass = className;
             }
-            tbody.appendChild(tr);
-        }
+            tab.onclick = () => switchTab(className);
+            tabsContainer.appendChild(tab);
+        });
     }
-    
-    // --- MODAL LOGIC ---
+
+    function renderTables(classData) {
+        const tablesContainer = document.getElementById('classTablesContainer');
+        tablesContainer.innerHTML = '';
+        const classNames = Object.keys(classData).sort();
+
+        classNames.forEach((className, index) => {
+            const tableWrapper = document.createElement('div');
+            tableWrapper.id = `table-${className.replace(/\s+/g, '-')}`;
+            if (index > 0) tableWrapper.classList.add('hidden');
+            
+            let tableHTML = `
+                <div class="overflow-x-auto bg-gray-800 rounded-lg shadow-xl">
+                    <table class="min-w-full">
+                        <thead class="bg-gray-700"><tr>
+                            <th class="p-4 text-left font-semibold">Student Name</th>
+            `;
+            for (let i = 0; i < NUM_QUESTIONS; i++) {
+                tableHTML += `<th class="p-4 font-semibold cursor-pointer" onclick="showModalByQuestion(${i + 1}, '${className}')">Q${i + 1}</th>`;
+            }
+            tableHTML += `</tr></thead><tbody>`;
+
+            classData[className].forEach(student => {
+                tableHTML += `<tr class="border-b border-gray-700 hover:bg-gray-700/50">
+                                <td class="p-4 font-medium cursor-pointer" onclick="showModalByStudent(processedClassData['${className}'].find(s => s.email === '${student.email}'))">${student.name}</td>`;
+                for (let i = 0; i < NUM_QUESTIONS; i++) {
+                    const submissionsForQuestion = student.submissions.filter(s => s.slideIndex === i);
+                    const latestSubmission = submissionsForQuestion.length > 0 ? submissionsForQuestion[0] : null;
+                    if (latestSubmission) {
+                        const score = latestSubmission.score || 0;
+                        const color = score >= 90 ? 'bg-green-500' : score >= 60 ? 'bg-yellow-500' : 'bg-red-500';
+                        tableHTML += `<td class="p-4 text-center"><div class="score-bar-bg w-full h-6 rounded-md overflow-hidden cursor-pointer" onclick='showModalForAnswerHistory("${student.name.replace(/'/g, "\\'")}", ${i + 1}, JSON.stringify(${JSON.stringify(submissionsForQuestion)}))'><div class="score-bar h-full rounded-md ${color}" style="width: ${score}%"></div></div></td>`;
+                    } else {
+                        tableHTML += `<td class="p-4 text-center"><div class="score-bar-bg w-full h-6 rounded-md"><div class="score-bar h-full rounded-md bg-gray-600" style="width: 100%"></div></div></td>`;
+                    }
+                }
+                tableHTML += `</tr>`;
+            });
+
+            tableHTML += `</tbody></table></div>`;
+            tableWrapper.innerHTML = tableHTML;
+            tablesContainer.appendChild(tableWrapper);
+        });
+    }
+
+    function switchTab(className) {
+        activeClass = className;
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelector(`.tab[data-class-name="${className}"]`).classList.add('active');
+        document.querySelectorAll('#classTablesContainer > div').forEach(t => t.classList.add('hidden'));
+        document.getElementById(`table-${className.replace(/\s+/g, '-')}`).classList.remove('hidden');
+    }
+
     const modal = document.getElementById('answerModal');
     const modalTitle = document.getElementById('modalTitle');
     const modalContent = document.getElementById('modalContent');
@@ -212,21 +222,20 @@
         modal.classList.remove('hidden');
     }
 
-    function showModalByQuestion(qNumber, studentData) {
-        modalTitle.innerText = `All Latest Answers for Question ${qNumber}`;
+    function showModalByQuestion(qNumber, className) {
+        modalTitle.innerText = `All Latest Answers for Question ${qNumber} (${className})`;
         modalContent.innerHTML = '';
-        for (const email in studentData) {
-            const student = studentData[email];
+        processedClassData[className].forEach(student => {
             const latestSub = student.submissions.find(s => s.slideIndex === qNumber - 1);
             const answerDiv = document.createElement('div');
             answerDiv.className = "mb-4 p-4 bg-gray-700 rounded-lg";
             const status = latestSub ? `<span class="font-bold ${latestSub.score === 100 ? 'text-green-400' : 'text-yellow-400'}">${latestSub.score}/100</span>` : '<span class="text-gray-500">N/A</span>';
             answerDiv.innerHTML = `<div class="flex justify-between items-center mb-2"><h3 class="font-bold">${student.name}</h3>${status}</div><p class="text-gray-300 whitespace-pre-wrap">${latestSub ? latestSub.answer : ''}</p>`;
             modalContent.appendChild(answerDiv);
-        }
+        });
         modal.classList.remove('hidden');
     }
-
+    
     function showModalForAnswerHistory(studentName, qNumber, submissions) {
         modalTitle.innerText = `Answer History for ${studentName} - Question ${qNumber}`;
         modalContent.innerHTML = '';
@@ -246,24 +255,22 @@
         modal.classList.remove('hidden');
     }
     
-    // --- Sign Out Logic ---
     document.getElementById('signOutButton').onclick = () => {
         google.accounts.id.disableAutoSelect();
         location.reload();
     };
 
-    // --- CSV EXPORT LOGIC ---
     function exportToCSV() {
-        if (!processedStudentData) {
-            alert("Student data has not been loaded yet. Please wait a moment and try again.");
+        if (!processedClassData || !activeClass) {
+            alert("Data not loaded or no class selected. Please wait and try again.");
             return;
         }
         let csvContent = "data:text/csv;charset=utf-8,";
         const questionHeaders = Array.from({length: NUM_QUESTIONS}, (_, i) => `Score Q${i + 1}`).join(',');
         const headers = ["Email", "Last Name", "First Name", questionHeaders, "Average Score", "Completion (%)"].join(',');
         csvContent += headers + "\r\n";
-        for (const email in processedStudentData) {
-            const student = processedStudentData[email];
+        
+        processedClassData[activeClass].forEach(student => {
             const { firstName, lastName } = splitName(student.name);
             let scores = [];
             let totalScore = 0;
@@ -275,25 +282,20 @@
                     totalScore += latestSubmission.score;
                     attemptedQuestions++;
                 } else {
-                    scores.push(""); // Use empty string for N/A in CSV
+                    scores.push("");
                 }
             }
             const averageScore = attemptedQuestions > 0 ? (totalScore / attemptedQuestions).toFixed(2) : "";
             const completionPercentage = ((attemptedQuestions / NUM_QUESTIONS) * 100).toFixed(2);
-            let row = [
-                student.email,
-                `"${lastName}"`,
-                `"${firstName}"`,
-                ...scores,
-                averageScore,
-                completionPercentage
-            ].join(',');
+            let row = [student.email, `"${lastName}"`, `"${firstName}"`, ...scores, averageScore, completionPercentage].join(',');
             csvContent += row + "\r\n";
-        }
+        });
+        
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
+        const safeClassName = activeClass.replace(/\s+/g, '_');
         link.setAttribute("href", encodedUri);
-        link.setAttribute("download", "student_submissions.csv");
+        link.setAttribute("download", `submissions_${safeClassName}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -307,7 +309,6 @@
         const firstName = parts.join(' ');
         return { firstName, lastName };
     }
-
     document.getElementById('exportButton').onclick = exportToCSV;
 </script>
 </body>
