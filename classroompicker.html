@@ -11,22 +11,49 @@
     <style>
         .hidden { display: none; }
         textarea { resize: vertical; }
-        #toast { visibility: hidden; min-width: 250px; margin-left: -125px; background-color: #333; color: #fff; text-align: center; border-radius: 4px; padding: 16px; position: fixed; z-index: 10; left: 50%; bottom: 30px; font-size: 17px; }
-        #toast.show { visibility: visible; animation: fadein 0.5s, fadeout 0.5s 2.5s; }
-        @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
-        @keyframes fadeout { from {bottom: 30px, opacity: 1;} to {bottom: 0, opacity: 0;} }
+        /* NEW: General Toast Container Styling */
+        .toast-container {
+            visibility: hidden;
+            position: fixed;
+            z-index: 100;
+            left: 50%;
+            transform: translateX(-50%);
+            min-width: 250px;
+            max-width: 80%;
+            color: #fff;
+            text-align: center;
+            border-radius: 4px;
+            padding: 16px;
+            font-size: 17px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+        .toast-container.show {
+            visibility: visible;
+            animation: fadein 0.5s, fadeout 0.5s 2.5s;
+        }
+        /* Positions */
+        .toast-top-center { top: 30px; }
+        .toast-bottom-center { bottom: 30px; }
+        /* Colors */
+        .toast-default { background-color: #333; }
+        .toast-green { background-color: #2f855a; } /* Tailwind green-700 */
+        .toast-red { background-color: #c53030; }   /* Tailwind red-700 */
+        .toast-blue { background-color: #2b6cb0; }  /* Tailwind blue-700 */
+        
+        @keyframes fadein { from { opacity: 0; transform: translate(-50%, 20px); } to { opacity: 1; transform: translate(-50%, 0); } }
+        @keyframes fadeout { from { opacity: 1; transform: translate(-50%, 0); } to { opacity: 0; transform: translate(-50%, 20px); } }
     </style>
 </head>
 <body class="bg-gray-900 text-white font-sans flex items-center justify-center min-h-screen">
 
     <div class="container mx-auto p-4">
+        <!-- ... (Login and Main Container HTML is unchanged) ... -->
         <div id="pageLoader" class="text-center">
             <h1 class="text-3xl font-bold text-yellow-400">Loading Assignment...</h1>
             <p id="loadingError" class="text-red-500 mt-4"></p>
         </div>
-
         <div id="loginContainer" class="hidden">
-            <div class="bg-gray-800 p-8 rounded-lg shadow-xl max-w-md mx-auto">
+             <div class="bg-gray-800 p-8 rounded-lg shadow-xl max-w-md mx-auto">
                 <h1 id="assignmentNameLogin" class="text-3xl font-bold text-yellow-400 mb-6 text-center"></h1>
                 <div id="passcodeForm">
                     <p class="text-gray-300 mb-4">Enter your school email and the passcode provided by your teacher.</p>
@@ -42,7 +69,6 @@
                 </div>
             </div>
         </div>
-
         <div id="mainContainer" class="hidden">
              <div class="main-content-grid grid grid-cols-1 md:grid-cols-3 gap-8">
                 <div class="slides-column md:col-span-2 bg-gray-800 p-4 rounded-lg">
@@ -64,9 +90,12 @@
         </div>
     </div>
     
-    <div id="toast"></div>
+    <!-- NEW: Multiple Toast Containers for Different Positions -->
+    <div id="toast-bottom-center" class="toast-container toast-bottom-center toast-default"></div>
+    <div id="toast-top-center" class="toast-container toast-top-center toast-default"></div>
 
 <script>
+    // ... (Firebase config and other variables are unchanged) ...
     const firebaseConfig = {
         apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
         authDomain: "mrlynch-slides-app.firebaseapp.com",
@@ -77,13 +106,13 @@
     };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
-
     let assignmentData = null;
     let currentSlideIndex = 0;
     let userProfile = null;
     let checkerFunctionStrings = {};
-    let slideStates = []; // NEW: Array to store answers and scores
+    let slideStates = [];
 
+    // ... (window.onload and login functions are unchanged) ...
     window.onload = async function() {
         const urlParams = new URLSearchParams(window.location.search);
         const assignmentId = urlParams.get('assignmentId');
@@ -106,7 +135,6 @@
             if (assignmentData.checkerFunctions) {
                 checkerFunctionStrings = assignmentData.checkerFunctions;
             }
-            // NEW: Initialize the state array with nulls
             slideStates = new Array(assignmentData.slideIds.length).fill(null);
             
             loader.classList.add('hidden');
@@ -118,7 +146,7 @@
             errorP.textContent = "An error occurred while loading the assignment.";
         }
     };
-
+    
     function showMainContent() {
         document.getElementById('loginContainer').classList.add('hidden');
         document.getElementById('mainContainer').classList.remove('hidden');
@@ -167,6 +195,7 @@
         }
     }
 
+    // ... (updateSlideDisplay, saveCurrentState, nextSlide, prevSlide are unchanged) ...
     function updateSlideDisplay() {
         const slideId = assignmentData.slideIds[currentSlideIndex];
         const slideImageElement = document.getElementById('slide-image');
@@ -186,7 +215,6 @@
             slideImageElement.classList.remove('hidden');
             slideCounterElement.innerText = `Slide ${currentSlideIndex + 1} of ${assignmentData.slideIds.length}`;
             
-            // NEW: Restore state for the current slide
             const currentState = slideStates[currentSlideIndex];
             if (currentState) {
                 inputBox.value = currentState.answer;
@@ -204,10 +232,8 @@
 
     function saveCurrentState() {
         const currentAnswer = document.getElementById('inputbox').value;
-        // Only save if there's an answer. Don't overwrite a graded answer with an empty box on navigation.
         if (currentAnswer.trim() !== "") {
             const currentState = slideStates[currentSlideIndex];
-            // If there's no graded score for this slide yet, save the text.
             if (!currentState || currentState.score === undefined) {
                  slideStates[currentSlideIndex] = { answer: currentAnswer, score: undefined };
             }
@@ -229,22 +255,23 @@
         } 
     }
 
+
+    // --- UPDATED: myfunction now calls the save confirmation toast ---
     async function myfunction() {
         var studentAnswer = document.getElementById("inputbox").value;
         var resultElement = document.getElementById("result");
         if (studentAnswer.trim() === "") {
-            showToast("Please enter your answer first!");
+            showToast("Please enter your answer first!", {color: 'red'});
             return;
         }
         var score = checkCurrentSlideAnswer(studentAnswer);
         resultElement.innerHTML = "Your Score: " + score;
         resultElement.style.color = score === 100 ? "lightgreen" : "orange";
 
-        // NEW: Save the graded answer and score to our state
         slideStates[currentSlideIndex] = { answer: studentAnswer, score: score };
 
         if (!userProfile) {
-            showToast("Error: User not signed in. Cannot save work.");
+            showToast("Error: User not signed in. Cannot save work.", {color: 'red'});
             return;
         }
         try {
@@ -258,13 +285,44 @@
                 timestamp: firebase.firestore.FieldValue.serverTimestamp()
             };
             await db.collection("submissions").add(submission);
-            showToast("Answer saved successfully!");
+            showToast("Answer saved successfully!", { color: 'blue', position: 'top-center' });
         } catch (error) {
             console.error("Error saving to Firestore:", error);
-            showToast("Could not save answer. See console for details.");
+            showToast("Could not save answer. See console for details.", {color: 'red'});
         }
     }
 
+    // --- NEW: The upgraded, configurable showToast function ---
+    function showToast(message, options = {}) {
+        const { color = 'default', position = 'bottom-center', duration = 3000 } = options;
+        
+        const toastContainer = document.getElementById(`toast-${position}`);
+        if (!toastContainer) {
+            console.error(`Toast container for position "${position}" not found!`);
+            return;
+        }
+
+        // Apply color classes
+        toastContainer.className = `toast-container toast-${position}`; // Reset classes
+        toastContainer.classList.add(`toast-${color}`);
+        
+        toastContainer.innerHTML = message;
+        toastContainer.classList.add('show');
+        
+        // Use animationend event to hide, or fallback to timeout
+        const animationDuration = 2500; // Must match the fadeout delay in CSS
+        const fadeoutDelay = duration - 500;
+        
+        const animationStyle = `fadein 0.5s, fadeout 0.5s ${fadeoutDelay / 1000}s`;
+        toastContainer.style.animation = animationStyle;
+
+        setTimeout(() => {
+            toastContainer.classList.remove('show');
+            toastContainer.style.animation = '';
+        }, duration);
+    }
+    
+    // ... (checkCurrentSlideAnswer is unchanged) ...
     function checkCurrentSlideAnswer(answer) {
         const funcName = `calc${currentSlideIndex + 1}`;
         const funcString = checkerFunctionStrings[funcName];
@@ -274,15 +332,14 @@
                 return checkerFunction(answer, showToast);
             } catch (e) {
                 console.error(`Error executing checker function ${funcName}:`, e);
-                showToast("Error in the checking logic for this slide.");
+                showToast("Error in the checking logic for this slide.", {color: 'red'});
                 return 0;
             }
         }
         showToast("No checking logic for this slide.");
         return 0;
     }
-    
-    function showToast(message) { var x = document.getElementById("toast"); x.innerHTML = message; x.className = "show"; setTimeout(function(){ x.className = x.className.replace("show", ""); }, 3000); }
+
 </script>
 </body>
 </html>
