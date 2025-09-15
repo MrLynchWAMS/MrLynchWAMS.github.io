@@ -12,7 +12,6 @@
         .hidden { display: none; }
         textarea { resize: vertical; }
         
-        /* NEW: Keyframe animations for toasts entering and leaving */
         @keyframes fade-in-right {
             from { opacity: 0; transform: translateX(100%); }
             to { opacity: 1; transform: translateX(0); }
@@ -75,7 +74,6 @@
         </div>
     </div>
     
-    <!-- NEW: A single wrapper for all dynamically created toasts -->
     <div id="toast-wrapper" class="fixed top-4 right-4 z-[100] space-y-3 w-full max-w-sm">
         <!-- Toasts will be dynamically injected here -->
     </div>
@@ -181,40 +179,70 @@
         }
     }
 
-    function updateSlideDisplay() {
+    // --- UPDATED: More robust slide display logic ---
+    function updateSlideDisplay(retryCount = 0) {
+        const MAX_RETRIES = 2; // Will try a total of 3 times
         const slideId = assignmentData.slideIds[currentSlideIndex];
         const slideImageElement = document.getElementById('slide-image');
         const slideCounterElement = document.getElementById('slide-counter');
         const slideLoader = document.getElementById('slide-loader');
-        const inputBox = document.getElementById('inputbox');
-        const resultElement = document.getElementById('result');
 
         slideLoader.classList.remove('hidden');
         slideImageElement.classList.add('hidden');
         
-        const imageUrl = `https://docs.google.com/presentation/d/${assignmentData.presentationId}/export/png?id=${assignmentData.presentationId}&pageid=${slideId}`;
+        // Add a timestamp to prevent the browser from using a cached error image
+        const imageUrl = `https://docs.google.com/presentation/d/${assignmentData.presentationId}/export/png?id=${assignmentData.presentationId}&pageid=${slideId}&time=${new Date().getTime()}`;
         
         slideImageElement.src = imageUrl;
+        
         slideImageElement.onload = () => {
             slideLoader.classList.add('hidden');
             slideImageElement.classList.remove('hidden');
             slideCounterElement.innerText = `Slide ${currentSlideIndex + 1} of ${assignmentData.slideIds.length}`;
             
+            // Restore answer/score state for the newly loaded slide
+            const inputBox = document.getElementById('inputbox');
+            const resultElement = document.getElementById('result');
             const currentState = slideStates[currentSlideIndex];
             if (currentState) {
                 inputBox.value = currentState.answer;
-                resultElement.innerHTML = "Your Score: " + currentState.score;
-                resultElement.style.color = currentState.score === 100 ? "lightgreen" : "orange";
+                if (currentState.score !== undefined) {
+                    resultElement.innerHTML = "Your Score: " + currentState.score;
+                    resultElement.style.color = currentState.score === 100 ? "lightgreen" : "orange";
+                } else {
+                    resultElement.innerHTML = "";
+                }
             } else {
                 inputBox.value = "";
                 resultElement.innerHTML = "";
             }
         };
+        
         slideImageElement.onerror = () => {
-            slideLoader.innerHTML = `<p class="text-red-500">Error loading slide. Please ensure the presentation is shared publicly ("Anyone with the link can view").</p>`;
+            console.warn(`Attempt ${retryCount + 1} to load slide image failed.`);
+            if (retryCount < MAX_RETRIES) {
+                // Wait a moment and try again
+                setTimeout(() => {
+                    updateSlideDisplay(retryCount + 1);
+                }, 500);
+            } else {
+                // If all retries fail, show the final error message
+                console.error("Failed to load slide image after multiple retries:", imageUrl);
+                slideLoader.innerHTML = `<p class="text-red-500">Error loading slide. Please ensure the presentation is shared publicly ("Anyone with the link can view") and try refreshing the page.</p>`;
+            }
         };
     }
 
+    function saveCurrentState() { /* ... unchanged ... */ }
+    function nextSlide() { /* ... unchanged ... */ }
+    function prevSlide() { /* ... unchanged ... */ }
+    async function myfunction() { /* ... unchanged ... */ }
+    function showToast(message, options = {}) { /* ... unchanged ... */ }
+    function checkCurrentSlideAnswer(answer) { /* ... unchanged ... */ }
+</script>
+
+<!-- Unchanged utility functions -->
+<script>
     function saveCurrentState() {
         const currentAnswer = document.getElementById('inputbox').value;
         if (currentAnswer.trim() !== "") {
@@ -224,7 +252,6 @@
             }
         }
     }
-
     function nextSlide() { 
         saveCurrentState();
         if (currentSlideIndex < assignmentData.slideIds.length - 1) { 
@@ -239,7 +266,6 @@
             updateSlideDisplay(); 
         } 
     }
-
     async function myfunction() {
         var studentAnswer = document.getElementById("inputbox").value;
         var resultElement = document.getElementById("result");
@@ -267,16 +293,12 @@
                 timestamp: firebase.firestore.FieldValue.serverTimestamp()
             };
             await db.collection("submissions").add(submission);
-            // Don't show custom feedback here. Let the calc function do it.
-            // Only show a save confirmation.
             showToast("Answer saved!", { color: 'blue', duration: 2000 });
         } catch (error) {
             console.error("Error saving to Firestore:", error);
             showToast("Could not save answer. See console for details.", {color: 'red'});
         }
     }
-
-    // --- NEW: The dynamic, stacking toast function ---
     function showToast(message, options = {}) {
         const { color = 'default', duration = 5000 } = options;
         const wrapper = document.getElementById('toast-wrapper');
@@ -315,7 +337,6 @@
         wrapper.appendChild(toast);
         timeoutId = setTimeout(dismiss, duration);
     }
-    
     function checkCurrentSlideAnswer(answer) {
         const funcName = `calc${currentSlideIndex + 1}`;
         const funcString = checkerFunctionStrings[funcName];
@@ -332,7 +353,6 @@
         showToast("No checking logic for this slide.");
         return 0;
     }
-
 </script>
 </body>
 </html>
