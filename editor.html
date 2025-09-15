@@ -165,6 +165,16 @@
         }
 
         slideIds.forEach((slideId, index) => {
+            const placeholderText = `// Example:
+function calc${index + 1}(studentAnswer, showToast) {
+  const answer = studentAnswer.toLowerCase();
+  if (answer.includes("mitochondria")) {
+    showToast("Correct!");
+    return 100;
+  }
+  return 0;
+}`;
+
             const slideEditorHTML = `
                 <div class="slide-editor-box grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-800 p-4 rounded-lg">
                     <div>
@@ -173,7 +183,7 @@
                     </div>
                     <div>
                         <label for="checker-func-${index}" class="block font-semibold mb-2">Checker Function (calc${index + 1})</label>
-                        <textarea id="checker-func-${index}" class="w-full h-64 p-2 bg-gray-700 rounded" placeholder="function calc${index + 1}(answer, showToast) { ... }">${checkerFunctions[`calc${index + 1}`] || ''}</textarea>
+                        <textarea id="checker-func-${index}" class="w-full h-64 p-2 bg-gray-700 rounded" placeholder="${placeholderText}">${checkerFunctions[`calc${index + 1}`] || ''}</textarea>
                     </div>
                 </div>
             `;
@@ -190,7 +200,6 @@
             assignmentData.slideIds.forEach((id, index) => {
                 const funcContent = document.getElementById(`checker-func-${index}`).value;
                 if (funcContent.trim()) {
-                    // Save the entire function as a string
                     checkerFunctions[`calc${index + 1}`] = funcContent;
                 }
             });
