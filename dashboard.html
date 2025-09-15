@@ -27,7 +27,8 @@
     <div id="signInPrompt" class="flex flex-col items-center justify-center h-screen">
         <h1 class="text-4xl font-bold text-yellow-400 mb-4">Teacher Dashboard</h1>
         <p class="text-lg text-gray-300 mb-8">Please sign in to view student submissions.</p>
-        <div id="g_id_onload" data-client_id="1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com" data-callback="handleCredentialResponse" data-auto_prompt="false"></div>
+        <!-- FIXED: Added data-use_fedcm_for_prompt="false" to prevent FedCM error -->
+        <div id="g_id_onload" data-client_id="1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com" data-callback="handleCredentialResponse" data-auto_select="true" data-use_fedcm_for_prompt="false"></div>
         <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_black" data-text="signin_with" data-shape="rectangular" data-logo_alignment="left"></div>
         <p id="auth-error" class="text-red-500 mt-4"></p>
     </div>
