@@ -3,58 +3,67 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Assignment Dashboard</title>
+    <title>Teacher Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore-compat.js"></script>
     <style>
+        .modal-content::-webkit-scrollbar { width: 8px; }
+        .modal-content::-webkit-scrollbar-track { background: #374151; }
+        .modal-content::-webkit-scrollbar-thumb { background: #9ca3af; border-radius: 4px; }
+        .modal-content::-webkit-scrollbar-thumb:hover { background: #d1d5db; }
+        .score-bar-bg { background-color: #4b5563; }
+        .score-bar { transition: width 0.5s ease-in-out; }
         .hidden { display: none; }
+        .tab { cursor: pointer; padding: 10px 20px; border-bottom: 2px solid transparent; }
+        .tab.active { border-color: #f59e0b; color: #f59e0b; }
     </style>
 </head>
 <body class="bg-gray-900 text-white font-sans">
 
-    <!-- SIGN-IN PROMPT -->
-    <div id="signInPrompt" class="flex flex-col items-center justify-center h-screen">
-        <h1 class="text-4xl font-bold text-yellow-400 mb-4">Assignment Management</h1>
-        <p class="text-lg text-gray-300 mb-8">Please sign in to manage your assignments.</p>
-        <!-- UPDATED: Simplified for better auto sign-in -->
-        <div id="g_id_onload" data-client_id="1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com" data-callback="handleCredentialResponse" data-auto_select="true"></div>
-        <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_black" data-text="signin_with" data-shape="rectangular" data-logo_alignment="left"></div>
+    <div id="pageLoader" class="flex flex-col items-center justify-center h-screen">
+        <h1 class="text-4xl font-bold text-yellow-400 mb-4">Teacher Dashboard</h1>
+        <p id="loading-text" class="text-lg text-gray-300">Please sign in to continue...</p>
+        <div id="signInButtonContainer" class="mt-8">
+             <div id="g_id_onload" data-client_id="1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com" data-callback="handleCredentialResponse" data-auto_select="true"></div>
+             <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_black" data-text="signin_with" data-shape="rectangular" data-logo_alignment="left"></div>
+        </div>
         <p id="auth-error" class="text-red-500 mt-4"></p>
     </div>
 
-    <!-- MAIN DASHBOARD CONTENT -->
-    <div id="assignmentContent" class="hidden container mx-auto p-4 md:p-8">
+    <div id="dashboardContent" class="hidden container mx-auto p-4 md:p-8">
         <div class="flex justify-between items-center mb-6 flex-wrap gap-4">
-            <h1 class="text-3xl font-bold text-yellow-400">Your Assignments</h1>
-            <button id="signOutButton" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Sign Out</button>
+            <h1 id="assignmentName" class="text-3xl font-bold text-yellow-400"></h1>
+            <div class="flex items-center gap-2">
+                <label for="sortOptions" class="font-semibold">Sort by:</label>
+                <select id="sortOptions" class="bg-gray-700 border border-gray-600 rounded-md p-2 text-white">
+                    <option value="lastName">Last Name (A-Z)</option>
+                    <option value="firstName">First Name (A-Z)</option>
+                    <option value="random">Randomize</option>
+                    <option value="randomHide">Randomize & Hide Names</option>
+                </select>
+            </div>
+            <div class="flex items-center gap-4">
+                 <a href="./assignments.html" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg">&larr; All Assignments</a>
+                <button id="exportButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Export Class to CSV</button>
+                <button id="signOutButton" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Sign Out</button>
+            </div>
         </div>
         
-        <div id="loadingState" class="text-center py-10"><p class="text-xl">Loading assignments...</p></div>
-
-        <div id="assignmentsList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <!-- Assignment cards and the "Create New" card will be dynamically added here -->
+        <div id="classDataContainer">
+            <div id="classTabs" class="flex border-b border-gray-700 mb-4"></div>
+            <div id="classTablesContainer"></div>
         </div>
     </div>
-
-    <!-- CREATE ASSIGNMENT MODAL -->
-    <div id="createModal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
-        <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-lg">
+    
+    <div id="answerModal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
+        <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
             <div class="flex justify-between items-center p-4 border-b border-gray-700">
-                <h2 class="text-2xl font-bold text-yellow-400">Create New Assignment</h2>
-                <button onclick="closeCreateModal()" class="text-gray-400 hover:text-white text-3xl">&times;</button>
+                <h2 id="modalTitle" class="text-2xl font-bold text-yellow-400">Details</h2>
+                <button id="closeModal" class="text-gray-400 hover:text-white text-3xl">&times;</button>
             </div>
-            <div class="p-6">
-                <label for="assignmentName" class="block text-sm font-medium text-gray-300 mb-2">Assignment Name</label>
-                <input type="text" id="assignmentName" placeholder="e.g., Chapter 5 Review" class="w-full p-3 mb-4 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500">
-                
-                <label for="slidesLink" class="block text-sm font-medium text-gray-300 mb-2">Google Slides Share Link</label>
-                <input type="text" id="slidesLink" placeholder="Paste the full URL from Google Slides" class="w-full p-3 mb-4 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500">
-                
-                <p id="modal-error" class="text-red-500 mb-4"></p>
-                <button onclick="handleCreateAssignment()" id="createAssignmentBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-colors">Create Assignment</button>
-            </div>
+            <div id="modalContent" class="p-6 modal-content overflow-y-auto"></div>
         </div>
     </div>
 
@@ -71,124 +80,278 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
+    let assignmentData = null;
+    let processedClassData = null;
+    let activeClass = null;
+    let currentSortOrder = 'lastName';
+    let assignmentId;
+
+    window.onload = function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        assignmentId = urlParams.get('assignmentId');
+        if (!assignmentId) {
+            document.getElementById('loading-text').textContent = "Error: No assignment ID specified in URL. Please go back to the assignments page.";
+            document.getElementById('signInButtonContainer').classList.add('hidden');
+        }
+    };
+
     function decodeJwtResponse(token) { try { const base64Url = token.split('.')[1]; const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/'); const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) { return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2); }).join('')); return JSON.parse(jsonPayload); } catch (e) { return null; } }
 
     function handleCredentialResponse(response) {
         const userProfile = decodeJwtResponse(response.credential);
         if (userProfile.email.toLowerCase() === TEACHER_EMAIL.toLowerCase()) {
-            document.getElementById('signInPrompt').classList.add('hidden');
-            document.getElementById('assignmentContent').classList.remove('hidden');
-            loadAssignments();
+            document.getElementById('pageLoader').classList.add('hidden');
+            document.getElementById('dashboardContent').classList.remove('hidden');
+            loadAndProcessData();
         } else {
             document.getElementById('auth-error').innerText = "Access Denied. Please sign in with the teacher account.";
             google.accounts.id.disableAutoSelect();
         }
     }
 
-    async function loadAssignments() {
-        const listContainer = document.getElementById('assignmentsList');
-        const loadingState = document.getElementById('loadingState');
-        
-        listContainer.innerHTML = '';
+    async function loadAndProcessData() {
+        if (!assignmentId) return;
         
         try {
-            const snapshot = await db.collection("assignments").orderBy("createdAt", "desc").get();
+            const assignmentDoc = await db.collection("assignments").doc(assignmentId).get();
+            if (!assignmentDoc.exists) {
+                alert("Error: Assignment not found!"); return;
+            }
+            assignmentData = { id: assignmentDoc.id, ...assignmentDoc.data() };
+            document.getElementById('assignmentName').textContent = assignmentData.name;
 
-            if (snapshot.empty) {
-                loadingState.innerText = "No assignments found. Click '+' to create your first one!";
-                loadingState.classList.remove('hidden');
-            } else {
-                loadingState.classList.add('hidden');
+            const studentSnapshot = await db.collection("students").get();
+            const students = studentSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+            const submissionSnapshot = await db.collection("submissions").where("assignmentId", "==", assignmentId).get();
+            let submissions = submissionSnapshot.docs.map(doc => doc.data());
+            
+            submissions.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+
+            const classData = {};
+            students.forEach(student => {
+                if (!classData[student.class]) {
+                    classData[student.class] = [];
+                }
+                student.submissions = submissions.filter(s => s.studentEmail === student.email);
+                classData[student.class].push(student);
+            });
+            
+            processedClassData = classData;
+            renderTabs(classData);
+            renderTables(classData);
+
+        } catch (error) {
+            console.error("Error loading data:", error);
+            alert("An error occurred while loading data. See console for details.");
+        }
+    }
+
+    function renderTabs(classData) {
+        const tabsContainer = document.getElementById('classTabs');
+        tabsContainer.innerHTML = '';
+        const classNames = Object.keys(classData).sort();
+        
+        classNames.forEach((className, index) => {
+            const tab = document.createElement('div');
+            tab.className = 'tab';
+            tab.innerText = className;
+            tab.dataset.className = className;
+            if (index === 0) {
+                tab.classList.add('active');
+                activeClass = className;
+            }
+            tab.onclick = () => switchTab(className);
+            tabsContainer.appendChild(tab);
+        });
+    }
+
+    function renderTables(classData) {
+        const tablesContainer = document.getElementById('classTablesContainer');
+        tablesContainer.innerHTML = '';
+        const classNames = Object.keys(classData).sort();
+        const numQuestions = assignmentData.slideIds ? assignmentData.slideIds.length : 0;
+
+        classNames.forEach((className, index) => {
+            const tableWrapper = document.createElement('div');
+            tableWrapper.id = `table-${className.replace(/\s+/g, '-')}`;
+            if (index > 0) tableWrapper.classList.add('hidden');
+            
+            const studentsInClass = [...classData[className]];
+            
+            if (currentSortOrder === 'lastName') { studentsInClass.sort((a, b) => splitName(a.name).lastName.localeCompare(splitName(b.name).lastName)); } 
+            else if (currentSortOrder === 'firstName') { studentsInClass.sort((a, b) => splitName(a.name).firstName.localeCompare(splitName(b.name).firstName)); } 
+            else if (currentSortOrder === 'random' || currentSortOrder === 'randomHide') {
+                for (let i = studentsInClass.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [studentsInClass[i], studentsInClass[j]] = [studentsInClass[j], studentsInClass[i]]; }
             }
 
-            snapshot.docs.forEach(doc => {
-                const assignment = { id: doc.id, ...doc.data() };
-                const card = document.createElement('div');
-                card.className = "bg-gray-800 rounded-lg p-6 shadow-lg flex flex-col justify-between";
-                
-                const date = assignment.createdAt ? new Date(assignment.createdAt.seconds * 1000).toLocaleDateString() : 'No date';
-                
-                card.innerHTML = `
-                    <div>
-                        <h3 class="text-2xl font-bold text-yellow-400 mb-2">${assignment.name}</h3>
-                        <p class="text-gray-400 text-sm">Created: ${date}</p>
-                        <p class="text-gray-500 text-xs mt-2 truncate">Presentation ID: ${assignment.presentationId}</p>
-                    </div>
-                    <div class="mt-4 pt-4 border-t border-gray-700 flex justify-between gap-2">
-                        <a href="./dashboard.html?assignmentId=${assignment.id}" class="flex-1 text-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-3 rounded-lg transition-colors">View Results</a>
-                        <a href="./editor.html?id=${assignment.id}" class="flex-1 text-center bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded-lg transition-colors">Edit Assignment</a>
-                    </div>
-                `;
-                listContainer.appendChild(card);
+            const table = document.createElement('table');
+            table.className = "min-w-full";
+            let tableHTML = `<thead class="bg-gray-700"><tr><th class="p-4 text-left font-semibold">Student Name</th>`;
+            for (let i = 0; i < numQuestions; i++) {
+                tableHTML += `<th class="p-4 font-semibold cursor-pointer" onclick="showModalByQuestion(${i + 1}, '${className}')">Q${i + 1}</th>`;
+            }
+            tableHTML += `</tr></thead><tbody></tbody>`;
+            table.innerHTML = tableHTML;
+            const tbody = table.querySelector('tbody');
+
+            studentsInClass.forEach((student, studentIndex) => {
+                const tr = document.createElement('tr');
+                tr.className = "border-b border-gray-700 hover:bg-gray-700/50";
+                const nameTd = document.createElement('td');
+                nameTd.className = "p-4 font-medium cursor-pointer";
+                nameTd.innerText = currentSortOrder === 'randomHide' ? `Student ${studentIndex + 1}` : student.name;
+                nameTd.onclick = () => showModalByStudent(student);
+                tr.appendChild(nameTd);
+
+                for (let i = 0; i < numQuestions; i++) {
+                    const scoreTd = document.createElement('td');
+                    scoreTd.className = "p-4 text-center";
+                    const submissionsForQuestion = student.submissions.filter(s => s.slideIndex === i);
+                    if (submissionsForQuestion.length > 0) {
+                        const latestSubmission = submissionsForQuestion[0];
+                        const score = latestSubmission.score || 0;
+                        const color = score >= 90 ? 'bg-green-500' : score >= 60 ? 'bg-yellow-500' : 'bg-red-500';
+                        const barWidth = Math.max(score, 2); 
+                        const scoreBarBg = document.createElement('div');
+                        scoreBarBg.className = "score-bar-bg w-full h-6 rounded-md overflow-hidden cursor-pointer";
+                        scoreBarBg.onclick = () => showModalForAnswerHistory(student.name, i + 1, submissionsForQuestion);
+                        const scoreBar = document.createElement('div');
+                        scoreBar.className = `score-bar h-full rounded-md ${color}`;
+                        scoreBar.style.width = `${barWidth}%`;
+                        scoreBarBg.appendChild(scoreBar);
+                        scoreTd.appendChild(scoreBarBg);
+                    } else {
+                        scoreTd.innerHTML = `<div class="score-bar-bg w-full h-6 rounded-md"><div class="score-bar h-full rounded-md bg-gray-600" style="width: 100%"></div></div>`;
+                    }
+                    tr.appendChild(scoreTd);
+                }
+                tbody.appendChild(tr);
             });
+            
+            tableWrapper.innerHTML = `<div class="overflow-x-auto bg-gray-800 rounded-lg shadow-xl"></div>`;
+            tableWrapper.querySelector('div').appendChild(table);
+            tablesContainer.appendChild(tableWrapper);
+        });
+    }
 
-        } catch (error) {
-            console.error("Error loading assignments:", error);
-            loadingState.innerText = "Error loading assignments. See console for details.";
-        } finally {
-            const createCard = document.createElement('div');
-            createCard.className = "bg-gray-800 hover:bg-gray-700/50 border-2 border-dashed border-gray-600 rounded-lg flex items-center justify-center min-h-[12rem] cursor-pointer transition-all";
-            createCard.onclick = openCreateModal;
-            createCard.innerHTML = `
-                <div class="text-center">
-                    <span class="text-5xl text-gray-500">+</span>
-                    <p class="text-xl font-semibold text-gray-400 mt-2">Create New Assignment</p>
-                </div>
-            `;
-            listContainer.appendChild(createCard);
+    function switchTab(className) {
+        activeClass = className;
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelector(`.tab[data-class-name="${className}"]`).classList.add('active');
+        document.querySelectorAll('#classTablesContainer > div').forEach(t => t.classList.add('hidden'));
+        document.getElementById(`table-${className.replace(/\s+/g, '-')}`).classList.remove('hidden');
+    }
+    
+    const modal = document.getElementById('answerModal');
+    const modalTitle = document.getElementById('modalTitle');
+    const modalContent = document.getElementById('modalContent');
+    document.getElementById('closeModal').onclick = () => modal.classList.add('hidden');
+
+    function showModalByStudent(student) {
+        const numQuestions = assignmentData.slideIds.length;
+        modalTitle.innerText = `Latest Answers for ${student.name}`;
+        modalContent.innerHTML = '';
+        for (let i = 0; i < numQuestions; i++) {
+            const latestSub = student.submissions.find(s => s.slideIndex === i);
+            const answerDiv = document.createElement('div');
+            answerDiv.className = "mb-6 p-4 bg-gray-700 rounded-lg";
+            const status = latestSub ? `<span class="font-bold text-lg ${latestSub.score === 100 ? 'text-green-400' : 'text-yellow-400'}">${latestSub.score}/100</span>` : '<span class="text-gray-500">No submission</span>';
+            answerDiv.innerHTML = `<div class="flex justify-between items-center mb-2"><h3 class="text-xl font-bold">Question ${i + 1}</h3>${status}</div><p class="text-gray-300 whitespace-pre-wrap">${latestSub ? latestSub.answer : ''}</p>`;
+            modalContent.appendChild(answerDiv);
         }
+        modal.classList.remove('hidden');
     }
 
-    const createModal = document.getElementById('createModal');
-    function openCreateModal() { createModal.classList.remove('hidden'); }
-    function closeCreateModal() { 
-        createModal.classList.add('hidden'); 
-        document.getElementById('assignmentName').value = '';
-        document.getElementById('slidesLink').value = '';
-        document.getElementById('modal-error').innerText = '';
+    function showModalByQuestion(qNumber, className) {
+        modalTitle.innerText = `All Latest Answers for Question ${qNumber} (${className})`;
+        modalContent.innerHTML = '';
+        processedClassData[className].forEach(student => {
+            const latestSub = student.submissions.find(s => s.slideIndex === qNumber - 1);
+            const answerDiv = document.createElement('div');
+            answerDiv.className = "mb-4 p-4 bg-gray-700 rounded-lg";
+            const status = latestSub ? `<span class="font-bold ${latestSub.score === 100 ? 'text-green-400' : 'text-yellow-400'}">${latestSub.score}/100</span>` : '<span class="text-gray-500">N/A</span>';
+            answerDiv.innerHTML = `<div class="flex justify-between items-center mb-2"><h3 class="font-bold">${student.name}</h3>${status}</div><p class="text-gray-300 whitespace-pre-wrap">${latestSub ? latestSub.answer : ''}</p>`;
+            modalContent.appendChild(answerDiv);
+        });
+        modal.classList.remove('hidden');
     }
-
-    async function handleCreateAssignment() {
-        const name = document.getElementById('assignmentName').value.trim();
-        const link = document.getElementById('slidesLink').value.trim();
-        const errorP = document.getElementById('modal-error');
-        errorP.innerText = '';
-
-        if (!name || !link) {
-            errorP.innerText = "Please fill out both fields.";
+    
+    function showModalForAnswerHistory(studentName, qNumber, submissions) {
+        modalTitle.innerText = `Answer History for ${studentName} - Question ${qNumber}`;
+        modalContent.innerHTML = '';
+        if (!submissions || submissions.length === 0) {
+            modalContent.innerHTML = '<p class="text-gray-400">No attempts found.</p>';
+            modal.classList.remove('hidden');
             return;
         }
-
-        const presentationIdRegex = /presentation\/d\/([a-zA-Z0-9-_]+)/;
-        const match = link.match(presentationIdRegex);
-
-        if (!match || !match[1]) {
-            errorP.innerText = "Invalid Google Slides link. Please use the full share URL.";
-            return;
-        }
-        const presentationId = match[1];
-
-        try {
-            document.getElementById('createAssignmentBtn').innerText = "Creating...";
-            await db.collection("assignments").add({
-                name: name,
-                presentationId: presentationId,
-                createdAt: firebase.firestore.FieldValue.serverTimestamp()
-            });
-            closeCreateModal();
-            loadAssignments();
-
-        } catch (error) {
-            console.error("Error creating assignment:", error);
-            errorP.innerText = "Could not create assignment. See console for details.";
-        } finally {
-            document.getElementById('createAssignmentBtn').innerText = "Create Assignment";
-        }
+        submissions.forEach(sub => {
+            const date = sub.timestamp ? new Date(sub.timestamp.seconds * 1000).toLocaleString() : 'Timestamp not available';
+            const status = sub.score !== undefined ? `<span class="font-bold text-lg ${sub.score === 100 ? 'text-green-400' : 'text-yellow-400'}">${sub.score}/100</span>` : '';
+            const answerDiv = document.createElement('div');
+            answerDiv.className = "mb-4 p-4 bg-gray-700 rounded-lg";
+            answerDiv.innerHTML = `<div class="flex justify-between items-center mb-2"><h3 class="text-gray-400 text-sm">${date}</h3>${status}</div><p class="text-gray-300 whitespace-pre-wrap">${sub.answer}</p>`;
+            modalContent.appendChild(answerDiv);
+        });
+        modal.classList.remove('hidden');
     }
-
+    
     document.getElementById('signOutButton').onclick = () => {
         google.accounts.id.disableAutoSelect();
         location.reload();
+    };
+
+    function exportToCSV() {
+        if (!processedClassData || !activeClass) {
+            alert("Data not loaded or no class selected. Please wait and try again."); return;
+        }
+        let csvContent = "data:text/csv;charset=utf-8,";
+        const numQuestions = assignmentData.slideIds.length;
+        const questionHeaders = Array.from({length: numQuestions}, (_, i) => `Score Q${i + 1}`).join(',');
+        const headers = ["Email", "Last Name", "First Name", questionHeaders, "Average Score", "Completion (%)"].join(',');
+        csvContent += headers + "\r\n";
+        const studentsToExport = [...processedClassData[activeClass]];
+        if (currentSortOrder === 'lastName') { studentsToExport.sort((a, b) => splitName(a.name).lastName.localeCompare(splitName(b.name).lastName)); } 
+        else if (currentSortOrder === 'firstName') { studentsToExport.sort((a, b) => splitName(a.name).firstName.localeCompare(splitName(b.name).firstName)); }
+        studentsToExport.forEach(student => {
+            const { firstName, lastName } = splitName(student.name);
+            let scores = []; let totalScore = 0; let attemptedQuestions = 0;
+            for (let i = 0; i < numQuestions; i++) {
+                const latestSubmission = student.submissions.find(s => s.slideIndex === i);
+                if (latestSubmission) { scores.push(latestSubmission.score); totalScore += latestSubmission.score; attemptedQuestions++; } 
+                else { scores.push(""); }
+            }
+            const averageScore = attemptedQuestions > 0 ? (totalScore / attemptedQuestions).toFixed(2) : "";
+            const completionPercentage = ((attemptedQuestions / numQuestions) * 100).toFixed(2);
+            let row = [student.email, `"${lastName}"`, `"${firstName}"`, ...scores, averageScore, completionPercentage].join(',');
+            csvContent += row + "\r\n";
+        });
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        const safeClassName = activeClass.replace(/\s+/g, '_');
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `submissions_${safeClassName}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    function splitName(fullName) {
+        if (!fullName) return { firstName: '', lastName: '' };
+        const parts = fullName.trim().split(' ');
+        if (parts.length === 1) return { firstName: parts[0], lastName: '' };
+        const lastName = parts.pop();
+        const firstName = parts.join(' ');
+        return { firstName, lastName };
+    }
+    document.getElementById('exportButton').onclick = exportToCSV;
+    document.getElementById('sortOptions').onchange = function(event) {
+        currentSortOrder = event.target.value;
+        if(processedClassData) {
+            renderTables(processedClassData);
+            document.querySelectorAll('#classTablesContainer > div').forEach(t => t.classList.add('hidden'));
+            document.getElementById(`table-${activeClass.replace(/\s+/g, '-')}`).classList.remove('hidden');
+        }
     };
 </script>
 </body>
