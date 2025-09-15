@@ -25,14 +25,37 @@
         #toast.show { visibility: visible; animation: fadein 0.5s, fadeout 0.5s 2.5s; }
         @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
         @keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
+        .hidden { display: none; }
+        .passcode-form input { color: black; padding: 8px; margin: 4px 0; border-radius: 4px; }
+        .passcode-form button { background-color: #4CAF50; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; }
+        .passcode-form button:hover { background-color: #45a049; }
+        .switch-link { color: #64b5f6; text-decoration: underline; cursor: pointer; margin-top: 15px; display: inline-block; }
     </style>
 </head>
 <body>
     <h1 class="header">Mr. Lynch's Interactive Slides</h1>
-    <div id="signInPrompt">
-        <h2>Please sign in to view the slides.</h2>
-        <div id="g_id_onload" data-client_id="1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com" data-callback="handleCredentialResponse" data-auto_select="true" data-use_fedcm_for_prompt="false"></div>
-        <div class="g_id_signin" data-type="standard" data-size="large" data-theme="outline" data-text="sign_in_with" data-shape="rectangular" data-logo_alignment="left"></div>
+    <div id="signInContainer">
+        
+        <!-- Google Sign-In View -->
+        <div id="googleSignInView">
+            <h2>Please sign in to view the slides.</h2>
+            <div id="g_id_onload" data-client_id="1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com" data-callback="handleCredentialResponse" data-auto_select="true" data-use_fedcm_for_prompt="false"></div>
+            <div class="g_id_signin" data-type="standard" data-size="large" data-theme="outline" data-text="sign_in_with" data-shape="rectangular" data-logo_alignment="left"></div>
+            <p class="switch-link" onclick="toggleSignInView()">Sign in with Email & Passcode instead</p>
+        </div>
+
+        <!-- Passcode Sign-In View (hidden by default) -->
+        <div id="passcodeSignInView" class="hidden">
+            <h2>Sign in with Email & Passcode</h2>
+            <div class="passcode-form">
+                <input type="email" id="emailInput" placeholder="School Email Address"><br>
+                <input type="password" id="passcodeInput" placeholder="Passcode"><br><br>
+                <button onclick="handlePasscodeSignIn()">Sign In</button>
+            </div>
+             <p id="passcode-error" style="color: red; margin-top: 10px;"></p>
+            <p class="switch-link" onclick="toggleSignInView()">Back to Google Sign-In</p>
+        </div>
+
     </div>
     <div class="main-container">
         <div class="slides-column">
@@ -75,6 +98,12 @@
     let tokenClient;
     let userProfile = null;
 
+    // --- NEW: Sign-In View Toggler ---
+    function toggleSignInView() {
+        document.getElementById('googleSignInView').classList.toggle('hidden');
+        document.getElementById('passcodeSignInView').classList.toggle('hidden');
+    }
+
     function decodeJwtResponse(token) {
         var base64Url = token.split('.')[1];
         var base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
@@ -84,12 +113,13 @@
         return JSON.parse(jsonPayload);
     }
 
+    // --- Google Sign-In Handler ---
     function handleCredentialResponse(response) {
         userProfile = decodeJwtResponse(response.credential);
         tokenClient.callback = (tokenResponse) => {
             if (tokenResponse && tokenResponse.access_token) {
                 gapi.client.setToken(tokenResponse);
-                document.getElementById('signInPrompt').style.display = 'none';
+                document.getElementById('signInContainer').style.display = 'none';
                 document.querySelector('.main-container').style.display = 'flex';
                 updateSlideDisplay();
             }
@@ -98,6 +128,44 @@
              tokenClient.requestAccessToken({ prompt: '' });
         } else { console.error("GAPI client not loaded yet."); }
     }
+
+    // --- NEW: Passcode Sign-In Handler ---
+    async function handlePasscodeSignIn() {
+        const email = document.getElementById('emailInput').value.toLowerCase().trim();
+        const passcode = document.getElementById('passcodeInput').value.trim();
+        const errorElement = document.getElementById('passcode-error');
+        errorElement.innerText = "";
+
+        if (!email || !passcode) {
+            errorElement.innerText = "Please enter both email and passcode.";
+            return;
+        }
+
+        try {
+            const studentQuery = await db.collection("students")
+                .where("email", "==", email)
+                .where("passcode", "==", passcode)
+                .limit(1)
+                .get();
+
+            if (studentQuery.empty) {
+                errorElement.innerText = "Invalid email or passcode. Please try again.";
+            } else {
+                const studentData = studentQuery.docs[0].data();
+                userProfile = {
+                    name: studentData.name,
+                    email: studentData.email
+                };
+                // User is authenticated, but we still need Slides API access
+                // So, we trigger a silent Google Sign-In for API access
+                handleCredentialResponse(await google.accounts.id.prompt());
+            }
+        } catch (error) {
+            console.error("Error during passcode sign-in:", error);
+            errorElement.innerText = "An error occurred. Please try again.";
+        }
+    }
+
 
     function updateSlideDisplay() {
         const slideId = SLIDE_IDS[currentSlideIndex];
