@@ -33,7 +33,6 @@
     <div id="dashboardContent" class="hidden container mx-auto p-4 md:p-8">
         <div class="flex justify-between items-center mb-6 flex-wrap gap-4">
             <h1 class="text-3xl font-bold text-yellow-400">Student Submissions</h1>
-            <!-- NEW: Sorting Controls -->
             <div class="flex items-center gap-2">
                 <label for="sortOptions" class="font-semibold">Sort by:</label>
                 <select id="sortOptions" class="bg-gray-700 border border-gray-600 rounded-md p-2 text-white">
@@ -83,7 +82,7 @@
     const db = firebase.firestore();
     let processedClassData = null;
     let activeClass = null;
-    let currentSortOrder = 'lastName'; // NEW: Default sort order
+    let currentSortOrder = 'lastName';
 
     function decodeJwtResponse(token) {
         var base64Url = token.split('.')[1];
@@ -129,7 +128,7 @@
             
             processedClassData = classData;
             renderTabs(classData);
-            renderTables(classData); // Initial render with default sort
+            renderTables(classData);
             loadingState.classList.add('hidden');
             document.getElementById('classDataContainer').classList.remove('hidden');
 
@@ -168,8 +167,7 @@
             tableWrapper.id = `table-${className.replace(/\s+/g, '-')}`;
             if (index > 0) tableWrapper.classList.add('hidden');
             
-            // --- NEW: SORTING LOGIC APPLIED HERE ---
-            const studentsInClass = [...classData[className]]; // Create a copy to sort
+            const studentsInClass = [...classData[className]];
             
             if (currentSortOrder === 'lastName') {
                 studentsInClass.sort((a, b) => splitName(a.name).lastName.localeCompare(splitName(b.name).lastName));
@@ -181,39 +179,64 @@
                     [studentsInClass[i], studentsInClass[j]] = [studentsInClass[j], studentsInClass[i]];
                 }
             }
-            // --- END SORTING LOGIC ---
 
+            const table = document.createElement('table');
+            table.className = "min-w-full";
             let tableHTML = `
-                <div class="overflow-x-auto bg-gray-800 rounded-lg shadow-xl">
-                    <table class="min-w-full">
-                        <thead class="bg-gray-700"><tr>
-                            <th class="p-4 text-left font-semibold">Student Name</th>
+                <thead class="bg-gray-700"><tr>
+                    <th class="p-4 text-left font-semibold">Student Name</th>
             `;
             for (let i = 0; i < NUM_QUESTIONS; i++) {
                 tableHTML += `<th class="p-4 font-semibold cursor-pointer" onclick="showModalByQuestion(${i + 1}, '${className}')">Q${i + 1}</th>`;
             }
             tableHTML += `</tr></thead><tbody>`;
+            table.innerHTML = tableHTML;
+            const tbody = table.querySelector('tbody');
 
             studentsInClass.forEach((student, studentIndex) => {
-                const displayName = currentSortOrder === 'randomHide' ? `Student ${studentIndex + 1}` : student.name;
-                tableHTML += `<tr class="border-b border-gray-700 hover:bg-gray-700/50">
-                                <td class="p-4 font-medium cursor-pointer" onclick="showModalByStudent(processedClassData['${className}'].find(s => s.email === '${student.email}'))">${displayName}</td>`;
+                const tr = document.createElement('tr');
+                tr.className = "border-b border-gray-700 hover:bg-gray-700/50";
+
+                const nameTd = document.createElement('td');
+                nameTd.className = "p-4 font-medium cursor-pointer";
+                nameTd.innerText = currentSortOrder === 'randomHide' ? `Student ${studentIndex + 1}` : student.name;
+                nameTd.onclick = () => showModalByStudent(student);
+                tr.appendChild(nameTd);
+
                 for (let i = 0; i < NUM_QUESTIONS; i++) {
+                    const scoreTd = document.createElement('td');
+                    scoreTd.className = "p-4 text-center";
                     const submissionsForQuestion = student.submissions.filter(s => s.slideIndex === i);
-                    const latestSubmission = submissionsForQuestion.length > 0 ? submissionsForQuestion[0] : null;
-                    if (latestSubmission) {
+                    
+                    if (submissionsForQuestion.length > 0) {
+                        const latestSubmission = submissionsForQuestion[0];
                         const score = latestSubmission.score || 0;
                         const color = score >= 90 ? 'bg-green-500' : score >= 60 ? 'bg-yellow-500' : 'bg-red-500';
-                        tableHTML += `<td class="p-4 text-center"><div class="score-bar-bg w-full h-6 rounded-md overflow-hidden cursor-pointer" onclick='showModalForAnswerHistory("${student.name.replace(/'/g, "\\'")}", ${i + 1}, JSON.stringify(${JSON.stringify(submissionsForQuestion)}))'><div class="score-bar h-full rounded-md ${color}" style="width: ${score}%"></div></div></td>`;
-                    } else {
-                        tableHTML += `<td class="p-4 text-center"><div class="score-bar-bg w-full h-6 rounded-md"><div class="score-bar h-full rounded-md bg-gray-600" style="width: 100%"></div></div></td>`;
-                    }
-                }
-                tableHTML += `</tr>`;
-            });
+                        // FIX: Set a minimum width for visible feedback on low/zero scores
+                        const barWidth = Math.max(score, 2); 
 
-            tableHTML += `</tbody></table></div>`;
-            tableWrapper.innerHTML = tableHTML;
+                        const scoreBarBg = document.createElement('div');
+                        scoreBarBg.className = "score-bar-bg w-full h-6 rounded-md overflow-hidden cursor-pointer";
+                        // FIX: Attach event listener directly for reliability
+                        scoreBarBg.onclick = () => showModalForAnswerHistory(student.name, i + 1, submissionsForQuestion);
+
+                        const scoreBar = document.createElement('div');
+                        scoreBar.className = `score-bar h-full rounded-md ${color}`;
+                        scoreBar.style.width = `${barWidth}%`;
+                        
+                        scoreBarBg.appendChild(scoreBar);
+                        scoreTd.appendChild(scoreBarBg);
+                    } else {
+                        // Unanswered remains a full gray bar for clear distinction
+                        scoreTd.innerHTML = `<div class="score-bar-bg w-full h-6 rounded-md"><div class="score-bar h-full rounded-md bg-gray-600" style="width: 100%"></div></div>`;
+                    }
+                    tr.appendChild(scoreTd);
+                }
+                tbody.appendChild(tr);
+            });
+            
+            tableWrapper.innerHTML = `<div class="overflow-x-auto bg-gray-800 rounded-lg shadow-xl"></div>`;
+            tableWrapper.querySelector('div').appendChild(table);
             tablesContainer.appendChild(tableWrapper);
         });
     }
@@ -226,36 +249,11 @@
         document.getElementById(`table-${className.replace(/\s+/g, '-')}`).classList.remove('hidden');
     }
     
-    // --- (Modal functions are unchanged) ---
     const modal = document.getElementById('answerModal');
     const modalTitle = document.getElementById('modalTitle');
     const modalContent = document.getElementById('modalContent');
     document.getElementById('closeModal').onclick = () => modal.classList.add('hidden');
-    function showModalByStudent(student) { /* ... unchanged ... */ }
-    function showModalByQuestion(qNumber, className) { /* ... unchanged ... */ }
-    function showModalForAnswerHistory(studentName, qNumber, submissions) { /* ... unchanged ... */ }
-    
-    // --- (Sign Out and Export functions are unchanged) ---
-    document.getElementById('signOutButton').onclick = () => { /* ... unchanged ... */ };
-    function exportToCSV() { /* ... unchanged ... */ }
-    function splitName(fullName) { /* ... unchanged ... */ }
-    document.getElementById('exportButton').onclick = exportToCSV;
 
-    // --- NEW: Handle sort changes ---
-    document.getElementById('sortOptions').onchange = function(event) {
-        currentSortOrder = event.target.value;
-        if(processedClassData) {
-            renderTables(processedClassData); // Re-render the tables with the new sort order
-            // Ensure the active tab remains visible
-            document.querySelectorAll('#classTablesContainer > div').forEach(t => t.classList.add('hidden'));
-            document.getElementById(`table-${activeClass.replace(/\s+/g, '-')}`).classList.remove('hidden');
-        }
-    };
-    
-</script>
-
-<!-- Paste unchanged modal/utility functions back in to keep file clean -->
-<script>
     function showModalByStudent(student) {
         modalTitle.innerText = `Latest Answers for ${student.name}`;
         modalContent.innerHTML = '';
@@ -302,11 +300,59 @@
         });
         modal.classList.remove('hidden');
     }
-
+    
     document.getElementById('signOutButton').onclick = () => {
         google.accounts.id.disableAutoSelect();
         location.reload();
     };
+
+    function exportToCSV() {
+        if (!processedClassData || !activeClass) {
+            alert("Data not loaded or no class selected. Please wait and try again.");
+            return;
+        }
+        let csvContent = "data:text/csv;charset=utf-8,";
+        const questionHeaders = Array.from({length: NUM_QUESTIONS}, (_, i) => `Score Q${i + 1}`).join(',');
+        const headers = ["Email", "Last Name", "First Name", questionHeaders, "Average Score", "Completion (%)"].join(',');
+        csvContent += headers + "\r\n";
+        
+        const studentsToExport = [...processedClassData[activeClass]];
+        if (currentSortOrder === 'lastName') {
+            studentsToExport.sort((a, b) => splitName(a.name).lastName.localeCompare(splitName(b.name).lastName));
+        } else if (currentSortOrder === 'firstName') {
+            studentsToExport.sort((a, b) => splitName(a.name).firstName.localeCompare(splitName(b.name).firstName));
+        }
+        
+        studentsToExport.forEach(student => {
+            const { firstName, lastName } = splitName(student.name);
+            let scores = [];
+            let totalScore = 0;
+            let attemptedQuestions = 0;
+            for (let i = 0; i < NUM_QUESTIONS; i++) {
+                const latestSubmission = student.submissions.find(s => s.slideIndex === i);
+                if (latestSubmission) {
+                    scores.push(latestSubmission.score);
+                    totalScore += latestSubmission.score;
+                    attemptedQuestions++;
+                } else {
+                    scores.push("");
+                }
+            }
+            const averageScore = attemptedQuestions > 0 ? (totalScore / attemptedQuestions).toFixed(2) : "";
+            const completionPercentage = ((attemptedQuestions / NUM_QUESTIONS) * 100).toFixed(2);
+            let row = [student.email, `"${lastName}"`, `"${firstName}"`, ...scores, averageScore, completionPercentage].join(',');
+            csvContent += row + "\r\n";
+        });
+        
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        const safeClassName = activeClass.replace(/\s+/g, '_');
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `submissions_${safeClassName}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
 
     function splitName(fullName) {
         if (!fullName) return { firstName: '', lastName: '' };
@@ -316,8 +362,17 @@
         const firstName = parts.join(' ');
         return { firstName, lastName };
     }
+    document.getElementById('exportButton').onclick = exportToCSV;
+    
+    document.getElementById('sortOptions').onchange = function(event) {
+        currentSortOrder = event.target.value;
+        if(processedClassData) {
+            renderTables(processedClassData);
+            document.querySelectorAll('#classTablesContainer > div').forEach(t => t.classList.add('hidden'));
+            document.getElementById(`table-${activeClass.replace(/\s+/g, '-')}`).classList.remove('hidden');
+        }
+    };
 </script>
-
 </body>
 </html>
 
