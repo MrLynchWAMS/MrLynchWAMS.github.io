@@ -31,11 +31,11 @@
 <body class="bg-gray-900 text-white font-sans flex items-center justify-center min-h-screen">
 
     <div class="container mx-auto p-4">
-        <!-- ... (Login and Main Container HTML is unchanged) ... -->
         <div id="pageLoader" class="text-center">
             <h1 class="text-3xl font-bold text-yellow-400">Loading Assignment...</h1>
             <p id="loadingError" class="text-red-500 mt-4"></p>
         </div>
+
         <div id="loginContainer" class="hidden">
              <div class="bg-gray-800 p-8 rounded-lg shadow-xl max-w-md mx-auto">
                 <h1 id="assignmentNameLogin" class="text-3xl font-bold text-yellow-400 mb-6 text-center"></h1>
@@ -74,12 +74,9 @@
         </div>
     </div>
     
-    <div id="toast-wrapper" class="fixed top-4 right-4 z-[100] space-y-3 w-full max-w-sm">
-        <!-- Toasts will be dynamically injected here -->
-    </div>
+    <div id="toast-wrapper" class="fixed top-4 right-4 z-[100] space-y-3 w-full max-w-sm"></div>
 
 <script>
-    // ... (Firebase config and other variables are unchanged) ...
     const firebaseConfig = {
         apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
         authDomain: "mrlynch-slides-app.firebaseapp.com",
@@ -96,7 +93,6 @@
     let checkerFunctionStrings = {};
     let slideStates = [];
 
-    // ... (window.onload and login functions are unchanged) ...
     window.onload = async function() {
         const urlParams = new URLSearchParams(window.location.search);
         const assignmentId = urlParams.get('assignmentId');
@@ -131,10 +127,47 @@
         }
     };
     
-    function showMainContent() {
+    // NEW: Central function to start the student session after login
+    async function initializeStudentSession() {
         document.getElementById('loginContainer').classList.add('hidden');
+        const loader = document.getElementById('pageLoader');
+        loader.classList.remove('hidden');
+        loader.querySelector('h1').textContent = `Loading your work, ${userProfile.name.split(' ')[0]}...`;
+        
+        await fetchStudentSubmissions(); // Fetch previous work
+
+        loader.classList.add('hidden'); // Hide loader
         document.getElementById('mainContainer').classList.remove('hidden');
-        updateSlideDisplay();
+        updateSlideDisplay(); // Show the first slide with restored work
+    }
+
+    // NEW: Function to fetch student's past submissions for this assignment
+    async function fetchStudentSubmissions() {
+        if (!userProfile || !assignmentData) return;
+
+        try {
+            const q = db.collection("submissions")
+                .where("studentEmail", "==", userProfile.email)
+                .where("assignmentId", "==", assignmentData.id)
+                .orderBy("timestamp", "desc");
+            
+            const querySnapshot = await q.get();
+            
+            querySnapshot.docs.forEach(doc => {
+                const sub = doc.data();
+                // Only store the most recent submission for each slide
+                if (sub.slideIndex !== undefined && !slideStates[sub.slideIndex]) {
+                    slideStates[sub.slideIndex] = {
+                        answer: sub.answer,
+                        score: sub.score
+                    };
+                }
+            });
+
+        } catch (error) {
+            console.error("Error fetching previous submissions:", error);
+            showToast("Could not load your previous work.", { color: 'red' });
+        }
     }
 
     async function handlePasscodeSignIn() {
@@ -159,7 +192,7 @@
             } else {
                 const studentData = querySnapshot.docs[0].data();
                 userProfile = { name: studentData.name, email: studentData.email };
-                showMainContent();
+                initializeStudentSession(); // MODIFIED
             }
         } catch (error) {
             console.error("Error signing in with passcode:", error);
@@ -173,15 +206,14 @@
         const profile = decodeJwtResponse(response.credential);
         if (profile) {
             userProfile = { name: profile.name, email: profile.email };
-            showMainContent();
+            initializeStudentSession(); // MODIFIED
         } else {
             document.getElementById('loginError').textContent = "Google Sign-In failed. Please try again.";
         }
     }
 
-    // --- UPDATED: More robust slide display logic ---
     function updateSlideDisplay(retryCount = 0) {
-        const MAX_RETRIES = 2; // Will try a total of 3 times
+        const MAX_RETRIES = 2;
         const slideId = assignmentData.slideIds[currentSlideIndex];
         const slideImageElement = document.getElementById('slide-image');
         const slideCounterElement = document.getElementById('slide-counter');
@@ -190,7 +222,6 @@
         slideLoader.classList.remove('hidden');
         slideImageElement.classList.add('hidden');
         
-        // Add a timestamp to prevent the browser from using a cached error image
         const imageUrl = `https://docs.google.com/presentation/d/${assignmentData.presentationId}/export/png?id=${assignmentData.presentationId}&pageid=${slideId}&time=${new Date().getTime()}`;
         
         slideImageElement.src = imageUrl;
@@ -200,7 +231,6 @@
             slideImageElement.classList.remove('hidden');
             slideCounterElement.innerText = `Slide ${currentSlideIndex + 1} of ${assignmentData.slideIds.length}`;
             
-            // Restore answer/score state for the newly loaded slide
             const inputBox = document.getElementById('inputbox');
             const resultElement = document.getElementById('result');
             const currentState = slideStates[currentSlideIndex];
@@ -221,27 +251,17 @@
         slideImageElement.onerror = () => {
             console.warn(`Attempt ${retryCount + 1} to load slide image failed.`);
             if (retryCount < MAX_RETRIES) {
-                // Wait a moment and try again
                 setTimeout(() => {
                     updateSlideDisplay(retryCount + 1);
                 }, 500);
             } else {
-                // If all retries fail, show the final error message
                 console.error("Failed to load slide image after multiple retries:", imageUrl);
                 slideLoader.innerHTML = `<p class="text-red-500">Error loading slide. Please ensure the presentation is shared publicly ("Anyone with the link can view") and try refreshing the page.</p>`;
             }
         };
     }
-
-    function saveCurrentState() { /* ... unchanged ... */ }
-    function nextSlide() { /* ... unchanged ... */ }
-    function prevSlide() { /* ... unchanged ... */ }
-    async function myfunction() { /* ... unchanged ... */ }
-    function showToast(message, options = {}) { /* ... unchanged ... */ }
-    function checkCurrentSlideAnswer(answer) { /* ... unchanged ... */ }
 </script>
-
-<!-- Unchanged utility functions -->
+<!-- The remaining JS functions are unchanged -->
 <script>
     function saveCurrentState() {
         const currentAnswer = document.getElementById('inputbox').value;
