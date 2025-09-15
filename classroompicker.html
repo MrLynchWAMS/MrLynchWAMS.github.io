@@ -11,37 +11,22 @@
     <style>
         .hidden { display: none; }
         textarea { resize: vertical; }
-        /* NEW: General Toast Container Styling */
-        .toast-container {
-            visibility: hidden;
-            position: fixed;
-            z-index: 100;
-            left: 50%;
-            transform: translateX(-50%);
-            min-width: 250px;
-            max-width: 80%;
-            color: #fff;
-            text-align: center;
-            border-radius: 4px;
-            padding: 16px;
-            font-size: 17px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-        }
-        .toast-container.show {
-            visibility: visible;
-            animation: fadein 0.5s, fadeout 0.5s 2.5s;
-        }
-        /* Positions */
-        .toast-top-center { top: 30px; }
-        .toast-bottom-center { bottom: 30px; }
-        /* Colors */
-        .toast-default { background-color: #333; }
-        .toast-green { background-color: #2f855a; } /* Tailwind green-700 */
-        .toast-red { background-color: #c53030; }   /* Tailwind red-700 */
-        .toast-blue { background-color: #2b6cb0; }  /* Tailwind blue-700 */
         
-        @keyframes fadein { from { opacity: 0; transform: translate(-50%, 20px); } to { opacity: 1; transform: translate(-50%, 0); } }
-        @keyframes fadeout { from { opacity: 1; transform: translate(-50%, 0); } to { opacity: 0; transform: translate(-50%, 20px); } }
+        /* NEW: Keyframe animations for toasts entering and leaving */
+        @keyframes fade-in-right {
+            from { opacity: 0; transform: translateX(100%); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes fade-out-right {
+            from { opacity: 1; transform: translateX(0); }
+            to { opacity: 0; transform: translateX(100%); }
+        }
+        .animate-fade-in-right {
+            animation: fade-in-right 0.5s ease-out forwards;
+        }
+        .animate-fade-out-right {
+            animation: fade-out-right 0.5s ease-in forwards;
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-white font-sans flex items-center justify-center min-h-screen">
@@ -90,9 +75,10 @@
         </div>
     </div>
     
-    <!-- NEW: Multiple Toast Containers for Different Positions -->
-    <div id="toast-bottom-center" class="toast-container toast-bottom-center toast-default"></div>
-    <div id="toast-top-center" class="toast-container toast-top-center toast-default"></div>
+    <!-- NEW: A single wrapper for all dynamically created toasts -->
+    <div id="toast-wrapper" class="fixed top-4 right-4 z-[100] space-y-3 w-full max-w-sm">
+        <!-- Toasts will be dynamically injected here -->
+    </div>
 
 <script>
     // ... (Firebase config and other variables are unchanged) ...
@@ -195,7 +181,6 @@
         }
     }
 
-    // ... (updateSlideDisplay, saveCurrentState, nextSlide, prevSlide are unchanged) ...
     function updateSlideDisplay() {
         const slideId = assignmentData.slideIds[currentSlideIndex];
         const slideImageElement = document.getElementById('slide-image');
@@ -255,8 +240,6 @@
         } 
     }
 
-
-    // --- UPDATED: myfunction now calls the save confirmation toast ---
     async function myfunction() {
         var studentAnswer = document.getElementById("inputbox").value;
         var resultElement = document.getElementById("result");
@@ -267,7 +250,6 @@
         var score = checkCurrentSlideAnswer(studentAnswer);
         resultElement.innerHTML = "Your Score: " + score;
         resultElement.style.color = score === 100 ? "lightgreen" : "orange";
-
         slideStates[currentSlideIndex] = { answer: studentAnswer, score: score };
 
         if (!userProfile) {
@@ -285,44 +267,55 @@
                 timestamp: firebase.firestore.FieldValue.serverTimestamp()
             };
             await db.collection("submissions").add(submission);
-            showToast("Answer saved successfully!", { color: 'blue', position: 'top-center' });
+            // Don't show custom feedback here. Let the calc function do it.
+            // Only show a save confirmation.
+            showToast("Answer saved!", { color: 'blue', duration: 2000 });
         } catch (error) {
             console.error("Error saving to Firestore:", error);
             showToast("Could not save answer. See console for details.", {color: 'red'});
         }
     }
 
-    // --- NEW: The upgraded, configurable showToast function ---
+    // --- NEW: The dynamic, stacking toast function ---
     function showToast(message, options = {}) {
-        const { color = 'default', position = 'bottom-center', duration = 3000 } = options;
-        
-        const toastContainer = document.getElementById(`toast-${position}`);
-        if (!toastContainer) {
-            console.error(`Toast container for position "${position}" not found!`);
-            return;
-        }
+        const { color = 'default', duration = 5000 } = options;
+        const wrapper = document.getElementById('toast-wrapper');
+        if (!wrapper) return;
 
-        // Apply color classes
-        toastContainer.className = `toast-container toast-${position}`; // Reset classes
-        toastContainer.classList.add(`toast-${color}`);
-        
-        toastContainer.innerHTML = message;
-        toastContainer.classList.add('show');
-        
-        // Use animationend event to hide, or fallback to timeout
-        const animationDuration = 2500; // Must match the fadeout delay in CSS
-        const fadeoutDelay = duration - 500;
-        
-        const animationStyle = `fadein 0.5s, fadeout 0.5s ${fadeoutDelay / 1000}s`;
-        toastContainer.style.animation = animationStyle;
+        const toast = document.createElement('div');
+        toast.className = 'flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm animate-fade-in-right';
 
-        setTimeout(() => {
-            toastContainer.classList.remove('show');
-            toastContainer.style.animation = '';
-        }, duration);
+        const colors = {
+            default: 'bg-gray-700',
+            green: 'bg-green-600',
+            red: 'bg-red-600',
+            blue: 'bg-blue-600'
+        };
+        toast.classList.add(colors[color] || colors['default']);
+
+        const messageSpan = document.createElement('span');
+        messageSpan.textContent = message;
+        toast.appendChild(messageSpan);
+        
+        const closeButton = document.createElement('button');
+        closeButton.innerHTML = '&times;';
+        closeButton.className = 'ml-4 text-2xl font-bold leading-none hover:text-gray-300 focus:outline-none';
+        
+        let timeoutId = null;
+
+        const dismiss = () => {
+            if (timeoutId) clearTimeout(timeoutId);
+            toast.classList.remove('animate-fade-in-right');
+            toast.classList.add('animate-fade-out-right');
+            toast.addEventListener('animationend', () => toast.remove());
+        };
+
+        closeButton.onclick = dismiss;
+        toast.appendChild(closeButton);
+        wrapper.appendChild(toast);
+        timeoutId = setTimeout(dismiss, duration);
     }
     
-    // ... (checkCurrentSlideAnswer is unchanged) ...
     function checkCurrentSlideAnswer(answer) {
         const funcName = `calc${currentSlideIndex + 1}`;
         const funcString = checkerFunctionStrings[funcName];
