@@ -18,7 +18,6 @@
         .hidden { display: none; }
         .tab { cursor: pointer; padding: 10px 20px; border-bottom: 2px solid transparent; }
         .tab.active { border-color: #f59e0b; color: #f59e0b; }
-        /* Add a subtle animation for button clicks */
         .btn-action { transition: background-color 0.2s, transform 0.1s; }
         .btn-action:active { transform: scale(0.95); }
     </style>
@@ -66,7 +65,7 @@
                 <h2 id="modalTitle" class="text-2xl font-bold text-yellow-400">Details</h2>
                 <button id="closeModal" class="text-gray-400 hover:text-white text-3xl">&times;</button>
             </div>
-            <div id="modalHeader" class="p-4 border-b border-gray-600"></div>
+            <div id="modalHeader" class="hidden p-4 border-b border-gray-600"></div>
             <div id="modalContent" class="p-6 modal-content overflow-y-auto"></div>
         </div>
     </div>
@@ -75,7 +74,14 @@
 
 <script>
     const TEACHER_EMAIL = "klynch@mtps.us";
-    const firebaseConfig = { /* ... unchanged ... */ };
+    const firebaseConfig = {
+      apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
+      authDomain: "mrlynch-slides-app.firebaseapp.com",
+      projectId: "mrlynch-slides-app",
+      storageBucket: "mrlynch-slides-app.appspot.com",
+      messagingSenderId: "223179627035",
+      appId: "1:223179627035:web:ff0f538f3029d829c3f6be"
+    };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
@@ -95,8 +101,19 @@
         }
     };
 
-    function decodeJwtResponse(token) { /* ... unchanged ... */ }
-    function handleCredentialResponse(response) { /* ... unchanged ... */ }
+    function decodeJwtResponse(token) { try { const base64Url = token.split('.')[1]; const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/'); const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) { return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2); }).join('')); return JSON.parse(jsonPayload); } catch (e) { return null; } }
+
+    function handleCredentialResponse(response) {
+        const userProfile = decodeJwtResponse(response.credential);
+        if (userProfile.email.toLowerCase() === TEACHER_EMAIL.toLowerCase()) {
+            document.getElementById('pageLoader').classList.add('hidden');
+            document.getElementById('dashboardContent').classList.remove('hidden');
+            loadAndProcessData();
+        } else {
+            document.getElementById('auth-error').innerText = "Access Denied. Please sign in with the teacher account.";
+            google.accounts.id.disableAutoSelect();
+        }
+    }
 
     async function loadAndProcessData() {
         if (!assignmentId) return;
@@ -112,7 +129,6 @@
 
             db.collection("submissions").where("assignmentId", "==", assignmentId)
               .onSnapshot(submissionSnapshot => {
-                // IMPORTANT: Fetch submissions with their document IDs for editing
                 let submissions = submissionSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 processAndRender(submissions);
               }, error => {
@@ -128,7 +144,6 @@
 
     function processAndRender(submissions) {
         submissions.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
-
         const classData = {};
         studentRoster.forEach(student => {
             if (!classData[student.class]) classData[student.class] = [];
@@ -136,18 +151,104 @@
             studentWithSubs.submissions = submissions.filter(s => s.studentEmail === student.email);
             classData[student.class].push(studentWithSubs);
         });
-        
         processedClassData = classData;
-        
         if (!document.getElementById('classTabs').hasChildNodes()) {
             renderTabs(classData);
         }
         renderTables(classData);
     }
     
-    function renderTabs(classData) { /* ... unchanged ... */ }
-    function renderTables(classData) { /* ... unchanged ... */ }
-    function switchTab(className) { /* ... unchanged ... */ }
+    function renderTabs(classData) {
+        const tabsContainer = document.getElementById('classTabs');
+        tabsContainer.innerHTML = '';
+        const classNames = Object.keys(classData).sort();
+        classNames.forEach((className, index) => {
+            const tab = document.createElement('div');
+            tab.className = 'tab';
+            tab.innerText = className;
+            tab.dataset.className = className;
+            if (index === 0 && !activeClass) {
+                tab.classList.add('active');
+                activeClass = className;
+            } else if (className === activeClass) {
+                tab.classList.add('active');
+            }
+            tab.onclick = () => switchTab(className);
+            tabsContainer.appendChild(tab);
+        });
+    }
+
+    function renderTables(classData) {
+        const tablesContainer = document.getElementById('classTablesContainer');
+        tablesContainer.innerHTML = '';
+        const classNames = Object.keys(classData).sort();
+        const numQuestions = assignmentData.slideIds ? assignmentData.slideIds.length : 0;
+        classNames.forEach(className => {
+            const tableWrapper = document.createElement('div');
+            tableWrapper.id = `table-${className.replace(/\s+/g, '-')}`;
+            if (activeClass ? className !== activeClass : classNames.indexOf(className) > 0) {
+                 tableWrapper.classList.add('hidden');
+            }
+            const studentsInClass = [...classData[className]];
+            if (currentSortOrder === 'lastName') { studentsInClass.sort((a, b) => splitName(a.name).lastName.localeCompare(splitName(b.name).lastName)); } 
+            else if (currentSortOrder === 'firstName') { studentsInClass.sort((a, b) => splitName(a.name).firstName.localeCompare(splitName(b.name).firstName)); } 
+            else if (currentSortOrder === 'random' || currentSortOrder === 'randomHide') {
+                for (let i = studentsInClass.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [studentsInClass[i], studentsInClass[j]] = [studentsInClass[j], studentsInClass[i]]; }
+            }
+            const table = document.createElement('table');
+            table.className = "min-w-full";
+            let tableHTML = `<thead class="bg-gray-700"><tr><th class="p-4 text-left font-semibold">Student Name</th>`;
+            for (let i = 0; i < numQuestions; i++) {
+                tableHTML += `<th class="p-4 font-semibold cursor-pointer" onclick="showModalByQuestion(${i + 1}, '${className}')">Q${i + 1}</th>`;
+            }
+            tableHTML += `</tr></thead><tbody></tbody>`;
+            table.innerHTML = tableHTML;
+            const tbody = table.querySelector('tbody');
+            studentsInClass.forEach((student, studentIndex) => {
+                const tr = document.createElement('tr');
+                tr.className = "border-b border-gray-700 hover:bg-gray-700/50";
+                const nameTd = document.createElement('td');
+                nameTd.className = "p-4 font-medium cursor-pointer";
+                nameTd.innerText = currentSortOrder === 'randomHide' ? `Student ${studentIndex + 1}` : student.name;
+                nameTd.onclick = () => showModalByStudent(student);
+                tr.appendChild(nameTd);
+                for (let i = 0; i < numQuestions; i++) {
+                    const scoreTd = document.createElement('td');
+                    scoreTd.className = "p-4 text-center";
+                    const submissionsForQuestion = student.submissions.filter(s => s.slideIndex === i);
+                    if (submissionsForQuestion.length > 0) {
+                        const latestSubmission = submissionsForQuestion[0];
+                        const score = latestSubmission.score || 0;
+                        const color = score >= 90 ? 'bg-green-500' : score >= 60 ? 'bg-yellow-500' : 'bg-red-500';
+                        const barWidth = Math.max(score, 2); 
+                        const scoreBarBg = document.createElement('div');
+                        scoreBarBg.className = "score-bar-bg w-full h-6 rounded-md overflow-hidden cursor-pointer";
+                        scoreBarBg.onclick = () => showModalForAnswerHistory(student.name, i + 1, submissionsForQuestion);
+                        const scoreBar = document.createElement('div');
+                        scoreBar.className = `score-bar h-full rounded-md ${color}`;
+                        scoreBar.style.width = `${barWidth}%`;
+                        scoreBarBg.appendChild(scoreBar);
+                        scoreTd.appendChild(scoreBarBg);
+                    } else {
+                        scoreTd.innerHTML = `<div class="score-bar-bg w-full h-6 rounded-md"><div class="score-bar h-full rounded-md bg-gray-600" style="width: 100%"></div></div>`;
+                    }
+                    tr.appendChild(scoreTd);
+                }
+                tbody.appendChild(tr);
+            });
+            tableWrapper.innerHTML = `<div class="overflow-x-auto bg-gray-800 rounded-lg shadow-xl"></div>`;
+            tableWrapper.querySelector('div').appendChild(table);
+            tablesContainer.appendChild(tableWrapper);
+        });
+    }
+
+    function switchTab(className) {
+        activeClass = className;
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelector(`.tab[data-class-name="${className}"]`).classList.add('active');
+        document.querySelectorAll('#classTablesContainer > div').forEach(t => t.classList.add('hidden'));
+        document.getElementById(`table-${className.replace(/\s+/g, '-')}`).classList.remove('hidden');
+    }
     
     const modal = document.getElementById('answerModal');
     const modalTitle = document.getElementById('modalTitle');
@@ -155,18 +256,25 @@
     const modalContent = document.getElementById('modalContent');
     document.getElementById('closeModal').onclick = () => modal.classList.add('hidden');
 
-    function showModalByStudent(student) { /* ... unchanged ... */ }
+    function showModalByStudent(student) {
+        const numQuestions = assignmentData.slideIds.length;
+        modalTitle.innerText = `Latest Answers for ${student.name}`;
+        modalHeader.classList.add('hidden');
+        modalContent.innerHTML = '';
+        for (let i = 0; i < numQuestions; i++) {
+            const latestSub = student.submissions.find(s => s.slideIndex === i);
+            const answerDiv = document.createElement('div');
+            answerDiv.className = "mb-6 p-4 bg-gray-700 rounded-lg";
+            const status = latestSub ? `<span class="font-bold text-lg ${latestSub.score === 100 ? 'text-green-400' : 'text-yellow-400'}">${latestSub.score}/100</span>` : '<span class="text-gray-500">No submission</span>';
+            answerDiv.innerHTML = `<div class="flex justify-between items-center mb-2"><h3 class="text-xl font-bold">Question ${i + 1}</h3>${status}</div><p class="text-gray-300 whitespace-pre-wrap">${latestSub ? latestSub.answer : ''}</p>`;
+            modalContent.appendChild(answerDiv);
+        }
+        modal.classList.remove('hidden');
+    }
 
-    // --- UPDATED: Modal for viewing all answers to a question ---
     function showModalByQuestion(qNumber, className) {
         modalTitle.innerText = `All Latest Answers for Question ${qNumber} (${className})`;
-        
-        // NEW: Add a re-grade button to the modal header
-        modalHeader.innerHTML = `
-            <button onclick="bulkRegrade(${qNumber - 1}, '${className}')" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg btn-action">
-                Re-grade All Answers for this Question
-            </button>
-        `;
+        modalHeader.innerHTML = `<button onclick="bulkRegrade(${qNumber - 1}, '${className}')" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Re-grade All Answers for this Question</button>`;
         modalHeader.classList.remove('hidden');
         modalContent.innerHTML = '';
         processedClassData[className].forEach(student => {
@@ -180,10 +288,9 @@
         modal.classList.remove('hidden');
     }
     
-    // --- UPDATED: Modal for viewing a student's answer history ---
     function showModalForAnswerHistory(studentName, qNumber, submissions) {
         modalTitle.innerText = `Answer History for ${studentName} - Question ${qNumber}`;
-        modalHeader.classList.add('hidden'); // No header needed here
+        modalHeader.classList.add('hidden');
         modalContent.innerHTML = '';
         if (!submissions || submissions.length === 0) {
             modalContent.innerHTML = '<p class="text-gray-400">No attempts found.</p>';
@@ -200,7 +307,7 @@
                     <div class="flex items-center gap-2">
                         <input type="number" id="score-input-${sub.id}" value="${sub.score}" class="bg-gray-600 rounded p-1 w-20 text-center">
                         <button onclick="saveManualScore('${sub.id}', document.getElementById('score-input-${sub.id}').value)" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-1 px-3 rounded btn-action">Save</button>
-                        <button onclick="rerunAutograder('${sub.id}', '${sub.slideIndex}')" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold py-1 px-3 rounded btn-action">Re-run</button>
+                        <button onclick="rerunAutograder('${sub.id}')" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold py-1 px-3 rounded btn-action">Re-run</button>
                     </div>
                 </div>
                 <p class="text-gray-300 whitespace-pre-wrap mt-2">${sub.answer}</p>
@@ -209,17 +316,13 @@
         });
         modal.classList.remove('hidden');
     }
-
-    // --- NEW: Functions for scoring and re-grading ---
     
-    // Helper function to execute checker code safely
     function executeChecker(slideIndex, answer) {
         const funcName = `calc${slideIndex + 1}`;
         const funcString = assignmentData.checkerFunctions?.[funcName];
         if (funcString) {
             try {
                 const checkerFunction = new Function('return ' + funcString)();
-                // The dashboard doesn't need to show toasts, so we provide a dummy function
                 const dummyShowToast = () => {}; 
                 return checkerFunction(answer, dummyShowToast);
             } catch (e) {
@@ -227,7 +330,7 @@
                 return 0;
             }
         }
-        return 0; // No function exists
+        return 0;
     }
     
     async function saveManualScore(submissionId, newScoreStr) {
@@ -237,10 +340,7 @@
             return;
         }
         try {
-            await db.collection("submissions").doc(submissionId).update({
-                score: newScore,
-                isManualGrade: true // Mark as manually graded
-            });
+            await db.collection("submissions").doc(submissionId).update({ score: newScore, isManualGrade: true });
             showToast("Score updated successfully!", {color: 'green'});
         } catch (error) {
             console.error("Error saving manual score:", error);
@@ -248,19 +348,13 @@
         }
     }
 
-    async function rerunAutograder(submissionId, slideIndex) {
+    async function rerunAutograder(submissionId) {
         try {
-            // We need to get the original answer text first
             const doc = await db.collection("submissions").doc(submissionId).get();
             if (!doc.exists) throw new Error("Submission not found");
-            
             const submission = doc.data();
             const newScore = executeChecker(submission.slideIndex, submission.answer);
-
-            await db.collection("submissions").doc(submissionId).update({
-                score: newScore,
-                isManualGrade: false // Mark as auto-graded
-            });
+            await db.collection("submissions").doc(submissionId).update({ score: newScore, isManualGrade: false });
             showToast(`Re-graded score: ${newScore}`, {color: 'blue'});
         } catch (error) {
             console.error("Error re-running auto-grader:", error);
@@ -272,14 +366,11 @@
         if (!confirm(`Are you sure you want to re-grade all answers for Question ${slideIndex + 1} in ${className}? This cannot be undone.`)) {
             return;
         }
-
         const studentsInClass = processedClassData[className];
         if (!studentsInClass) return;
-
         showToast(`Starting re-grade for Q${slideIndex + 1}...`, {color: 'blue'});
         const batch = db.batch();
         let updatedCount = 0;
-
         studentsInClass.forEach(student => {
             student.submissions.forEach(sub => {
                 if (sub.slideIndex === slideIndex) {
@@ -290,7 +381,6 @@
                 }
             });
         });
-
         try {
             await batch.commit();
             showToast(`Successfully re-graded ${updatedCount} submissions!`, {color: 'green'});
@@ -299,24 +389,25 @@
             showToast("Bulk re-grade failed. See console.", {color: 'red'});
         }
     }
+    
+    document.getElementById('signOutButton').onclick = () => {
+        google.accounts.id.disableAutoSelect();
+        location.reload();
+    };
 
-    // --- (All other utility functions are unchanged) ---
-</script>
-
-<!-- Unchanged utility functions -->
-<script>
-    /* ... Paste the unchanged functions like splitName, exportToCSV, showToast, etc. here ... */
-    const firebaseConfig_utility = { /* ... */ }; // Need to re-declare if in separate script, but better to keep in one
-    function splitName(fullName) { if (!fullName) return { firstName: '', lastName: '' }; const parts = fullName.trim().split(' '); if (parts.length === 1) return { firstName: parts[0], lastName: '' }; const lastName = parts.pop(); const firstName = parts.join(' '); return { firstName, lastName }; }
-    document.getElementById('signOutButton').onclick = () => { google.accounts.id.disableAutoSelect(); location.reload(); };
     function showToast(message, options = {}) { const { color = 'default', duration = 3000 } = options; const wrapper = document.getElementById('toast-wrapper'); if (!wrapper) return; const toast = document.createElement('div'); toast.className = 'flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm animate-fade-in-right'; const colors = { default: 'bg-gray-700', green: 'bg-green-600', red: 'bg-red-600', blue: 'bg-blue-600' }; toast.classList.add(colors[color] || colors['default']); const messageSpan = document.createElement('span'); messageSpan.textContent = message; toast.appendChild(messageSpan); const closeButton = document.createElement('button'); closeButton.innerHTML = '&times;'; closeButton.className = 'ml-4 text-2xl font-bold leading-none hover:text-gray-300 focus:outline-none'; let timeoutId = null; const dismiss = () => { if (timeoutId) clearTimeout(timeoutId); toast.classList.remove('animate-fade-in-right'); toast.classList.add('animate-fade-out-right'); toast.addEventListener('animationend', () => toast.remove()); }; closeButton.onclick = dismiss; toast.appendChild(closeButton); wrapper.appendChild(toast); timeoutId = setTimeout(dismiss, duration); }
+    
+    function splitName(fullName) { if (!fullName) return { firstName: '', lastName: '' }; const parts = fullName.trim().split(' '); if (parts.length === 1) return { firstName: parts[0], lastName: '' }; const lastName = parts.pop(); const firstName = parts.join(' '); return { firstName, lastName }; }
+    
     document.getElementById('exportButton').onclick = exportToCSV;
+    
     document.getElementById('sortOptions').onchange = function(event) {
         currentSortOrder = event.target.value;
         if(processedClassData) {
             renderTables(processedClassData);
         }
     };
+
     function exportToCSV() {
         if (!processedClassData || !activeClass) {
             alert("Data not loaded or no class selected. Please wait and try again."); return;
