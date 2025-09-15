@@ -20,6 +20,16 @@
         .tab.active { border-color: #f59e0b; color: #f59e0b; }
         .btn-action { transition: background-color 0.2s, transform 0.1s; }
         .btn-action:active { transform: scale(0.95); }
+        @keyframes fade-in-right {
+            from { opacity: 0; transform: translateX(100%); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes fade-out-right {
+            from { opacity: 1; transform: translateX(0); }
+            to { opacity: 0; transform: translateX(100%); }
+        }
+        .animate-fade-in-right { animation: fade-in-right 0.5s ease-out forwards; }
+        .animate-fade-out-right { animation: fade-out-right 0.5s ease-in forwards; }
     </style>
 </head>
 <body class="bg-gray-900 text-white font-sans">
@@ -120,7 +130,7 @@
         
         try {
             const assignmentDoc = await db.collection("assignments").doc(assignmentId).get();
-            if (!assignmentDoc.exists) { alert("Error: Assignment not found!"); return; }
+            if (!assignmentDoc.exists) { showToast("Error: Assignment not found!", {color: 'red'}); return; }
             assignmentData = { id: assignmentDoc.id, ...assignmentDoc.data() };
             document.getElementById('assignmentName').textContent = assignmentData.name;
 
@@ -133,12 +143,12 @@
                 processAndRender(submissions);
               }, error => {
                 console.error("Real-time listener failed:", error);
-                alert("Connection to the database was lost. Please refresh the page.");
+                showToast("Connection to the database was lost. Please refresh.", {color: 'red', duration: 10000});
               });
 
         } catch (error) {
             console.error("Error loading initial data:", error);
-            alert("An error occurred while loading initial data. See console for details.");
+            showToast("An error occurred while loading initial data.", {color: 'red'});
         }
     }
 
@@ -158,6 +168,125 @@
         renderTables(classData);
     }
     
+    function renderTabs(classData) { /* ... unchanged ... */ }
+    function renderTables(classData) { /* ... unchanged ... */ }
+    function switchTab(className) { /* ... unchanged ... */ }
+    
+    const modal = document.getElementById('answerModal');
+    const modalTitle = document.getElementById('modalTitle');
+    const modalHeader = document.getElementById('modalHeader');
+    const modalContent = document.getElementById('modalContent');
+    document.getElementById('closeModal').onclick = () => modal.classList.add('hidden');
+
+    function showModalByStudent(student) { /* ... unchanged ... */ }
+    function showModalByQuestion(qNumber, className) { /* ... unchanged ... */ }
+    
+    // UPDATED: Answer History modal with editing capabilities
+    function showModalForAnswerHistory(studentName, qNumber, submissions) {
+        modalTitle.innerText = `Answer History for ${studentName} - Question ${qNumber}`;
+        modalHeader.classList.add('hidden');
+        modalContent.innerHTML = '';
+        if (!submissions || submissions.length === 0) {
+            modalContent.innerHTML = '<p class="text-gray-400">No attempts found.</p>';
+            modal.classList.remove('hidden');
+            return;
+        }
+        submissions.forEach(sub => {
+            const date = sub.timestamp ? new Date(sub.timestamp.seconds * 1000).toLocaleString() : 'Timestamp not available';
+            const answerDiv = document.createElement('div');
+            answerDiv.className = "mb-4 p-4 bg-gray-700 rounded-lg";
+            answerDiv.innerHTML = `
+                <div class="flex justify-between items-center mb-2 flex-wrap gap-2">
+                    <h3 class="text-gray-400 text-sm">${date}</h3>
+                    <div class="flex items-center gap-2">
+                        <input type="number" id="score-input-${sub.id}" value="${sub.score}" class="bg-gray-600 rounded p-1 w-20 text-center">
+                        <button onclick="saveManualScore('${sub.id}', document.getElementById('score-input-${sub.id}').value)" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-1 px-3 rounded btn-action">Save Score</button>
+                        <button onclick="rerunAutograder('${sub.id}')" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold py-1 px-3 rounded btn-action">Re-run Auto</button>
+                    </div>
+                </div>
+                <!-- NEW: Editable textarea for the answer -->
+                <textarea id="answer-text-${sub.id}" class="w-full h-32 p-2 bg-gray-600 rounded border border-gray-500 mt-2">${sub.answer}</textarea>
+                <button onclick="saveAnswerText('${sub.id}', document.getElementById('answer-text-${sub.id}').value)" class="w-full mt-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-1 px-3 rounded btn-action">Save Answer Text</button>
+            `;
+            modalContent.appendChild(answerDiv);
+        });
+        modal.classList.remove('hidden');
+    }
+    
+    function executeChecker(slideIndex, answer) { /* ... unchanged ... */ }
+    
+    async function saveManualScore(submissionId, newScoreStr) {
+        const newScore = parseInt(newScoreStr, 10);
+        if (isNaN(newScore) || newScore < 0 || newScore > 100) {
+            showToast("Please enter a valid score between 0 and 100.", {color: 'red'});
+            return;
+        }
+        try {
+            await db.collection("submissions").doc(submissionId).update({ score: newScore, isManualGrade: true });
+            showToast("Score updated successfully!", {color: 'green'});
+        } catch (error) {
+            console.error("Error saving manual score:", error);
+            showToast("Failed to save score.", {color: 'red'});
+        }
+    }
+
+    // NEW: Function to save edited answer text
+    async function saveAnswerText(submissionId, newAnswer) {
+        if (!newAnswer.trim()) {
+            showToast("Answer cannot be empty.", {color: 'red'});
+            return;
+        }
+        try {
+            await db.collection("submissions").doc(submissionId).update({ answer: newAnswer });
+            showToast("Answer text updated successfully!", {color: 'green'});
+        } catch (error) {
+            console.error("Error saving answer text:", error);
+            showToast("Failed to save answer text.", {color: 'red'});
+        }
+    }
+
+    async function rerunAutograder(submissionId) { /* ... unchanged ... */ }
+    async function bulkRegrade(slideIndex, className) { /* ... unchanged ... */ }
+    
+    document.getElementById('signOutButton').onclick = () => { /* ... unchanged ... */ };
+    document.getElementById('exportButton').onclick = exportToCSV;
+    document.getElementById('sortOptions').onchange = function(event) { /* ... unchanged ... */ };
+    function splitName(fullName) { /* ... unchanged ... */ }
+    function exportToCSV() { /* ... unchanged ... */ }
+
+    // NEW: Upgraded, dynamic toast function
+    function showToast(message, options = {}) {
+        const { color = 'default', duration = 3000 } = options;
+        const wrapper = document.getElementById('toast-wrapper');
+        if (!wrapper) return;
+        const toast = document.createElement('div');
+        toast.className = 'flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm animate-fade-in-right';
+        const colors = { default: 'bg-gray-700', green: 'bg-green-600', red: 'bg-red-600', blue: 'bg-blue-600' };
+        toast.classList.add(colors[color] || colors['default']);
+        const messageSpan = document.createElement('span');
+        messageSpan.textContent = message;
+        toast.appendChild(messageSpan);
+        const closeButton = document.createElement('button');
+        closeButton.innerHTML = '&times;';
+        closeButton.className = 'ml-4 text-2xl font-bold leading-none hover:text-gray-300 focus:outline-none';
+        let timeoutId = null;
+        const dismiss = () => {
+            if (timeoutId) clearTimeout(timeoutId);
+            toast.classList.remove('animate-fade-in-right');
+            toast.classList.add('animate-fade-out-right');
+            toast.addEventListener('animationend', () => toast.remove());
+        };
+        closeButton.onclick = dismiss;
+        toast.appendChild(closeButton);
+        wrapper.appendChild(toast);
+        timeoutId = setTimeout(dismiss, duration);
+    }
+</script>
+
+<!-- Unchanged utility functions -->
+<script>
+    // These functions are pasted here to ensure the main script block is not overly cluttered.
+    // In a production app, these would be in separate JS files.
     function renderTabs(classData) {
         const tabsContainer = document.getElementById('classTabs');
         tabsContainer.innerHTML = '';
@@ -177,7 +306,6 @@
             tabsContainer.appendChild(tab);
         });
     }
-
     function renderTables(classData) {
         const tablesContainer = document.getElementById('classTablesContainer');
         tablesContainer.innerHTML = '';
@@ -241,7 +369,6 @@
             tablesContainer.appendChild(tableWrapper);
         });
     }
-
     function switchTab(className) {
         activeClass = className;
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -249,13 +376,6 @@
         document.querySelectorAll('#classTablesContainer > div').forEach(t => t.classList.add('hidden'));
         document.getElementById(`table-${className.replace(/\s+/g, '-')}`).classList.remove('hidden');
     }
-    
-    const modal = document.getElementById('answerModal');
-    const modalTitle = document.getElementById('modalTitle');
-    const modalHeader = document.getElementById('modalHeader');
-    const modalContent = document.getElementById('modalContent');
-    document.getElementById('closeModal').onclick = () => modal.classList.add('hidden');
-
     function showModalByStudent(student) {
         const numQuestions = assignmentData.slideIds.length;
         modalTitle.innerText = `Latest Answers for ${student.name}`;
@@ -271,7 +391,6 @@
         }
         modal.classList.remove('hidden');
     }
-
     function showModalByQuestion(qNumber, className) {
         modalTitle.innerText = `All Latest Answers for Question ${qNumber} (${className})`;
         modalHeader.innerHTML = `<button onclick="bulkRegrade(${qNumber - 1}, '${className}')" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Re-grade All Answers for this Question</button>`;
@@ -287,67 +406,6 @@
         });
         modal.classList.remove('hidden');
     }
-    
-    function showModalForAnswerHistory(studentName, qNumber, submissions) {
-        modalTitle.innerText = `Answer History for ${studentName} - Question ${qNumber}`;
-        modalHeader.classList.add('hidden');
-        modalContent.innerHTML = '';
-        if (!submissions || submissions.length === 0) {
-            modalContent.innerHTML = '<p class="text-gray-400">No attempts found.</p>';
-            modal.classList.remove('hidden');
-            return;
-        }
-        submissions.forEach(sub => {
-            const date = sub.timestamp ? new Date(sub.timestamp.seconds * 1000).toLocaleString() : 'Timestamp not available';
-            const answerDiv = document.createElement('div');
-            answerDiv.className = "mb-4 p-4 bg-gray-700 rounded-lg";
-            answerDiv.innerHTML = `
-                <div class="flex justify-between items-center mb-2 flex-wrap gap-2">
-                    <h3 class="text-gray-400 text-sm">${date}</h3>
-                    <div class="flex items-center gap-2">
-                        <input type="number" id="score-input-${sub.id}" value="${sub.score}" class="bg-gray-600 rounded p-1 w-20 text-center">
-                        <button onclick="saveManualScore('${sub.id}', document.getElementById('score-input-${sub.id}').value)" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-1 px-3 rounded btn-action">Save</button>
-                        <button onclick="rerunAutograder('${sub.id}')" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold py-1 px-3 rounded btn-action">Re-run</button>
-                    </div>
-                </div>
-                <p class="text-gray-300 whitespace-pre-wrap mt-2">${sub.answer}</p>
-            `;
-            modalContent.appendChild(answerDiv);
-        });
-        modal.classList.remove('hidden');
-    }
-    
-    function executeChecker(slideIndex, answer) {
-        const funcName = `calc${slideIndex + 1}`;
-        const funcString = assignmentData.checkerFunctions?.[funcName];
-        if (funcString) {
-            try {
-                const checkerFunction = new Function('return ' + funcString)();
-                const dummyShowToast = () => {}; 
-                return checkerFunction(answer, dummyShowToast);
-            } catch (e) {
-                console.error(`Error in checker function ${funcName}:`, e);
-                return 0;
-            }
-        }
-        return 0;
-    }
-    
-    async function saveManualScore(submissionId, newScoreStr) {
-        const newScore = parseInt(newScoreStr, 10);
-        if (isNaN(newScore) || newScore < 0 || newScore > 100) {
-            alert("Please enter a valid score between 0 and 100.");
-            return;
-        }
-        try {
-            await db.collection("submissions").doc(submissionId).update({ score: newScore, isManualGrade: true });
-            showToast("Score updated successfully!", {color: 'green'});
-        } catch (error) {
-            console.error("Error saving manual score:", error);
-            showToast("Failed to save score.", {color: 'red'});
-        }
-    }
-
     async function rerunAutograder(submissionId) {
         try {
             const doc = await db.collection("submissions").doc(submissionId).get();
@@ -361,7 +419,6 @@
             showToast("Failed to re-grade.", {color: 'red'});
         }
     }
-
     async function bulkRegrade(slideIndex, className) {
         if (!confirm(`Are you sure you want to re-grade all answers for Question ${slideIndex + 1} in ${className}? This cannot be undone.`)) {
             return;
@@ -389,28 +446,36 @@
             showToast("Bulk re-grade failed. See console.", {color: 'red'});
         }
     }
-    
+    function executeChecker(slideIndex, answer) {
+        const funcName = `calc${slideIndex + 1}`;
+        const funcString = assignmentData.checkerFunctions?.[funcName];
+        if (funcString) {
+            try {
+                const checkerFunction = new Function('return ' + funcString)();
+                const dummyShowToast = () => {}; 
+                return checkerFunction(answer, dummyShowToast);
+            } catch (e) {
+                console.error(`Error in checker function ${funcName}:`, e);
+                return 0;
+            }
+        }
+        return 0;
+    }
     document.getElementById('signOutButton').onclick = () => {
         google.accounts.id.disableAutoSelect();
         location.reload();
     };
-
-    function showToast(message, options = {}) { const { color = 'default', duration = 3000 } = options; const wrapper = document.getElementById('toast-wrapper'); if (!wrapper) return; const toast = document.createElement('div'); toast.className = 'flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm animate-fade-in-right'; const colors = { default: 'bg-gray-700', green: 'bg-green-600', red: 'bg-red-600', blue: 'bg-blue-600' }; toast.classList.add(colors[color] || colors['default']); const messageSpan = document.createElement('span'); messageSpan.textContent = message; toast.appendChild(messageSpan); const closeButton = document.createElement('button'); closeButton.innerHTML = '&times;'; closeButton.className = 'ml-4 text-2xl font-bold leading-none hover:text-gray-300 focus:outline-none'; let timeoutId = null; const dismiss = () => { if (timeoutId) clearTimeout(timeoutId); toast.classList.remove('animate-fade-in-right'); toast.classList.add('animate-fade-out-right'); toast.addEventListener('animationend', () => toast.remove()); }; closeButton.onclick = dismiss; toast.appendChild(closeButton); wrapper.appendChild(toast); timeoutId = setTimeout(dismiss, duration); }
-    
     function splitName(fullName) { if (!fullName) return { firstName: '', lastName: '' }; const parts = fullName.trim().split(' '); if (parts.length === 1) return { firstName: parts[0], lastName: '' }; const lastName = parts.pop(); const firstName = parts.join(' '); return { firstName, lastName }; }
-    
     document.getElementById('exportButton').onclick = exportToCSV;
-    
     document.getElementById('sortOptions').onchange = function(event) {
         currentSortOrder = event.target.value;
         if(processedClassData) {
             renderTables(processedClassData);
         }
     };
-
     function exportToCSV() {
         if (!processedClassData || !activeClass) {
-            alert("Data not loaded or no class selected. Please wait and try again."); return;
+            showToast("Data not loaded or no class selected.", {color: 'red'}); return;
         }
         let csvContent = "data:text/csv;charset=utf-8,";
         const numQuestions = assignmentData.slideIds.length;
