@@ -81,7 +81,7 @@
     let assignmentData = null;
     let currentSlideIndex = 0;
     let userProfile = null;
-    let dynamicCheckers = {};
+    let checkerFunctionStrings = {}; // Will store the function strings from Firebase
 
     window.onload = async function() {
         const urlParams = new URLSearchParams(window.location.search);
@@ -102,13 +102,9 @@
             }
             assignmentData = { id: doc.id, ...doc.data() };
 
-            // Dynamically create checker functions from stored strings
+            // Just store the function strings, don't execute them yet
             if (assignmentData.checkerFunctions) {
-                for (const key in assignmentData.checkerFunctions) {
-                    const funcString = assignmentData.checkerFunctions[key];
-                    const body = funcString.substring(funcString.indexOf('{') + 1, funcString.lastIndexOf('}'));
-                    dynamicCheckers[key] = new Function('answer', 'showToast', body);
-                }
+                checkerFunctionStrings = assignmentData.checkerFunctions;
             }
             
             loader.classList.add('hidden');
@@ -217,7 +213,7 @@
             const submission = {
                 studentName: userProfile.name,
                 studentEmail: userProfile.email,
-                assignmentId: assignmentData.id, // Store which assignment this belongs to
+                assignmentId: assignmentData.id,
                 slideIndex: currentSlideIndex,
                 answer: studentAnswer,
                 score: score,
@@ -231,16 +227,22 @@
         }
     }
 
+    // --- UPDATED: The new, more robust checker logic ---
     function checkCurrentSlideAnswer(answer) {
         const funcName = `calc${currentSlideIndex + 1}`;
-        if (dynamicCheckers[funcName]) {
+        const funcString = checkerFunctionStrings[funcName];
+
+        if (funcString) {
             try {
-                // Pass `showToast` so the dynamic function can use it
-                return dynamicCheckers[funcName](answer, showToast);
+                // Create the function from the raw string stored in Firebase
+                const checkerFunction = new Function('return ' + funcString)();
+                
+                // Call the function with the student's answer and the toast utility
+                return checkerFunction(answer, showToast);
             } catch (e) {
                 console.error(`Error executing checker function ${funcName}:`, e);
-                showToast("Error in checking logic.");
-                return 0;
+                showToast("Error in the checking logic for this slide.");
+                return 0; // Return 0 if the teacher's code has an error
             }
         }
         showToast("No checking logic for this slide.");
