@@ -130,23 +130,17 @@
                 return;
             }
 
-            // Process data: group submissions by student
+            // Process data: group all submissions by student
             const studentData = {};
             submissions.forEach(sub => {
                 if (!studentData[sub.studentEmail]) {
                     studentData[sub.studentEmail] = {
                         name: sub.studentName,
-                        submissions: Array(NUM_QUESTIONS).fill(null) // Create empty slots for each question
+                        email: sub.studentEmail, // Store email for easier access
+                        submissions: []
                     };
                 }
-                // Place the submission in the correct slot based on slideIndex
-                // This ensures that only the latest submission for each question is shown
-                if (sub.slideIndex < NUM_QUESTIONS && !studentData[sub.studentEmail].submissions[sub.slideIndex]) {
-                    studentData[sub.studentEmail].submissions[sub.slideIndex] = {
-                        score: sub.score,
-                        answer: sub.answer
-                    };
-                }
+                studentData[sub.studentEmail].submissions.push(sub);
             });
 
             renderDashboard(studentData);
@@ -185,26 +179,37 @@
             const nameTd = document.createElement('td');
             nameTd.className = "p-4 font-medium cursor-pointer";
             nameTd.innerText = student.name;
-            nameTd.onclick = () => showModalByStudent(student, studentData);
+            nameTd.onclick = () => showModalByStudent(student);
             tr.appendChild(nameTd);
 
-            // Score cells for each question
-            student.submissions.forEach(sub => {
+            // Create score cells for each question
+            for (let i = 0; i < NUM_QUESTIONS; i++) {
                 const scoreTd = document.createElement('td');
                 scoreTd.className = "p-4 text-center";
-                if (sub) {
-                    const score = sub.score || 0;
-                    const color = score > 80 ? 'bg-green-500' : score > 50 ? 'bg-yellow-500' : 'bg-red-500';
+
+                // Find all submissions for this specific question
+                const submissionsForQuestion = student.submissions.filter(s => s.slideIndex === i);
+
+                if (submissionsForQuestion.length > 0) {
+                    // The first one is the latest because of our initial query
+                    const latestSubmission = submissionsForQuestion[0];
+                    const score = latestSubmission.score || 0;
+                    const color = score >= 90 ? 'bg-green-500' : score >= 60 ? 'bg-yellow-500' : 'bg-red-500';
+                    
+                    // Make the score bar clickable
                     scoreTd.innerHTML = `
-                        <div class="score-bar-bg w-full h-6 rounded-md overflow-hidden">
+                        <div class="score-bar-bg w-full h-6 rounded-md overflow-hidden cursor-pointer" onclick="showModalForAnswerHistory('${student.name}', ${i + 1}, JSON.stringify(this.submissionsForQuestion))">
                             <div class="score-bar h-full rounded-md ${color}" style="width: ${score}%"></div>
                         </div>
                     `;
+                    // Attach the data directly to the element for the onclick event
+                    scoreTd.querySelector('.score-bar-bg').submissionsForQuestion = submissionsForQuestion;
+
                 } else {
                     scoreTd.innerHTML = `<span class="text-gray-500">N/A</span>`;
                 }
                 tr.appendChild(scoreTd);
-            });
+            }
             tbody.appendChild(tr);
         }
     }
@@ -217,42 +222,80 @@
     document.getElementById('closeModal').onclick = () => modal.classList.add('hidden');
 
     function showModalByStudent(student) {
-        modalTitle.innerText = `Answers for ${student.name}`;
+        modalTitle.innerText = `Latest Answers for ${student.name}`;
         modalContent.innerHTML = ''; // Clear previous content
-        student.submissions.forEach((sub, index) => {
+
+        for (let i = 0; i < NUM_QUESTIONS; i++) {
+            const submissionsForQuestion = student.submissions.filter(s => s.slideIndex === i);
+            const latestSub = submissionsForQuestion.length > 0 ? submissionsForQuestion[0] : null;
+
             const answerDiv = document.createElement('div');
             answerDiv.className = "mb-6 p-4 bg-gray-700 rounded-lg";
-            const status = sub ? `<span class="font-bold text-lg ${sub.score === 100 ? 'text-green-400' : 'text-yellow-400'}">${sub.score}/100</span>` : '<span class="text-gray-500">No submission</span>';
+            const status = latestSub ? `<span class="font-bold text-lg ${latestSub.score === 100 ? 'text-green-400' : 'text-yellow-400'}">${latestSub.score}/100</span>` : '<span class="text-gray-500">No submission</span>';
             answerDiv.innerHTML = `
                 <div class="flex justify-between items-center mb-2">
-                    <h3 class="text-xl font-bold">Question ${index + 1}</h3>
+                    <h3 class="text-xl font-bold">Question ${i + 1}</h3>
                     ${status}
                 </div>
-                <p class="text-gray-300 whitespace-pre-wrap">${sub ? sub.answer : ''}</p>
+                <p class="text-gray-300 whitespace-pre-wrap">${latestSub ? latestSub.answer : ''}</p>
             `;
             modalContent.appendChild(answerDiv);
-        });
+        }
         modal.classList.remove('hidden');
     }
 
     function showModalByQuestion(qNumber, studentData) {
-        modalTitle.innerText = `All Answers for Question ${qNumber}`;
+        modalTitle.innerText = `All Latest Answers for Question ${qNumber}`;
         modalContent.innerHTML = ''; // Clear previous content
         for (const email in studentData) {
             const student = studentData[email];
-            const sub = student.submissions[qNumber - 1];
+            const submissionsForQuestion = student.submissions.filter(s => s.slideIndex === qNumber - 1);
+            const latestSub = submissionsForQuestion.length > 0 ? submissionsForQuestion[0] : null;
+
             const answerDiv = document.createElement('div');
             answerDiv.className = "mb-4 p-4 bg-gray-700 rounded-lg";
-            const status = sub ? `<span class="font-bold ${sub.score === 100 ? 'text-green-400' : 'text-yellow-400'}">${sub.score}/100</span>` : '<span class="text-gray-500">N/A</span>';
+            const status = latestSub ? `<span class="font-bold ${latestSub.score === 100 ? 'text-green-400' : 'text-yellow-400'}">${latestSub.score}/100</span>` : '<span class="text-gray-500">N/A</span>';
             answerDiv.innerHTML = `
                 <div class="flex justify-between items-center mb-2">
                     <h3 class="font-bold">${student.name}</h3>
                     ${status}
                 </div>
-                <p class="text-gray-300 whitespace-pre-wrap">${sub ? sub.answer : ''}</p>
+                <p class="text-gray-300 whitespace-pre-wrap">${latestSub ? latestSub.answer : ''}</p>
             `;
             modalContent.appendChild(answerDiv);
         }
+        modal.classList.remove('hidden');
+    }
+
+    // NEW FUNCTION: Shows all attempts for a single question by a single student
+    function showModalForAnswerHistory(studentName, qNumber, submissionsStr) {
+        const submissions = JSON.parse(submissionsStr);
+        modalTitle.innerText = `Answer History for ${studentName} - Question ${qNumber}`;
+        modalContent.innerHTML = ''; // Clear previous content
+
+        if (!submissions || submissions.length === 0) {
+            modalContent.innerHTML = '<p class="text-gray-400">No attempts found.</p>';
+            modal.classList.remove('hidden');
+            return;
+        }
+
+        // Submissions are already sorted newest to oldest from the initial query
+        submissions.forEach(sub => {
+            const date = sub.timestamp ? new Date(sub.timestamp.seconds * 1000).toLocaleString() : 'Timestamp not available';
+            const status = sub.score !== undefined ? `<span class="font-bold text-lg ${sub.score === 100 ? 'text-green-400' : 'text-yellow-400'}">${sub.score}/100</span>` : '';
+            
+            const answerDiv = document.createElement('div');
+            answerDiv.className = "mb-4 p-4 bg-gray-700 rounded-lg";
+            answerDiv.innerHTML = `
+                <div class="flex justify-between items-center mb-2">
+                    <h3 class="text-gray-400 text-sm">${date}</h3>
+                    ${status}
+                </div>
+                <p class="text-gray-300 whitespace-pre-wrap">${sub.answer}</p>
+            `;
+            modalContent.appendChild(answerDiv);
+        });
+
         modal.classList.remove('hidden');
     }
     
@@ -265,4 +308,5 @@
 </script>
 </body>
 </html>
+
 
