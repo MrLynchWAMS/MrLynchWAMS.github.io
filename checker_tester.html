@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Checker Function Tester</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        textarea { font-family: monospace; resize: vertical; }
+        @keyframes fade-in-right {
+            from { opacity: 0; transform: translateX(100%); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes fade-out-right {
+            from { opacity: 1; transform: translateX(0); }
+            to { opacity: 0; transform: translateX(100%); }
+        }
+        .animate-fade-in-right { animation: fade-in-right 0.5s ease-out forwards; }
+        .animate-fade-out-right { animation: fade-out-right 0.5s ease-in forwards; }
+    </style>
+</head>
+<body class="bg-gray-900 text-white font-sans">
+
+    <div class="container mx-auto p-4 md:p-8">
+        <h1 class="text-4xl font-bold text-yellow-400 mb-2">Checker Function Tester</h1>
+        <p class="text-gray-400 mb-8">A sandbox to test your auto-grading logic before adding it to an assignment.</p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <!-- Left Side: Code Input -->
+            <div class="bg-gray-800 p-6 rounded-lg shadow-xl">
+                <label for="checkerCode" class="block text-xl font-semibold mb-2">1. Paste Your Checker Function</label>
+                <p class="text-sm text-gray-400 mb-4">Make sure it's a complete function, e.g., `function calc1(answer, showToast) { ... }`</p>
+                <textarea id="checkerCode" class="w-full h-80 p-3 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500" placeholder="function calc1(studentAnswer, showToast) { ... }"></textarea>
+            </div>
+
+            <!-- Right Side: Testing Area -->
+            <div class="bg-gray-800 p-6 rounded-lg shadow-xl">
+                <label for="studentAnswer" class="block text-xl font-semibold mb-2">2. Enter a Sample Student Answer</label>
+                <textarea id="studentAnswer" class="w-full h-40 p-3 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500" placeholder="Type a sample student response here..."></textarea>
+                
+                <button onclick="runTest()" class="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-colors text-lg">
+                    3. Run Test
+                </button>
+
+                <div class="mt-6">
+                    <h3 class="text-xl font-semibold">Result:</h3>
+                    <div id="resultBox" class="mt-2 p-4 bg-gray-700 rounded-lg text-2xl font-bold text-center">
+                        --
+                    </div>
+                    <p id="errorBox" class="text-red-500 mt-2"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification Wrapper -->
+    <div id="toast-wrapper" class="fixed top-4 right-4 z-[100] space-y-3 w-full max-w-sm"></div>
+
+<script>
+    function runTest() {
+        const codeInput = document.getElementById('checkerCode').value;
+        const studentAnswer = document.getElementById('studentAnswer').value;
+        const resultBox = document.getElementById('resultBox');
+        const errorBox = document.getElementById('errorBox');
+
+        resultBox.textContent = "--";
+        errorBox.textContent = "";
+
+        if (!codeInput.trim()) {
+            errorBox.textContent = "Error: Checker function code is empty.";
+            return;
+        }
+
+        try {
+            // Create the function from the user's code string
+            const checkerFunction = new Function('return ' + codeInput)();
+            
+            // Run the function with the sample answer and the real showToast utility
+            const score = checkerFunction(studentAnswer, showToast);
+
+            resultBox.textContent = `Score: ${score}`;
+            resultBox.style.color = score === 100 ? '#48bb78' : '#f6ad55'; // green-500 or orange-400
+
+        } catch (e) {
+            console.error("Error executing checker function:", e);
+            errorBox.textContent = `Execution Error: ${e.message}`;
+        }
+    }
+
+    // The robust, dynamic toast function from your main app
+    function showToast(message, options = {}) {
+        const { color = 'default', duration = 5000 } = options;
+        const wrapper = document.getElementById('toast-wrapper');
+        if (!wrapper) return;
+
+        const toast = document.createElement('div');
+        toast.className = 'flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm animate-fade-in-right';
+
+        const colors = {
+            default: 'bg-gray-700',
+            green: 'bg-green-600',
+            red: 'bg-red-600',
+            blue: 'bg-blue-600'
+        };
+        toast.classList.add(colors[color] || colors['default']);
+
+        const messageSpan = document.createElement('span');
+        messageSpan.textContent = message;
+        toast.appendChild(messageSpan);
+        
+        const closeButton = document.createElement('button');
+        closeButton.innerHTML = '&times;';
+        closeButton.className = 'ml-4 text-2xl font-bold leading-none hover:text-gray-300 focus:outline-none';
+        
+        let timeoutId = null;
+
+        const dismiss = () => {
+            if (timeoutId) clearTimeout(timeoutId);
+            toast.classList.remove('animate-fade-in-right');
+            toast.classList.add('animate-fade-out-right');
+            toast.addEventListener('animationend', () => toast.remove());
+        };
+
+        closeButton.onclick = dismiss;
+        toast.appendChild(closeButton);
+        wrapper.appendChild(toast);
+        timeoutId = setTimeout(dismiss, duration);
+    }
+</script>
+</body>
+</html>
