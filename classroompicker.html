@@ -127,35 +127,36 @@
         }
     };
     
-    // NEW: Central function to start the student session after login
     async function initializeStudentSession() {
         document.getElementById('loginContainer').classList.add('hidden');
         const loader = document.getElementById('pageLoader');
         loader.classList.remove('hidden');
         loader.querySelector('h1').textContent = `Loading your work, ${userProfile.name.split(' ')[0]}...`;
         
-        await fetchStudentSubmissions(); // Fetch previous work
+        await fetchStudentSubmissions();
 
-        loader.classList.add('hidden'); // Hide loader
+        loader.classList.add('hidden');
         document.getElementById('mainContainer').classList.remove('hidden');
-        updateSlideDisplay(); // Show the first slide with restored work
+        updateSlideDisplay();
     }
 
-    // NEW: Function to fetch student's past submissions for this assignment
+    // UPDATED: Function to fetch student's past submissions
     async function fetchStudentSubmissions() {
         if (!userProfile || !assignmentData) return;
 
         try {
+            // FIX: Remove .orderBy() to avoid needing a composite index
             const q = db.collection("submissions")
                 .where("studentEmail", "==", userProfile.email)
-                .where("assignmentId", "==", assignmentData.id)
-                .orderBy("timestamp", "desc");
+                .where("assignmentId", "==", assignmentData.id);
             
             const querySnapshot = await q.get();
+            let submissions = querySnapshot.docs.map(doc => doc.data());
+
+            // FIX: Sort the results here in the browser instead of in the query
+            submissions.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
             
-            querySnapshot.docs.forEach(doc => {
-                const sub = doc.data();
-                // Only store the most recent submission for each slide
+            submissions.forEach(sub => {
                 if (sub.slideIndex !== undefined && !slideStates[sub.slideIndex]) {
                     slideStates[sub.slideIndex] = {
                         answer: sub.answer,
@@ -192,7 +193,7 @@
             } else {
                 const studentData = querySnapshot.docs[0].data();
                 userProfile = { name: studentData.name, email: studentData.email };
-                initializeStudentSession(); // MODIFIED
+                initializeStudentSession();
             }
         } catch (error) {
             console.error("Error signing in with passcode:", error);
@@ -206,7 +207,7 @@
         const profile = decodeJwtResponse(response.credential);
         if (profile) {
             userProfile = { name: profile.name, email: profile.email };
-            initializeStudentSession(); // MODIFIED
+            initializeStudentSession();
         } else {
             document.getElementById('loginError').textContent = "Google Sign-In failed. Please try again.";
         }
