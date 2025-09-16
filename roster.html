@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Roster Management</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
+    <style>
+        .hidden { display: none; }
+        .btn-action { transition: background-color 0.2s, transform 0.1s; }
+        .btn-action:active { transform: scale(0.95); }
+        @keyframes fade-in-right { from { opacity: 0; transform: translateX(100%); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes fade-out-right { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(100%); } }
+        .animate-fade-in-right { animation: fade-in-right 0.5s ease-out forwards; }
+        .animate-fade-out-right { animation: fade-out-right 0.5s ease-in forwards; }
+    </style>
+</head>
+<body class="bg-gray-900 text-white font-sans">
+
+    <div id="pageLoader" class="flex flex-col items-center justify-center h-screen">
+        <h1 class="text-4xl font-bold text-yellow-400 mb-4">Roster Management</h1>
+        <p id="loading-text" class="text-lg text-gray-300">Initializing...</p>
+        <div id="signInButtonContainer" class="hidden mt-8">
+             <div id="g_id_onload" data-client_id="1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com" data-callback="handleCredentialResponse"></div>
+             <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_black" data-text="signin_with" data-shape="rectangular" data-logo_alignment="left"></div>
+        </div>
+        <p id="auth-error" class="text-red-500 mt-4"></p>
+    </div>
+
+    <div id="rosterContent" class="hidden container mx-auto p-4 md:p-8">
+        <div class="flex justify-between items-center mb-6 flex-wrap gap-4">
+            <h1 class="text-3xl font-bold text-yellow-400">Class Rosters</h1>
+            <div>
+                <a href="./assignments.html" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg btn-action">&larr; All Assignments</a>
+                <button onclick="openStudentModal()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg btn-action">+ Add Student</button>
+                <button id="signOutButton" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Sign Out</button>
+            </div>
+        </div>
+        
+        <div id="loadingState" class="text-center py-10"><p class="text-xl">Loading rosters...</p></div>
+
+        <div id="rosterContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- Class roster cards will be dynamically added here -->
+        </div>
+    </div>
+
+    <!-- Add/Edit Student Modal -->
+    <div id="studentModal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
+        <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-lg">
+            <div class="flex justify-between items-center p-4 border-b border-gray-700">
+                <h2 id="modalTitle" class="text-2xl font-bold text-yellow-400">Add Student</h2>
+                <button onclick="closeStudentModal()" class="text-gray-400 hover:text-white text-3xl">&times;</button>
+            </div>
+            <div class="p-6">
+                <input type="hidden" id="studentId">
+                <label for="studentName" class="block text-sm font-medium text-gray-300 mb-2">Full Name</label>
+                <input type="text" id="studentName" class="w-full p-3 mb-4 bg-gray-700 rounded border border-gray-600">
+                
+                <label for="studentEmail" class="block text-sm font-medium text-gray-300 mb-2">Email Address</label>
+                <input type="email" id="studentEmail" class="w-full p-3 mb-4 bg-gray-700 rounded border border-gray-600">
+
+                <label for="studentPasscode" class="block text-sm font-medium text-gray-300 mb-2">Passcode</label>
+                <input type="text" id="studentPasscode" class="w-full p-3 mb-4 bg-gray-700 rounded border border-gray-600">
+                
+                <label for="studentClass" class="block text-sm font-medium text-gray-300 mb-2">Class</label>
+                <input type="text" id="studentClass" class="w-full p-3 mb-4 bg-gray-700 rounded border border-gray-600">
+                
+                <p id="modal-error" class="text-red-500 mb-4"></p>
+                <button onclick="handleSaveStudent()" id="saveStudentBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg btn-action">Save Student</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast-wrapper" class="fixed top-4 right-4 z-[100] space-y-3 w-full max-w-sm"></div>
+
+<script>
+    const TEACHER_EMAILS = ["klynch@mtps.us"];
+    const firebaseConfig = {
+      apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
+      authDomain: "mrlynch-slides-app.firebaseapp.com",
+      projectId: "mrlynch-slides-app",
+      storageBucket: "mrlynch-slides-app.appspot.com",
+      messagingSenderId: "223179627035",
+      appId: "1:223179627035:web:ff0f538f3029d829c3f6be"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    const auth = firebase.auth();
+
+    auth.onAuthStateChanged(user => {
+        if (user && TEACHER_EMAILS.map(e => e.toLowerCase()).includes(user.email.toLowerCase())) {
+            document.getElementById('pageLoader').classList.add('hidden');
+            document.getElementById('rosterContent').classList.remove('hidden');
+            loadRoster();
+        } else {
+            document.getElementById('loading-text').textContent = "Please sign in to continue.";
+            document.getElementById('signInButtonContainer').classList.remove('hidden');
+        }
+    });
+
+    function handleCredentialResponse(response) {
+        const credential = firebase.auth.GoogleAuthProvider.credential(response.credential);
+        auth.signInWithCredential(credential).catch(error => {
+            console.error("Firebase sign-in error", error);
+            document.getElementById('auth-error').innerText = "Firebase sign-in failed. Please try again.";
+        });
+    }
+
+    async function loadRoster() {
+        const rosterContainer = document.getElementById('rosterContainer');
+        const loadingState = document.getElementById('loadingState');
+        
+        db.collection("students").onSnapshot(snapshot => {
+            if (snapshot.empty) {
+                loadingState.innerText = "No students found. Click '+ Add Student' to build your roster.";
+                loadingState.classList.remove('hidden');
+                rosterContainer.innerHTML = '';
+                return;
+            }
+            
+            loadingState.classList.add('hidden');
+            const students = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+            const classData = {};
+            students.forEach(student => {
+                const className = student.class || 'Unassigned';
+                if (!classData[className]) {
+                    classData[className] = [];
+                }
+                classData[className].push(student);
+            });
+
+            renderRoster(classData);
+
+        }, error => {
+            console.error("Error fetching roster:", error);
+            loadingState.innerText = "Error loading roster. See console for details.";
+        });
+    }
+
+    function renderRoster(classData) {
+        const rosterContainer = document.getElementById('rosterContainer');
+        rosterContainer.innerHTML = '';
+        const classNames = Object.keys(classData).sort();
+
+        classNames.forEach(className => {
+            const classCard = document.createElement('div');
+            classCard.className = "bg-gray-800 rounded-lg p-6 shadow-lg";
+            
+            let studentListHTML = '';
+            classData[className]
+                .sort((a,b) => a.name.localeCompare(b.name))
+                .forEach(student => {
+                studentListHTML += `
+                    <li class="flex justify-between items-center py-2 border-b border-gray-700">
+                        <div>
+                            <p class="font-medium">${student.name}</p>
+                            <p class="text-sm text-gray-400">${student.email}</p>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick='openStudentModal(${JSON.stringify(student)})' class="text-blue-400 hover:text-blue-300 text-sm">Edit</button>
+                            <button onclick="handleDeleteStudent('${student.id}', '${student.name}')" class="text-red-400 hover:text-red-300 text-sm">Delete</button>
+                        </div>
+                    </li>
+                `;
+            });
+
+            classCard.innerHTML = `
+                <h2 class="text-2xl font-bold text-yellow-400 mb-4">${className}</h2>
+                <ul class="space-y-2">${studentListHTML}</ul>
+            `;
+            rosterContainer.appendChild(classCard);
+        });
+    }
+
+    const studentModal = document.getElementById('studentModal');
+    const modalTitle = document.getElementById('modalTitle');
+    function openStudentModal(student = null) {
+        // Reset form
+        document.getElementById('studentId').value = '';
+        document.getElementById('studentName').value = '';
+        document.getElementById('studentEmail').value = '';
+        document.getElementById('studentPasscode').value = '';
+        document.getElementById('studentClass').value = '';
+        document.getElementById('modal-error').innerText = '';
+
+        if (student) { // Editing existing student
+            modalTitle.innerText = "Edit Student";
+            document.getElementById('studentId').value = student.id;
+            document.getElementById('studentName').value = student.name;
+            document.getElementById('studentEmail').value = student.email;
+            document.getElementById('studentPasscode').value = student.passcode;
+            document.getElementById('studentClass').value = student.class;
+        } else { // Adding new student
+            modalTitle.innerText = "Add Student";
+        }
+        studentModal.classList.remove('hidden');
+    }
+
+    function closeStudentModal() { studentModal.classList.add('hidden'); }
+
+    async function handleSaveStudent() {
+        const id = document.getElementById('studentId').value;
+        const student = {
+            name: document.getElementById('studentName').value.trim(),
+            email: document.getElementById('studentEmail').value.toLowerCase().trim(),
+            passcode: parseInt(document.getElementById('studentPasscode').value.trim(), 10),
+            class: document.getElementById('studentClass').value.trim()
+        };
+
+        if (!student.name || !student.email || !student.passcode || !student.class) {
+            document.getElementById('modal-error').innerText = "All fields are required.";
+            return;
+        }
+        if (isNaN(student.passcode)) {
+            document.getElementById('modal-error').innerText = "Passcode must be a number.";
+            return;
+        }
+
+        try {
+            if (id) { // Update existing
+                await db.collection("students").doc(id).update(student);
+                showToast("Student updated successfully!", {color: 'green'});
+            } else { // Create new
+                await db.collection("students").add(student);
+                showToast("Student added successfully!", {color: 'green'});
+            }
+            closeStudentModal();
+        } catch (error) {
+            console.error("Error saving student:", error);
+            document.getElementById('modal-error').innerText = "Could not save student. See console for details.";
+        }
+    }
+
+    async function handleDeleteStudent(id, name) {
+        if (confirm(`Are you sure you want to delete ${name}? This action cannot be undone.`)) {
+            try {
+                await db.collection("students").doc(id).delete();
+                showToast("Student deleted successfully.", {color: 'blue'});
+            } catch (error) {
+                console.error("Error deleting student:", error);
+                showToast("Could not delete student.", {color: 'red'});
+            }
+        }
+    }
+    
+    document.getElementById('signOutButton').onclick = () => { auth.signOut(); };
+    function showToast(message, options = {}) { const { color = 'default', duration = 3000 } = options; const wrapper = document.getElementById('toast-wrapper'); if (!wrapper) return; const toast = document.createElement('div'); toast.className = 'flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm animate-fade-in-right'; const colors = { default: 'bg-gray-700', green: 'bg-green-600', red: 'bg-red-600', blue: 'bg-blue-600' }; toast.classList.add(colors[color] || colors['default']); const messageSpan = document.createElement('span'); messageSpan.textContent = message; toast.appendChild(messageSpan); const closeButton = document.createElement('button'); closeButton.innerHTML = '&times;'; closeButton.className = 'ml-4 text-2xl font-bold leading-none hover:text-gray-300 focus:outline-none'; let timeoutId = null; const dismiss = () => { if (timeoutId) clearTimeout(timeoutId); toast.classList.remove('animate-fade-in-right'); toast.classList.add('animate-fade-out-right'); toast.addEventListener('animationend', () => toast.remove()); }; closeButton.onclick = dismiss; toast.appendChild(closeButton); wrapper.appendChild(toast); timeoutId = setTimeout(dismiss, duration); }
+</script>
+</body>
+</html>
