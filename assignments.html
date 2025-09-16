@@ -13,6 +13,10 @@
         .hidden { display: none; }
         .btn-action { transition: background-color 0.2s, transform 0.1s; }
         .btn-action:active { transform: scale(0.95); }
+        @keyframes fade-in-right { from { opacity: 0; transform: translateX(100%); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes fade-out-right { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(100%); } }
+        .animate-fade-in-right { animation: fade-in-right 0.5s ease-out forwards; }
+        .animate-fade-out-right { animation: fade-out-right 0.5s ease-in forwards; }
     </style>
 </head>
 <body class="bg-gray-900 text-white font-sans">
@@ -71,7 +75,15 @@
 
 <script>
     const TEACHER_EMAILS = ["klynch@mtps.us"];
-    const firebaseConfig = { /* ... */ };
+    // --- FIX: Restored the full Firebase configuration object ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
+      authDomain: "mrlynch-slides-app.firebaseapp.com",
+      projectId: "mrlynch-slides-app",
+      storageBucket: "mrlynch-slides-app.appspot.com",
+      messagingSenderId: "223179627035",
+      appId: "1:223179627035:web:ff0f538f3029d829c3f6be"
+    };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
     const auth = firebase.auth();
@@ -187,7 +199,12 @@
         });
     }
 
-    function closeCreateModal() { /* ... unchanged ... */ }
+    function closeCreateModal() { 
+        createModal.classList.add('hidden'); 
+        document.getElementById('assignmentName').value = '';
+        document.getElementById('slidesLink').value = '';
+        document.getElementById('modal-error').innerText = '';
+    }
     async function handleCreateAssignment() {
         const name = document.getElementById('assignmentName').value.trim();
         const link = document.getElementById('slidesLink').value.trim();
@@ -214,7 +231,7 @@
                 name: name,
                 presentationId: presentationId,
                 assignedClasses: selectedClasses,
-                status: 'open', // Default status
+                status: 'open',
                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });
             closeCreateModal();
@@ -251,16 +268,6 @@
     }
 
     document.getElementById('signOutButton').onclick = () => { auth.signOut(); };
-    function showToast(message, options = {}) { /* ... unchanged ... */ }
-</script>
-<!-- Unchanged utility functions -->
-<script>
-    function closeCreateModal() { 
-        createModal.classList.add('hidden'); 
-        document.getElementById('assignmentName').value = '';
-        document.getElementById('slidesLink').value = '';
-        document.getElementById('modal-error').innerText = '';
-    }
     function showToast(message, options = {}) { const { color = 'default', duration = 3000 } = options; const wrapper = document.getElementById('toast-wrapper'); if (!wrapper) return; const toast = document.createElement('div'); toast.className = 'flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm animate-fade-in-right'; const colors = { default: 'bg-gray-700', green: 'bg-green-600', red: 'bg-red-600', blue: 'bg-blue-600' }; toast.classList.add(colors[color] || colors['default']); const messageSpan = document.createElement('span'); messageSpan.textContent = message; toast.appendChild(messageSpan); const closeButton = document.createElement('button'); closeButton.innerHTML = '&times;'; closeButton.className = 'ml-4 text-2xl font-bold leading-none hover:text-gray-300 focus:outline-none'; let timeoutId = null; const dismiss = () => { if (timeoutId) clearTimeout(timeoutId); toast.classList.remove('animate-fade-in-right'); toast.classList.add('animate-fade-out-right'); toast.addEventListener('animationend', () => toast.remove()); }; closeButton.onclick = dismiss; toast.appendChild(closeButton); wrapper.appendChild(toast); timeoutId = setTimeout(dismiss, duration); }
 </script>
 </body>
