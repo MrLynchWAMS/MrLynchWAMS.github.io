@@ -8,10 +8,11 @@
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore-compat.js"></script>
-    <!-- NEW: Firebase Auth script -->
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
     <style>
         .hidden { display: none; }
+        .btn-action { transition: background-color 0.2s, transform 0.1s; }
+        .btn-action:active { transform: scale(0.95); }
     </style>
 </head>
 <body class="bg-gray-900 text-white font-sans">
@@ -26,21 +27,22 @@
         </div>
     </div>
 
-    <!-- MAIN DASHBOARD CONTENT -->
     <div id="assignmentContent" class="hidden container mx-auto p-4 md:p-8">
         <div class="flex justify-between items-center mb-6 flex-wrap gap-4">
             <h1 class="text-3xl font-bold text-yellow-400">Your Assignments</h1>
-            <button id="signOutButton" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Sign Out</button>
+            <div>
+                <a href="./roster.html" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Manage Roster</a>
+                <button id="signOutButton" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Sign Out</button>
+            </div>
         </div>
         
         <div id="loadingState" class="text-center py-10"><p class="text-xl">Loading assignments...</p></div>
 
-        <div id="assignmentsList" class="grid grid-cols-1 md-grid-cols-2 lg:grid-cols-3 gap-6">
+        <div id="assignmentsList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <!-- Assignment cards and the "Create New" card will be dynamically added here -->
         </div>
     </div>
 
-    <!-- CREATE ASSIGNMENT MODAL -->
     <div id="createModal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
         <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-lg">
             <div class="flex justify-between items-center p-4 border-b border-gray-700">
@@ -49,43 +51,39 @@
             </div>
             <div class="p-6">
                 <label for="assignmentName" class="block text-sm font-medium text-gray-300 mb-2">Assignment Name</label>
-                <input type="text" id="assignmentName" placeholder="e.g., Chapter 5 Review" class="w-full p-3 mb-4 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500">
+                <input type="text" id="assignmentName" placeholder="e.g., Chapter 5 Review" class="w-full p-3 mb-4 bg-gray-700 rounded border border-gray-600">
                 
                 <label for="slidesLink" class="block text-sm font-medium text-gray-300 mb-2">Google Slides Share Link</label>
-                <input type="text" id="slidesLink" placeholder="Paste the full URL from Google Slides" class="w-full p-3 mb-4 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500">
+                <input type="text" id="slidesLink" placeholder="Paste the full URL from Google Slides" class="w-full p-3 mb-4 bg-gray-700 rounded border border-gray-600">
                 
+                <label class="block text-sm font-medium text-gray-300 mb-2">Assign to Classes</label>
+                <div id="class-checkboxes" class="space-y-2 mb-4 p-3 bg-gray-700 rounded-md max-h-40 overflow-y-auto">
+                    <!-- Checkboxes will be dynamically added here -->
+                </div>
+
                 <p id="modal-error" class="text-red-500 mb-4"></p>
-                <button onclick="handleCreateAssignment()" id="createAssignmentBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-colors">Create Assignment</button>
+                <button onclick="handleCreateAssignment()" id="createAssignmentBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg btn-action">Create Assignment</button>
             </div>
         </div>
     </div>
+    
+    <div id="toast-wrapper" class="fixed top-4 right-4 z-[100] space-y-3 w-full max-w-sm"></div>
 
 <script>
-    const TEACHER_EMAILS = ["klynch@mtps.us"]; 
-    const firebaseConfig = {
-      apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
-      authDomain: "mrlynch-slides-app.firebaseapp.com",
-      projectId: "mrlynch-slides-app",
-      storageBucket: "mrlynch-slides-app.appspot.com",
-      messagingSenderId: "223179627035",
-      appId: "1:223179627035:web:ff0f538f3029d829c3f6be"
-    };
+    const TEACHER_EMAILS = ["klynch@mtps.us"];
+    const firebaseConfig = { /* ... */ };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
-    const auth = firebase.auth(); // NEW: Get auth instance
+    const auth = firebase.auth();
 
-    // NEW: Central authentication handler
     auth.onAuthStateChanged(user => {
         if (user && TEACHER_EMAILS.map(e => e.toLowerCase()).includes(user.email.toLowerCase())) {
-            // User is signed in and is a teacher
             document.getElementById('pageLoader').classList.add('hidden');
             document.getElementById('assignmentContent').classList.remove('hidden');
             loadAssignments();
         } else {
-            // User is not signed in or not a teacher
             document.getElementById('loading-text').textContent = "Please sign in to continue.";
             document.getElementById('signInButtonContainer').classList.remove('hidden');
-            document.getElementById('assignmentContent').classList.add('hidden');
         }
     });
 
@@ -114,15 +112,30 @@
                 const card = document.createElement('div');
                 card.className = "bg-gray-800 rounded-lg p-6 shadow-lg flex flex-col justify-between";
                 const date = assignment.createdAt ? new Date(assignment.createdAt.seconds * 1000).toLocaleDateString() : 'No date';
+                const status = assignment.status === 'closed' ? 
+                    '<span class="text-xs font-semibold inline-block py-1 px-2 uppercase rounded-full text-red-600 bg-red-200">Closed</span>' :
+                    '<span class="text-xs font-semibold inline-block py-1 px-2 uppercase rounded-full text-green-600 bg-green-200">Open</span>';
+                
+                const assignedClasses = assignment.assignedClasses?.join(', ') || 'All Classes';
+
                 card.innerHTML = `
                     <div>
-                        <h3 class="text-2xl font-bold text-yellow-400 mb-2">${assignment.name}</h3>
-                        <p class="text-gray-400 text-sm">Created: ${date}</p>
-                        <p class="text-gray-500 text-xs mt-2 truncate">Presentation ID: ${assignment.presentationId}</p>
+                        <div class="flex justify-between items-start">
+                            <h3 class="text-2xl font-bold text-yellow-400 mb-2">${assignment.name}</h3>
+                            ${status}
+                        </div>
+                        <p class="text-gray-400 text-sm">Assigned to: ${assignedClasses}</p>
+                        <p class="text-gray-500 text-xs mt-2">Created: ${date}</p>
                     </div>
-                    <div class="mt-4 pt-4 border-t border-gray-700 flex justify-between gap-2">
-                        <a href="./dashboard.html?assignmentId=${assignment.id}" class="flex-1 text-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-3 rounded-lg transition-colors">View Results</a>
-                        <a href="./editor.html?id=${assignment.id}" class="flex-1 text-center bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded-lg transition-colors">Edit Assignment</a>
+                    <div class="mt-4 pt-4 border-t border-gray-700 flex flex-col gap-2">
+                        <div class="flex justify-between gap-2">
+                            <a href="./dashboard.html?assignmentId=${assignment.id}" class="flex-1 text-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-3 rounded-lg btn-action">View Results</a>
+                            <a href="./editor.html?id=${assignment.id}" class="flex-1 text-center bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded-lg btn-action">Edit</a>
+                        </div>
+                        <div class="flex justify-between gap-2">
+                             <button onclick="toggleAssignmentStatus('${assignment.id}', '${assignment.status || 'open'}')" class="flex-1 text-center ${assignment.status === 'closed' ? 'bg-green-600 hover:bg-green-700' : 'bg-yellow-600 hover:bg-yellow-700'} text-white font-bold py-2 px-3 rounded-lg btn-action">${assignment.status === 'closed' ? 'Re-open' : 'Close'}</button>
+                             <button onclick="deleteAssignment('${assignment.id}', '${assignment.name}')" class="flex-1 text-center bg-red-700 hover:bg-red-800 text-white font-bold py-2 px-3 rounded-lg btn-action">Delete</button>
+                        </div>
                     </div>
                 `;
                 listContainer.appendChild(card);
@@ -132,61 +145,123 @@
             loadingState.innerText = "Error loading assignments. See console for details.";
         } finally {
             const createCard = document.createElement('div');
-            createCard.className = "bg-gray-800 hover:bg-gray-700/50 border-2 border-dashed border-gray-600 rounded-lg flex items-center justify-center min-h-[12rem] cursor-pointer transition-all";
+            createCard.className = "bg-gray-800 hover:bg-gray-700/50 border-2 border-dashed border-gray-600 rounded-lg flex items-center justify-center min-h-[16rem] cursor-pointer transition-all";
             createCard.onclick = openCreateModal;
-            createCard.innerHTML = `
-                <div class="text-center">
-                    <span class="text-5xl text-gray-500">+</span>
-                    <p class="text-xl font-semibold text-gray-400 mt-2">Create New Assignment</p>
-                </div>
-            `;
+            createCard.innerHTML = `<div class="text-center"><span class="text-5xl text-gray-500">+</span><p class="text-xl font-semibold text-gray-400 mt-2">Create New Assignment</p></div>`;
             listContainer.appendChild(createCard);
         }
     }
 
     const createModal = document.getElementById('createModal');
-    function openCreateModal() { createModal.classList.remove('hidden'); }
-    function closeCreateModal() { 
-        createModal.classList.add('hidden'); 
-        document.getElementById('assignmentName').value = '';
-        document.getElementById('slidesLink').value = '';
-        document.getElementById('modal-error').innerText = '';
+    async function openCreateModal() {
+        const checkboxContainer = document.getElementById('class-checkboxes');
+        checkboxContainer.innerHTML = '<p class="text-gray-400">Loading classes...</p>';
+        try {
+            const studentSnapshot = await db.collection("students").get();
+            const students = studentSnapshot.docs.map(doc => doc.data());
+            const classNames = [...new Set(students.map(s => s.class))].sort();
+            
+            if (classNames.length > 0) {
+                let checkboxesHTML = '<div class="flex items-center"><input id="assign-all" type="checkbox" class="h-4 w-4 rounded border-gray-300" onchange="toggleAllClasses(this.checked)"><label for="assign-all" class="ml-2 block text-sm font-bold">Assign to All Classes</label></div><hr class="my-2 border-gray-600">';
+                classNames.forEach(className => {
+                    checkboxesHTML += `
+                        <div class="flex items-center">
+                            <input id="class-${className}" name="class" value="${className}" type="checkbox" class="h-4 w-4 rounded border-gray-300">
+                            <label for="class-${className}" class="ml-2 block text-sm">${className}</label>
+                        </div>
+                    `;
+                });
+                checkboxContainer.innerHTML = checkboxesHTML;
+            } else {
+                checkboxContainer.innerHTML = '<p class="text-gray-400">No classes found in roster.</p>';
+            }
+        } catch (error) {
+            console.error("Error fetching classes:", error);
+            checkboxContainer.innerHTML = '<p class="text-red-500">Could not load classes.</p>';
+        }
+        createModal.classList.remove('hidden');
+    }
+    function toggleAllClasses(checked) {
+        document.querySelectorAll('input[name="class"]').forEach(checkbox => {
+            checkbox.checked = checked;
+        });
     }
 
+    function closeCreateModal() { /* ... unchanged ... */ }
     async function handleCreateAssignment() {
         const name = document.getElementById('assignmentName').value.trim();
         const link = document.getElementById('slidesLink').value.trim();
         const errorP = document.getElementById('modal-error');
         errorP.innerText = '';
-        if (!name || !link) {
-            errorP.innerText = "Please fill out both fields."; return;
+        
+        const selectedClasses = Array.from(document.querySelectorAll('input[name="class"]:checked')).map(cb => cb.value);
+
+        if (!name || !link || selectedClasses.length === 0) {
+            errorP.innerText = "Please fill out all fields and select at least one class.";
+            return;
         }
+
         const presentationIdRegex = /presentation\/d\/([a-zA-Z0-9-_]+)/;
         const match = link.match(presentationIdRegex);
         if (!match || !match[1]) {
-            errorP.innerText = "Invalid Google Slides link. Please use the full share URL."; return;
+            errorP.innerText = "Invalid Google Slides link."; return;
         }
         const presentationId = match[1];
+
         try {
             document.getElementById('createAssignmentBtn').innerText = "Creating...";
             await db.collection("assignments").add({
                 name: name,
                 presentationId: presentationId,
+                assignedClasses: selectedClasses,
+                status: 'open', // Default status
                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });
             closeCreateModal();
             loadAssignments();
         } catch (error) {
             console.error("Error creating assignment:", error);
-            errorP.innerText = "Could not create assignment. See console for details.";
+            errorP.innerText = "Could not create assignment.";
         } finally {
             document.getElementById('createAssignmentBtn').innerText = "Create Assignment";
         }
     }
 
-    document.getElementById('signOutButton').onclick = () => {
-        auth.signOut();
-    };
+    async function toggleAssignmentStatus(id, currentStatus) {
+        const newStatus = currentStatus === 'open' ? 'closed' : 'open';
+        try {
+            await db.collection("assignments").doc(id).update({ status: newStatus });
+            showToast(`Assignment marked as ${newStatus}.`, {color: 'blue'});
+        } catch (error) {
+            console.error("Error updating status:", error);
+            showToast("Could not update status.", {color: 'red'});
+        }
+    }
+    
+    async function deleteAssignment(id, name) {
+        if (confirm(`Are you sure you want to permanently delete the assignment "${name}"? This action cannot be undone.`)) {
+             try {
+                await db.collection("assignments").doc(id).delete();
+                showToast("Assignment deleted.", {color: 'blue'});
+            } catch (error) {
+                console.error("Error deleting assignment:", error);
+                showToast("Could not delete assignment.", {color: 'red'});
+            }
+        }
+    }
+
+    document.getElementById('signOutButton').onclick = () => { auth.signOut(); };
+    function showToast(message, options = {}) { /* ... unchanged ... */ }
+</script>
+<!-- Unchanged utility functions -->
+<script>
+    function closeCreateModal() { 
+        createModal.classList.add('hidden'); 
+        document.getElementById('assignmentName').value = '';
+        document.getElementById('slidesLink').value = '';
+        document.getElementById('modal-error').innerText = '';
+    }
+    function showToast(message, options = {}) { const { color = 'default', duration = 3000 } = options; const wrapper = document.getElementById('toast-wrapper'); if (!wrapper) return; const toast = document.createElement('div'); toast.className = 'flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm animate-fade-in-right'; const colors = { default: 'bg-gray-700', green: 'bg-green-600', red: 'bg-red-600', blue: 'bg-blue-600' }; toast.classList.add(colors[color] || colors['default']); const messageSpan = document.createElement('span'); messageSpan.textContent = message; toast.appendChild(messageSpan); const closeButton = document.createElement('button'); closeButton.innerHTML = '&times;'; closeButton.className = 'ml-4 text-2xl font-bold leading-none hover:text-gray-300 focus:outline-none'; let timeoutId = null; const dismiss = () => { if (timeoutId) clearTimeout(timeoutId); toast.classList.remove('animate-fade-in-right'); toast.classList.add('animate-fade-out-right'); toast.addEventListener('animationend', () => toast.remove()); }; closeButton.onclick = dismiss; toast.appendChild(closeButton); wrapper.appendChild(toast); timeoutId = setTimeout(dismiss, duration); }
 </script>
 </body>
 </html>
