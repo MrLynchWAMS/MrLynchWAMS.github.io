@@ -5,11 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Assignment Editor</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Both Google scripts are needed: GSI for sign-in, GAPI for API calls -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://apis.google.com/js/api.js" async defer></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
     <style>
         .hidden { display: none; }
         textarea { font-family: monospace; resize: vertical; }
@@ -21,18 +21,16 @@
 </head>
 <body class="bg-gray-900 text-white font-sans">
 
-    <!-- SIGN-IN & LOADING STATES -->
     <div id="page-loader" class="flex flex-col items-center justify-center h-screen">
         <h1 class="text-4xl font-bold text-yellow-400 mb-4">Assignment Editor</h1>
-        <p id="loading-text" class="text-lg text-gray-300">Please sign in to continue...</p>
-        <div id="signInButtonContainer" class="mt-8">
-             <div id="g_id_onload" data-client_id="1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com" data-callback="handleCredentialResponse" data-auto_select="true"></div>
+        <p id="loading-text" class="text-lg text-gray-300">Initializing...</p>
+        <div id="signInButtonContainer" class="hidden mt-8">
+             <div id="g_id_onload" data-client_id="1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com" data-callback="handleCredentialResponse"></div>
              <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_black" data-text="signin_with" data-shape="rectangular" data-logo_alignment="left"></div>
         </div>
         <p id="auth-error" class="text-red-500 mt-4"></p>
     </div>
 
-    <!-- MAIN EDITOR CONTENT -->
     <div id="editorContent" class="hidden container mx-auto p-4 md:p-8">
         <div class="flex justify-between items-center mb-6 flex-wrap gap-4">
             <h1 id="assignmentTitle" class="text-3xl font-bold text-yellow-400"></h1>
@@ -42,22 +40,18 @@
                 <button id="signOutButton" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Sign Out</button>
             </div>
         </div>
-
         <div class="bg-gray-800 p-4 rounded-lg mb-6">
             <h2 class="text-xl font-semibold mb-2">Student Link</h2>
             <p class="text-gray-400 mb-2">Share this link with your students to have them complete this assignment.</p>
             <input id="shareLink" type="text" readonly class="w-full p-2 bg-gray-700 border border-gray-600 rounded">
         </div>
-
-        <div id="slidesContainer" class="space-y-8">
-            <!-- Slides and editor boxes will be dynamically added here -->
-        </div>
+        <div id="slidesContainer" class="space-y-8"></div>
     </div>
 
     <div id="toast"></div>
 
 <script>
-    const TEACHER_EMAIL = "klynch@mtps.us";
+    const TEACHER_EMAILS = ["klynch@mtps.us"];
     const CLIENT_ID = "1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com";
     const SCOPES = "https://www.googleapis.com/auth/presentations.readonly";
     const firebaseConfig = {
@@ -70,31 +64,46 @@
     };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
+    const auth = firebase.auth();
 
     let assignmentId = null;
     let assignmentData = null;
     let tokenClient;
 
-    function decodeJwtResponse(token) { try { const base64Url = token.split('.')[1]; const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/'); const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) { return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2); }).join('')); return JSON.parse(jsonPayload); } catch (e) { return null; } }
+    auth.onAuthStateChanged(user => {
+        if (user && TEACHER_EMAILS.map(e => e.toLowerCase()).includes(user.email.toLowerCase())) {
+            authorizeGapi();
+        } else {
+            document.getElementById('loading-text').textContent = "Please sign in to continue.";
+            document.getElementById('signInButtonContainer').classList.remove('hidden');
+        }
+    });
 
     function handleCredentialResponse(response) {
-        const userProfile = decodeJwtResponse(response.credential);
-        if (userProfile.email.toLowerCase() === TEACHER_EMAIL.toLowerCase()) {
-            document.getElementById('signInButtonContainer').classList.add('hidden');
-            document.getElementById('loading-text').textContent = "Authenticating...";
-            tokenClient.callback = (tokenResponse) => {
-                if (tokenResponse && tokenResponse.access_token) {
-                    gapi.client.setToken(tokenResponse);
-                    loadAssignment();
-                } else {
-                     document.getElementById('loading-text').textContent = "Could not get authorization. Please try again.";
-                }
-            };
-            tokenClient.requestAccessToken();
-        } else {
-            document.getElementById('loading-text').textContent = "Access Denied. Please sign in with the teacher account.";
-            google.accounts.id.disableAutoSelect();
-        }
+        const credential = firebase.auth.GoogleAuthProvider.credential(response.credential);
+        auth.signInWithCredential(credential).catch(error => {
+            console.error("Firebase sign-in error", error);
+            document.getElementById('auth-error').innerText = "Firebase sign-in failed. Please try again.";
+        });
+    }
+
+    function authorizeGapi() {
+        gapi.load('client', () => {
+            tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: CLIENT_ID,
+                scope: SCOPES,
+                callback: (tokenResponse) => {
+                    if (tokenResponse && tokenResponse.access_token) {
+                        gapi.client.setToken(tokenResponse);
+                        loadAssignment();
+                    } else {
+                        document.getElementById('loading-text').textContent = "Could not get Google API authorization. Please try re-signing in.";
+                        document.getElementById('signInButtonContainer').classList.remove('hidden');
+                    }
+                },
+            });
+            tokenClient.requestAccessToken({prompt: ''}); 
+        });
     }
     
     window.onload = function() {
@@ -102,49 +111,29 @@
         assignmentId = urlParams.get('id');
         if (!assignmentId) {
             document.getElementById('loading-text').textContent = "Error: No assignment ID provided in the URL.";
+            document.getElementById('signInButtonContainer').classList.add('hidden');
         }
-        
-        gapi.load('client', function() {
-            tokenClient = google.accounts.oauth2.initTokenClient({
-                client_id: CLIENT_ID,
-                scope: SCOPES,
-                callback: '',
-            });
-            gapi.client.load('https://slides.googleapis.com/$discovery/rest?version=v1');
-        });
+        gapi.load('client', () => gapi.client.load('https://slides.googleapis.com/$discovery/rest?version=v1'));
     };
 
     async function loadAssignment() {
         if (!assignmentId) return;
         const loadingText = document.getElementById('loading-text');
-        
         try {
             loadingText.textContent = "Loading assignment data...";
             const doc = await db.collection("assignments").doc(assignmentId).get();
-            if (!doc.exists) {
-                loadingText.textContent = "Error: Assignment not found."; return;
-            }
+            if (!doc.exists) { loadingText.textContent = "Error: Assignment not found."; return; }
             assignmentData = { id: doc.id, ...doc.data() };
-            
             loadingText.textContent = "Fetching slide information from Google...";
-            
-            const response = await gapi.client.slides.presentations.get({
-                presentationId: assignmentData.presentationId,
-            });
-            
+            const response = await gapi.client.slides.presentations.get({ presentationId: assignmentData.presentationId });
             const slides = response.result.slides;
-            if (!slides || slides.length === 0) {
-                loadingText.textContent = "Error: No slides found in the presentation."; return;
-            }
+            if (!slides || slides.length === 0) { loadingText.textContent = "Error: No slides found in the presentation."; return; }
             assignmentData.slideIds = slides.map(slide => slide.objectId);
-
             document.getElementById('page-loader').classList.add('hidden');
             document.getElementById('editorContent').classList.remove('hidden');
             document.getElementById('assignmentTitle').textContent = `Editing: ${assignmentData.name}`;
             document.getElementById('shareLink').value = `https://custom.scienceclass.rocks/classroompicker.html?assignmentId=${assignmentId}`;
-
             renderEditor();
-
         } catch (error) {
             console.error("Error loading assignment or slides:", error);
             const errorMessage = error.result?.error?.message || "An unknown error occurred.";
@@ -155,38 +144,12 @@
     function renderEditor() {
         const container = document.getElementById('slidesContainer');
         container.innerHTML = '';
-        
         let slideIds = assignmentData.slideIds || [];
         let checkerFunctions = assignmentData.checkerFunctions || {};
-
-        if (slideIds.length === 0) {
-            container.innerHTML = `<p class="text-center text-gray-400">No slides were found to generate the editor.</p>`;
-            return;
-        }
-
+        if (slideIds.length === 0) { container.innerHTML = `<p class="text-center text-gray-400">No slides were found to generate the editor.</p>`; return; }
         slideIds.forEach((slideId, index) => {
-            const placeholderText = `// Example:
-function calc${index + 1}(studentAnswer, showToast) {
-  const answer = studentAnswer.toLowerCase();
-  if (answer.includes("mitochondria")) {
-    showToast("Correct!");
-    return 100;
-  }
-  return 0;
-}`;
-
-            const slideEditorHTML = `
-                <div class="slide-editor-box grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-800 p-4 rounded-lg">
-                    <div>
-                        <h3 class="text-xl font-semibold mb-2">Slide ${index + 1} <span class="text-xs text-gray-500">${slideId}</span></h3>
-                        <img src="https://docs.google.com/presentation/d/${assignmentData.presentationId}/export/png?id=${assignmentData.presentationId}&pageid=${slideId}" class="w-full rounded border border-gray-700">
-                    </div>
-                    <div>
-                        <label for="checker-func-${index}" class="block font-semibold mb-2">Checker Function (calc${index + 1})</label>
-                        <textarea id="checker-func-${index}" class="w-full h-64 p-2 bg-gray-700 rounded" placeholder="${placeholderText}">${checkerFunctions[`calc${index + 1}`] || ''}</textarea>
-                    </div>
-                </div>
-            `;
+            const placeholderText = `// Example:\nfunction calc${index + 1}(studentAnswer, showToast) {\n  const answer = studentAnswer.toLowerCase();\n  if (answer.includes("mitochondria")) {\n    showToast("Correct!");\n    return 100;\n  }\n  return 0;\n}`;
+            const slideEditorHTML = `<div class="slide-editor-box grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-800 p-4 rounded-lg"><div><h3 class="text-xl font-semibold mb-2">Slide ${index + 1} <span class="text-xs text-gray-500">${slideId}</span></h3><img src="https://docs.google.com/presentation/d/${assignmentData.presentationId}/export/png?id=${assignmentData.presentationId}&pageid=${slideId}" class="w-full rounded border border-gray-700"></div><div><label for="checker-func-${index}" class="block font-semibold mb-2">Checker Function (calc${index + 1})</label><textarea id="checker-func-${index}" class="w-full h-64 p-2 bg-gray-700 rounded" placeholder="${placeholderText}">${checkerFunctions[`calc${index + 1}`] || ''}</textarea></div></div>`;
             container.innerHTML += slideEditorHTML;
         });
     }
@@ -195,22 +158,16 @@ function calc${index + 1}(studentAnswer, showToast) {
         const saveBtn = document.getElementById('saveBtn');
         try {
             saveBtn.textContent = "Saving...";
-            
             const checkerFunctions = {};
             assignmentData.slideIds.forEach((id, index) => {
                 const funcContent = document.getElementById(`checker-func-${index}`).value;
-                if (funcContent.trim()) {
-                    checkerFunctions[`calc${index + 1}`] = funcContent;
-                }
+                if (funcContent.trim()) { checkerFunctions[`calc${index + 1}`] = funcContent; }
             });
-
             await db.collection("assignments").doc(assignmentId).update({
                 slideIds: assignmentData.slideIds,
                 checkerFunctions: checkerFunctions
             });
-
             showToast("Assignment saved successfully!");
-
         } catch (error) {
             console.error("Error saving assignment:", error);
             showToast("Error saving. See console for details.");
@@ -220,7 +177,9 @@ function calc${index + 1}(studentAnswer, showToast) {
     }
     
     function showToast(message) { var x = document.getElementById("toast"); x.innerHTML = message; x.className = "show"; setTimeout(function(){ x.className = x.className.replace("show", ""); }, 3000); }
-    document.getElementById('signOutButton').onclick = () => { google.accounts.id.disableAutoSelect(); location.reload(); };
+    document.getElementById('signOutButton').onclick = () => {
+        auth.signOut();
+    };
 </script>
 </body>
 </html>
