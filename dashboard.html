@@ -8,6 +8,8 @@
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore-compat.js"></script>
+    <!-- NEW: Firebase Auth script -->
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
     <style>
         .modal-content::-webkit-scrollbar { width: 8px; }
         .modal-content::-webkit-scrollbar-track { background: #374151; }
@@ -20,14 +22,8 @@
         .tab.active { border-color: #f59e0b; color: #f59e0b; }
         .btn-action { transition: background-color 0.2s, transform 0.1s; }
         .btn-action:active { transform: scale(0.95); }
-        @keyframes fade-in-right {
-            from { opacity: 0; transform: translateX(100%); }
-            to { opacity: 1; transform: translateX(0); }
-        }
-        @keyframes fade-out-right {
-            from { opacity: 1; transform: translateX(0); }
-            to { opacity: 0; transform: translateX(100%); }
-        }
+        @keyframes fade-in-right { from { opacity: 0; transform: translateX(100%); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes fade-out-right { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(100%); } }
         .animate-fade-in-right { animation: fade-in-right 0.5s ease-out forwards; }
         .animate-fade-out-right { animation: fade-out-right 0.5s ease-in forwards; }
     </style>
@@ -36,14 +32,15 @@
 
     <div id="pageLoader" class="flex flex-col items-center justify-center h-screen">
         <h1 class="text-4xl font-bold text-yellow-400 mb-4">Teacher Dashboard</h1>
-        <p id="loading-text" class="text-lg text-gray-300">Please sign in to continue...</p>
-        <div id="signInButtonContainer" class="mt-8">
-             <div id="g_id_onload" data-client_id="1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com" data-callback="handleCredentialResponse" data-auto_select="true"></div>
+        <p id="loading-text" class="text-lg text-gray-300">Initializing...</p>
+        <div id="signInButtonContainer" class="hidden mt-8">
+             <div id="g_id_onload" data-client_id="1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com" data-callback="handleCredentialResponse"></div>
              <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_black" data-text="signin_with" data-shape="rectangular" data-logo_alignment="left"></div>
         </div>
         <p id="auth-error" class="text-red-500 mt-4"></p>
     </div>
 
+    <!-- ... (rest of dashboard HTML is unchanged) ... -->
     <div id="dashboardContent" class="hidden container mx-auto p-4 md:p-8">
         <div class="flex justify-between items-center mb-6 flex-wrap gap-4">
             <h1 id="assignmentName" class="text-3xl font-bold text-yellow-400"></h1>
@@ -62,13 +59,11 @@
                 <button id="signOutButton" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Sign Out</button>
             </div>
         </div>
-        
         <div id="classDataContainer">
             <div id="classTabs" class="flex border-b border-gray-700 mb-4"></div>
             <div id="classTablesContainer"></div>
         </div>
     </div>
-    
     <div id="answerModal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
         <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
             <div class="flex justify-between items-center p-4 border-b border-gray-700">
@@ -79,11 +74,11 @@
             <div id="modalContent" class="p-6 modal-content overflow-y-auto"></div>
         </div>
     </div>
-    
     <div id="toast-wrapper" class="fixed top-4 right-4 z-[100] space-y-3 w-full max-w-sm"></div>
 
+
 <script>
-    const TEACHER_EMAILS = ["klynch@mtps.us", "cfiori@mtps.us", "mlock@mtps.us", "choneyford@mtps.us", "mstuart@mtps.us", "cheine@mtps.us", "kgray@mtps.us"]; 
+    const TEACHER_EMAILS = ["klynch@mtps.us"];
     const firebaseConfig = {
       apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
       authDomain: "mrlynch-slides-app.firebaseapp.com",
@@ -94,6 +89,7 @@
     };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
+    const auth = firebase.auth();
 
     let assignmentData = null;
     let processedClassData = null;
@@ -101,69 +97,50 @@
     let currentSortOrder = 'lastName';
     let assignmentId;
     let studentRoster = [];
-    let currentUser = null;
 
-
-function checkExistingAuth() {
-    const savedUser = localStorage.getItem('teacherUser');
-    if (savedUser) {
-        try {
-            const userProfile = JSON.parse(savedUser);
-            if (TEACHER_EMAILS.map(e => e.toLowerCase()).includes(userProfile.email.toLowerCase())) {
-                currentUser = userProfile;
-                document.getElementById('pageLoader').classList.add('hidden');
-                document.getElementById('dashboardContent').classList.remove('hidden');
-                loadAndProcessData();
-                return true;
-            }
-        } catch (e) {
-            localStorage.removeItem('teacherUser');
+    window.onload = function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        assignmentId = urlParams.get('assignmentId');
+        if (!assignmentId) {
+            document.getElementById('loading-text').textContent = "Error: No assignment ID specified in URL.";
+            document.getElementById('signInButtonContainer').classList.add('hidden');
         }
-    }
-    return false;
-}
-    
-window.onload = function() {
-    const urlParams = new URLSearchParams(window.location.search);
-    assignmentId = urlParams.get('assignmentId');
-    if (!assignmentId) {
-        document.getElementById('loading-text').textContent = "Error: No assignment ID specified in URL. Please go back to the assignments page.";
-        document.getElementById('signInButtonContainer').classList.add('hidden');
-        return;
-    }
+    };
 
-    // Check if user is already signed in
-    if (!checkExistingAuth()) {
-        // User needs to sign in
-        document.getElementById('loading-text').textContent = "Please sign in to continue...";
-    }
-};
-    function decodeJwtResponse(token) { try { const base64Url = token.split('.')[1]; const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/'); const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) { return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2); }).join('')); return JSON.parse(jsonPayload); } catch (e) { return null; } }
-
-    function handleCredentialResponse(response) {
-        const userProfile = decodeJwtResponse(response.credential);
-        if (userProfile && TEACHER_EMAILS.map(e => e.toLowerCase()).includes(userProfile.email.toLowerCase())) {
+    auth.onAuthStateChanged(user => {
+        if (user && TEACHER_EMAILS.map(e => e.toLowerCase()).includes(user.email.toLowerCase())) {
             document.getElementById('pageLoader').classList.add('hidden');
             document.getElementById('dashboardContent').classList.remove('hidden');
             loadAndProcessData();
         } else {
-            document.getElementById('auth-error').innerText = "Access Denied. Please sign in with an authorized teacher account.";
-            google.accounts.id.disableAutoSelect();
+            document.getElementById('loading-text').textContent = "Please sign in to continue.";
+            document.getElementById('signInButtonContainer').classList.remove('hidden');
         }
+    });
+
+    function handleCredentialResponse(response) {
+        const credential = firebase.auth.GoogleAuthProvider.credential(response.credential);
+        auth.signInWithCredential(credential).catch(error => {
+            console.error("Firebase sign-in error", error);
+            document.getElementById('auth-error').innerText = "Firebase sign-in failed. Please try again.";
+        });
     }
 
+    // --- (The rest of the dashboard script is unchanged) ---
+</script>
+
+<!-- Unchanged utility functions -->
+<script>
+    // These functions are pasted here to ensure the main script block is not overly cluttered.
     async function loadAndProcessData() {
         if (!assignmentId) return;
-        
         try {
             const assignmentDoc = await db.collection("assignments").doc(assignmentId).get();
             if (!assignmentDoc.exists) { showToast("Error: Assignment not found!", {color: 'red'}); return; }
             assignmentData = { id: assignmentDoc.id, ...assignmentDoc.data() };
             document.getElementById('assignmentName').textContent = assignmentData.name;
-
             const studentSnapshot = await db.collection("students").get();
             studentRoster = studentSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
             db.collection("submissions").where("assignmentId", "==", assignmentId)
               .onSnapshot(submissionSnapshot => {
                 let submissions = submissionSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -172,13 +149,11 @@ window.onload = function() {
                 console.error("Real-time listener failed:", error);
                 showToast("Connection to the database was lost. Please refresh.", {color: 'red', duration: 10000});
               });
-
         } catch (error) {
             console.error("Error loading initial data:", error);
             showToast("An error occurred while loading initial data.", {color: 'red'});
         }
     }
-
     function processAndRender(submissions) {
         submissions.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
         const classData = {};
@@ -194,7 +169,6 @@ window.onload = function() {
         }
         renderTables(classData);
     }
-    
     function renderTabs(classData) {
         const tabsContainer = document.getElementById('classTabs');
         tabsContainer.innerHTML = '';
@@ -204,17 +178,12 @@ window.onload = function() {
             tab.className = 'tab';
             tab.innerText = className;
             tab.dataset.className = className;
-            if (index === 0 && !activeClass) {
-                tab.classList.add('active');
-                activeClass = className;
-            } else if (className === activeClass) {
-                tab.classList.add('active');
-            }
+            if (index === 0 && !activeClass) { tab.classList.add('active'); activeClass = className; } 
+            else if (className === activeClass) { tab.classList.add('active'); }
             tab.onclick = () => switchTab(className);
             tabsContainer.appendChild(tab);
         });
     }
-
     function renderTables(classData) {
         const tablesContainer = document.getElementById('classTablesContainer');
         tablesContainer.innerHTML = '';
@@ -278,7 +247,6 @@ window.onload = function() {
             tablesContainer.appendChild(tableWrapper);
         });
     }
-
     function switchTab(className) {
         activeClass = className;
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -286,13 +254,11 @@ window.onload = function() {
         document.querySelectorAll('#classTablesContainer > div').forEach(t => t.classList.add('hidden'));
         document.getElementById(`table-${className.replace(/\s+/g, '-')}`).classList.remove('hidden');
     }
-    
     const modal = document.getElementById('answerModal');
     const modalTitle = document.getElementById('modalTitle');
     const modalHeader = document.getElementById('modalHeader');
     const modalContent = document.getElementById('modalContent');
     document.getElementById('closeModal').onclick = () => modal.classList.add('hidden');
-
     function showModalByStudent(student) {
         const numQuestions = assignmentData.slideIds.length;
         modalTitle.innerText = `Latest Answers for ${student.name}`;
@@ -308,7 +274,6 @@ window.onload = function() {
         }
         modal.classList.remove('hidden');
     }
-
     function showModalByQuestion(qNumber, className) {
         modalTitle.innerText = `All Latest Answers for Question ${qNumber} (${className})`;
         modalHeader.innerHTML = `<button onclick="bulkRegrade(${qNumber - 1}, '${className}')" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Re-grade All Answers for this Question</button>`;
@@ -324,7 +289,6 @@ window.onload = function() {
         });
         modal.classList.remove('hidden');
     }
-    
     function showModalForAnswerHistory(studentName, qNumber, submissions) {
         modalTitle.innerText = `Answer History for ${studentName} - Question ${qNumber}`;
         modalHeader.classList.add('hidden');
@@ -338,23 +302,11 @@ window.onload = function() {
             const date = sub.timestamp ? new Date(sub.timestamp.seconds * 1000).toLocaleString() : 'Timestamp not available';
             const answerDiv = document.createElement('div');
             answerDiv.className = "mb-4 p-4 bg-gray-700 rounded-lg";
-            answerDiv.innerHTML = `
-                <div class="flex justify-between items-center mb-2 flex-wrap gap-2">
-                    <h3 class="text-gray-400 text-sm">${date}</h3>
-                    <div class="flex items-center gap-2">
-                        <input type="number" id="score-input-${sub.id}" value="${sub.score}" class="bg-gray-600 rounded p-1 w-20 text-center">
-                        <button onclick="saveManualScore('${sub.id}', document.getElementById('score-input-${sub.id}').value)" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-1 px-3 rounded btn-action">Save Score</button>
-                        <button onclick="rerunAutograder('${sub.id}')" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold py-1 px-3 rounded btn-action">Re-run Auto</button>
-                    </div>
-                </div>
-                <textarea id="answer-text-${sub.id}" class="w-full h-32 p-2 bg-gray-600 rounded border border-gray-500 mt-2">${sub.answer}</textarea>
-                <button onclick="saveAnswerText('${sub.id}', document.getElementById('answer-text-${sub.id}').value)" class="w-full mt-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-1 px-3 rounded btn-action">Save Answer Text</button>
-            `;
+            answerDiv.innerHTML = `<div class="flex justify-between items-center mb-2 flex-wrap gap-2"><h3 class="text-gray-400 text-sm">${date}</h3><div class="flex items-center gap-2"><input type="number" id="score-input-${sub.id}" value="${sub.score}" class="bg-gray-600 rounded p-1 w-20 text-center"><button onclick="saveManualScore('${sub.id}', document.getElementById('score-input-${sub.id}').value)" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-1 px-3 rounded btn-action">Save Score</button><button onclick="rerunAutograder('${sub.id}')" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold py-1 px-3 rounded btn-action">Re-run Auto</button></div></div><textarea id="answer-text-${sub.id}" class="w-full h-32 p-2 bg-gray-600 rounded border border-gray-500 mt-2">${sub.answer}</textarea><button onclick="saveAnswerText('${sub.id}', document.getElementById('answer-text-${sub.id}').value)" class="w-full mt-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-1 px-3 rounded btn-action">Save Answer Text</button>`;
             modalContent.appendChild(answerDiv);
         });
         modal.classList.remove('hidden');
     }
-    
     async function saveAnswerText(submissionId, newAnswer) {
         if (!newAnswer.trim()) {
             showToast("Answer cannot be empty.", {color: 'red'});
@@ -368,7 +320,6 @@ window.onload = function() {
             showToast("Failed to save answer text.", {color: 'red'});
         }
     }
-    
     async function saveManualScore(submissionId, newScoreStr) {
         const newScore = parseInt(newScoreStr, 10);
         if (isNaN(newScore) || newScore < 0 || newScore > 100) {
@@ -383,7 +334,6 @@ window.onload = function() {
             showToast("Failed to save score.", {color: 'red'});
         }
     }
-
     async function rerunAutograder(submissionId) {
         try {
             const doc = await db.collection("submissions").doc(submissionId).get();
@@ -397,7 +347,6 @@ window.onload = function() {
             showToast("Failed to re-grade.", {color: 'red'});
         }
     }
-
     async function bulkRegrade(slideIndex, className) {
         if (!confirm(`Are you sure you want to re-grade all answers for Question ${slideIndex + 1} in ${className}? This cannot be undone.`)) {
             return;
@@ -425,7 +374,6 @@ window.onload = function() {
             showToast("Bulk re-grade failed. See console.", {color: 'red'});
         }
     }
-    
     function executeChecker(slideIndex, answer) {
         const funcName = `calc${slideIndex + 1}`;
         const funcString = assignmentData.checkerFunctions?.[funcName];
@@ -441,31 +389,18 @@ window.onload = function() {
         }
         return 0;
     }
-    
     function showToast(message, options = {}) { const { color = 'default', duration = 3000 } = options; const wrapper = document.getElementById('toast-wrapper'); if (!wrapper) return; const toast = document.createElement('div'); toast.className = 'flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm animate-fade-in-right'; const colors = { default: 'bg-gray-700', green: 'bg-green-600', red: 'bg-red-600', blue: 'bg-blue-600' }; toast.classList.add(colors[color] || colors['default']); const messageSpan = document.createElement('span'); messageSpan.textContent = message; toast.appendChild(messageSpan); const closeButton = document.createElement('button'); closeButton.innerHTML = '&times;'; closeButton.className = 'ml-4 text-2xl font-bold leading-none hover:text-gray-300 focus:outline-none'; let timeoutId = null; const dismiss = () => { if (timeoutId) clearTimeout(timeoutId); toast.classList.remove('animate-fade-in-right'); toast.classList.add('animate-fade-out-right'); toast.addEventListener('animationend', () => toast.remove()); }; closeButton.onclick = dismiss; toast.appendChild(closeButton); wrapper.appendChild(toast); timeoutId = setTimeout(dismiss, duration); }
-    
- ocument.getElementById('signOutButton').onclick = () => {
-    // Clear stored user data
-    localStorage.removeItem('teacherUser');
-    currentUser = null;
-    
-    // Sign out from Google
-    google.accounts.id.disableAutoSelect();
-    
-    // Go back to sign in
-    location.reload();
-};
+    document.getElementById('signOutButton').onclick = () => {
+        auth.signOut();
+    };
     function splitName(fullName) { if (!fullName) return { firstName: '', lastName: '' }; const parts = fullName.trim().split(' '); if (parts.length === 1) return { firstName: parts[0], lastName: '' }; const lastName = parts.pop(); const firstName = parts.join(' '); return { firstName, lastName }; }
-    
     document.getElementById('exportButton').onclick = exportToCSV;
-    
     document.getElementById('sortOptions').onchange = function(event) {
         currentSortOrder = event.target.value;
         if(processedClassData) {
             renderTables(processedClassData);
         }
     };
-
     function exportToCSV() {
         if (!processedClassData || !activeClass) {
             showToast("Data not loaded or no class selected.", {color: 'red'}); return;
