@@ -66,6 +66,7 @@
     <div id="toast-wrapper" class="fixed top-4 right-4 z-[100] space-y-3 w-full max-w-sm"></div>
 
 <script>
+    const TEACHER_EMAILS = ["klynch@mtps.us"]; // For teacher bypass
     const firebaseConfig = {
       apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
       authDomain: "mrlynch-slides-app.firebaseapp.com",
@@ -116,6 +117,14 @@
     async function authorizeAndStart(profile) {
         const errorP = document.getElementById('loadingError');
         const loader = document.getElementById('pageLoader');
+
+        // NEW: Teacher Bypass. If the user is a teacher, grant immediate access.
+        if (TEACHER_EMAILS.map(e => e.toLowerCase()).includes(profile.email.toLowerCase())) {
+            userProfile = profile;
+            initializeStudentSession();
+            return;
+        }
+
         try {
             const studentQuery = await db.collection("students").where("email", "==", profile.email).get();
             if (studentQuery.empty) {
@@ -125,9 +134,10 @@
                 return;
             }
             const studentData = studentQuery.docs[0].data();
-            const studentClass = studentData.class;
+            
+            // FIX: Convert the student's class (number) to a string for comparison.
+            const studentClass = String(studentData.class);
 
-            // UPDATED: Check if student's class is assigned
             if (!assignmentData.assignedClasses || !assignmentData.assignedClasses.includes(studentClass)) {
                 loader.classList.remove('hidden');
                 errorP.textContent = `Access Denied: This assignment is not available for your class (${studentClass}).`;
@@ -135,7 +145,6 @@
                 return;
             }
             
-            // UPDATED: Check if the assignment is open for the student's class
             const classStatus = assignmentData.classStatus?.[studentClass];
             if (classStatus !== 'open') {
                  loader.classList.remove('hidden');
@@ -219,7 +228,6 @@
         }
     }
     
-    // All other functions (updateSlideDisplay, myfunction, checkers, etc.) are unchanged
 </script>
 <!-- Unchanged utility functions -->
 <script>
