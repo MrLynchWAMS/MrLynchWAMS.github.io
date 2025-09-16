@@ -8,7 +8,6 @@
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore-compat.js"></script>
-    <!-- NEW: Firebase Auth script -->
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
     <style>
         .modal-content::-webkit-scrollbar { width: 8px; }
@@ -40,7 +39,6 @@
         <p id="auth-error" class="text-red-500 mt-4"></p>
     </div>
 
-    <!-- ... (rest of dashboard HTML is unchanged) ... -->
     <div id="dashboardContent" class="hidden container mx-auto p-4 md:p-8">
         <div class="flex justify-between items-center mb-6 flex-wrap gap-4">
             <h1 id="assignmentName" class="text-3xl font-bold text-yellow-400"></h1>
@@ -59,11 +57,13 @@
                 <button id="signOutButton" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Sign Out</button>
             </div>
         </div>
+        
         <div id="classDataContainer">
             <div id="classTabs" class="flex border-b border-gray-700 mb-4"></div>
             <div id="classTablesContainer"></div>
         </div>
     </div>
+    
     <div id="answerModal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
         <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
             <div class="flex justify-between items-center p-4 border-b border-gray-700">
@@ -74,8 +74,8 @@
             <div id="modalContent" class="p-6 modal-content overflow-y-auto"></div>
         </div>
     </div>
+    
     <div id="toast-wrapper" class="fixed top-4 right-4 z-[100] space-y-3 w-full max-w-sm"></div>
-
 
 <script>
     const TEACHER_EMAILS = ["klynch@mtps.us"];
@@ -98,23 +98,26 @@
     let assignmentId;
     let studentRoster = [];
 
-    window.onload = function() {
-        const urlParams = new URLSearchParams(window.location.search);
-        assignmentId = urlParams.get('assignmentId');
-        if (!assignmentId) {
-            document.getElementById('loading-text').textContent = "Error: No assignment ID specified in URL.";
-            document.getElementById('signInButtonContainer').classList.add('hidden');
-        }
-    };
+    // --- FIX: Read URL parameter immediately when the script loads ---
+    const urlParams = new URLSearchParams(window.location.search);
+    assignmentId = urlParams.get('assignmentId');
+    if (!assignmentId) {
+        document.getElementById('loading-text').textContent = "Error: No assignment ID specified in URL. Please go back to the assignments page.";
+        document.getElementById('signInButtonContainer').classList.add('hidden');
+    }
 
+    // This listener now correctly waits for authentication status
     auth.onAuthStateChanged(user => {
         if (user && TEACHER_EMAILS.map(e => e.toLowerCase()).includes(user.email.toLowerCase())) {
+            // User is signed in and is a teacher, now we can safely load data
             document.getElementById('pageLoader').classList.add('hidden');
             document.getElementById('dashboardContent').classList.remove('hidden');
             loadAndProcessData();
         } else {
+            // User is not signed in or not a teacher, show the sign-in button
             document.getElementById('loading-text').textContent = "Please sign in to continue.";
             document.getElementById('signInButtonContainer').classList.remove('hidden');
+            document.getElementById('dashboardContent').classList.add('hidden');
         }
     });
 
@@ -126,21 +129,18 @@
         });
     }
 
-    // --- (The rest of the dashboard script is unchanged) ---
-</script>
-
-<!-- Unchanged utility functions -->
-<script>
-    // These functions are pasted here to ensure the main script block is not overly cluttered.
     async function loadAndProcessData() {
         if (!assignmentId) return;
+        
         try {
             const assignmentDoc = await db.collection("assignments").doc(assignmentId).get();
             if (!assignmentDoc.exists) { showToast("Error: Assignment not found!", {color: 'red'}); return; }
             assignmentData = { id: assignmentDoc.id, ...assignmentDoc.data() };
             document.getElementById('assignmentName').textContent = assignmentData.name;
+
             const studentSnapshot = await db.collection("students").get();
             studentRoster = studentSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
             db.collection("submissions").where("assignmentId", "==", assignmentId)
               .onSnapshot(submissionSnapshot => {
                 let submissions = submissionSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -154,6 +154,7 @@
             showToast("An error occurred while loading initial data.", {color: 'red'});
         }
     }
+
     function processAndRender(submissions) {
         submissions.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
         const classData = {};
@@ -169,6 +170,12 @@
         }
         renderTables(classData);
     }
+    
+    // --- (The rest of the script is unchanged) ---
+</script>
+
+<!-- Unchanged utility functions -->
+<script>
     function renderTabs(classData) {
         const tabsContainer = document.getElementById('classTabs');
         tabsContainer.innerHTML = '';
