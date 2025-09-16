@@ -43,10 +43,11 @@
         <div id="loadingState" class="text-center py-10"><p class="text-xl">Loading assignments...</p></div>
 
         <div id="assignmentsList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <!-- Assignment cards and the "Create New" card will be dynamically added here -->
+            <!-- Assignment cards will be dynamically added here -->
         </div>
     </div>
 
+    <!-- Create Assignment Modal -->
     <div id="createModal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
         <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-lg">
             <div class="flex justify-between items-center p-4 border-b border-gray-700">
@@ -56,17 +57,26 @@
             <div class="p-6">
                 <label for="assignmentName" class="block text-sm font-medium text-gray-300 mb-2">Assignment Name</label>
                 <input type="text" id="assignmentName" placeholder="e.g., Chapter 5 Review" class="w-full p-3 mb-4 bg-gray-700 rounded border border-gray-600">
-                
                 <label for="slidesLink" class="block text-sm font-medium text-gray-300 mb-2">Google Slides Share Link</label>
                 <input type="text" id="slidesLink" placeholder="Paste the full URL from Google Slides" class="w-full p-3 mb-4 bg-gray-700 rounded border border-gray-600">
-                
                 <label class="block text-sm font-medium text-gray-300 mb-2">Assign to Classes</label>
-                <div id="class-checkboxes" class="space-y-2 mb-4 p-3 bg-gray-700 rounded-md max-h-40 overflow-y-auto">
-                    <!-- Checkboxes will be dynamically added here -->
-                </div>
-
+                <div id="class-checkboxes" class="space-y-2 mb-4 p-3 bg-gray-700 rounded-md max-h-40 overflow-y-auto"></div>
                 <p id="modal-error" class="text-red-500 mb-4"></p>
                 <button onclick="handleCreateAssignment()" id="createAssignmentBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg btn-action">Create Assignment</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Status/Scheduling Modal -->
+    <div id="statusModal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
+        <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-lg">
+            <div class="flex justify-between items-center p-4 border-b border-gray-700">
+                <h2 id="statusModalTitle" class="text-2xl font-bold text-yellow-400">Manage Status</h2>
+                <button onclick="closeStatusModal()" class="text-gray-400 hover:text-white text-3xl">&times;</button>
+            </div>
+            <div id="statusModalContent" class="p-6"></div>
+            <div class="p-4 bg-gray-700/50 flex justify-end">
+                 <button onclick="handleSaveAssignmentStatus()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Save Statuses</button>
             </div>
         </div>
     </div>
@@ -75,7 +85,6 @@
 
 <script>
     const TEACHER_EMAILS = ["klynch@mtps.us"];
-    // --- FIX: Restored the full Firebase configuration object ---
     const firebaseConfig = {
       apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
       authDomain: "mrlynch-slides-app.firebaseapp.com",
@@ -87,6 +96,7 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
     const auth = firebase.auth();
+    let activeAssignmentId = null;
 
     auth.onAuthStateChanged(user => {
         if (user && TEACHER_EMAILS.map(e => e.toLowerCase()).includes(user.email.toLowerCase())) {
@@ -110,9 +120,10 @@
     async function loadAssignments() {
         const listContainer = document.getElementById('assignmentsList');
         const loadingState = document.getElementById('loadingState');
-        listContainer.innerHTML = '';
-        try {
-            const snapshot = await db.collection("assignments").orderBy("createdAt", "desc").get();
+        
+        db.collection("assignments").orderBy("createdAt", "desc")
+          .onSnapshot(snapshot => {
+            listContainer.innerHTML = '';
             if (snapshot.empty) {
                 loadingState.innerText = "No assignments found. Click '+' to create your first one!";
                 loadingState.classList.remove('hidden');
@@ -124,19 +135,22 @@
                 const card = document.createElement('div');
                 card.className = "bg-gray-800 rounded-lg p-6 shadow-lg flex flex-col justify-between";
                 const date = assignment.createdAt ? new Date(assignment.createdAt.seconds * 1000).toLocaleDateString() : 'No date';
-                const status = assignment.status === 'closed' ? 
-                    '<span class="text-xs font-semibold inline-block py-1 px-2 uppercase rounded-full text-red-600 bg-red-200">Closed</span>' :
-                    '<span class="text-xs font-semibold inline-block py-1 px-2 uppercase rounded-full text-green-600 bg-green-200">Open</span>';
-                
-                const assignedClasses = assignment.assignedClasses?.join(', ') || 'All Classes';
+                let statusHTML = '<ul class="text-xs space-y-1">';
+                if (assignment.classStatus) {
+                    Object.keys(assignment.classStatus).sort().forEach(className => {
+                        const status = assignment.classStatus[className];
+                        const color = status === 'open' ? 'text-green-400' : 'text-red-400';
+                        statusHTML += `<li><span class="font-semibold">${className}:</span> <span class="${color}">${status}</span></li>`;
+                    });
+                } else {
+                    statusHTML += '<li>Status not set.</li>';
+                }
+                statusHTML += '</ul>';
 
                 card.innerHTML = `
                     <div>
-                        <div class="flex justify-between items-start">
-                            <h3 class="text-2xl font-bold text-yellow-400 mb-2">${assignment.name}</h3>
-                            ${status}
-                        </div>
-                        <p class="text-gray-400 text-sm">Assigned to: ${assignedClasses}</p>
+                        <h3 class="text-2xl font-bold text-yellow-400 mb-2">${assignment.name}</h3>
+                        <div class="mb-2">${statusHTML}</div>
                         <p class="text-gray-500 text-xs mt-2">Created: ${date}</p>
                     </div>
                     <div class="mt-4 pt-4 border-t border-gray-700 flex flex-col gap-2">
@@ -145,23 +159,22 @@
                             <a href="./editor.html?id=${assignment.id}" class="flex-1 text-center bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded-lg btn-action">Edit</a>
                         </div>
                         <div class="flex justify-between gap-2">
-                             <button onclick="toggleAssignmentStatus('${assignment.id}', '${assignment.status || 'open'}')" class="flex-1 text-center ${assignment.status === 'closed' ? 'bg-green-600 hover:bg-green-700' : 'bg-yellow-600 hover:bg-yellow-700'} text-white font-bold py-2 px-3 rounded-lg btn-action">${assignment.status === 'closed' ? 'Re-open' : 'Close'}</button>
+                             <button onclick='openStatusModal(${JSON.stringify(assignment)})' class="flex-1 text-center bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-3 rounded-lg btn-action">Assign & Schedule</button>
                              <button onclick="deleteAssignment('${assignment.id}', '${assignment.name}')" class="flex-1 text-center bg-red-700 hover:bg-red-800 text-white font-bold py-2 px-3 rounded-lg btn-action">Delete</button>
                         </div>
                     </div>
                 `;
                 listContainer.appendChild(card);
             });
-        } catch (error) {
-            console.error("Error loading assignments:", error);
-            loadingState.innerText = "Error loading assignments. See console for details.";
-        } finally {
             const createCard = document.createElement('div');
             createCard.className = "bg-gray-800 hover:bg-gray-700/50 border-2 border-dashed border-gray-600 rounded-lg flex items-center justify-center min-h-[16rem] cursor-pointer transition-all";
             createCard.onclick = openCreateModal;
             createCard.innerHTML = `<div class="text-center"><span class="text-5xl text-gray-500">+</span><p class="text-xl font-semibold text-gray-400 mt-2">Create New Assignment</p></div>`;
             listContainer.appendChild(createCard);
-        }
+          }, error => {
+              console.error("Error loading assignments:", error);
+              loadingState.innerText = "Error loading assignments. See console for details.";
+          });
     }
 
     const createModal = document.getElementById('createModal');
@@ -172,16 +185,10 @@
             const studentSnapshot = await db.collection("students").get();
             const students = studentSnapshot.docs.map(doc => doc.data());
             const classNames = [...new Set(students.map(s => s.class))].sort();
-            
             if (classNames.length > 0) {
                 let checkboxesHTML = '<div class="flex items-center"><input id="assign-all" type="checkbox" class="h-4 w-4 rounded border-gray-300" onchange="toggleAllClasses(this.checked)"><label for="assign-all" class="ml-2 block text-sm font-bold">Assign to All Classes</label></div><hr class="my-2 border-gray-600">';
                 classNames.forEach(className => {
-                    checkboxesHTML += `
-                        <div class="flex items-center">
-                            <input id="class-${className}" name="class" value="${className}" type="checkbox" class="h-4 w-4 rounded border-gray-300">
-                            <label for="class-${className}" class="ml-2 block text-sm">${className}</label>
-                        </div>
-                    `;
+                    checkboxesHTML += `<div class="flex items-center"><input id="class-${className}" name="class" value="${className}" type="checkbox" class="h-4 w-4 rounded border-gray-300"><label for="class-${className}" class="ml-2 block text-sm">${className}</label></div>`;
                 });
                 checkboxContainer.innerHTML = checkboxesHTML;
             } else {
@@ -193,10 +200,9 @@
         }
         createModal.classList.remove('hidden');
     }
+    
     function toggleAllClasses(checked) {
-        document.querySelectorAll('input[name="class"]').forEach(checkbox => {
-            checkbox.checked = checked;
-        });
+        document.querySelectorAll('input[name="class"]').forEach(checkbox => { checkbox.checked = checked; });
     }
 
     function closeCreateModal() { 
@@ -210,21 +216,16 @@
         const link = document.getElementById('slidesLink').value.trim();
         const errorP = document.getElementById('modal-error');
         errorP.innerText = '';
-        
         const selectedClasses = Array.from(document.querySelectorAll('input[name="class"]:checked')).map(cb => cb.value);
-
         if (!name || !link || selectedClasses.length === 0) {
-            errorP.innerText = "Please fill out all fields and select at least one class.";
-            return;
+            errorP.innerText = "Please fill out all fields and select at least one class."; return;
         }
-
         const presentationIdRegex = /presentation\/d\/([a-zA-Z0-9-_]+)/;
         const match = link.match(presentationIdRegex);
         if (!match || !match[1]) {
             errorP.innerText = "Invalid Google Slides link."; return;
         }
         const presentationId = match[1];
-
         try {
             document.getElementById('createAssignmentBtn').innerText = "Creating...";
             await db.collection("assignments").add({
@@ -235,7 +236,6 @@
                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });
             closeCreateModal();
-            loadAssignments();
         } catch (error) {
             console.error("Error creating assignment:", error);
             errorP.innerText = "Could not create assignment.";
@@ -244,14 +244,47 @@
         }
     }
 
-    async function toggleAssignmentStatus(id, currentStatus) {
-        const newStatus = currentStatus === 'open' ? 'closed' : 'open';
+    const statusModal = document.getElementById('statusModal');
+    function openStatusModal(assignment) {
+        activeAssignmentId = assignment.id;
+        const modalTitle = document.getElementById('statusModalTitle');
+        const modalContent = document.getElementById('statusModalContent');
+        modalTitle.innerText = `Manage Status for: ${assignment.name}`;
+        let contentHTML = '<div class="space-y-4">';
+        const assignedClasses = assignment.assignedClasses || [];
+        const classStatus = assignment.classStatus || {};
+        if (assignedClasses.length === 0) {
+            contentHTML = '<p class="text-gray-400">This assignment is not assigned to any classes. Please edit the assignment to assign it.</p>';
+        } else {
+            assignedClasses.forEach(className => {
+                const currentStatus = classStatus[className] || 'closed';
+                contentHTML += `<div class="flex justify-between items-center bg-gray-700 p-3 rounded-lg"><label for="status-${className}" class="font-semibold">${className}</label><select id="status-${className}" data-class-name="${className}" class="bg-gray-600 rounded p-2 border border-gray-500"><option value="open" ${currentStatus === 'open' ? 'selected' : ''}>Open</option><option value="closed" ${currentStatus === 'closed' ? 'selected' : ''}>Closed</option></select></div>`;
+            });
+        }
+        contentHTML += '</div>';
+        modalContent.innerHTML = contentHTML;
+        statusModal.classList.remove('hidden');
+    }
+    
+    function closeStatusModal() {
+        statusModal.classList.add('hidden');
+        activeAssignmentId = null;
+    }
+
+    async function handleSaveAssignmentStatus() {
+        if (!activeAssignmentId) return;
+        const newClassStatus = {};
+        document.querySelectorAll('#statusModalContent select').forEach(select => {
+            const className = select.dataset.className;
+            newClassStatus[className] = select.value;
+        });
         try {
-            await db.collection("assignments").doc(id).update({ status: newStatus });
-            showToast(`Assignment marked as ${newStatus}.`, {color: 'blue'});
+            await db.collection("assignments").doc(activeAssignmentId).update({ classStatus: newClassStatus });
+            showToast("Assignment statuses updated!", {color: 'green'});
+            closeStatusModal();
         } catch (error) {
-            console.error("Error updating status:", error);
-            showToast("Could not update status.", {color: 'red'});
+            console.error("Error updating statuses:", error);
+            showToast("Failed to update statuses.", {color: 'red'});
         }
     }
     
