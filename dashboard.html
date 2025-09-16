@@ -101,16 +101,43 @@
     let currentSortOrder = 'lastName';
     let assignmentId;
     let studentRoster = [];
+    let currentUser = null;
 
-    window.onload = function() {
-        const urlParams = new URLSearchParams(window.location.search);
-        assignmentId = urlParams.get('assignmentId');
-        if (!assignmentId) {
-            document.getElementById('loading-text').textContent = "Error: No assignment ID specified in URL. Please go back to the assignments page.";
-            document.getElementById('signInButtonContainer').classList.add('hidden');
+
+function checkExistingAuth() {
+    const savedUser = localStorage.getItem('teacherUser');
+    if (savedUser) {
+        try {
+            const userProfile = JSON.parse(savedUser);
+            if (TEACHER_EMAILS.map(e => e.toLowerCase()).includes(userProfile.email.toLowerCase())) {
+                currentUser = userProfile;
+                document.getElementById('pageLoader').classList.add('hidden');
+                document.getElementById('dashboardContent').classList.remove('hidden');
+                loadAndProcessData();
+                return true;
+            }
+        } catch (e) {
+            localStorage.removeItem('teacherUser');
         }
-    };
+    }
+    return false;
+}
+    
+window.onload = function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    assignmentId = urlParams.get('assignmentId');
+    if (!assignmentId) {
+        document.getElementById('loading-text').textContent = "Error: No assignment ID specified in URL. Please go back to the assignments page.";
+        document.getElementById('signInButtonContainer').classList.add('hidden');
+        return;
+    }
 
+    // Check if user is already signed in
+    if (!checkExistingAuth()) {
+        // User needs to sign in
+        document.getElementById('loading-text').textContent = "Please sign in to continue...";
+    }
+};
     function decodeJwtResponse(token) { try { const base64Url = token.split('.')[1]; const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/'); const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) { return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2); }).join('')); return JSON.parse(jsonPayload); } catch (e) { return null; } }
 
     function handleCredentialResponse(response) {
@@ -417,11 +444,17 @@
     
     function showToast(message, options = {}) { const { color = 'default', duration = 3000 } = options; const wrapper = document.getElementById('toast-wrapper'); if (!wrapper) return; const toast = document.createElement('div'); toast.className = 'flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm animate-fade-in-right'; const colors = { default: 'bg-gray-700', green: 'bg-green-600', red: 'bg-red-600', blue: 'bg-blue-600' }; toast.classList.add(colors[color] || colors['default']); const messageSpan = document.createElement('span'); messageSpan.textContent = message; toast.appendChild(messageSpan); const closeButton = document.createElement('button'); closeButton.innerHTML = '&times;'; closeButton.className = 'ml-4 text-2xl font-bold leading-none hover:text-gray-300 focus:outline-none'; let timeoutId = null; const dismiss = () => { if (timeoutId) clearTimeout(timeoutId); toast.classList.remove('animate-fade-in-right'); toast.classList.add('animate-fade-out-right'); toast.addEventListener('animationend', () => toast.remove()); }; closeButton.onclick = dismiss; toast.appendChild(closeButton); wrapper.appendChild(toast); timeoutId = setTimeout(dismiss, duration); }
     
-    document.getElementById('signOutButton').onclick = () => {
-        google.accounts.id.disableAutoSelect();
-        location.reload();
-    };
-
+ ocument.getElementById('signOutButton').onclick = () => {
+    // Clear stored user data
+    localStorage.removeItem('teacherUser');
+    currentUser = null;
+    
+    // Sign out from Google
+    google.accounts.id.disableAutoSelect();
+    
+    // Go back to sign in
+    location.reload();
+};
     function splitName(fullName) { if (!fullName) return { firstName: '', lastName: '' }; const parts = fullName.trim().split(' '); if (parts.length === 1) return { firstName: parts[0], lastName: '' }; const lastName = parts.pop(); const firstName = parts.join(' '); return { firstName, lastName }; }
     
     document.getElementById('exportButton').onclick = exportToCSV;
