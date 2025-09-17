@@ -98,23 +98,19 @@
     let assignmentId;
     let studentRoster = [];
 
-    // --- FIX: Read URL parameter immediately when the script loads ---
     const urlParams = new URLSearchParams(window.location.search);
     assignmentId = urlParams.get('assignmentId');
     if (!assignmentId) {
-        document.getElementById('loading-text').textContent = "Error: No assignment ID specified in URL. Please go back to the assignments page.";
+        document.getElementById('loading-text').textContent = "Error: No assignment ID specified in URL.";
         document.getElementById('signInButtonContainer').classList.add('hidden');
     }
 
-    // This listener now correctly waits for authentication status
     auth.onAuthStateChanged(user => {
         if (user && TEACHER_EMAILS.map(e => e.toLowerCase()).includes(user.email.toLowerCase())) {
-            // User is signed in and is a teacher, now we can safely load data
             document.getElementById('pageLoader').classList.add('hidden');
             document.getElementById('dashboardContent').classList.remove('hidden');
             loadAndProcessData();
         } else {
-            // User is not signed in or not a teacher, show the sign-in button
             document.getElementById('loading-text').textContent = "Please sign in to continue.";
             document.getElementById('signInButtonContainer').classList.remove('hidden');
             document.getElementById('dashboardContent').classList.add('hidden');
@@ -138,9 +134,11 @@
             assignmentData = { id: assignmentDoc.id, ...assignmentDoc.data() };
             document.getElementById('assignmentName').textContent = assignmentData.name;
 
+            // OPTIMIZATION: Fetch roster once and store it.
             const studentSnapshot = await db.collection("students").get();
             studentRoster = studentSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
+            // OPTIMIZATION: Only listen to submissions in real-time.
             db.collection("submissions").where("assignmentId", "==", assignmentId)
               .onSnapshot(submissionSnapshot => {
                 let submissions = submissionSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -158,6 +156,7 @@
     function processAndRender(submissions) {
         submissions.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
         const classData = {};
+        // OPTIMIZATION: Use the globally stored roster instead of re-fetching.
         studentRoster.forEach(student => {
             if (!classData[student.class]) classData[student.class] = [];
             const studentWithSubs = { ...student };
