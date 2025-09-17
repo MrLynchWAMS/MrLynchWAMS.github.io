@@ -110,7 +110,7 @@
         });
     }
 
-    async function loadRoster() {
+    function loadRoster() {
         const rosterContainer = document.getElementById('rosterContainer');
         const loadingState = document.getElementById('loadingState');
         
@@ -180,7 +180,6 @@
     const studentModal = document.getElementById('studentModal');
     const modalTitle = document.getElementById('modalTitle');
     function openStudentModal(student = null) {
-        // Reset form
         document.getElementById('studentId').value = '';
         document.getElementById('studentName').value = '';
         document.getElementById('studentEmail').value = '';
@@ -188,14 +187,14 @@
         document.getElementById('studentClass').value = '';
         document.getElementById('modal-error').innerText = '';
 
-        if (student) { // Editing existing student
+        if (student) {
             modalTitle.innerText = "Edit Student";
             document.getElementById('studentId').value = student.id;
             document.getElementById('studentName').value = student.name;
             document.getElementById('studentEmail').value = student.email;
             document.getElementById('studentPasscode').value = student.passcode;
             document.getElementById('studentClass').value = student.class;
-        } else { // Adding new student
+        } else {
             modalTitle.innerText = "Add Student";
         }
         studentModal.classList.remove('hidden');
@@ -222,10 +221,10 @@
         }
 
         try {
-            if (id) { // Update existing
+            if (id) {
                 await db.collection("students").doc(id).update(student);
                 showToast("Student updated successfully!", {color: 'green'});
-            } else { // Create new
+            } else {
                 await db.collection("students").add(student);
                 showToast("Student added successfully!", {color: 'green'});
             }
@@ -253,3 +252,4 @@
 </script>
 </body>
 </html>
+
