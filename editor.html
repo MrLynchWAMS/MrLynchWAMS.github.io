@@ -48,7 +48,10 @@
         </div>
         
         <div id="deadline-section" class="bg-gray-800 p-6 rounded-lg mb-8">
-            <h2 class="text-2xl font-bold text-yellow-400 mb-4">Class Start Times & Deadlines</h2>
+            <div class="flex justify-between items-center mb-4">
+                 <h2 class="text-2xl font-bold text-yellow-400">Class Start Times & Deadlines</h2>
+                 <button onclick="saveTeacherDefaults()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">Save as Defaults</button>
+            </div>
             <p class="text-gray-400 mb-4">Set the official start time for each class period. Per-question deadlines are calculated in minutes after this time.</p>
             <div id="class-start-times" class="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <!-- Time inputs will be added here -->
@@ -80,6 +83,7 @@
     let assignmentData = null;
     let tokenClient;
     let allClassNames = [];
+    let teacherDefaults = {}; // Store teacher's default settings
 
     auth.onAuthStateChanged(user => {
         if (user && TEACHER_EMAILS.map(e => e.toLowerCase()).includes(user.email.toLowerCase())) {
@@ -133,13 +137,20 @@
         const loadingText = document.getElementById('loading-text');
         try {
             loadingText.textContent = "Loading assignment data...";
+            // Fetch teacher defaults, assignment, and roster in parallel for speed
+            const teacherDefaultsDoc = await db.collection("teachers").doc(auth.currentUser.email).get();
+            if(teacherDefaultsDoc.exists) {
+                teacherDefaults = teacherDefaultsDoc.data();
+            }
+
             const assignmentDoc = await db.collection("assignments").doc(assignmentId).get();
             if (!assignmentDoc.exists) { loadingText.textContent = "Error: Assignment not found."; return; }
             assignmentData = { id: assignmentDoc.id, ...assignmentDoc.data() };
             
             const studentSnapshot = await db.collection("students").get();
             const students = studentSnapshot.docs.map(doc => doc.data());
-            allClassNames = [...new Set(students.map(s => s.class))].sort();
+            // FIX: Ensure class names are strings to prevent duplicates from different data types
+            allClassNames = [...new Set(students.map(s => String(s.class)))].sort();
 
             loadingText.textContent = "Fetching slide information from Google...";
             const response = await gapi.client.slides.presentations.get({ presentationId: assignmentData.presentationId });
@@ -164,17 +175,50 @@
     function renderDeadlineUI() {
         const container = document.getElementById('class-start-times');
         container.innerHTML = '';
-        const savedStartTimes = assignmentData.deadlinePolicy?.classStartTimes || {};
+        const assignmentStartTimes = assignmentData.deadlinePolicy?.classStartTimes;
+        const defaultStartTimes = teacherDefaults.classStartTimes;
+        // Your provided default times
+        const hardcodedDefaults = { '1': '08:01', '2': '08:50', '5': '11:17', '7': '12:55', '8': '13:44' };
+
         allClassNames.forEach(className => {
+            // Logic: Use assignment-specific time > teacher default > hardcoded default > 00:00
+            const value = assignmentStartTimes?.[className] || defaultStartTimes?.[className] || hardcodedDefaults[className] || '00:00';
             container.innerHTML += `
                 <div>
                     <label for="start-time-${className}" class="block text-sm font-semibold">${className}</label>
-                    <input type="time" id="start-time-${className}" value="${savedStartTimes[className] || '00:00'}" class="w-full mt-1 p-2 bg-gray-700 rounded border border-gray-600">
+                    <input type="time" id="start-time-${className}" value="${value}" class="w-full mt-1 p-2 bg-gray-700 rounded border border-gray-600">
                 </div>
             `;
         });
     }
 
+    function renderEditor() { /* ... unchanged ... */ }
+    async function saveAssignment() { /* ... unchanged ... */ }
+    
+    // NEW: Function to save the current start times as the teacher's default
+    async function saveTeacherDefaults() {
+        const newDefaults = { classStartTimes: {} };
+        allClassNames.forEach(className => {
+            const timeValue = document.getElementById(`start-time-${className}`).value;
+            if(timeValue) {
+                newDefaults.classStartTimes[className] = timeValue;
+            }
+        });
+        
+        try {
+            await db.collection("teachers").doc(auth.currentUser.email).set(newDefaults, { merge: true });
+            showToast("Default start times saved!", { color: 'green' });
+            teacherDefaults.classStartTimes = newDefaults.classStartTimes; // Update in-memory defaults
+        } catch (error) {
+            console.error("Error saving defaults:", error);
+            showToast("Could not save defaults.", { color: 'red' });
+        }
+    }
+
+</script>
+<!-- Unchanged utility functions -->
+<script>
+    // These functions can be pasted here to keep the file complete
     function renderEditor() {
         const container = document.getElementById('slidesContainer');
         container.innerHTML = '';
@@ -255,7 +299,7 @@
             const deadlinePolicy = { classStartTimes: {} };
             allClassNames.forEach(className => {
                 const timeValue = document.getElementById(`start-time-${className}`).value;
-                if(timeValue) { deadlinePolicy.classStartTimes[className] = timeValue; }
+                if(timeValue) { deadlinePolicy.classStartTimes[String(className)] = timeValue; }
             });
             assignmentData.slideIds.forEach((id, index) => {
                 const qNum = index + 1;
@@ -280,7 +324,7 @@
             saveBtn.textContent = "Save Assignment";
         }
     }
-    
+
     function showToast(message, options = {}) {
         const { color = 'default', duration = 3000 } = options;
         const wrapper = document.getElementById('toast-wrapper');
