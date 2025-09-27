@@ -83,7 +83,7 @@
     let assignmentData = null;
     let tokenClient;
     let allClassNames = [];
-    let teacherDefaults = {}; // Store teacher's default settings
+    let teacherDefaults = {};
 
     auth.onAuthStateChanged(user => {
         if (user && TEACHER_EMAILS.map(e => e.toLowerCase()).includes(user.email.toLowerCase())) {
@@ -137,32 +137,25 @@
         const loadingText = document.getElementById('loading-text');
         try {
             loadingText.textContent = "Loading assignment data...";
-            // Fetch teacher defaults, assignment, and roster in parallel for speed
             const teacherDefaultsDoc = await db.collection("teachers").doc(auth.currentUser.email).get();
             if(teacherDefaultsDoc.exists) {
                 teacherDefaults = teacherDefaultsDoc.data();
             }
-
             const assignmentDoc = await db.collection("assignments").doc(assignmentId).get();
             if (!assignmentDoc.exists) { loadingText.textContent = "Error: Assignment not found."; return; }
             assignmentData = { id: assignmentDoc.id, ...assignmentDoc.data() };
-            
             const studentSnapshot = await db.collection("students").get();
             const students = studentSnapshot.docs.map(doc => doc.data());
-            // FIX: Ensure class names are strings to prevent duplicates from different data types
             allClassNames = [...new Set(students.map(s => String(s.class)))].sort();
-
             loadingText.textContent = "Fetching slide information from Google...";
             const response = await gapi.client.slides.presentations.get({ presentationId: assignmentData.presentationId });
             const slides = response.result.slides;
             if (!slides || slides.length === 0) { loadingText.textContent = "Error: No slides found in the presentation."; return; }
             assignmentData.slideIds = slides.map(slide => slide.objectId);
-
             document.getElementById('page-loader').classList.add('hidden');
             document.getElementById('editorContent').classList.remove('hidden');
             document.getElementById('assignmentTitle').textContent = `Editing: ${assignmentData.name}`;
             document.getElementById('shareLink').value = `https://custom.scienceclass.rocks/classroompicker.html?assignmentId=${assignmentId}`;
-
             renderDeadlineUI();
             renderEditor();
         } catch (error) {
@@ -177,61 +170,25 @@
         container.innerHTML = '';
         const assignmentStartTimes = assignmentData.deadlinePolicy?.classStartTimes;
         const defaultStartTimes = teacherDefaults.classStartTimes;
-        // Your provided default times
         const hardcodedDefaults = { '1': '08:01', '2': '08:50', '5': '11:17', '7': '12:55', '8': '13:44' };
-
         allClassNames.forEach(className => {
-            // Logic: Use assignment-specific time > teacher default > hardcoded default > 00:00
             const value = assignmentStartTimes?.[className] || defaultStartTimes?.[className] || hardcodedDefaults[className] || '00:00';
-            container.innerHTML += `
-                <div>
-                    <label for="start-time-${className}" class="block text-sm font-semibold">${className}</label>
-                    <input type="time" id="start-time-${className}" value="${value}" class="w-full mt-1 p-2 bg-gray-700 rounded border border-gray-600">
-                </div>
-            `;
+            container.innerHTML += `<div><label for="start-time-${className}" class="block text-sm font-semibold">${className}</label><input type="time" id="start-time-${className}" value="${value}" class="w-full mt-1 p-2 bg-gray-700 rounded border border-gray-600"></div>`;
         });
     }
 
-    function renderEditor() { /* ... unchanged ... */ }
-    async function saveAssignment() { /* ... unchanged ... */ }
-    
-    // NEW: Function to save the current start times as the teacher's default
-    async function saveTeacherDefaults() {
-        const newDefaults = { classStartTimes: {} };
-        allClassNames.forEach(className => {
-            const timeValue = document.getElementById(`start-time-${className}`).value;
-            if(timeValue) {
-                newDefaults.classStartTimes[className] = timeValue;
-            }
-        });
-        
-        try {
-            await db.collection("teachers").doc(auth.currentUser.email).set(newDefaults, { merge: true });
-            showToast("Default start times saved!", { color: 'green' });
-            teacherDefaults.classStartTimes = newDefaults.classStartTimes; // Update in-memory defaults
-        } catch (error) {
-            console.error("Error saving defaults:", error);
-            showToast("Could not save defaults.", { color: 'red' });
-        }
-    }
-
-</script>
-<!-- Unchanged utility functions -->
-<script>
-    // These functions can be pasted here to keep the file complete
     function renderEditor() {
         const container = document.getElementById('slidesContainer');
         container.innerHTML = '';
         let slideIds = assignmentData.slideIds || [];
         let checkerFunctions = assignmentData.checkerFunctions || {};
         let deadlinePolicy = assignmentData.deadlinePolicy || {};
-
         slideIds.forEach((slideId, index) => {
             const qNum = index + 1;
             const slidePolicy = deadlinePolicy[`q${qNum}`] || {};
             const editorBox = document.createElement('div');
             editorBox.className = "slide-editor-box grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-800 p-4 rounded-lg";
-            const placeholderText = `// Example:\nfunction calc${qNum}(studentAnswer, showToast) { ... }`;
+            const placeholderText = `// Example:\nfunction calc${qNum}(studentAnswer, showToast, userProfile) {\n  const name = userProfile.name.split(' ')[0];\n  showToast('Keep going, ' + name + '!');\n  return 100;\n}`;
             editorBox.innerHTML = `
                 <div>
                     <h3 class="text-xl font-semibold mb-2">Slide ${qNum}</h3>
@@ -240,27 +197,12 @@
                 <div>
                     <label for="checker-func-${index}" class="block font-semibold mb-2">Checker Function (calc${qNum})</label>
                     <textarea id="checker-func-${index}" class="w-full h-64 p-2 bg-gray-700 rounded">${checkerFunctions[`calc${qNum}`] || ''}</textarea>
-                    
                     <div class="mt-4 border-t border-gray-700 pt-4">
-                        <h4 class="font-semibold mb-2">Deadline & Late Policy for this Question</h4>
+                        <h4 class="font-semibold mb-2">Deadline & Late Policy</h4>
                         <div class="grid grid-cols-3 gap-2 text-sm">
-                            <div>
-                                <label for="deadline-minutes-${index}">Deadline (mins after start)</label>
-                                <input type="number" id="deadline-minutes-${index}" value="${slidePolicy.deadlineMinutes || 0}" class="w-full mt-1 p-2 bg-gray-700 rounded border-gray-600">
-                            </div>
-                            <div>
-                                <label for="penalty-type-${index}">Penalty Type</label>
-                                <select id="penalty-type-${index}" class="w-full mt-1 p-2 bg-gray-700 rounded border-gray-600">
-                                    <option value="none" ${!slidePolicy.penaltyType || slidePolicy.penaltyType === 'none' ? 'selected' : ''}>None</option>
-                                    <option value="zero" ${slidePolicy.penaltyType === 'zero' ? 'selected' : ''}>Set to 0</option>
-                                    <option value="deduction" ${slidePolicy.penaltyType === 'deduction' ? 'selected' : ''}>One-time Deduction (%)</option>
-                                    <option value="incremental" ${slidePolicy.penaltyType === 'incremental' ? 'selected' : ''}>Points per Minute</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label for="penalty-value-${index}">Penalty Value</label>
-                                <input type="number" id="penalty-value-${index}" value="${slidePolicy.penaltyValue || 0}" class="w-full mt-1 p-2 bg-gray-700 rounded border-gray-600">
-                            </div>
+                            <div><label>Deadline (mins)</label><input type="number" id="deadline-minutes-${index}" value="${slidePolicy.deadlineMinutes || 0}" class="w-full mt-1 p-2 bg-gray-700 rounded border-gray-600"></div>
+                            <div><label>Penalty Type</label><select id="penalty-type-${index}" class="w-full mt-1 p-2 bg-gray-700 rounded border-gray-600"><option value="none" ${!slidePolicy.penaltyType || slidePolicy.penaltyType === 'none' ? 'selected' : ''}>None</option><option value="zero" ${slidePolicy.penaltyType === 'zero' ? 'selected' : ''}>Set to 0</option><option value="deduction" ${slidePolicy.penaltyType === 'deduction' ? 'selected' : ''}>Deduction (%)</option><option value="incremental" ${slidePolicy.penaltyType === 'incremental' ? 'selected' : ''}>Points/Min</option></select></div>
+                            <div><label>Penalty Value</label><input type="number" id="penalty-value-${index}" value="${slidePolicy.penaltyValue || 0}" class="w-full mt-1 p-2 bg-gray-700 rounded border-gray-600"></div>
                         </div>
                     </div>
                 </div>
@@ -325,6 +267,25 @@
         }
     }
 
+    async function saveTeacherDefaults() {
+        const newDefaults = { classStartTimes: {} };
+        allClassNames.forEach(className => {
+            const timeValue = document.getElementById(`start-time-${className}`).value;
+            if(timeValue) {
+                newDefaults.classStartTimes[String(className)] = timeValue;
+            }
+        });
+        
+        try {
+            await db.collection("teachers").doc(auth.currentUser.email).set(newDefaults, { merge: true });
+            showToast("Default start times saved!", { color: 'green' });
+            teacherDefaults.classStartTimes = newDefaults.classStartTimes;
+        } catch (error) {
+            console.error("Error saving defaults:", error);
+            showToast("Could not save defaults.", { color: 'red' });
+        }
+    }
+
     function showToast(message, options = {}) {
         const { color = 'default', duration = 3000 } = options;
         const wrapper = document.getElementById('toast-wrapper');
@@ -351,7 +312,9 @@
         wrapper.appendChild(toast);
         timeoutId = setTimeout(dismiss, duration);
     }
-    document.getElementById('signOutButton').onclick = () => { auth.signOut(); };
+    document.getElementById('signOutButton').onclick = () => {
+        auth.signOut();
+    };
 </script>
 </body>
 </html>
