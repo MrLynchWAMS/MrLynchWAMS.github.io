@@ -40,13 +40,11 @@
                 <button id="signOutButton" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Sign Out</button>
             </div>
         </div>
-
         <div class="bg-gray-800 p-4 rounded-lg mb-6">
             <h2 class="text-xl font-semibold mb-2">Student Link</h2>
             <p class="text-gray-400 mb-2">Share this link with your students to have them complete this assignment.</p>
             <input id="shareLink" type="text" readonly class="w-full p-2 bg-gray-700 border border-gray-600 rounded">
         </div>
-        
         <div id="deadline-section" class="bg-gray-800 p-6 rounded-lg mb-8">
             <div class="flex justify-between items-center mb-4">
                  <h2 class="text-2xl font-bold text-yellow-400">Class Start Times & Deadlines</h2>
@@ -57,7 +55,6 @@
                 <!-- Time inputs will be added here -->
             </div>
         </div>
-
         <div id="slidesContainer" class="space-y-8"></div>
     </div>
 
@@ -188,7 +185,7 @@
             const slidePolicy = deadlinePolicy[`q${qNum}`] || {};
             const editorBox = document.createElement('div');
             editorBox.className = "slide-editor-box grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-800 p-4 rounded-lg";
-            const placeholderText = `// Example:\nfunction calc${qNum}(studentAnswer, showToast, userProfile) {\n  const name = userProfile.name.split(' ')[0];\n  showToast('Keep going, ' + name + '!');\n  return 100;\n}`;
+            const placeholderText = `// The 'userProfile' object is available here!\nfunction calc${qNum}(studentAnswer, showToast, userProfile) {\n  const name = userProfile.name.split(' ')[0];\n  showToast('Keep going, ' + name + '!');\n  return 100;\n}`;
             editorBox.innerHTML = `
                 <div>
                     <h3 class="text-xl font-semibold mb-2">Slide ${qNum}</h3>
@@ -196,7 +193,7 @@
                 </div>
                 <div>
                     <label for="checker-func-${index}" class="block font-semibold mb-2">Checker Function (calc${qNum})</label>
-                    <textarea id="checker-func-${index}" class="w-full h-64 p-2 bg-gray-700 rounded">${checkerFunctions[`calc${qNum}`] || ''}</textarea>
+                    <textarea id="checker-func-${index}" class="w-full h-64 p-2 bg-gray-700 rounded" placeholder="${placeholderText}">${checkerFunctions[`calc${qNum}`] || ''}</textarea>
                     <div class="mt-4 border-t border-gray-700 pt-4">
                         <h4 class="font-semibold mb-2">Deadline & Late Policy</h4>
                         <div class="grid grid-cols-3 gap-2 text-sm">
@@ -275,7 +272,6 @@
                 newDefaults.classStartTimes[String(className)] = timeValue;
             }
         });
-        
         try {
             await db.collection("teachers").doc(auth.currentUser.email).set(newDefaults, { merge: true });
             showToast("Default start times saved!", { color: 'green' });
