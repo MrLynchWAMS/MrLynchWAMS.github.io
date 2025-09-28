@@ -399,9 +399,19 @@
         const funcString = checkerFunctionStrings[funcName];
         if (funcString) {
             try {
-                const checkerFunction = new Function('return ' + funcString)();
-                // Pass the full userProfile object as the third argument
-                return checkerFunction(answer, showToast, userProfile);
+                // This creates a "runner" function that defines your checker and calls it,
+                // ensuring it has access to the correct variables.
+                const runner = new Function('studentAnswer', 'showToast', 'userProfile', `
+                    ${funcString}
+                    // Allow for function names like 'calc' or 'calc1'
+                    const funcToRun = typeof ${funcName} !== 'undefined' ? ${funcName} : (typeof calc !== 'undefined' ? calc : null);
+                    if (funcToRun) {
+                        return funcToRun(studentAnswer, showToast, userProfile);
+                    } else {
+                        throw new Error("Checker function (e.g., calc, calc${funcName}) not found in your code.");
+                    }
+                `);
+                return runner(answer, showToast, userProfile);
             } catch (e) {
                 console.error(`Error executing checker function ${funcName}:`, e);
                 showToast("Error in the checking logic for this slide.", {color: 'red'});
