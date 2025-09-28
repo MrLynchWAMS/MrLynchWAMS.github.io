@@ -392,13 +392,16 @@
         wrapper.appendChild(toast);
         timeoutId = setTimeout(dismiss, duration);
     }
+
+    // UPDATED: checkCurrentSlideAnswer now passes the userProfile object
     function checkCurrentSlideAnswer(answer) {
         const funcName = `calc${currentSlideIndex + 1}`;
         const funcString = checkerFunctionStrings[funcName];
         if (funcString) {
             try {
                 const checkerFunction = new Function('return ' + funcString)();
-                return checkerFunction(answer, showToast);
+                // Pass the full userProfile object as the third argument
+                return checkerFunction(answer, showToast, userProfile);
             } catch (e) {
                 console.error(`Error executing checker function ${funcName}:`, e);
                 showToast("Error in the checking logic for this slide.", {color: 'red'});
