@@ -127,18 +127,13 @@
 
     async function loadAndProcessData() {
         if (!assignmentId) return;
-        
         try {
             const assignmentDoc = await db.collection("assignments").doc(assignmentId).get();
             if (!assignmentDoc.exists) { showToast("Error: Assignment not found!", {color: 'red'}); return; }
             assignmentData = { id: assignmentDoc.id, ...assignmentDoc.data() };
             document.getElementById('assignmentName').textContent = assignmentData.name;
-
-            // OPTIMIZATION: Fetch roster once and store it.
             const studentSnapshot = await db.collection("students").get();
             studentRoster = studentSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-            // OPTIMIZATION: Only listen to submissions in real-time.
             db.collection("submissions").where("assignmentId", "==", assignmentId)
               .onSnapshot(submissionSnapshot => {
                 let submissions = submissionSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -156,7 +151,6 @@
     function processAndRender(submissions) {
         submissions.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
         const classData = {};
-        // OPTIMIZATION: Use the globally stored roster instead of re-fetching.
         studentRoster.forEach(student => {
             if (!classData[student.class]) classData[student.class] = [];
             const studentWithSubs = { ...student };
@@ -170,11 +164,130 @@
         renderTables(classData);
     }
     
-    // --- (The rest of the script is unchanged) ---
+    // --- (renderTabs, renderTables, and modals are unchanged from the last correct version) ---
+    // --- The key change is in the new executeChecker function below ---
+
+    // --- NEW: Upgraded "Sandboxed" Checker Function ---
+    function executeChecker(submission) {
+        const slideIndex = submission.slideIndex;
+        const studentAnswer = submission.answer;
+        const funcName = `calc${slideIndex + 1}`;
+        const funcString = assignmentData.checkerFunctions?.[funcName];
+        
+        if (funcString) {
+            try {
+                // This runner function creates a safe "sandbox" for the teacher's code
+                const runner = new Function('studentAnswer', 'userProfile', `
+                    // Suppress functions by redefining them as empty inside this scope
+                    const showToast = () => {};
+                    const window = { open: () => {} };
+                    const alert = () => {};
+                    const confirm = () => {};
+
+                    ${funcString}
+
+                    // Find the function to run (e.g., calc1, calc, etc.)
+                    const funcToRun = typeof ${funcName} !== 'undefined' ? ${funcName} : (typeof calc !== 'undefined' ? calc : null);
+                    if (funcToRun) {
+                        return funcToRun(studentAnswer, showToast, userProfile);
+                    } else {
+                        throw new Error("Checker function (e.g., calc, ${funcName}) not found in your code.");
+                    }
+                `);
+                
+                const userProfile = { name: submission.studentName, email: submission.studentEmail };
+                return runner(studentAnswer, userProfile);
+
+            } catch (e) {
+                console.error(`Error executing checker function ${funcName} for submission ${submission.id}:`, e);
+                return 0; // Return 0 if the teacher's code has a syntax error
+            }
+        }
+        return 0; // Default score if no function exists
+    }
+    
+    async function saveManualScore(submissionId, newScoreStr) {
+        const newScore = parseInt(newScoreStr, 10);
+        if (isNaN(newScore) || newScore < 0 || newScore > 100) {
+            showToast("Please enter a valid score between 0 and 100.", {color: 'red'});
+            return;
+        }
+        try {
+            await db.collection("submissions").doc(submissionId).update({ score: newScore, isManualGrade: true });
+            showToast("Score updated successfully!", {color: 'green'});
+        } catch (error) {
+            console.error("Error saving manual score:", error);
+            showToast("Failed to save score.", {color: 'red'});
+        }
+    }
+
+    async function saveAnswerText(submissionId, newAnswer) {
+        if (!newAnswer.trim()) {
+            showToast("Answer cannot be empty.", {color: 'red'});
+            return;
+        }
+        try {
+            await db.collection("submissions").doc(submissionId).update({ answer: newAnswer });
+            showToast("Answer text updated successfully!", {color: 'green'});
+        } catch (error) {
+            console.error("Error saving answer text:", error);
+            showToast("Failed to save answer text.", {color: 'red'});
+        }
+    }
+
+    async function rerunAutograder(submissionId) {
+        try {
+            const doc = await db.collection("submissions").doc(submissionId).get();
+            if (!doc.exists) throw new Error("Submission not found");
+            
+            const submission = doc.data();
+            const newScore = executeChecker(submission); // Use the new sandboxed checker
+
+            await db.collection("submissions").doc(submissionId).update({
+                score: newScore,
+                isManualGrade: false
+            });
+            showToast(`Re-graded score: ${newScore}`, {color: 'blue'});
+        } catch (error) {
+            console.error("Error re-running auto-grader:", error);
+            showToast("Failed to re-grade.", {color: 'red'});
+        }
+    }
+
+    async function bulkRegrade(slideIndex, className) {
+        if (!confirm(`Are you sure you want to re-grade all answers for Question ${slideIndex + 1} in ${className}? This cannot be undone.`)) {
+            return;
+        }
+        const studentsInClass = processedClassData[className];
+        if (!studentsInClass) return;
+        showToast(`Starting re-grade for Q${slideIndex + 1}...`, {color: 'blue'});
+        const batch = db.batch();
+        let updatedCount = 0;
+        studentsInClass.forEach(student => {
+            student.submissions.forEach(sub => {
+                if (sub.slideIndex === slideIndex) {
+                    const newScore = executeChecker(sub); // Use the new sandboxed checker
+                    const docRef = db.collection("submissions").doc(sub.id);
+                    batch.update(docRef, { score: newScore, isManualGrade: false });
+                    updatedCount++;
+                }
+            });
+        });
+        try {
+            await batch.commit();
+            showToast(`Successfully re-graded ${updatedCount} submissions!`, {color: 'green'});
+        } catch (error) {
+            console.error("Error during bulk re-grade:", error);
+            showToast("Bulk re-grade failed. See console.", {color: 'red'});
+        }
+    }
+    
+    // --- (All other utility functions: showToast, splitName, exportToCSV, etc. are unchanged) ---
 </script>
 
 <!-- Unchanged utility functions -->
 <script>
+    // These functions are pasted here to ensure the main script block is not overly cluttered.
     function renderTabs(classData) {
         const tabsContainer = document.getElementById('classTabs');
         tabsContainer.innerHTML = '';
@@ -313,92 +426,8 @@
         });
         modal.classList.remove('hidden');
     }
-    async function saveAnswerText(submissionId, newAnswer) {
-        if (!newAnswer.trim()) {
-            showToast("Answer cannot be empty.", {color: 'red'});
-            return;
-        }
-        try {
-            await db.collection("submissions").doc(submissionId).update({ answer: newAnswer });
-            showToast("Answer text updated successfully!", {color: 'green'});
-        } catch (error) {
-            console.error("Error saving answer text:", error);
-            showToast("Failed to save answer text.", {color: 'red'});
-        }
-    }
-    async function saveManualScore(submissionId, newScoreStr) {
-        const newScore = parseInt(newScoreStr, 10);
-        if (isNaN(newScore) || newScore < 0 || newScore > 100) {
-            showToast("Please enter a valid score between 0 and 100.", {color: 'red'});
-            return;
-        }
-        try {
-            await db.collection("submissions").doc(submissionId).update({ score: newScore, isManualGrade: true });
-            showToast("Score updated successfully!", {color: 'green'});
-        } catch (error) {
-            console.error("Error saving manual score:", error);
-            showToast("Failed to save score.", {color: 'red'});
-        }
-    }
-    async function rerunAutograder(submissionId) {
-        try {
-            const doc = await db.collection("submissions").doc(submissionId).get();
-            if (!doc.exists) throw new Error("Submission not found");
-            const submission = doc.data();
-            const newScore = executeChecker(submission.slideIndex, submission.answer);
-            await db.collection("submissions").doc(submissionId).update({ score: newScore, isManualGrade: false });
-            showToast(`Re-graded score: ${newScore}`, {color: 'blue'});
-        } catch (error) {
-            console.error("Error re-running auto-grader:", error);
-            showToast("Failed to re-grade.", {color: 'red'});
-        }
-    }
-    async function bulkRegrade(slideIndex, className) {
-        if (!confirm(`Are you sure you want to re-grade all answers for Question ${slideIndex + 1} in ${className}? This cannot be undone.`)) {
-            return;
-        }
-        const studentsInClass = processedClassData[className];
-        if (!studentsInClass) return;
-        showToast(`Starting re-grade for Q${slideIndex + 1}...`, {color: 'blue'});
-        const batch = db.batch();
-        let updatedCount = 0;
-        studentsInClass.forEach(student => {
-            student.submissions.forEach(sub => {
-                if (sub.slideIndex === slideIndex) {
-                    const newScore = executeChecker(sub.slideIndex, sub.answer);
-                    const docRef = db.collection("submissions").doc(sub.id);
-                    batch.update(docRef, { score: newScore, isManualGrade: false });
-                    updatedCount++;
-                }
-            });
-        });
-        try {
-            await batch.commit();
-            showToast(`Successfully re-graded ${updatedCount} submissions!`, {color: 'green'});
-        } catch (error) {
-            console.error("Error during bulk re-grade:", error);
-            showToast("Bulk re-grade failed. See console.", {color: 'red'});
-        }
-    }
-    function executeChecker(slideIndex, answer) {
-        const funcName = `calc${slideIndex + 1}`;
-        const funcString = assignmentData.checkerFunctions?.[funcName];
-        if (funcString) {
-            try {
-                const checkerFunction = new Function('return ' + funcString)();
-                const dummyShowToast = () => {}; 
-                return checkerFunction(answer, dummyShowToast);
-            } catch (e) {
-                console.error(`Error in checker function ${funcName}:`, e);
-                return 0;
-            }
-        }
-        return 0;
-    }
     function showToast(message, options = {}) { const { color = 'default', duration = 3000 } = options; const wrapper = document.getElementById('toast-wrapper'); if (!wrapper) return; const toast = document.createElement('div'); toast.className = 'flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm animate-fade-in-right'; const colors = { default: 'bg-gray-700', green: 'bg-green-600', red: 'bg-red-600', blue: 'bg-blue-600' }; toast.classList.add(colors[color] || colors['default']); const messageSpan = document.createElement('span'); messageSpan.textContent = message; toast.appendChild(messageSpan); const closeButton = document.createElement('button'); closeButton.innerHTML = '&times;'; closeButton.className = 'ml-4 text-2xl font-bold leading-none hover:text-gray-300 focus:outline-none'; let timeoutId = null; const dismiss = () => { if (timeoutId) clearTimeout(timeoutId); toast.classList.remove('animate-fade-in-right'); toast.classList.add('animate-fade-out-right'); toast.addEventListener('animationend', () => toast.remove()); }; closeButton.onclick = dismiss; toast.appendChild(closeButton); wrapper.appendChild(toast); timeoutId = setTimeout(dismiss, duration); }
-    document.getElementById('signOutButton').onclick = () => {
-        auth.signOut();
-    };
+    document.getElementById('signOutButton').onclick = () => { auth.signOut(); };
     function splitName(fullName) { if (!fullName) return { firstName: '', lastName: '' }; const parts = fullName.trim().split(' '); if (parts.length === 1) return { firstName: parts[0], lastName: '' }; const lastName = parts.pop(); const firstName = parts.join(' '); return { firstName, lastName }; }
     document.getElementById('exportButton').onclick = exportToCSV;
     document.getElementById('sortOptions').onchange = function(event) {
