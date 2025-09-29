@@ -12,14 +12,7 @@
     <style>
         .hidden { display: none; }
         textarea { resize: vertical; }
-        .toast-wrapper {
-            position: fixed;
-            z-index: 100;
-            padding: 1rem;
-            width: 100%;
-            max-width: 24rem; /* sm */
-            pointer-events: none;
-        }
+        .toast-wrapper { position: fixed; z-index: 100; padding: 1rem; width: 100%; max-width: 24rem; pointer-events: none; }
         .toast-wrapper > div { pointer-events: auto; }
         .top-left { top: 0; left: 0; }
         .top-center { top: 0; left: 50%; transform: translateX(-50%); }
@@ -42,10 +35,52 @@
 <body class="bg-gray-900 text-white font-sans flex items-center justify-center min-h-screen">
 
     <div class="container mx-auto p-4">
-        <!-- ... (HTML structure unchanged) ... -->
+        <div id="pageLoader" class="text-center">
+            <h1 class="text-3xl font-bold text-yellow-400">Loading Assignment...</h1>
+            <p id="loadingError" class="text-red-500 mt-4"></p>
+        </div>
+
+        <div id="loginContainer" class="hidden">
+             <div class="bg-gray-800 p-8 rounded-lg shadow-xl max-w-md mx-auto">
+                <h1 id="assignmentNameLogin" class="text-3xl font-bold text-yellow-400 mb-6 text-center"></h1>
+                <div id="passcodeForm">
+                    <p class="text-gray-300 mb-4">Enter your school email and the passcode provided by your teacher.</p>
+                    <input type="email" id="emailInput" placeholder="School Email" class="w-full p-3 mb-4 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500">
+                    <input type="password" id="passcodeInput" placeholder="Passcode" class="w-full p-3 mb-4 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500">
+                    <button onclick="handlePasscodeSignIn()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-colors">Sign In with Passcode</button>
+                    <p id="loginError" class="text-red-500 mt-4 text-center"></p>
+                </div>
+                <div class="text-center mt-6">
+                    <p class="text-gray-400 mb-2">or</p>
+                    <div id="g_id_onload" data-client_id="1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com" data-callback="handleCredentialResponse"></div>
+                    <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_black" data-text="signin_with" data-shape="rectangular" data-logo_alignment="left"></div>
+                </div>
+            </div>
+        </div>
+        <div id="mainContainer" class="hidden">
+             <div class="flex justify-end mb-4">
+                <button onclick="handleSignOut()" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Sign Out</button>
+             </div>
+             <div class="main-content-grid grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div class="slides-column md:col-span-2 bg-gray-800 p-4 rounded-lg">
+                    <div id="slide-loader" class="text-center py-10 flex items-center justify-center h-full"><p>Loading Slide...</p></div>
+                    <img id="slide-image" src="" alt="Current Slide" class="w-full border border-gray-700 rounded hidden">
+                    <div class="slide-nav flex justify-center items-center mt-4 gap-4">
+                        <button onclick="prevSlide()" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg">Previous</button>
+                        <span id="slide-counter" class="text-lg"></span>
+                        <button onclick="nextSlide()" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg">Next</button>
+                    </div>
+                </div>
+                <div class="interactive-column bg-gray-800 p-4 rounded-lg flex flex-col">
+                    <p id="prompt" class="font-semibold mb-2">Enter your answer for the current slide:</p>
+                    <textarea id="inputbox" placeholder="Your answer here..." rows="8" class="flex-grow w-full p-3 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500"></textarea>
+                    <button id="btn" onclick="myfunction()" class="w-full mt-4 bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition-colors">Check & Save Answer</button>
+                    <p id="result" class="mt-4 text-xl font-bold text-center"></p>
+                </div>
+            </div>
+        </div>
     </div>
     
-    <!-- Toast Wrappers -->
     <div id="toast-wrapper-top-left" class="toast-wrapper top-left space-y-3"></div>
     <div id="toast-wrapper-top-center" class="toast-wrapper top-center space-y-3"></div>
     <div id="toast-wrapper-top-right" class="toast-wrapper top-right space-y-3"></div>
@@ -53,54 +88,6 @@
     <div id="toast-wrapper-bottom-center" class="toast-wrapper bottom-center flex-col-reverse space-y-3"></div>
     <div id="toast-wrapper-bottom-right" class="toast-wrapper bottom-right flex-col-reverse space-y-3"></div>
 
-<script>
-    // --- (Firebase config and global variables are unchanged) ---
-    
-    // ... (All login, auth, and navigation functions are unchanged) ...
-
-    // --- UPDATED: The new, more robust checker execution engine ---
-    function checkCurrentSlideAnswer(answer) {
-        const funcNameKey = `calc${currentSlideIndex + 1}`;
-        const funcString = checkerFunctionStrings[funcNameKey];
-
-        if (funcString) {
-            try {
-                // Find the function name automatically from the teacher's code
-                const funcNameMatch = funcString.match(/function\s+([a-zA-Z0-9_]+)\s*\(/);
-                if (!funcNameMatch || !funcNameMatch[1]) {
-                    throw new Error("Could not find a valid function definition (e.g., 'function calc1(...)') in the checker code.");
-                }
-                const funcNameToRun = funcNameMatch[1];
-                
-                // This runner function creates a safe scope for the teacher's code
-                const runner = new Function('studentAnswer', 'showToast', 'userProfile', `
-                    // The teacher's full function code is placed here, which defines the function
-                    ${funcString}
-
-                    // Now, safely check for and call the function that was just defined
-                    if (typeof ${funcNameToRun} === 'function') {
-                        return ${funcNameToRun}(studentAnswer, showToast, userProfile);
-                    } else {
-                        // This case should rarely be hit with the new logic
-                        throw new Error("The function '${funcNameToRun}' defined in your code could not be executed.");
-                    }
-                `);
-
-                return runner(answer, showToast, userProfile);
-            } catch (e) {
-                console.error(`Error executing checker function ${funcNameKey}:`, e);
-                showToast(`Error in checking logic: ${e.message}`, {color: 'red'});
-                return 0;
-            }
-        }
-        showToast("No checking logic for this slide.");
-        return 0;
-    }
-
-    // --- (All other utility functions like showToast are unchanged) ---
-</script>
-
-<!-- The full, unchanged JavaScript for the page for completeness -->
 <script>
     const TEACHER_EMAILS = ["klynch@mtps.us"];
     const firebaseConfig = {
@@ -114,24 +101,38 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
     const auth = firebase.auth();
+
     let assignmentData = null;
     let currentSlideIndex = 0;
     let userProfile = null;
     let checkerFunctionStrings = {};
     let slideStates = [];
     let assignmentId;
+
     window.onload = async function() {
         const urlParams = new URLSearchParams(window.location.search);
         assignmentId = urlParams.get('assignmentId');
         const loader = document.getElementById('pageLoader');
         const errorP = document.getElementById('loadingError');
-        if (!assignmentId) { errorP.textContent = "Error: No assignment ID provided in the URL."; return; }
+
+        if (!assignmentId) {
+            errorP.textContent = "Error: No assignment ID provided in the URL.";
+            return;
+        }
+
         try {
             const doc = await db.collection("assignments").doc(assignmentId).get();
-            if (!doc.exists) { errorP.textContent = "Error: This assignment could not be found."; return; }
+            if (!doc.exists) {
+                errorP.textContent = "Error: This assignment could not be found.";
+                return;
+            }
             assignmentData = { id: doc.id, ...doc.data() };
-            if (assignmentData.checkerFunctions) { checkerFunctionStrings = assignmentData.checkerFunctions; }
+
+            if (assignmentData.checkerFunctions) {
+                checkerFunctionStrings = assignmentData.checkerFunctions;
+            }
             slideStates = new Array(assignmentData.slideIds.length).fill(null);
+            
             auth.onAuthStateChanged(user => {
                 if (user) {
                     const profile = { name: user.displayName, email: user.email };
@@ -142,19 +143,23 @@
                     document.getElementById('loginContainer').classList.remove('hidden');
                 }
             });
+
         } catch (error) {
             console.error("Error loading assignment:", error);
             errorP.textContent = "An error occurred while loading the assignment.";
         }
     };
+    
     async function authorizeAndStart(profile) {
         const errorP = document.getElementById('loadingError');
         const loader = document.getElementById('pageLoader');
+
         if (TEACHER_EMAILS.map(e => e.toLowerCase()).includes(profile.email.toLowerCase())) {
             userProfile = { name: profile.name, email: profile.email, class: 'Teacher' };
             initializeStudentSession();
             return;
         }
+
         try {
             const studentQuery = await db.collection("students").where("email", "==", profile.email).get();
             if (studentQuery.empty) {
@@ -167,6 +172,7 @@
             const studentData = studentQuery.docs[0].data();
             const studentClass = String(studentData.class);
             profile.class = studentClass;
+
             const assignedClasses = assignmentData.assignedClasses || [];
             if (!assignedClasses.includes(studentClass)) {
                 loader.classList.remove('hidden');
@@ -175,6 +181,7 @@
                 auth.signOut();
                 return;
             }
+            
             const classStatus = assignmentData.classStatus?.[studentClass];
             if (classStatus !== 'open') {
                 loader.classList.remove('hidden');
@@ -183,13 +190,16 @@
                 auth.signOut();
                 return;
             }
+            
             userProfile = profile;
             initializeStudentSession();
+
         } catch (error) {
             console.error("Authorization Error:", error);
             errorP.textContent = "An error occurred during authorization.";
         }
     }
+    
     async function initializeStudentSession() {
         document.getElementById('loginContainer').classList.add('hidden');
         const loader = document.getElementById('pageLoader');
@@ -200,6 +210,7 @@
         document.getElementById('mainContainer').classList.remove('hidden');
         updateSlideDisplay();
     }
+
     async function fetchStudentSubmissions() {
         if (!userProfile || !assignmentData) return;
         try {
@@ -217,6 +228,7 @@
             showToast("Could not load your previous work.", { color: 'red' });
         }
     }
+
     async function handlePasscodeSignIn() {
         const email = document.getElementById('emailInput').value.toLowerCase().trim();
         const passcodeString = document.getElementById('passcodeInput').value.trim();
@@ -240,7 +252,9 @@
             errorP.textContent = "An error occurred. Please try again later.";
         }
     }
+
     function decodeJwtResponse(token) { try { const base64Url = token.split('.')[1]; const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/'); const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) { return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2); }).join('')); return JSON.parse(jsonPayload); } catch (e) { return null; } }
+
     function handleCredentialResponse(response) {
         const credential = firebase.auth.GoogleAuthProvider.credential(response.credential);
         auth.signInWithCredential(credential)
@@ -249,16 +263,21 @@
                 document.getElementById('loginError').textContent = "Google Sign-In failed. Please try again.";
             });
     }
+    
     function updateSlideDisplay(retryCount = 0) {
         const MAX_RETRIES = 2;
         const slideId = assignmentData.slideIds[currentSlideIndex];
         const slideImageElement = document.getElementById('slide-image');
         const slideCounterElement = document.getElementById('slide-counter');
         const slideLoader = document.getElementById('slide-loader');
+        
         slideLoader.classList.remove('hidden');
         slideImageElement.classList.add('hidden');
+        
         const imageUrl = `https://docs.google.com/presentation/d/${assignmentData.presentationId}/export/png?id=${assignmentData.presentationId}&pageid=${slideId}&time=${new Date().getTime()}`;
+        
         slideImageElement.src = imageUrl;
+        
         slideCounterElement.innerText = `Slide ${currentSlideIndex + 1} of ${assignmentData.slideIds.length}`;
         const inputBox = document.getElementById('inputbox');
         const resultElement = document.getElementById('result');
@@ -275,10 +294,12 @@
             inputBox.value = "";
             resultElement.innerHTML = "";
         }
+
         slideImageElement.onload = () => {
             slideLoader.classList.add('hidden');
             slideImageElement.classList.remove('hidden');
         };
+        
         slideImageElement.onerror = () => {
             console.warn(`Attempt ${retryCount + 1} to load slide image failed.`);
             if (retryCount < MAX_RETRIES) {
@@ -292,7 +313,13 @@
             }
         };
     }
-    function handleSignOut() { auth.signOut().then(() => { window.location.reload(); }); }
+
+    function handleSignOut() {
+        auth.signOut().then(() => {
+            window.location.reload();
+        });
+    }
+
     function saveCurrentState() {
         const currentAnswer = document.getElementById('inputbox').value;
         if (currentAnswer.trim() !== "") {
@@ -302,6 +329,7 @@
             }
         }
     }
+
     function nextSlide() { 
         saveCurrentState();
         if (currentSlideIndex < assignmentData.slideIds.length - 1) { 
@@ -316,6 +344,7 @@
             updateSlideDisplay(); 
         } 
     }
+
     async function myfunction() {
         var studentAnswer = document.getElementById("inputbox").value;
         var resultElement = document.getElementById("result");
@@ -326,15 +355,18 @@
         let baseScore = checkCurrentSlideAnswer(studentAnswer);
         let finalScore = baseScore;
         const policy = assignmentData.deadlinePolicy;
+
         if (policy && userProfile.class !== 'Teacher') {
             const qPolicy = policy[`q${currentSlideIndex + 1}`];
             const classStartTimeStr = policy.classStartTimes?.[userProfile.class];
+
             if (qPolicy && qPolicy.deadlineMinutes > 0 && classStartTimeStr) {
                 const now = new Date();
                 const startTime = new Date();
                 const [hours, minutes] = classStartTimeStr.split(':');
                 startTime.setHours(hours, minutes, 0, 0);
                 const deadline = new Date(startTime.getTime() + qPolicy.deadlineMinutes * 60000);
+                
                 if (now > deadline) {
                     const minutesLate = Math.ceil((now - deadline) / 60000);
                     switch (qPolicy.penaltyType) {
@@ -355,7 +387,15 @@
             return;
         }
         try {
-            const submission = { studentName: userProfile.name, studentEmail: userProfile.email, assignmentId: assignmentData.id, slideIndex: currentSlideIndex, answer: studentAnswer, score: finalScore, timestamp: firebase.firestore.FieldValue.serverTimestamp() };
+            const submission = {
+                studentName: userProfile.name,
+                studentEmail: userProfile.email,
+                assignmentId: assignmentData.id,
+                slideIndex: currentSlideIndex,
+                answer: studentAnswer,
+                score: finalScore,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            };
             await db.collection("submissions").add(submission);
             showToast("Answer saved!", { color: 'blue', position: 'bottom-right', duration: 2000 });
         } catch (error) {
@@ -363,42 +403,87 @@
             showToast("Could not save answer. See console for details.", {color: 'red'});
         }
     }
+    
     function showToast(message, options = {}) {
         const { color = 'default', duration = 5000, position = 'top-right' } = options;
-        const wrapper = document.getElementById(`toast-wrapper-${position}`);
-        if (!wrapper) {
-            const newWrapper = document.createElement('div');
-            newWrapper.id = `toast-wrapper-${position}`;
-            newWrapper.className = `toast-wrapper ${position.replace('-', ' ')} space-y-3`;
-            document.body.appendChild(newWrapper);
+        
+        let wrapper = document.getElementById(`toast-wrapper-${position}`);
+        if (!wrapper) { // Create wrapper if it doesn't exist
+            wrapper = document.createElement('div');
+            wrapper.id = `toast-wrapper-${position}`;
+            const positionClasses = {
+                'top-right': 'top-0 right-0', 'top-left': 'top-0 left-0', 'top-center': 'top-0 left-1/2 -translate-x-1/2',
+                'bottom-right': 'bottom-0 right-0', 'bottom-left': 'bottom-0 left-0', 'bottom-center': 'bottom-0 left-1/2 -translate-x-1/2'
+            };
+            wrapper.className = `toast-wrapper fixed z-[100] p-4 pointer-events-none w-full max-w-sm space-y-3 ${positionClasses[position] || positionClasses['top-right']}`;
+            document.body.appendChild(wrapper);
         }
-        const toastWrapper = document.getElementById(`toast-wrapper-${position}`);
+        
         const toast = document.createElement('div');
         toast.className = 'flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm w-full animate-fade-in-up pointer-events-auto';
+
         const colors = { default: 'bg-gray-700', green: 'bg-green-600', red: 'bg-red-600', blue: 'bg-blue-600' };
         toast.classList.add(colors[color] || colors['default']);
+
         const messageSpan = document.createElement('span');
         messageSpan.className = "text-left";
         messageSpan.textContent = message;
         toast.appendChild(messageSpan);
+        
         const closeButton = document.createElement('button');
         closeButton.innerHTML = '&times;';
         closeButton.className = 'ml-4 text-2xl font-bold leading-none hover:text-gray-300 focus:outline-none';
+        
         let timeoutId = null;
+
         const dismiss = () => {
             if (timeoutId) clearTimeout(timeoutId);
             toast.classList.remove('animate-fade-in-up');
             toast.classList.add('animate-fade-out-down');
             toast.addEventListener('animationend', () => toast.remove());
         };
+
         closeButton.onclick = dismiss;
         toast.appendChild(closeButton);
+        
         if(position.includes('top')) {
-            toastWrapper.appendChild(toast);
+            wrapper.appendChild(toast);
         } else {
-            toastWrapper.prepend(toast);
+            wrapper.prepend(toast);
         }
+        
         timeoutId = setTimeout(dismiss, duration);
     }
+    
+    function checkCurrentSlideAnswer(answer) {
+        const funcNameKey = `calc${currentSlideIndex + 1}`;
+        const funcString = checkerFunctionStrings[funcNameKey];
+        if (funcString) {
+            try {
+                const funcNameMatch = funcString.match(/function\s+([a-zA-Z0-9_]+)\s*\(/);
+                if (!funcNameMatch || !funcNameMatch[1]) {
+                    throw new Error("Could not find a valid function definition (e.g., 'function calc1(...)') in the checker code.");
+                }
+                const funcNameToRun = funcNameMatch[1];
+                const runner = new Function('studentAnswer', 'showToast', 'userProfile', `
+                    ${funcString}
+                    if (typeof ${funcNameToRun} === 'function') {
+                        return ${funcNameToRun}(studentAnswer, showToast, userProfile);
+                    } else {
+                        throw new Error("The function '${funcNameToRun}' defined in your code could not be executed.");
+                    }
+                `);
+                return runner(answer, showToast, userProfile);
+            } catch (e) {
+                console.error(`Error executing checker function ${funcNameKey}:`, e);
+                showToast(`Error in checking logic: ${e.message}`, {color: 'red'});
+                return 0;
+            }
+        }
+        showToast("No checking logic for this slide.");
+        return 0;
+    }
 </script>
+</body>
+</html>
 
