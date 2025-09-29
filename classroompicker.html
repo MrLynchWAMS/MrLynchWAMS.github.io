@@ -21,11 +21,11 @@
 <body class="bg-gray-900 text-white font-sans flex items-center justify-center min-h-screen">
 
     <div class="container mx-auto p-4">
+        <!-- ... (Login and Main Container HTML is unchanged) ... -->
         <div id="pageLoader" class="text-center">
             <h1 class="text-3xl font-bold text-yellow-400">Loading Assignment...</h1>
             <p id="loadingError" class="text-red-500 mt-4"></p>
         </div>
-
         <div id="loginContainer" class="hidden">
              <div class="bg-gray-800 p-8 rounded-lg shadow-xl max-w-md mx-auto">
                 <h1 id="assignmentNameLogin" class="text-3xl font-bold text-yellow-400 mb-6 text-center"></h1>
@@ -67,10 +67,11 @@
         </div>
     </div>
     
-    <div id="toast-wrapper" class="fixed top-4 right-4 z-[100] space-y-3 w-full max-w-sm"></div>
+    <!-- UPDATED: Wrapper for all dynamic toasts -->
+    <div id="toast-wrapper-container" class="fixed inset-0 pointer-events-none p-4 flex flex-col items-end justify-start space-y-3 z-[100]"></div>
 
 <script>
-    const TEACHER_EMAILS = ["klynch@mtps.us"];
+    // ... (Firebase config and other variables are unchanged) ...
     const firebaseConfig = {
       apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
       authDomain: "mrlynch-slides-app.firebaseapp.com",
@@ -82,7 +83,6 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
     const auth = firebase.auth();
-
     let assignmentData = null;
     let currentSlideIndex = 0;
     let userProfile = null;
@@ -90,30 +90,71 @@
     let slideStates = [];
     let assignmentId;
 
+    // ... (window.onload and all login/auth functions are unchanged) ...
+
+    // --- UPDATED: The new, more powerful showToast function ---
+    function showToast(message, options = {}) {
+        const { color = 'default', duration = 5000, position = 'top-right' } = options;
+        
+        const wrapper = document.createElement('div');
+        wrapper.className = `fixed z-[100] p-4 pointer-events-none w-full max-w-sm`;
+        
+        const positionClasses = {
+            'top-right': 'top-0 right-0',
+            'top-left': 'top-0 left-0',
+            'top-center': 'top-0 left-1/2 -translate-x-1/2',
+            'bottom-right': 'bottom-0 right-0',
+            'bottom-left': 'bottom-0 left-0',
+            'bottom-center': 'bottom-0 left-1/2 -translate-x-1/2'
+        };
+        wrapper.classList.add(...(positionClasses[position] || positionClasses['top-right']).split(' '));
+        
+        const toast = document.createElement('div');
+        toast.className = 'flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm animate-fade-in-right pointer-events-auto';
+
+        const colors = { default: 'bg-gray-700', green: 'bg-green-600', red: 'bg-red-600', blue: 'bg-blue-600' };
+        toast.classList.add(colors[color] || colors['default']);
+
+        const messageSpan = document.createElement('span');
+        messageSpan.textContent = message;
+        toast.appendChild(messageSpan);
+        
+        const closeButton = document.createElement('button');
+        closeButton.innerHTML = '&times;';
+        closeButton.className = 'ml-4 text-2xl font-bold leading-none hover:text-gray-300 focus:outline-none';
+        
+        let timeoutId = null;
+
+        const dismiss = () => {
+            if (timeoutId) clearTimeout(timeoutId);
+            toast.classList.remove('animate-fade-in-right');
+            toast.classList.add('animate-fade-out-right');
+            toast.addEventListener('animationend', () => wrapper.remove());
+        };
+
+        closeButton.onclick = dismiss;
+        toast.appendChild(closeButton);
+        
+        wrapper.appendChild(toast);
+        document.body.appendChild(wrapper);
+        
+        timeoutId = setTimeout(dismiss, duration);
+    }
+</script>
+<!-- Paste the full, correct, single-script version of the remaining JS functions here -->
+<script>
     window.onload = async function() {
         const urlParams = new URLSearchParams(window.location.search);
         assignmentId = urlParams.get('assignmentId');
         const loader = document.getElementById('pageLoader');
         const errorP = document.getElementById('loadingError');
-
-        if (!assignmentId) {
-            errorP.textContent = "Error: No assignment ID provided in the URL.";
-            return;
-        }
-
+        if (!assignmentId) { errorP.textContent = "Error: No assignment ID provided in the URL."; return; }
         try {
             const doc = await db.collection("assignments").doc(assignmentId).get();
-            if (!doc.exists) {
-                errorP.textContent = "Error: This assignment could not be found.";
-                return;
-            }
+            if (!doc.exists) { errorP.textContent = "Error: This assignment could not be found."; return; }
             assignmentData = { id: doc.id, ...doc.data() };
-
-            if (assignmentData.checkerFunctions) {
-                checkerFunctionStrings = assignmentData.checkerFunctions;
-            }
+            if (assignmentData.checkerFunctions) { checkerFunctionStrings = assignmentData.checkerFunctions; }
             slideStates = new Array(assignmentData.slideIds.length).fill(null);
-            
             auth.onAuthStateChanged(user => {
                 if (user) {
                     const profile = { name: user.displayName, email: user.email };
@@ -124,36 +165,31 @@
                     document.getElementById('loginContainer').classList.remove('hidden');
                 }
             });
-
         } catch (error) {
             console.error("Error loading assignment:", error);
             errorP.textContent = "An error occurred while loading the assignment.";
         }
     };
-    
     async function authorizeAndStart(profile) {
         const errorP = document.getElementById('loadingError');
         const loader = document.getElementById('pageLoader');
-
         if (TEACHER_EMAILS.map(e => e.toLowerCase()).includes(profile.email.toLowerCase())) {
             userProfile = { name: profile.name, email: profile.email, class: 'Teacher' };
             initializeStudentSession();
             return;
         }
-
         try {
             const studentQuery = await db.collection("students").where("email", "==", profile.email).get();
             if (studentQuery.empty) {
                 loader.classList.remove('hidden');
                 errorP.textContent = "Access Denied: Your email is not on the class roster.";
                 document.getElementById('loginContainer').classList.add('hidden');
-                auth.signOut(); // Sign out unauthorized user
+                auth.signOut();
                 return;
             }
             const studentData = studentQuery.docs[0].data();
             const studentClass = String(studentData.class);
             profile.class = studentClass;
-
             const assignedClasses = assignmentData.assignedClasses || [];
             if (!assignedClasses.includes(studentClass)) {
                 loader.classList.remove('hidden');
@@ -162,7 +198,6 @@
                 auth.signOut();
                 return;
             }
-            
             const classStatus = assignmentData.classStatus?.[studentClass];
             if (classStatus !== 'open') {
                 loader.classList.remove('hidden');
@@ -171,16 +206,13 @@
                 auth.signOut();
                 return;
             }
-            
             userProfile = profile;
             initializeStudentSession();
-
         } catch (error) {
             console.error("Authorization Error:", error);
             errorP.textContent = "An error occurred during authorization.";
         }
     }
-    
     async function initializeStudentSession() {
         document.getElementById('loginContainer').classList.add('hidden');
         const loader = document.getElementById('pageLoader');
@@ -191,7 +223,6 @@
         document.getElementById('mainContainer').classList.remove('hidden');
         updateSlideDisplay();
     }
-
     async function fetchStudentSubmissions() {
         if (!userProfile || !assignmentData) return;
         try {
@@ -209,7 +240,6 @@
             showToast("Could not load your previous work.", { color: 'red' });
         }
     }
-
     async function handlePasscodeSignIn() {
         const email = document.getElementById('emailInput').value.toLowerCase().trim();
         const passcodeString = document.getElementById('passcodeInput').value.trim();
@@ -233,16 +263,11 @@
             errorP.textContent = "An error occurred. Please try again later.";
         }
     }
-
     function decodeJwtResponse(token) { try { const base64Url = token.split('.')[1]; const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/'); const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) { return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2); }).join('')); return JSON.parse(jsonPayload); } catch (e) { return null; } }
-
-    // UPDATED: More explicit sign-in flow
     function handleCredentialResponse(response) {
         const credential = firebase.auth.GoogleAuthProvider.credential(response.credential);
         auth.signInWithCredential(credential)
             .then((result) => {
-                // This block now executes immediately on successful sign-in,
-                // making the flow more reliable than waiting for onAuthStateChanged.
                 const user = result.user;
                 if (user) {
                     const profile = { name: user.displayName, email: user.email };
@@ -254,21 +279,16 @@
                 document.getElementById('loginError').textContent = "Google Sign-In failed. Please try again.";
             });
     }
-    
     function updateSlideDisplay(retryCount = 0) {
         const MAX_RETRIES = 2;
         const slideId = assignmentData.slideIds[currentSlideIndex];
         const slideImageElement = document.getElementById('slide-image');
         const slideCounterElement = document.getElementById('slide-counter');
         const slideLoader = document.getElementById('slide-loader');
-        
         slideLoader.classList.remove('hidden');
         slideImageElement.classList.add('hidden');
-        
         const imageUrl = `https://docs.google.com/presentation/d/${assignmentData.presentationId}/export/png?id=${assignmentData.presentationId}&pageid=${slideId}&time=${new Date().getTime()}`;
-        
         slideImageElement.src = imageUrl;
-        
         slideCounterElement.innerText = `Slide ${currentSlideIndex + 1} of ${assignmentData.slideIds.length}`;
         const inputBox = document.getElementById('inputbox');
         const resultElement = document.getElementById('result');
@@ -285,12 +305,10 @@
             inputBox.value = "";
             resultElement.innerHTML = "";
         }
-
         slideImageElement.onload = () => {
             slideLoader.classList.add('hidden');
             slideImageElement.classList.remove('hidden');
         };
-        
         slideImageElement.onerror = () => {
             console.warn(`Attempt ${retryCount + 1} to load slide image failed.`);
             if (retryCount < MAX_RETRIES) {
@@ -304,13 +322,7 @@
             }
         };
     }
-
-    function handleSignOut() {
-        auth.signOut().then(() => {
-            window.location.reload();
-        });
-    }
-
+    function handleSignOut() { auth.signOut().then(() => { window.location.reload(); }); }
     function saveCurrentState() {
         const currentAnswer = document.getElementById('inputbox').value;
         if (currentAnswer.trim() !== "") {
@@ -320,7 +332,6 @@
             }
         }
     }
-
     function nextSlide() { 
         saveCurrentState();
         if (currentSlideIndex < assignmentData.slideIds.length - 1) { 
@@ -335,7 +346,6 @@
             updateSlideDisplay(); 
         } 
     }
-
     async function myfunction() {
         var studentAnswer = document.getElementById("inputbox").value;
         var resultElement = document.getElementById("result");
@@ -346,35 +356,21 @@
         let baseScore = checkCurrentSlideAnswer(studentAnswer);
         let finalScore = baseScore;
         const policy = assignmentData.deadlinePolicy;
-
         if (policy && userProfile.class !== 'Teacher') {
             const qPolicy = policy[`q${currentSlideIndex + 1}`];
             const classStartTimeStr = policy.classStartTimes?.[userProfile.class];
-
             if (qPolicy && qPolicy.deadlineMinutes > 0 && classStartTimeStr) {
                 const now = new Date();
                 const startTime = new Date();
                 const [hours, minutes] = classStartTimeStr.split(':');
                 startTime.setHours(hours, minutes, 0, 0);
                 const deadline = new Date(startTime.getTime() + qPolicy.deadlineMinutes * 60000);
-                
                 if (now > deadline) {
                     const minutesLate = Math.ceil((now - deadline) / 60000);
                     switch (qPolicy.penaltyType) {
-                        case 'zero':
-                            finalScore = 0;
-                            showToast(`Submitted ${minutesLate} mins late. Score is 0.`, {color: 'red', duration: 7000});
-                            break;
-                        case 'deduction':
-                            const deduction = baseScore * (qPolicy.penaltyValue / 100);
-                            finalScore = Math.round(baseScore - deduction);
-                            showToast(`-${qPolicy.penaltyValue}% for being ${minutesLate} mins late.`, {color: 'red', duration: 7000});
-                            break;
-                        case 'incremental':
-                            const pointsOff = minutesLate * qPolicy.penaltyValue;
-                            finalScore = baseScore - pointsOff;
-                            showToast(`-${pointsOff} points for being ${minutesLate} mins late.`, {color: 'red', duration: 7000});
-                            break;
+                        case 'zero': finalScore = 0; showToast(`Submitted ${minutesLate} mins late. Score is 0.`, {color: 'red', duration: 7000}); break;
+                        case 'deduction': const deduction = baseScore * (qPolicy.penaltyValue / 100); finalScore = Math.round(baseScore - deduction); showToast(`-${qPolicy.penaltyValue}% for being ${minutesLate} mins late.`, {color: 'red', duration: 7000}); break;
+                        case 'incremental': const pointsOff = minutesLate * qPolicy.penaltyValue; finalScore = baseScore - pointsOff; showToast(`-${pointsOff} points for being ${minutesLate} mins late.`, {color: 'red', duration: 7000}); break;
                         default: finalScore = baseScore; break;
                     }
                     finalScore = Math.max(0, finalScore);
@@ -389,15 +385,7 @@
             return;
         }
         try {
-            const submission = {
-                studentName: userProfile.name,
-                studentEmail: userProfile.email,
-                assignmentId: assignmentData.id,
-                slideIndex: currentSlideIndex,
-                answer: studentAnswer,
-                score: finalScore,
-                timestamp: firebase.firestore.FieldValue.serverTimestamp()
-            };
+            const submission = { studentName: userProfile.name, studentEmail: userProfile.email, assignmentId: assignmentData.id, slideIndex: currentSlideIndex, answer: studentAnswer, score: finalScore, timestamp: firebase.firestore.FieldValue.serverTimestamp() };
             await db.collection("submissions").add(submission);
             showToast("Answer saved!", { color: 'blue', duration: 2000 });
         } catch (error) {
@@ -405,47 +393,12 @@
             showToast("Could not save answer. See console for details.", {color: 'red'});
         }
     }
-    
-    function showToast(message, options = {}) {
-        const { color = 'default', duration = 5000 } = options;
-        const wrapper = document.getElementById('toast-wrapper');
-        if (!wrapper) return;
-        const toast = document.createElement('div');
-        toast.className = 'flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm animate-fade-in-right';
-        const colors = { default: 'bg-gray-700', green: 'bg-green-600', red: 'bg-red-600', blue: 'bg-blue-600' };
-        toast.classList.add(colors[color] || colors['default']);
-        const messageSpan = document.createElement('span');
-        messageSpan.textContent = message;
-        toast.appendChild(messageSpan);
-        const closeButton = document.createElement('button');
-        closeButton.innerHTML = '&times;';
-        closeButton.className = 'ml-4 text-2xl font-bold leading-none hover:text-gray-300 focus:outline-none';
-        let timeoutId = null;
-        const dismiss = () => {
-            if (timeoutId) clearTimeout(timeoutId);
-            toast.classList.remove('animate-fade-in-right');
-            toast.classList.add('animate-fade-out-right');
-            toast.addEventListener('animationend', () => toast.remove());
-        };
-        closeButton.onclick = dismiss;
-        toast.appendChild(closeButton);
-        wrapper.appendChild(toast);
-        timeoutId = setTimeout(dismiss, duration);
-    }
     function checkCurrentSlideAnswer(answer) {
         const funcName = `calc${currentSlideIndex + 1}`;
         const funcString = checkerFunctionStrings[funcName];
         if (funcString) {
             try {
-                const runner = new Function('studentAnswer', 'showToast', 'userProfile', `
-                    ${funcString}
-                    const funcToRun = typeof ${funcName} !== 'undefined' ? ${funcName} : (typeof calc !== 'undefined' ? calc : null);
-                    if (funcToRun) {
-                        return funcToRun(studentAnswer, showToast, userProfile);
-                    } else {
-                        throw new Error("Checker function (e.g., calc, ${funcName}) not found in your code.");
-                    }
-                `);
+                const runner = new Function('studentAnswer', 'showToast', 'userProfile', `${funcString}\nconst funcToRun = typeof ${funcName} !== 'undefined' ? ${funcName} : (typeof calc !== 'undefined' ? calc : null); if (funcToRun) { return funcToRun(studentAnswer, showToast, userProfile); } else { throw new Error("Checker function (e.g., calc, ${funcName}) not found in your code."); }`);
                 return runner(answer, showToast, userProfile);
             } catch (e) {
                 console.error(`Error executing checker function ${funcName}:`, e);
