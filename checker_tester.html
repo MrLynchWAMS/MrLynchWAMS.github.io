@@ -7,16 +7,32 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         textarea { font-family: monospace; resize: vertical; }
-        @keyframes fade-in-right {
-            from { opacity: 0; transform: translateX(100%); }
-            to { opacity: 1; transform: translateX(0); }
+        .toast-wrapper {
+            position: fixed;
+            z-index: 100;
+            padding: 1rem;
+            width: 100%;
+            max-width: 24rem; /* sm */
+            pointer-events: none;
         }
-        @keyframes fade-out-right {
-            from { opacity: 1; transform: translateX(0); }
-            to { opacity: 0; transform: translateX(100%); }
+        .toast-wrapper > div { pointer-events: auto; }
+        .top-left { top: 0; left: 0; }
+        .top-center { top: 0; left: 50%; transform: translateX(-50%); }
+        .top-right { top: 0; right: 0; }
+        .bottom-left { bottom: 0; left: 0; }
+        .bottom-center { bottom: 0; left: 50%; transform: translateX(-50%); }
+        .bottom-right { bottom: 0; right: 0; }
+
+        @keyframes fade-in-up {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
         }
-        .animate-fade-in-right { animation: fade-in-right 0.5s ease-out forwards; }
-        .animate-fade-out-right { animation: fade-out-right 0.5s ease-in forwards; }
+        @keyframes fade-out-down {
+            from { opacity: 1; transform: translateY(0); }
+            to { opacity: 0; transform: translateY(20px); }
+        }
+        .animate-fade-in-up { animation: fade-in-up 0.5s ease-out forwards; }
+        .animate-fade-out-down { animation: fade-out-down 0.5s ease-in forwards; }
     </style>
 </head>
 <body class="bg-gray-900 text-white font-sans">
@@ -29,20 +45,29 @@
             <!-- Left Side: Code Input -->
             <div class="bg-gray-800 p-6 rounded-lg shadow-xl">
                 <label for="checkerCode" class="block text-xl font-semibold mb-2">1. Paste Your Checker Function</label>
-                <p class="text-sm text-gray-400 mb-4">Make sure it's a complete function, e.g., `function calc1(answer, showToast) { ... }`</p>
-                <textarea id="checkerCode" class="w-full h-80 p-3 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500" placeholder="function calc1(studentAnswer, showToast) { ... }"></textarea>
+                <p class="text-sm text-gray-400 mb-4">The function can accept up to three parameters: `(studentAnswer, showToast, userProfile)`</p>
+                <textarea id="checkerCode" class="w-full h-80 p-3 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500" placeholder="function calc(studentAnswer, showToast, userProfile) { ... }"></textarea>
             </div>
 
             <!-- Right Side: Testing Area -->
-            <div class="bg-gray-800 p-6 rounded-lg shadow-xl">
-                <label for="studentAnswer" class="block text-xl font-semibold mb-2">2. Enter a Sample Student Answer</label>
-                <textarea id="studentAnswer" class="w-full h-40 p-3 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500" placeholder="Type a sample student response here..."></textarea>
+            <div class="bg-gray-800 p-6 rounded-lg shadow-xl space-y-4">
+                <div>
+                    <label for="mockStudentName" class="block text-xl font-semibold mb-2">2. Simulate a Student (Optional)</label>
+                    <div class="grid grid-cols-2 gap-4">
+                        <input type="text" id="mockStudentName" class="w-full p-3 bg-gray-700 rounded border border-gray-600" placeholder="Mock Student Name">
+                        <input type="email" id="mockStudentEmail" class="w-full p-3 bg-gray-700 rounded border border-gray-600" placeholder="Mock Student Email">
+                    </div>
+                </div>
+                <div>
+                    <label for="studentAnswer" class="block text-xl font-semibold mb-2">3. Enter a Sample Answer</label>
+                    <textarea id="studentAnswer" class="w-full h-32 p-3 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500" placeholder="Type a sample student response here..."></textarea>
+                </div>
                 
-                <button onclick="runTest()" class="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-colors text-lg">
-                    3. Run Test
+                <button onclick="runTest()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-colors text-lg">
+                    4. Run Test
                 </button>
 
-                <div class="mt-6">
+                <div class="pt-4">
                     <h3 class="text-xl font-semibold">Result:</h3>
                     <div id="resultBox" class="mt-2 p-4 bg-gray-700 rounded-lg text-2xl font-bold text-center">
                         --
@@ -53,8 +78,13 @@
         </div>
     </div>
 
-    <!-- Toast Notification Wrapper -->
-    <div id="toast-wrapper" class="fixed top-4 right-4 z-[100] space-y-3 w-full max-w-sm"></div>
+    <!-- Toast Notification Wrappers -->
+    <div id="toast-wrapper-top-left" class="toast-wrapper top-left space-y-3"></div>
+    <div id="toast-wrapper-top-center" class="toast-wrapper top-center space-y-3"></div>
+    <div id="toast-wrapper-top-right" class="toast-wrapper top-right space-y-3"></div>
+    <div id="toast-wrapper-bottom-left" class="toast-wrapper bottom-left flex-col-reverse space-y-3"></div>
+    <div id="toast-wrapper-bottom-center" class="toast-wrapper bottom-center flex-col-reverse space-y-3"></div>
+    <div id="toast-wrapper-bottom-right" class="toast-wrapper bottom-right flex-col-reverse space-y-3"></div>
 
 <script>
     function runTest() {
@@ -70,16 +100,38 @@
             errorBox.textContent = "Error: Checker function code is empty.";
             return;
         }
+        
+        const mockUserProfile = {
+            name: document.getElementById('mockStudentName').value || "Test Student",
+            email: document.getElementById('mockStudentEmail').value || "test@example.com"
+        };
 
         try {
-            // Create the function from the user's code string
-            const checkerFunction = new Function('return ' + codeInput)();
+            // Find the function name automatically from the code
+            const funcNameMatch = codeInput.match(/function\s+([a-zA-Z0-9_]+)\s*\(/);
+            if (!funcNameMatch || !funcNameMatch[1]) {
+                throw new Error("Could not find a valid function definition (e.g., 'function calc(...)') in your code.");
+            }
+            const funcNameToRun = funcNameMatch[1];
             
-            // Run the function with the sample answer and the real showToast utility
-            const score = checkerFunction(studentAnswer, showToast);
+            // Create a "runner" function that will execute the user's code safely
+            const runner = new Function('studentAnswer', 'showToast', 'userProfile', `
+                // The user's full function code is placed here, which defines the function
+                ${codeInput}
+
+                // Now, safely check for and call the function that was just defined
+                if (typeof ${funcNameToRun} === 'function') {
+                    return ${funcNameToRun}(studentAnswer, showToast, userProfile);
+                } else {
+                    throw new Error("The function '${funcNameToRun}' defined in your code could not be executed.");
+                }
+            `);
+
+            // Run the function with the sample answer, the real showToast utility, and the mock profile
+            const score = runner(studentAnswer, showToast, mockUserProfile);
 
             resultBox.textContent = `Score: ${score}`;
-            resultBox.style.color = score === 100 ? '#48bb78' : '#f6ad55'; // green-500 or orange-400
+            resultBox.style.color = score >= 90 ? '#48bb78' : '#f6ad55'; // green-500 or orange-400
 
         } catch (e) {
             console.error("Error executing checker function:", e);
@@ -87,24 +139,24 @@
         }
     }
 
-    // The robust, dynamic toast function from your main app
+    // The robust, position-aware toast function from your main app
     function showToast(message, options = {}) {
-        const { color = 'default', duration = 5000 } = options;
-        const wrapper = document.getElementById('toast-wrapper');
-        if (!wrapper) return;
-
+        const { color = 'default', duration = 5000, position = 'top-right' } = options;
+        
+        let wrapper = document.getElementById(`toast-wrapper-${position}`);
+        if (!wrapper) {
+            console.error(`Toast wrapper for position "${position}" not found! Defaulting to top-right.`);
+            wrapper = document.getElementById('toast-wrapper-top-right');
+        }
+        
         const toast = document.createElement('div');
-        toast.className = 'flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm animate-fade-in-right';
+        toast.className = 'flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm w-full animate-fade-in-up pointer-events-auto';
 
-        const colors = {
-            default: 'bg-gray-700',
-            green: 'bg-green-600',
-            red: 'bg-red-600',
-            blue: 'bg-blue-600'
-        };
+        const colors = { default: 'bg-gray-700', green: 'bg-green-600', red: 'bg-red-600', blue: 'bg-blue-600' };
         toast.classList.add(colors[color] || colors['default']);
 
         const messageSpan = document.createElement('span');
+        messageSpan.className = "text-left";
         messageSpan.textContent = message;
         toast.appendChild(messageSpan);
         
@@ -116,16 +168,23 @@
 
         const dismiss = () => {
             if (timeoutId) clearTimeout(timeoutId);
-            toast.classList.remove('animate-fade-in-right');
-            toast.classList.add('animate-fade-out-right');
+            toast.classList.remove('animate-fade-in-up');
+            toast.classList.add('animate-fade-out-down');
             toast.addEventListener('animationend', () => toast.remove());
         };
 
         closeButton.onclick = dismiss;
         toast.appendChild(closeButton);
-        wrapper.appendChild(toast);
+        
+        if(position.includes('top')) {
+            wrapper.appendChild(toast);
+        } else {
+            wrapper.prepend(toast);
+        }
+        
         timeoutId = setTimeout(dismiss, duration);
     }
 </script>
 </body>
 </html>
+
