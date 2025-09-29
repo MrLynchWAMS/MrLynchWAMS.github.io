@@ -82,7 +82,7 @@
     <div id="toast-wrapper" class="fixed top-4 right-4 z-[100] space-y-3 w-full max-w-sm"></div>
 
 <script>
-    const TEACHER_EMAILS = ["klynch@mtps.us", "cfiori@mtps.us", "mstuart@mtps.us", "cheine@mtps.us"];
+    const TEACHER_EMAILS = ["klynch@mtps.us"];
     const firebaseConfig = {
       apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
       authDomain: "mrlynch-slides-app.firebaseapp.com",
@@ -117,7 +117,6 @@
     }
 
     async function loadAssignmentsAndClasses() {
-        // First, get all unique class names from the roster
         try {
             const studentSnapshot = await db.collection("students").get();
             const students = studentSnapshot.docs.map(doc => doc.data());
@@ -127,7 +126,6 @@
             showToast("Error: Could not load class roster.", { color: 'red' });
         }
         
-        // Now, set up the real-time listener for assignments
         db.collection("assignments").orderBy("createdAt", "desc")
           .onSnapshot(renderAssignments, error => {
               console.error("Error loading assignments:", error);
@@ -315,13 +313,6 @@
         }
     }
     
-    async function deleteAssignment(id, name) { /* ... unchanged ... */ }
-    document.getElementById('signOutButton').onclick = () => { auth.signOut(); };
-    function showToast(message, options = {}) { /* ... unchanged ... */ }
-</script>
-
-<script>
-    // Unchanged utility functions
     async function deleteAssignment(id, name) {
         if (confirm(`Are you sure you want to permanently delete the assignment "${name}"? This action cannot be undone.`)) {
              try {
@@ -333,6 +324,8 @@
             }
         }
     }
+
+    document.getElementById('signOutButton').onclick = () => { auth.signOut(); };
     function showToast(message, options = {}) { const { color = 'default', duration = 3000 } = options; const wrapper = document.getElementById('toast-wrapper'); if (!wrapper) return; const toast = document.createElement('div'); toast.className = 'flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm animate-fade-in-right'; const colors = { default: 'bg-gray-700', green: 'bg-green-600', red: 'bg-red-600', blue: 'bg-blue-600' }; toast.classList.add(colors[color] || colors['default']); const messageSpan = document.createElement('span'); messageSpan.textContent = message; toast.appendChild(messageSpan); const closeButton = document.createElement('button'); closeButton.innerHTML = '&times;'; closeButton.className = 'ml-4 text-2xl font-bold leading-none hover:text-gray-300 focus:outline-none'; let timeoutId = null; const dismiss = () => { if (timeoutId) clearTimeout(timeoutId); toast.classList.remove('animate-fade-in-right'); toast.classList.add('animate-fade-out-right'); toast.addEventListener('animationend', () => toast.remove()); }; closeButton.onclick = dismiss; toast.appendChild(closeButton); wrapper.appendChild(toast); timeoutId = setTimeout(dismiss, duration); }
 </script>
 </body>
