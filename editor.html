@@ -185,7 +185,7 @@
             const slidePolicy = deadlinePolicy[`q${qNum}`] || {};
             const editorBox = document.createElement('div');
             editorBox.className = "slide-editor-box grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-800 p-4 rounded-lg";
-            const placeholderText = `// The 'userProfile' object is available here!\nfunction calc${qNum}(studentAnswer, showToast, userProfile) {\n  const name = userProfile.name.split(' ')[0];\n  showToast('Keep going, ' + name + '!');\n  return 100;\n}`;
+            const placeholderText = `// Example with all parameters:\nfunction calc${qNum}(studentAnswer, showToast, userProfile) {\n  let grade = 0;\n  const name = userProfile.name.split(' ')[0];\n  showToast('Keep going, ' + name + '!');\n  // ... your grading logic ...\n  return grade;\n}`;
             editorBox.innerHTML = `
                 <div>
                     <h3 class="text-xl font-semibold mb-2">Slide ${qNum}</h3>
