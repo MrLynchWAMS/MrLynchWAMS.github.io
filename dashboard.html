@@ -164,38 +164,27 @@
         renderTables(classData);
     }
     
-    // --- UPDATED: The new, more flexible and secure checker execution engine ---
     function executeChecker(submission) {
         const slideIndex = submission.slideIndex;
         const funcString = assignmentData.checkerFunctions?.[`calc${slideIndex + 1}`];
         if (funcString) {
             try {
-                // Find the function name automatically from the teacher's code
                 const funcNameMatch = funcString.match(/function\s+([a-zA-Z0-9_]+)\s*\(/);
                 if (!funcNameMatch || !funcNameMatch[1]) {
                     throw new Error("Could not find a valid function definition (e.g., 'function calc1(...)') in the checker code.");
                 }
                 const funcNameToRun = funcNameMatch[1];
-
                 const runner = new Function('studentAnswer', 'userProfile', `
-                    // Suppress functions by redefining them as empty inside this scope
-                    const showToast = () => {};
-                    const window = { open: () => {} };
-                    const alert = () => {};
-                    const confirm = () => {};
-
+                    const showToast = () => {}; const window = { open: () => {} }; const alert = () => {}; const confirm = () => {};
                     ${funcString}
-
                     if (typeof ${funcNameToRun} === 'function') {
                         return ${funcNameToRun}(studentAnswer, showToast, userProfile);
                     } else {
                         throw new Error("The function '${funcNameToRun}' defined in your code could not be executed.");
                     }
                 `);
-                
                 const userProfile = { name: submission.studentName, email: submission.studentEmail };
                 return runner(submission.answer, userProfile);
-
             } catch (e) {
                 console.error(`Error executing checker function for submission ${submission.id}:`, e);
                 showToast(`Error in checker for Q${slideIndex + 1}: ${e.message}`, { color: 'red' });
@@ -205,33 +194,260 @@
         return 0;
     }
     
-    async function saveManualScore(submissionId, newScoreStr) { /* ...unchanged... */ }
-    async function saveAnswerText(submissionId, newAnswer) { /* ...unchanged... */ }
-    async function rerunAutograder(submissionId) { /* ...unchanged... */ }
-    async function bulkRegrade(slideIndex, className) { /* ...unchanged... */ }
-    function showToast(message, options = {}) { /* ...unchanged... */ }
-    
-    // --- (All other utility functions: splitName, exportToCSV, etc. are unchanged) ---
+    // --- (All other functions are unchanged) ---
 </script>
 
-<!-- Unchanged utility functions -->
+<!-- The full, unchanged JavaScript for the page for completeness -->
 <script>
-    function renderTabs(classData) { /* ... */ }
-    function renderTables(classData) { /* ... */ }
-    function switchTab(className) { /* ... */ }
+    function renderTabs(classData) {
+        const tabsContainer = document.getElementById('classTabs');
+        tabsContainer.innerHTML = '';
+        const classNames = Object.keys(classData).sort();
+        classNames.forEach((className, index) => {
+            const tab = document.createElement('div');
+            tab.className = 'tab';
+            tab.innerText = className;
+            tab.dataset.className = className;
+            if (index === 0 && !activeClass) { tab.classList.add('active'); activeClass = className; } 
+            else if (className === activeClass) { tab.classList.add('active'); }
+            tab.onclick = () => switchTab(className);
+            tabsContainer.appendChild(tab);
+        });
+    }
+    function renderTables(classData) {
+        const tablesContainer = document.getElementById('classTablesContainer');
+        tablesContainer.innerHTML = '';
+        const classNames = Object.keys(classData).sort();
+        const numQuestions = assignmentData.slideIds ? assignmentData.slideIds.length : 0;
+        classNames.forEach(className => {
+            const tableWrapper = document.createElement('div');
+            tableWrapper.id = `table-${className.replace(/\s+/g, '-')}`;
+            if (activeClass ? className !== activeClass : classNames.indexOf(className) > 0) {
+                 tableWrapper.classList.add('hidden');
+            }
+            const studentsInClass = [...classData[className]];
+            if (currentSortOrder === 'lastName') { studentsInClass.sort((a, b) => splitName(a.name).lastName.localeCompare(splitName(b.name).lastName)); } 
+            else if (currentSortOrder === 'firstName') { studentsInClass.sort((a, b) => splitName(a.name).firstName.localeCompare(splitName(b.name).firstName)); } 
+            else if (currentSortOrder === 'random' || currentSortOrder === 'randomHide') {
+                for (let i = studentsInClass.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [studentsInClass[i], studentsInClass[j]] = [studentsInClass[j], studentsInClass[i]]; }
+            }
+            const table = document.createElement('table');
+            table.className = "min-w-full";
+            let tableHTML = `<thead class="bg-gray-700"><tr><th class="p-4 text-left font-semibold">Student Name</th>`;
+            for (let i = 0; i < numQuestions; i++) {
+                tableHTML += `<th class="p-4 font-semibold cursor-pointer" onclick="showModalByQuestion(${i + 1}, '${className}')">Q${i + 1}</th>`;
+            }
+            tableHTML += `</tr></thead><tbody></tbody>`;
+            table.innerHTML = tableHTML;
+            const tbody = table.querySelector('tbody');
+            studentsInClass.forEach((student, studentIndex) => {
+                const tr = document.createElement('tr');
+                tr.className = "border-b border-gray-700 hover:bg-gray-700/50";
+                const nameTd = document.createElement('td');
+                nameTd.className = "p-4 font-medium cursor-pointer";
+                nameTd.innerText = currentSortOrder === 'randomHide' ? `Student ${studentIndex + 1}` : student.name;
+                nameTd.onclick = () => showModalByStudent(student);
+                tr.appendChild(nameTd);
+                for (let i = 0; i < numQuestions; i++) {
+                    const scoreTd = document.createElement('td');
+                    scoreTd.className = "p-4 text-center";
+                    const submissionsForQuestion = student.submissions.filter(s => s.slideIndex === i);
+                    if (submissionsForQuestion.length > 0) {
+                        const latestSubmission = submissionsForQuestion[0];
+                        const score = latestSubmission.score || 0;
+                        const color = score >= 90 ? 'bg-green-500' : score >= 60 ? 'bg-yellow-500' : 'bg-red-500';
+                        const barWidth = Math.max(score, 2); 
+                        const scoreBarBg = document.createElement('div');
+                        scoreBarBg.className = "score-bar-bg w-full h-6 rounded-md overflow-hidden cursor-pointer";
+                        scoreBarBg.onclick = () => showModalForAnswerHistory(student.name, i + 1, submissionsForQuestion);
+                        const scoreBar = document.createElement('div');
+                        scoreBar.className = `score-bar h-full rounded-md ${color}`;
+                        scoreBar.style.width = `${barWidth}%`;
+                        scoreBarBg.appendChild(scoreBar);
+                        scoreTd.appendChild(scoreBarBg);
+                    } else {
+                        scoreTd.innerHTML = `<div class="score-bar-bg w-full h-6 rounded-md"><div class="score-bar h-full rounded-md bg-gray-600" style="width: 100%"></div></div>`;
+                    }
+                    tr.appendChild(scoreTd);
+                }
+                tbody.appendChild(tr);
+            });
+            tableWrapper.innerHTML = `<div class="overflow-x-auto bg-gray-800 rounded-lg shadow-xl"></div>`;
+            tableWrapper.querySelector('div').appendChild(table);
+            tablesContainer.appendChild(tableWrapper);
+        });
+    }
+    function switchTab(className) {
+        activeClass = className;
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelector(`.tab[data-class-name="${className}"]`).classList.add('active');
+        document.querySelectorAll('#classTablesContainer > div').forEach(t => t.classList.add('hidden'));
+        document.getElementById(`table-${className.replace(/\s+/g, '-')}`).classList.remove('hidden');
+    }
     const modal = document.getElementById('answerModal');
     const modalTitle = document.getElementById('modalTitle');
     const modalHeader = document.getElementById('modalHeader');
     const modalContent = document.getElementById('modalContent');
     document.getElementById('closeModal').onclick = () => modal.classList.add('hidden');
-    function showModalByStudent(student) { /* ... */ }
-    function showModalByQuestion(qNumber, className) { /* ... */ }
-    function showModalForAnswerHistory(studentName, qNumber, submissions) { /* ... */ }
+    function showModalByStudent(student) {
+        const numQuestions = assignmentData.slideIds.length;
+        modalTitle.innerText = `Latest Answers for ${student.name}`;
+        modalHeader.classList.add('hidden');
+        modalContent.innerHTML = '';
+        for (let i = 0; i < numQuestions; i++) {
+            const latestSub = student.submissions.find(s => s.slideIndex === i);
+            const answerDiv = document.createElement('div');
+            answerDiv.className = "mb-6 p-4 bg-gray-700 rounded-lg";
+            const status = latestSub ? `<span class="font-bold text-lg ${latestSub.score === 100 ? 'text-green-400' : 'text-yellow-400'}">${latestSub.score}/100</span>` : '<span class="text-gray-500">No submission</span>';
+            answerDiv.innerHTML = `<div class="flex justify-between items-center mb-2"><h3 class="text-xl font-bold">Question ${i + 1}</h3>${status}</div><p class="text-gray-300 whitespace-pre-wrap">${latestSub ? latestSub.answer : ''}</p>`;
+            modalContent.appendChild(answerDiv);
+        }
+        modal.classList.remove('hidden');
+    }
+    function showModalByQuestion(qNumber, className) {
+        modalTitle.innerText = `All Latest Answers for Question ${qNumber} (${className})`;
+        modalHeader.innerHTML = `<button onclick="bulkRegrade(${qNumber - 1}, '${className}')" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Re-grade All Answers for this Question</button>`;
+        modalHeader.classList.remove('hidden');
+        modalContent.innerHTML = '';
+        processedClassData[className].forEach(student => {
+            const latestSub = student.submissions.find(s => s.slideIndex === qNumber - 1);
+            const answerDiv = document.createElement('div');
+            answerDiv.className = "mb-4 p-4 bg-gray-700 rounded-lg";
+            const status = latestSub ? `<span class="font-bold ${latestSub.score === 100 ? 'text-green-400' : 'text-yellow-400'}">${latestSub.score}/100</span>` : '<span class="text-gray-500">N/A</span>';
+            answerDiv.innerHTML = `<div class="flex justify-between items-center mb-2"><h3 class="font-bold">${student.name}</h3>${status}</div><p class="text-gray-300 whitespace-pre-wrap">${latestSub ? latestSub.answer : ''}</p>`;
+            modalContent.appendChild(answerDiv);
+        });
+        modal.classList.remove('hidden');
+    }
+    function showModalForAnswerHistory(studentName, qNumber, submissions) {
+        modalTitle.innerText = `Answer History for ${studentName} - Question ${qNumber}`;
+        modalHeader.classList.add('hidden');
+        modalContent.innerHTML = '';
+        if (!submissions || submissions.length === 0) {
+            modalContent.innerHTML = '<p class="text-gray-400">No attempts found.</p>';
+            modal.classList.remove('hidden');
+            return;
+        }
+        submissions.forEach(sub => {
+            const date = sub.timestamp ? new Date(sub.timestamp.seconds * 1000).toLocaleString() : 'Timestamp not available';
+            const answerDiv = document.createElement('div');
+            answerDiv.className = "mb-4 p-4 bg-gray-700 rounded-lg";
+            answerDiv.innerHTML = `<div class="flex justify-between items-center mb-2 flex-wrap gap-2"><h3 class="text-gray-400 text-sm">${date}</h3><div class="flex items-center gap-2"><input type="number" id="score-input-${sub.id}" value="${sub.score}" class="bg-gray-600 rounded p-1 w-20 text-center"><button onclick="saveManualScore('${sub.id}', document.getElementById('score-input-${sub.id}').value)" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-1 px-3 rounded btn-action">Save Score</button><button onclick="rerunAutograder('${sub.id}')" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold py-1 px-3 rounded btn-action">Re-run Auto</button></div></div><textarea id="answer-text-${sub.id}" class="w-full h-32 p-2 bg-gray-600 rounded border border-gray-500 mt-2">${sub.answer}</textarea><button onclick="saveAnswerText('${sub.id}', document.getElementById('answer-text-${sub.id}').value)" class="w-full mt-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-1 px-3 rounded btn-action">Save Answer Text</button>`;
+            modalContent.appendChild(answerDiv);
+        });
+        modal.classList.remove('hidden');
+    }
+    async function saveAnswerText(submissionId, newAnswer) {
+        if (!newAnswer.trim()) {
+            showToast("Answer cannot be empty.", {color: 'red'});
+            return;
+        }
+        try {
+            await db.collection("submissions").doc(submissionId).update({ answer: newAnswer });
+            showToast("Answer text updated successfully!", {color: 'green'});
+        } catch (error) {
+            console.error("Error saving answer text:", error);
+            showToast("Failed to save answer text.", {color: 'red'});
+        }
+    }
+    async function saveManualScore(submissionId, newScoreStr) {
+        const newScore = parseInt(newScoreStr, 10);
+        if (isNaN(newScore) || newScore < 0 || newScore > 100) {
+            showToast("Please enter a valid score between 0 and 100.", {color: 'red'});
+            return;
+        }
+        try {
+            await db.collection("submissions").doc(submissionId).update({ score: newScore, isManualGrade: true });
+            showToast("Score updated successfully!", {color: 'green'});
+        } catch (error) {
+            console.error("Error saving manual score:", error);
+            showToast("Failed to save score.", {color: 'red'});
+        }
+    }
+    async function rerunAutograder(submissionId) {
+        try {
+            const doc = await db.collection("submissions").doc(submissionId).get();
+            if (!doc.exists) throw new Error("Submission not found");
+            const submission = { id: doc.id, ...doc.data() };
+            const newScore = executeChecker(submission);
+            await db.collection("submissions").doc(submissionId).update({ score: newScore, isManualGrade: false });
+            showToast(`Re-graded score: ${newScore}`, {color: 'blue'});
+        } catch (error) {
+            console.error("Error re-running auto-grader:", error);
+            showToast("Failed to re-grade.", {color: 'red'});
+        }
+    }
+    async function bulkRegrade(slideIndex, className) {
+        if (!confirm(`Are you sure you want to re-grade all answers for Question ${slideIndex + 1} in ${className}? This cannot be undone.`)) {
+            return;
+        }
+        const studentsInClass = processedClassData[className];
+        if (!studentsInClass) return;
+        showToast(`Starting re-grade for Q${slideIndex + 1}...`, {color: 'blue'});
+        const batch = db.batch();
+        let updatedCount = 0;
+        studentsInClass.forEach(student => {
+            student.submissions.forEach(sub => {
+                if (sub.slideIndex === slideIndex) {
+                    const newScore = executeChecker(sub);
+                    const docRef = db.collection("submissions").doc(sub.id);
+                    batch.update(docRef, { score: newScore, isManualGrade: false });
+                    updatedCount++;
+                }
+            });
+        });
+        try {
+            await batch.commit();
+            showToast(`Successfully re-graded ${updatedCount} submissions!`, {color: 'green'});
+        } catch (error) {
+            console.error("Error during bulk re-grade:", error);
+            showToast("Bulk re-grade failed. See console.", {color: 'red'});
+        }
+    }
+    function showToast(message, options = {}) { const { color = 'default', duration = 3000 } = options; const wrapper = document.getElementById('toast-wrapper'); if (!wrapper) return; const toast = document.createElement('div'); toast.className = 'flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm animate-fade-in-right'; const colors = { default: 'bg-gray-700', green: 'bg-green-600', red: 'bg-red-600', blue: 'bg-blue-600' }; toast.classList.add(colors[color] || colors['default']); const messageSpan = document.createElement('span'); messageSpan.textContent = message; toast.appendChild(messageSpan); const closeButton = document.createElement('button'); closeButton.innerHTML = '&times;'; closeButton.className = 'ml-4 text-2xl font-bold leading-none hover:text-gray-300 focus:outline-none'; let timeoutId = null; const dismiss = () => { if (timeoutId) clearTimeout(timeoutId); toast.classList.remove('animate-fade-in-right'); toast.classList.add('animate-fade-out-right'); toast.addEventListener('animationend', () => toast.remove()); }; closeButton.onclick = dismiss; toast.appendChild(closeButton); wrapper.appendChild(toast); timeoutId = setTimeout(dismiss, duration); }
     document.getElementById('signOutButton').onclick = () => { auth.signOut(); };
-    function splitName(fullName) { /* ... */ }
+    function splitName(fullName) { if (!fullName) return { firstName: '', lastName: '' }; const parts = fullName.trim().split(' '); if (parts.length === 1) return { firstName: parts[0], lastName: '' }; const lastName = parts.pop(); const firstName = parts.join(' '); return { firstName, lastName }; }
     document.getElementById('exportButton').onclick = exportToCSV;
-    document.getElementById('sortOptions').onchange = function(event) { /* ... */ };
-    function exportToCSV() { /* ... */ }
+    document.getElementById('sortOptions').onchange = function(event) {
+        currentSortOrder = event.target.value;
+        if(processedClassData) {
+            renderTables(processedClassData);
+        }
+    };
+    function exportToCSV() {
+        if (!processedClassData || !activeClass) {
+            showToast("Data not loaded or no class selected.", {color: 'red'}); return;
+        }
+        let csvContent = "data:text/csv;charset=utf-8,";
+        const numQuestions = assignmentData.slideIds.length;
+        const questionHeaders = Array.from({length: numQuestions}, (_, i) => `Score Q${i + 1}`).join(',');
+        const headers = ["Email", "Last Name", "First Name", questionHeaders, "Average Score", "Completion (%)"].join(',');
+        csvContent += headers + "\r\n";
+        const studentsToExport = [...processedClassData[activeClass]];
+        if (currentSortOrder === 'lastName') { studentsToExport.sort((a, b) => splitName(a.name).lastName.localeCompare(splitName(b.name).lastName)); } 
+        else if (currentSortOrder === 'firstName') { studentsToExport.sort((a, b) => splitName(a.name).firstName.localeCompare(splitName(b.name).firstName)); }
+        studentsToExport.forEach(student => {
+            const { firstName, lastName } = splitName(student.name);
+            let scores = []; let totalScore = 0; let attemptedQuestions = 0;
+            for (let i = 0; i < numQuestions; i++) {
+                const latestSubmission = student.submissions.find(s => s.slideIndex === i);
+                if (latestSubmission) { scores.push(latestSubmission.score); totalScore += latestSubmission.score; attemptedQuestions++; } 
+                else { scores.push(""); }
+            }
+            const averageScore = attemptedQuestions > 0 ? (totalScore / attemptedQuestions).toFixed(2) : "";
+            const completionPercentage = ((attemptedQuestions / numQuestions) * 100).toFixed(2);
+            let row = [student.email, `"${lastName}"`, `"${firstName}"`, ...scores, averageScore, completionPercentage].join(',');
+            csvContent += row + "\r\n";
+        });
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        const safeClassName = activeClass.replace(/\s+/g, '_');
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `submissions_${safeClassName}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
 </script>
 </body>
 </html>
