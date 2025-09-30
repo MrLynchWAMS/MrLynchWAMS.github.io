@@ -107,19 +107,14 @@
         };
 
         try {
-            // Find the function name automatically from the code
             const funcNameMatch = codeInput.match(/function\s+([a-zA-Z0-9_]+)\s*\(/);
             if (!funcNameMatch || !funcNameMatch[1]) {
                 throw new Error("Could not find a valid function definition (e.g., 'function calc(...)') in your code.");
             }
             const funcNameToRun = funcNameMatch[1];
             
-            // Create a "runner" function that will execute the user's code safely
             const runner = new Function('studentAnswer', 'showToast', 'userProfile', `
-                // The user's full function code is placed here, which defines the function
                 ${codeInput}
-
-                // Now, safely check for and call the function that was just defined
                 if (typeof ${funcNameToRun} === 'function') {
                     return ${funcNameToRun}(studentAnswer, showToast, userProfile);
                 } else {
@@ -127,11 +122,10 @@
                 }
             `);
 
-            // Run the function with the sample answer, the real showToast utility, and the mock profile
             const score = runner(studentAnswer, showToast, mockUserProfile);
 
             resultBox.textContent = `Score: ${score}`;
-            resultBox.style.color = score >= 90 ? '#48bb78' : '#f6ad55'; // green-500 or orange-400
+            resultBox.style.color = score >= 90 ? '#48bb78' : '#f6ad55';
 
         } catch (e) {
             console.error("Error executing checker function:", e);
@@ -139,7 +133,6 @@
         }
     }
 
-    // The robust, position-aware toast function from your main app
     function showToast(message, options = {}) {
         const { color = 'default', duration = 5000, position = 'top-right' } = options;
         
