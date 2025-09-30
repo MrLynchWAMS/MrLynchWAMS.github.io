@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mr. Lynch's Interactive Slides</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💡</text></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
@@ -12,7 +13,14 @@
     <style>
         .hidden { display: none; }
         textarea { resize: vertical; }
-        .toast-wrapper { position: fixed; z-index: 100; padding: 1rem; width: 100%; max-width: 24rem; pointer-events: none; }
+        .toast-wrapper {
+            position: fixed;
+            z-index: 100;
+            padding: 1rem;
+            width: 100%;
+            max-width: 24rem; /* sm */
+            pointer-events: none;
+        }
         .toast-wrapper > div { pointer-events: auto; }
         .top-left { top: 0; left: 0; }
         .top-center { top: 0; left: 50%; transform: translateX(-50%); }
@@ -20,6 +28,7 @@
         .bottom-left { bottom: 0; left: 0; }
         .bottom-center { bottom: 0; left: 50%; transform: translateX(-50%); }
         .bottom-right { bottom: 0; right: 0; }
+
         @keyframes fade-in-up {
             from { opacity: 0; transform: translateY(20px); }
             to { opacity: 1; transform: translateY(0); }
@@ -89,7 +98,7 @@
     <div id="toast-wrapper-bottom-right" class="toast-wrapper bottom-right flex-col-reverse space-y-3"></div>
 
 <script>
-    const TEACHER_EMAILS = ["klynch@mtps.us", "cheine@mtps.us", "mlock@mtps.us", "cfiori@mtps.us", "mstuart@mtps.us"];
+    const TEACHER_EMAILS = ["klynch@mtps.us"];
     const firebaseConfig = {
       apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
       authDomain: "mrlynch-slides-app.firebaseapp.com",
@@ -114,12 +123,10 @@
         assignmentId = urlParams.get('assignmentId');
         const loader = document.getElementById('pageLoader');
         const errorP = document.getElementById('loadingError');
-
         if (!assignmentId) {
             errorP.textContent = "Error: No assignment ID provided in the URL.";
             return;
         }
-
         try {
             const doc = await db.collection("assignments").doc(assignmentId).get();
             if (!doc.exists) {
@@ -127,12 +134,10 @@
                 return;
             }
             assignmentData = { id: doc.id, ...doc.data() };
-
             if (assignmentData.checkerFunctions) {
                 checkerFunctionStrings = assignmentData.checkerFunctions;
             }
             slideStates = new Array(assignmentData.slideIds.length).fill(null);
-            
             auth.onAuthStateChanged(user => {
                 if (user) {
                     const profile = { name: user.displayName, email: user.email };
@@ -143,7 +148,6 @@
                     document.getElementById('loginContainer').classList.remove('hidden');
                 }
             });
-
         } catch (error) {
             console.error("Error loading assignment:", error);
             errorP.textContent = "An error occurred while loading the assignment.";
@@ -153,13 +157,11 @@
     async function authorizeAndStart(profile) {
         const errorP = document.getElementById('loadingError');
         const loader = document.getElementById('pageLoader');
-
         if (TEACHER_EMAILS.map(e => e.toLowerCase()).includes(profile.email.toLowerCase())) {
             userProfile = { name: profile.name, email: profile.email, class: 'Teacher' };
             initializeStudentSession();
             return;
         }
-
         try {
             const studentQuery = await db.collection("students").where("email", "==", profile.email).get();
             if (studentQuery.empty) {
@@ -172,7 +174,6 @@
             const studentData = studentQuery.docs[0].data();
             const studentClass = String(studentData.class);
             profile.class = studentClass;
-
             const assignedClasses = assignmentData.assignedClasses || [];
             if (!assignedClasses.includes(studentClass)) {
                 loader.classList.remove('hidden');
@@ -181,7 +182,6 @@
                 auth.signOut();
                 return;
             }
-            
             const classStatus = assignmentData.classStatus?.[studentClass];
             if (classStatus !== 'open') {
                 loader.classList.remove('hidden');
@@ -190,10 +190,8 @@
                 auth.signOut();
                 return;
             }
-            
             userProfile = profile;
             initializeStudentSession();
-
         } catch (error) {
             console.error("Authorization Error:", error);
             errorP.textContent = "An error occurred during authorization.";
@@ -408,7 +406,7 @@
         const { color = 'default', duration = 5000, position = 'top-right' } = options;
         
         let wrapper = document.getElementById(`toast-wrapper-${position}`);
-        if (!wrapper) { // Create wrapper if it doesn't exist
+        if (!wrapper) {
             wrapper = document.createElement('div');
             wrapper.id = `toast-wrapper-${position}`;
             const positionClasses = {
