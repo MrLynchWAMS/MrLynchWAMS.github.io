@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Assignment Dashboard</title>
-     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🦄</text></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
@@ -44,7 +43,7 @@
         <div id="loadingState" class="text-center py-10"><p class="text-xl">Loading assignments...</p></div>
 
         <div id="assignmentsList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <!-- Assignment cards and the "Create New" card will be dynamically added here -->
+            <!-- Assignment cards will be dynamically added here -->
         </div>
     </div>
 
@@ -83,7 +82,7 @@
     <div id="toast-wrapper" class="fixed top-4 right-4 z-[100] space-y-3 w-full max-w-sm"></div>
 
 <script>
-    const TEACHER_EMAILS = ["klynch@mtps.us", "cheine@mtps.us", "mlock@mtps.us", "cfiori@mtps.us", "mstuart@mtps.us"];
+    const TEACHER_EMAILS = ["klynch@mtps.us"];
     const firebaseConfig = {
       apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
       authDomain: "mrlynch-slides-app.firebaseapp.com",
@@ -121,7 +120,7 @@
         try {
             const studentSnapshot = await db.collection("students").get();
             const students = studentSnapshot.docs.map(doc => doc.data());
-            allClassNames = [...new Set(students.map(s => s.class))].sort();
+            allClassNames = [...new Set(students.map(s => String(s.class)))].sort();
         } catch (error) {
             console.error("Could not load class roster:", error);
             showToast("Error: Could not load class roster.", { color: 'red' });
