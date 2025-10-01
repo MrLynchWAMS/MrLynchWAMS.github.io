@@ -4,18 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Checker Function Tester</title>
-     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🦄</text></svg>">
+     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👩‍🚀</text></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         textarea { font-family: monospace; resize: vertical; }
-        .toast-wrapper {
-            position: fixed;
-            z-index: 100;
-            padding: 1rem;
-            width: 100%;
-            max-width: 24rem; /* sm */
-            pointer-events: none;
-        }
+        .toast-wrapper { position: fixed; z-index: 100; padding: 1rem; width: 100%; max-width: 24rem; pointer-events: none; }
         .toast-wrapper > div { pointer-events: auto; }
         .top-left { top: 0; left: 0; }
         .top-center { top: 0; left: 50%; transform: translateX(-50%); }
@@ -46,14 +39,14 @@
             <!-- Left Side: Code Input -->
             <div class="bg-gray-800 p-6 rounded-lg shadow-xl">
                 <label for="checkerCode" class="block text-xl font-semibold mb-2">1. Paste Your Checker Function</label>
-                <p class="text-sm text-gray-400 mb-4">The function can accept up to three parameters: `(studentAnswer, showToast, userProfile)`</p>
-                <textarea id="checkerCode" class="w-full h-80 p-3 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500" placeholder="function calc(studentAnswer, showToast, userProfile) { ... }"></textarea>
+                <p class="text-sm text-gray-400 mb-4">The function can accept up to four parameters: `(studentAnswer, showToast, userProfile, isLate)`</p>
+                <textarea id="checkerCode" class="w-full h-80 p-3 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500" placeholder="function calc(studentAnswer, showToast, userProfile, isLate) { ... }"></textarea>
             </div>
 
             <!-- Right Side: Testing Area -->
             <div class="bg-gray-800 p-6 rounded-lg shadow-xl space-y-4">
                 <div>
-                    <label for="mockStudentName" class="block text-xl font-semibold mb-2">2. Simulate a Student (Optional)</label>
+                    <label class="block text-xl font-semibold mb-2">2. Simulate a Student (Optional)</label>
                     <div class="grid grid-cols-2 gap-4">
                         <input type="text" id="mockStudentName" class="w-full p-3 bg-gray-700 rounded border border-gray-600" placeholder="Mock Student Name">
                         <input type="email" id="mockStudentEmail" class="w-full p-3 bg-gray-700 rounded border border-gray-600" placeholder="Mock Student Email">
@@ -62,6 +55,10 @@
                 <div>
                     <label for="studentAnswer" class="block text-xl font-semibold mb-2">3. Enter a Sample Answer</label>
                     <textarea id="studentAnswer" class="w-full h-32 p-3 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500" placeholder="Type a sample student response here..."></textarea>
+                    <div class="flex items-center mt-2">
+                        <input type="checkbox" id="isLateCheckbox" class="h-4 w-4 rounded border-gray-300 text-blue-500 focus:ring-blue-400">
+                        <label for="isLateCheckbox" class="ml-2 text-sm">Simulate Late Submission</label>
+                    </div>
                 </div>
                 
                 <button onclick="runTest()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-colors text-lg">
@@ -93,6 +90,7 @@
         const studentAnswer = document.getElementById('studentAnswer').value;
         const resultBox = document.getElementById('resultBox');
         const errorBox = document.getElementById('errorBox');
+        const isLate = document.getElementById('isLateCheckbox').checked;
 
         resultBox.textContent = "--";
         errorBox.textContent = "";
@@ -114,16 +112,16 @@
             }
             const funcNameToRun = funcNameMatch[1];
             
-            const runner = new Function('studentAnswer', 'showToast', 'userProfile', `
+            const runner = new Function('studentAnswer', 'showToast', 'userProfile', 'isLate', `
                 ${codeInput}
                 if (typeof ${funcNameToRun} === 'function') {
-                    return ${funcNameToRun}(studentAnswer, showToast, userProfile);
+                    return ${funcNameToRun}(studentAnswer, showToast, userProfile, isLate);
                 } else {
                     throw new Error("The function '${funcNameToRun}' defined in your code could not be executed.");
                 }
             `);
 
-            const score = runner(studentAnswer, showToast, mockUserProfile);
+            const score = runner(studentAnswer, showToast, mockUserProfile, isLate);
 
             resultBox.textContent = `Score: ${score}`;
             resultBox.style.color = score >= 90 ? '#48bb78' : '#f6ad55';
