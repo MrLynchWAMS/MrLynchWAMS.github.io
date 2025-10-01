@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mr. Lynch's Interactive Slides</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💡</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👩‍🚀</text></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
@@ -115,10 +115,12 @@
         assignmentId = urlParams.get('assignmentId');
         const loader = document.getElementById('pageLoader');
         const errorP = document.getElementById('loadingError');
+
         if (!assignmentId) {
             errorP.textContent = "Error: No assignment ID provided in the URL.";
             return;
         }
+
         try {
             const doc = await db.collection("assignments").doc(assignmentId).get();
             if (!doc.exists) {
@@ -126,10 +128,12 @@
                 return;
             }
             assignmentData = { id: doc.id, ...doc.data() };
+
             if (assignmentData.checkerFunctions) {
                 checkerFunctionStrings = assignmentData.checkerFunctions;
             }
             slideStates = new Array(assignmentData.slideIds.length).fill(null);
+            
             auth.onAuthStateChanged(user => {
                 if (user) {
                     const profile = { name: user.displayName, email: user.email };
@@ -140,6 +144,7 @@
                     document.getElementById('loginContainer').classList.remove('hidden');
                 }
             });
+
         } catch (error) {
             console.error("Error loading assignment:", error);
             errorP.textContent = "An error occurred while loading the assignment.";
@@ -149,11 +154,13 @@
     async function authorizeAndStart(profile) {
         const errorP = document.getElementById('loadingError');
         const loader = document.getElementById('pageLoader');
+
         if (TEACHER_EMAILS.map(e => e.toLowerCase()).includes(profile.email.toLowerCase())) {
             userProfile = { name: profile.name, email: profile.email, class: 'Teacher' };
             initializeStudentSession();
             return;
         }
+
         try {
             const studentQuery = await db.collection("students").where("email", "==", profile.email).get();
             if (studentQuery.empty) {
@@ -166,6 +173,7 @@
             const studentData = studentQuery.docs[0].data();
             const studentClass = String(studentData.class);
             profile.class = studentClass;
+
             const assignedClasses = assignmentData.assignedClasses || [];
             if (!assignedClasses.includes(studentClass)) {
                 loader.classList.remove('hidden');
@@ -174,6 +182,7 @@
                 auth.signOut();
                 return;
             }
+            
             const classStatus = assignmentData.classStatus?.[studentClass];
             if (classStatus !== 'open') {
                 loader.classList.remove('hidden');
@@ -182,8 +191,10 @@
                 auth.signOut();
                 return;
             }
+            
             userProfile = profile;
             initializeStudentSession();
+
         } catch (error) {
             console.error("Authorization Error:", error);
             errorP.textContent = "An error occurred during authorization.";
@@ -333,30 +344,43 @@
             showToast("Please enter your answer first!", {color: 'red'});
             return;
         }
-        let baseScore = checkCurrentSlideAnswer(studentAnswer);
-        let finalScore = baseScore;
+        
         const policy = assignmentData.deadlinePolicy;
+        let isLate = false;
+        let minutesLate = 0;
+
         if (policy && userProfile.class !== 'Teacher') {
             const qPolicy = policy[`q${currentSlideIndex + 1}`];
             const classStartTimeStr = policy.classStartTimes?.[userProfile.class];
+
             if (qPolicy && qPolicy.deadlineMinutes > 0 && classStartTimeStr) {
                 const now = new Date();
                 const startTime = new Date();
                 const [hours, minutes] = classStartTimeStr.split(':');
                 startTime.setHours(hours, minutes, 0, 0);
                 const deadline = new Date(startTime.getTime() + qPolicy.deadlineMinutes * 60000);
+                
                 if (now > deadline) {
-                    const minutesLate = Math.ceil((now - deadline) / 60000);
-                    switch (qPolicy.penaltyType) {
-                        case 'zero': finalScore = 0; showToast(`Submitted ${minutesLate} mins late. Score is 0.`, {color: 'red', duration: 7000}); break;
-                        case 'deduction': const deduction = baseScore * (qPolicy.penaltyValue / 100); finalScore = Math.round(baseScore - deduction); showToast(`-${qPolicy.penaltyValue}% for being ${minutesLate} mins late.`, {color: 'red', duration: 7000}); break;
-                        case 'incremental': const pointsOff = minutesLate * qPolicy.penaltyValue; finalScore = baseScore - pointsOff; showToast(`-${pointsOff} points for being ${minutesLate} mins late.`, {color: 'red', duration: 7000}); break;
-                        default: finalScore = baseScore; break;
-                    }
-                    finalScore = Math.max(0, finalScore);
+                    isLate = true;
+                    minutesLate = Math.ceil((now - deadline) / 60000);
                 }
             }
         }
+
+        let baseScore = checkCurrentSlideAnswer(studentAnswer, isLate);
+        let finalScore = baseScore;
+
+        if (isLate) {
+            const qPolicy = policy[`q${currentSlideIndex + 1}`];
+            switch (qPolicy.penaltyType) {
+                case 'zero': finalScore = 0; showToast(`Submitted ${minutesLate} mins late. Score is 0.`, {color: 'red', duration: 7000}); break;
+                case 'deduction': const deduction = baseScore * (qPolicy.penaltyValue / 100); finalScore = Math.round(baseScore - deduction); showToast(`-${qPolicy.penaltyValue}% for being ${minutesLate} mins late.`, {color: 'red', duration: 7000}); break;
+                case 'incremental': const pointsOff = minutesLate * qPolicy.penaltyValue; finalScore = baseScore - pointsOff; showToast(`-${pointsOff} points for being ${minutesLate} mins late.`, {color: 'red', duration: 7000}); break;
+                default: finalScore = baseScore; break;
+            }
+            finalScore = Math.max(0, finalScore);
+        }
+        
         resultElement.innerHTML = "Your Score: " + finalScore;
         resultElement.style.color = finalScore >= 90 ? "lightgreen" : "orange";
         slideStates[currentSlideIndex] = { answer: studentAnswer, score: finalScore };
@@ -416,7 +440,7 @@
         timeoutId = setTimeout(dismiss, duration);
     }
     
-    function checkCurrentSlideAnswer(answer) {
+    function checkCurrentSlideAnswer(answer, isLate) {
         const funcNameKey = `calc${currentSlideIndex + 1}`;
         const funcString = checkerFunctionStrings[funcNameKey];
         if (funcString) {
@@ -426,15 +450,15 @@
                     throw new Error("Could not find a valid function definition (e.g., 'function calc1(...)') in the checker code.");
                 }
                 const funcNameToRun = funcNameMatch[1];
-                const runner = new Function('studentAnswer', 'showToast', 'userProfile', `
+                const runner = new Function('studentAnswer', 'showToast', 'userProfile', 'isLate', `
                     ${funcString}
                     if (typeof ${funcNameToRun} === 'function') {
-                        return ${funcNameToRun}(studentAnswer, showToast, userProfile);
+                        return ${funcNameToRun}(studentAnswer, showToast, userProfile, isLate);
                     } else {
                         throw new Error("The function '${funcNameToRun}' defined in your code could not be executed.");
                     }
                 `);
-                return runner(answer, showToast, userProfile);
+                return runner(answer, showToast, userProfile, isLate);
             } catch (e) {
                 console.error(`Error executing checker function ${funcNameKey}:`, e);
                 showToast(`Error in checking logic: ${e.message}`, {color: 'red'});
