@@ -15,12 +15,8 @@
         textarea { resize: vertical; }
         .toast-wrapper { position: fixed; z-index: 100; padding: 1rem; width: 100%; max-width: 24rem; pointer-events: none; }
         .toast-wrapper > div { pointer-events: auto; }
-        .top-left { top: 0; left: 0; }
-        .top-center { top: 0; left: 50%; transform: translateX(-50%); }
-        .top-right { top: 0; right: 0; }
-        .bottom-left { bottom: 0; left: 0; }
-        .bottom-center { bottom: 0; left: 50%; transform: translateX(-50%); }
-        .bottom-right { bottom: 0; right: 0; }
+        .top-left { top: 0; left: 0; } .top-center { top: 0; left: 50%; transform: translateX(-50%); } .top-right { top: 0; right: 0; }
+        .bottom-left { bottom: 0; left: 0; } .bottom-center { bottom: 0; left: 50%; transform: translateX(-50%); } .bottom-right { bottom: 0; right: 0; }
         @keyframes fade-in-up {
             from { opacity: 0; transform: translateY(20px); }
             to { opacity: 1; transform: translateY(0); }
@@ -271,10 +267,14 @@
         const slideImageElement = document.getElementById('slide-image');
         const slideCounterElement = document.getElementById('slide-counter');
         const slideLoader = document.getElementById('slide-loader');
+        
         slideLoader.classList.remove('hidden');
         slideImageElement.classList.add('hidden');
+        
         const imageUrl = `https://docs.google.com/presentation/d/${assignmentData.presentationId}/export/png?id=${assignmentData.presentationId}&pageid=${slideId}&time=${new Date().getTime()}`;
+        
         slideImageElement.src = imageUrl;
+        
         slideCounterElement.innerText = `Slide ${currentSlideIndex + 1} of ${assignmentData.slideIds.length}`;
         const inputBox = document.getElementById('inputbox');
         const resultElement = document.getElementById('result');
@@ -291,10 +291,12 @@
             inputBox.value = "";
             resultElement.innerHTML = "";
         }
+
         slideImageElement.onload = () => {
             slideLoader.classList.add('hidden');
             slideImageElement.classList.remove('hidden');
         };
+        
         slideImageElement.onerror = () => {
             console.warn(`Attempt ${retryCount + 1} to load slide image failed.`);
             if (retryCount < MAX_RETRIES) {
@@ -344,10 +346,9 @@
             showToast("Please enter your answer first!", {color: 'red'});
             return;
         }
-        
-        const policy = assignmentData.deadlinePolicy;
         let isLate = false;
         let minutesLate = 0;
+        const policy = assignmentData.deadlinePolicy;
 
         if (policy && userProfile.class !== 'Teacher') {
             const qPolicy = policy[`q${currentSlideIndex + 1}`];
@@ -366,7 +367,7 @@
                 }
             }
         }
-
+        
         let baseScore = checkCurrentSlideAnswer(studentAnswer, isLate);
         let finalScore = baseScore;
 
@@ -400,6 +401,7 @@
     
     function showToast(message, options = {}) {
         const { color = 'default', duration = 5000, position = 'top-right' } = options;
+        
         let wrapper = document.getElementById(`toast-wrapper-${position}`);
         if (!wrapper) {
             wrapper = document.createElement('div');
@@ -412,31 +414,40 @@
             if(position.includes('bottom')) wrapper.classList.add('flex', 'flex-col-reverse');
             document.body.appendChild(wrapper);
         }
+        
         const toast = document.createElement('div');
         toast.className = 'flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm w-full animate-fade-in-up pointer-events-auto';
+
         const colors = { default: 'bg-gray-700', green: 'bg-green-600', red: 'bg-red-600', blue: 'bg-blue-600' };
         toast.classList.add(colors[color] || colors['default']);
+
         const messageSpan = document.createElement('span');
         messageSpan.className = "text-left";
         messageSpan.textContent = message;
         toast.appendChild(messageSpan);
+        
         const closeButton = document.createElement('button');
         closeButton.innerHTML = '&times;';
         closeButton.className = 'ml-4 text-2xl font-bold leading-none hover:text-gray-300 focus:outline-none';
+        
         let timeoutId = null;
+
         const dismiss = () => {
             if (timeoutId) clearTimeout(timeoutId);
             toast.classList.remove('animate-fade-in-up');
             toast.classList.add('animate-fade-out-down');
             toast.addEventListener('animationend', () => toast.remove());
         };
+
         closeButton.onclick = dismiss;
         toast.appendChild(closeButton);
+        
         if(position.includes('top')) {
             wrapper.appendChild(toast);
         } else {
             wrapper.prepend(toast);
         }
+        
         timeoutId = setTimeout(dismiss, duration);
     }
     
@@ -446,19 +457,17 @@
         if (funcString) {
             try {
                 const funcNameMatch = funcString.match(/function\s+([a-zA-Z0-9_]+)\s*\(/);
-                if (!funcNameMatch || !funcNameMatch[1]) {
-                    throw new Error("Could not find a valid function definition (e.g., 'function calc1(...)') in the checker code.");
-                }
+                if (!funcNameMatch || !funcNameMatch[1]) { throw new Error("Could not find a valid function definition in the checker code."); }
                 const funcNameToRun = funcNameMatch[1];
-                const runner = new Function('studentAnswer', 'showToast', 'userProfile', 'isLate', `
+                const runner = new Function('studentAnswer', 'showToast', 'userProfile', 'isLate', 'showVideo', `
                     ${funcString}
                     if (typeof ${funcNameToRun} === 'function') {
-                        return ${funcNameToRun}(studentAnswer, showToast, userProfile, isLate);
+                        return ${funcNameToRun}(studentAnswer, showToast, userProfile, isLate, showVideo);
                     } else {
-                        throw new Error("The function '${funcNameToRun}' defined in your code could not be executed.");
+                        throw new Error("The function '${funcNameToRun}' could not be executed.");
                     }
                 `);
-                return runner(answer, showToast, userProfile, isLate);
+                return runner(answer, showToast, userProfile, isLate, showVideo);
             } catch (e) {
                 console.error(`Error executing checker function ${funcNameKey}:`, e);
                 showToast(`Error in checking logic: ${e.message}`, {color: 'red'});
@@ -467,6 +476,28 @@
         }
         showToast("No checking logic for this slide.");
         return 0;
+    }
+
+    function showVideo(youtubeUrl) {
+        if (!youtubeUrl) { console.error("showVideo error: No URL provided."); return; }
+        const youtubeIdRegex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
+        const match = youtubeUrl.match(youtubeIdRegex);
+        if (!match || !match[1]) { console.error("showVideo error: Could not extract a valid YouTube ID from the URL:", youtubeUrl); return; }
+        const videoId = match[1];
+        const videoContainer = document.createElement('div');
+        videoContainer.style.cssText = 'position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); z-index:10000; background:#000; padding:10px; border-radius:8px; box-shadow:0 10px 30px rgba(0,0,0,0.5);';
+        const videoFrame = document.createElement('iframe');
+        videoFrame.src = `https://www.youtube.com/embed/${videoId}?autoplay=1`;
+        videoFrame.width = "560"; videoFrame.height = "315"; videoFrame.style.border = 'none';
+        videoFrame.setAttribute('allow', 'autoplay; encrypted-media');
+        videoFrame.setAttribute('allowfullscreen', 'true');
+        const closeButton = document.createElement('button');
+        closeButton.innerText = '✖';
+        closeButton.style.cssText = 'position:absolute; top:-15px; right:-15px; width:30px; height:30px; border-radius:50%; border:2px solid white; background:black; color:white; cursor:pointer; font-size:16px;';
+        closeButton.addEventListener('click', () => { document.body.removeChild(videoContainer); });
+        videoContainer.appendChild(videoFrame);
+        videoContainer.appendChild(closeButton);
+        document.body.appendChild(videoContainer);
     }
 </script>
 </body>
