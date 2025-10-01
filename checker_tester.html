@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Checker Function Tester</title>
-     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👩‍🚀</text></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         textarea { font-family: monospace; resize: vertical; }
@@ -39,8 +38,8 @@
             <!-- Left Side: Code Input -->
             <div class="bg-gray-800 p-6 rounded-lg shadow-xl">
                 <label for="checkerCode" class="block text-xl font-semibold mb-2">1. Paste Your Checker Function</label>
-                <p class="text-sm text-gray-400 mb-4">The function can accept up to four parameters: `(studentAnswer, showToast, userProfile, isLate)`</p>
-                <textarea id="checkerCode" class="w-full h-80 p-3 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500" placeholder="function calc(studentAnswer, showToast, userProfile, isLate) { ... }"></textarea>
+                <p class="text-sm text-gray-400 mb-4">The function can now use `showVideo()` in addition to other parameters.</p>
+                <textarea id="checkerCode" class="w-full h-80 p-3 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500" placeholder="function calc(studentAnswer, showToast, userProfile, isLate) {&#10;  if (studentAnswer.includes('help')) {&#10;    showVideo('https://www.youtube.com/watch?v=dQw4w9WgXcQ');&#10;  }&#10;  return 100;&#10;}"></textarea>
             </div>
 
             <!-- Right Side: Testing Area -->
@@ -112,16 +111,16 @@
             }
             const funcNameToRun = funcNameMatch[1];
             
-            const runner = new Function('studentAnswer', 'showToast', 'userProfile', 'isLate', `
+            const runner = new Function('studentAnswer', 'showToast', 'userProfile', 'isLate', 'showVideo', `
                 ${codeInput}
                 if (typeof ${funcNameToRun} === 'function') {
-                    return ${funcNameToRun}(studentAnswer, showToast, userProfile, isLate);
+                    return ${funcNameToRun}(studentAnswer, showToast, userProfile, isLate, showVideo);
                 } else {
                     throw new Error("The function '${funcNameToRun}' defined in your code could not be executed.");
                 }
             `);
 
-            const score = runner(studentAnswer, showToast, mockUserProfile, isLate);
+            const score = runner(studentAnswer, showToast, mockUserProfile, isLate, showVideo);
 
             resultBox.textContent = `Score: ${score}`;
             resultBox.style.color = score >= 90 ? '#48bb78' : '#f6ad55';
@@ -130,6 +129,63 @@
             console.error("Error executing checker function:", e);
             errorBox.textContent = `Execution Error: ${e.message}`;
         }
+    }
+
+    function showVideo(youtubeUrl) {
+        if (!youtubeUrl) {
+            console.error("showVideo error: No URL provided.");
+            return;
+        }
+
+        const youtubeIdRegex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
+        const match = youtubeUrl.match(youtubeIdRegex);
+
+        if (!match || !match[1]) {
+            console.error("showVideo error: Could not extract a valid YouTube ID from the URL:", youtubeUrl);
+            return;
+        }
+        const videoId = match[1];
+
+        const videoContainer = document.createElement('div');
+        videoContainer.style.position = 'fixed';
+        videoContainer.style.top = '50%';
+        videoContainer.style.left = '50%';
+        videoContainer.style.transform = 'translate(-50%, -50%)';
+        videoContainer.style.zIndex = '10000';
+        videoContainer.style.background = '#000';
+        videoContainer.style.padding = '10px';
+        videoContainer.style.borderRadius = '8px';
+        videoContainer.style.boxShadow = '0 10px 30px rgba(0,0,0,0.5)';
+
+        const videoFrame = document.createElement('iframe');
+        videoFrame.src = `https://www.youtube.com/embed/${videoId}?autoplay=1`;
+        videoFrame.width = "560";
+        videoFrame.height = "315";
+        videoFrame.style.border = 'none';
+        videoFrame.setAttribute('allow', 'autoplay; encrypted-media');
+        videoFrame.setAttribute('allowfullscreen', 'true');
+
+        const closeButton = document.createElement('button');
+        closeButton.innerText = '✖';
+        closeButton.style.position = 'absolute';
+        closeButton.style.top = '-15px';
+        closeButton.style.right = '-15px';
+        closeButton.style.width = '30px';
+        closeButton.style.height = '30px';
+        closeButton.style.borderRadius = '50%';
+        closeButton.style.border = '2px solid white';
+        closeButton.style.background = 'black';
+        closeButton.style.color = 'white';
+        closeButton.style.cursor = 'pointer';
+        closeButton.style.fontSize = '16px';
+
+        closeButton.addEventListener('click', () => {
+            document.body.removeChild(videoContainer);
+        });
+
+        videoContainer.appendChild(videoFrame);
+        videoContainer.appendChild(closeButton);
+        document.body.appendChild(videoContainer);
     }
 
     function showToast(message, options = {}) {
@@ -143,37 +199,29 @@
         
         const toast = document.createElement('div');
         toast.className = 'flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm w-full animate-fade-in-up pointer-events-auto';
-
         const colors = { default: 'bg-gray-700', green: 'bg-green-600', red: 'bg-red-600', blue: 'bg-blue-600' };
         toast.classList.add(colors[color] || colors['default']);
-
         const messageSpan = document.createElement('span');
         messageSpan.className = "text-left";
         messageSpan.textContent = message;
         toast.appendChild(messageSpan);
-        
         const closeButton = document.createElement('button');
         closeButton.innerHTML = '&times;';
         closeButton.className = 'ml-4 text-2xl font-bold leading-none hover:text-gray-300 focus:outline-none';
-        
         let timeoutId = null;
-
         const dismiss = () => {
             if (timeoutId) clearTimeout(timeoutId);
             toast.classList.remove('animate-fade-in-up');
             toast.classList.add('animate-fade-out-down');
             toast.addEventListener('animationend', () => toast.remove());
         };
-
         closeButton.onclick = dismiss;
         toast.appendChild(closeButton);
-        
         if(position.includes('top')) {
             wrapper.appendChild(toast);
         } else {
             wrapper.prepend(toast);
         }
-        
         timeoutId = setTimeout(dismiss, duration);
     }
 </script>
