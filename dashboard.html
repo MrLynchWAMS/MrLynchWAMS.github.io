@@ -197,7 +197,7 @@
             if (currentSortOrder === 'lastName') { studentsInClass.sort((a, b) => splitName(a.name).lastName.localeCompare(splitName(b.name).lastName)); } 
             else if (currentSortOrder === 'firstName') { studentsInClass.sort((a, b) => splitName(a.name).firstName.localeCompare(splitName(b.name).firstName)); } 
             else if (currentSortOrder === 'random' || currentSortOrder === 'randomHide') {
-                for (let i = studentsInClass.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [studentsInClass[i], studentsInClass[j]] = [studentsInClass[j], studentsInClass[i][...]
+                for (let i = studentsInClass.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [studentsInClass[i], studentsInClass[j]] = [studentsInClass[j], studentsInClass[i]]; }
             }
             const table = document.createElement('table');
             table.className = "min-w-full";
@@ -269,8 +269,8 @@
             const latestSub = student.submissions.find(s => s.slideIndex === i);
             const answerDiv = document.createElement('div');
             answerDiv.className = "mb-6 p-4 bg-gray-700 rounded-lg";
-            const status = latestSub ? `<span class="font-bold text-lg ${latestSub.score === 100 ? 'text-green-400' : 'text-yellow-400'}">${latestSub.score}/100</span>` : '<span class="text-gray-500">[...]
-            answerDiv.innerHTML = `<div class="flex justify-between items-center mb-2"><h3 class="text-xl font-bold">Question ${i + 1}</h3>${status}</div><p class="text-gray-300 whitespace-pre-wrap">$[...]
+            const status = latestSub ? `<span class="font-bold text-lg ${latestSub.score === 100 ? 'text-green-400' : 'text-yellow-400'}">${latestSub.score}/100</span>` : '<span class="text-gray-500">No submission</span>';
+            answerDiv.innerHTML = `<div class="flex justify-between items-center mb-2"><h3 class="text-xl font-bold">Question ${i + 1}</h3>${status}</div><p class="text-gray-300 whitespace-pre-wrap">${latestSub ? latestSub.answer : ''}</p>`;
             modalContent.appendChild(answerDiv);
         }
         modal.classList.remove('hidden');
@@ -278,15 +278,15 @@
 
     function showModalByQuestion(qNumber, className) {
         modalTitle.innerText = `All Latest Answers for Question ${qNumber} (${className})`;
-        modalHeader.innerHTML = `<button onclick="bulkRegrade(${qNumber - 1}, '${className}')" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Re-[...]
+        modalHeader.innerHTML = `<button onclick="bulkRegrade(${qNumber - 1}, '${className}')" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Re-grade All Answers for this Question</button>`;
         modalHeader.classList.remove('hidden');
         modalContent.innerHTML = '';
         processedClassData[className].forEach(student => {
             const latestSub = student.submissions.find(s => s.slideIndex === qNumber - 1);
             const answerDiv = document.createElement('div');
             answerDiv.className = "mb-4 p-4 bg-gray-700 rounded-lg";
-            const status = latestSub ? `<span class="font-bold ${latestSub.score === 100 ? 'text-green-400' : 'text-yellow-400'}">${latestSub.score}/100</span>` : '<span class="text-gray-500">N/A</spa[...]
-            answerDiv.innerHTML = `<div class="flex justify-between items-center mb-2"><h3 class="font-bold">${student.name}</h3>${status}</div><p class="text-gray-300 whitespace-pre-wrap">${latestSub[...]
+            const status = latestSub ? `<span class="font-bold ${latestSub.score === 100 ? 'text-green-400' : 'text-yellow-400'}">${latestSub.score}/100</span>` : '<span class="text-gray-500">N/A</span>';
+            answerDiv.innerHTML = `<div class="flex justify-between items-center mb-2"><h3 class="font-bold">${student.name}</h3>${status}</div><p class="text-gray-300 whitespace-pre-wrap">${latestSub ? latestSub.answer : ''}</p>`;
             modalContent.appendChild(answerDiv);
         });
         modal.classList.remove('hidden');
@@ -305,7 +305,7 @@
             const date = sub.timestamp ? new Date(sub.timestamp.seconds * 1000).toLocaleString() : 'Timestamp not available';
             const answerDiv = document.createElement('div');
             answerDiv.className = "mb-4 p-4 bg-gray-700 rounded-lg";
-            answerDiv.innerHTML = `<div class="flex justify-between items-center mb-2 flex-wrap gap-2"><h3 class="text-gray-400 text-sm">${date}</h3><div class="flex items-center gap-2"><input type="n[...]
+            answerDiv.innerHTML = `<div class="flex justify-between items-center mb-2 flex-wrap gap-2"><h3 class="text-gray-400 text-sm">${date}</h3><div class="flex items-center gap-2"><input type="number" id="score-input-${sub.id}" value="${sub.score}" class="bg-gray-600 rounded p-1 w-20 text-center"><button onclick="saveManualScore('${sub.id}', document.getElementById('score-input-${sub.id}').value)" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-1 px-3 rounded btn-action">Save Score</button><button onclick="rerunAutograder('${sub.id}')" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold py-1 px-3 rounded btn-action">Re-run Auto</button></div></div><textarea id="answer-text-${sub.id}" class="w-full h-32 p-2 bg-gray-600 rounded border border-gray-500 mt-2">${sub.answer}</textarea><button onclick="saveAnswerText('${sub.id}', document.getElementById('answer-text-${sub.id}').value)" class="w-full mt-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-1 px-3 rounded btn-action">Save Answer Text</button>`;
             modalContent.appendChild(answerDiv);
         });
         modal.classList.remove('hidden');
@@ -410,70 +410,81 @@
         return 0;
     }
     
-    function showToast(message, options = {}) { const { color = 'default', duration = 3000 } = options; const wrapper = document.getElementById('toast-wrapper'); if (!wrapper) return; const toast = do[...]
+    function showToast(message, options = {}) { const { color = 'default', duration = 3000 } = options; const wrapper = document.getElementById('toast-wrapper'); if (!wrapper) return; const toast = document.createElement('div'); toast.className = 'flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm animate-fade-in-right'; const colors = { default: 'bg-gray-700', green: 'bg-green-600', red: 'bg-red-600', blue: 'bg-blue-600' }; toast.classList.add(colors[color] || colors['default']); const messageSpan = document.createElement('span'); messageSpan.textContent = message; toast.appendChild(messageSpan); const closeButton = document.createElement('button'); closeButton.innerHTML = '&times;'; closeButton.className = 'ml-4 text-2xl font-bold leading-none hover:text-gray-300 focus:outline-none'; let timeoutId = null; const dismiss = () => { if (timeoutId) clearTimeout(timeoutId); toast.classList.remove('animate-fade-in-right'); toast.classList.add('animate-fade-out-right'); toast.addEventListener('animationend', () => toast.remove()); }; closeButton.onclick = dismiss; toast.appendChild(closeButton); wrapper.appendChild(toast); timeoutId = setTimeout(dismiss, duration); }
     
     document.getElementById('signOutButton').onclick = () => { auth.signOut(); };
     
-    function splitName(fullName) { if (!fullName) return { firstName: '', lastName: '' }; const parts = fullName.trim().split(' '); if (parts.length === 1) return { firstName: parts[0], lastName: '' }[...]
+    function splitName(fullName) { if (!fullName) return { firstName: '', lastName: '' }; const parts = fullName.trim().split(' '); if (parts.length === 1) return { firstName: parts[0], lastName: '' }; const lastName = parts.pop(); const firstName = parts.join(' '); return { firstName, lastName }; }
     
     document.getElementById('sortOptions').onchange = function(event) {
         currentSortOrder = event.target.value;
         if(processedClassData) { renderTables(processedClassData); }
     };
     
-    // NEW: Export ALL classes to CSV when export button is clicked.
-    document.getElementById('exportButton').onclick = exportAllClassesToCSV;
-    
-    function exportAllClassesToCSV() {
+    // UPDATED: New Export function
+    function exportToCSV() {
         if (!processedClassData) {
             showToast("Student data has not been loaded yet.", {color: 'red'});
             return;
         }
 
+        let allStudents = [];
+        // Flatten all students from all assigned classes into a single array
+        const assignedClasses = assignmentData.assignedClasses || [];
+        for (const className of assignedClasses) {
+            if (processedClassData[className]) {
+                processedClassData[className].forEach(student => {
+                    allStudents.push({ ...student, className: String(className) });
+                });
+            }
+        }
+
+        if (allStudents.length === 0) {
+            showToast("No student data available for the assigned classes.", {color: 'red'});
+            return;
+        }
+        
         let csvContent = "data:text/csv;charset=utf-8,";
         const numQuestions = assignmentData.slideIds ? assignmentData.slideIds.length : 0;
         const questionHeaders = Array.from({length: numQuestions}, (_, i) => `Score Q${i + 1}`).join(',');
         const headers = ["Email", "Last Name", "First Name", "Last, First", "Class", "Average Score", "Completion (%)", questionHeaders].join(',');
         csvContent += headers + "\r\n";
 
-        Object.keys(processedClassData).forEach(className => {
-            const studentsToExport = [...processedClassData[className]];
-            // Sort students by last/first name if selected
-            if (currentSortOrder === 'lastName') {
-                studentsToExport.sort((a, b) => splitName(a.name).lastName.localeCompare(splitName(b.name).lastName));
-            } else if (currentSortOrder === 'firstName') {
-                studentsToExport.sort((a, b) => splitName(a.name).firstName.localeCompare(splitName(b.name).firstName));
+        allStudents.sort((a, b) => {
+            const classCompare = String(a.className).localeCompare(String(b.className));
+            if (classCompare !== 0) return classCompare;
+            return splitName(a.name).lastName.localeCompare(splitName(b.name).lastName);
+        });
+        
+        allStudents.forEach(student => {
+            const { firstName, lastName } = splitName(student.name);
+            const lastFirst = `"${lastName}, ${firstName}"`;
+            let scores = []; let totalScore = 0; let attemptedQuestions = 0;
+            for (let i = 0; i < numQuestions; i++) {
+                const latestSubmission = student.submissions.find(s => s.slideIndex === i);
+                if (latestSubmission) { scores.push(latestSubmission.score); totalScore += latestSubmission.score; attemptedQuestions++; } 
+                else { scores.push(""); }
             }
-            studentsToExport.forEach(student => {
-                const { firstName, lastName } = splitName(student.name);
-                const lastFirst = `"${lastName}, ${firstName}"`;
-                let scores = []; let totalScore = 0; let attemptedQuestions = 0;
-                for (let i = 0; i < numQuestions; i++) {
-                    const latestSubmission = student.submissions.find(s => s.slideIndex === i);
-                    if (latestSubmission) { scores.push(latestSubmission.score); totalScore += latestSubmission.score; attemptedQuestions++; } 
-                    else { scores.push(""); }
-                }
-                const averageScore = attemptedQuestions > 0 ? (totalScore / attemptedQuestions).toFixed(2) : "";
-                const completionPercentage = ((attemptedQuestions / numQuestions) * 100).toFixed(2);
-                let row = [
-                    student.email,
-                    `"${lastName}"`,
-                    `"${firstName}"`,
-                    lastFirst,
-                    className,
-                    averageScore,
-                    completionPercentage,
-                    ...scores
-                ].join(',');
-                csvContent += row + "\r\n";
-            });
+            const averageScore = attemptedQuestions > 0 ? (totalScore / attemptedQuestions).toFixed(2) : "";
+            const completionPercentage = numQuestions > 0 ? ((attemptedQuestions / numQuestions) * 100).toFixed(2) : "0.00";
+            let row = [
+                student.email,
+                `"${lastName}"`,
+                `"${firstName}"`,
+                lastFirst,
+                student.className,
+                averageScore,
+                completionPercentage,
+                ...scores
+            ].join(',');
+            csvContent += row + "\r\n";
         });
 
         const encodedUri = encodeURI(csvContent);
-        const safeAssignmentName = assignmentData.name.replace(/[^a-z0-9]/gi, '_');
         const link = document.createElement("a");
+        const safeAssignmentName = assignmentData.name.replace(/[^a-z0-9]/gi, '_');
         link.setAttribute("href", encodedUri);
-        link.setAttribute("download", `submissions_${safeAssignmentName}_ALL_CLASSES.csv`);
+        link.setAttribute("download", `submissions_${safeAssignmentName}_all.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -481,3 +492,4 @@
 </script>
 </body>
 </html>
+
