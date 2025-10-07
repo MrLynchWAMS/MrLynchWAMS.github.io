@@ -79,7 +79,7 @@
     <div id="toast-wrapper" class="fixed top-4 right-4 z-[100] space-y-3 w-full max-w-sm"></div>
 
 <script>
-     const TEACHER_EMAILS = ["klynch@mtps.us", "mstuart@mtps.us", "cfiori@mtps.us", "mlock@mtps.us", "cheine@mtps.us"];
+    const TEACHER_EMAILS = ["klynch@mtps.us", "mstuart@mtps.us", "cfiori@mtps.us", "mlock@mtps.us", "cheine@mtps.us"];
     const firebaseConfig = {
       apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
       authDomain: "mrlynch-slides-app.firebaseapp.com",
@@ -153,7 +153,7 @@
         submissions.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
         const classData = {};
         studentRoster.forEach(student => {
-            const className = String(student.class); // Ensure class is a string
+            const className = String(student.class);
             if (!classData[className]) classData[className] = [];
             const studentWithSubs = { ...student };
             studentWithSubs.submissions = submissions.filter(s => s.studentEmail === student.email);
@@ -434,7 +434,7 @@
         }
         
         let csvContent = "data:text/csv;charset=utf-8,";
-        const numQuestions = assignmentData.slideIds.length;
+        const numQuestions = assignmentData.slideIds ? assignmentData.slideIds.length : 0;
         const questionHeaders = Array.from({length: numQuestions}, (_, i) => `Score Q${i + 1}`).join(',');
         const headers = ["Email", "Last Name", "First Name", "Last, First", "Class", "Average Score", "Completion (%)", questionHeaders].join(',');
         csvContent += headers + "\r\n";
