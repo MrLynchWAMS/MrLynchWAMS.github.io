@@ -54,7 +54,7 @@
             </div>
             <div class="flex items-center gap-4">
                  <a href="./assignments.html" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg btn-action">&larr; All Assignments</a>
-                <button id="exportButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Export All to CSV</button>
+                <button id="exportButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Export Class to CSV</button>
                 <button id="signOutButton" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Sign Out</button>
             </div>
         </div>
@@ -421,15 +421,17 @@
         if(processedClassData) { renderTables(processedClassData); }
     };
     
+    // UPDATED: New Export function
     function exportToCSV() {
         if (!processedClassData) {
             showToast("Student data has not been loaded yet.", {color: 'red'});
             return;
         }
         let allStudents = [];
+        // Flatten all students from all classes into a single array
         for (const className in processedClassData) {
             processedClassData[className].forEach(student => {
-                allStudents.push({ ...student, className });
+                allStudents.push({ ...student, className: String(className) });
             });
         }
         
@@ -439,6 +441,7 @@
         const headers = ["Email", "Last Name", "First Name", "Last, First", "Class", "Average Score", "Completion (%)", questionHeaders].join(',');
         csvContent += headers + "\r\n";
 
+        // Sort all students together by last name
         allStudents.sort((a, b) => splitName(a.name).lastName.localeCompare(splitName(b.name).lastName));
         
         allStudents.forEach(student => {
