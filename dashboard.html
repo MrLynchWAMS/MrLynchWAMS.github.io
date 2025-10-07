@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Teacher Dashboard</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👩‍🚀</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📊</text></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
@@ -54,7 +54,7 @@
             </div>
             <div class="flex items-center gap-4">
                  <a href="./assignments.html" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg btn-action">&larr; All Assignments</a>
-                <button id="exportButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Export Class to CSV</button>
+                <button id="exportButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Export All to CSV</button>
                 <button id="signOutButton" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Sign Out</button>
             </div>
         </div>
@@ -79,7 +79,7 @@
     <div id="toast-wrapper" class="fixed top-4 right-4 z-[100] space-y-3 w-full max-w-sm"></div>
 
 <script>
-    const TEACHER_EMAILS = ["klynch@mtps.us", "mstuart@mtps.us", "cfiori@mtps.us", "mlock@mtps.us", "cheine@mtps.us"];
+     const TEACHER_EMAILS = ["klynch@mtps.us", "mstuart@mtps.us", "cfiori@mtps.us", "mlock@mtps.us", "cheine@mtps.us"];
     const firebaseConfig = {
       apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
       authDomain: "mrlynch-slides-app.firebaseapp.com",
@@ -153,7 +153,7 @@
         submissions.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
         const classData = {};
         studentRoster.forEach(student => {
-            const className = String(student.class);
+            const className = String(student.class); // Ensure class is a string
             if (!classData[className]) classData[className] = [];
             const studentWithSubs = { ...student };
             studentWithSubs.submissions = submissions.filter(s => s.studentEmail === student.email);
@@ -305,51 +305,24 @@
             const date = sub.timestamp ? new Date(sub.timestamp.seconds * 1000).toLocaleString() : 'Timestamp not available';
             const answerDiv = document.createElement('div');
             answerDiv.className = "mb-4 p-4 bg-gray-700 rounded-lg";
-            answerDiv.innerHTML = `
-                <div class="flex justify-between items-center mb-2 flex-wrap gap-2">
-                    <h3 class="text-gray-400 text-sm">${date}</h3>
-                    <div class="flex items-center gap-2">
-                        <input type="number" id="score-input-${sub.id}" value="${sub.score}" class="bg-gray-600 rounded p-1 w-20 text-center">
-                        <button onclick="saveManualScore('${sub.id}', document.getElementById('score-input-${sub.id}').value)" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-1 px-3 rounded btn-action">Save Score</button>
-                        <button onclick="rerunAutograder('${sub.id}')" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold py-1 px-3 rounded btn-action">Re-run Auto</button>
-                    </div>
-                </div>
-                <textarea id="answer-text-${sub.id}" class="w-full h-32 p-2 bg-gray-600 rounded border border-gray-500 mt-2">${sub.answer}</textarea>
-                <button onclick="saveAnswerText('${sub.id}', document.getElementById('answer-text-${sub.id}').value)" class="w-full mt-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-1 px-3 rounded btn-action">Save Answer Text</button>
-            `;
+            answerDiv.innerHTML = `<div class="flex justify-between items-center mb-2 flex-wrap gap-2"><h3 class="text-gray-400 text-sm">${date}</h3><div class="flex items-center gap-2"><input type="number" id="score-input-${sub.id}" value="${sub.score}" class="bg-gray-600 rounded p-1 w-20 text-center"><button onclick="saveManualScore('${sub.id}', document.getElementById('score-input-${sub.id}').value)" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-1 px-3 rounded btn-action">Save Score</button><button onclick="rerunAutograder('${sub.id}')" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold py-1 px-3 rounded btn-action">Re-run Auto</button></div></div><textarea id="answer-text-${sub.id}" class="w-full h-32 p-2 bg-gray-600 rounded border border-gray-500 mt-2">${sub.answer}</textarea><button onclick="saveAnswerText('${sub.id}', document.getElementById('answer-text-${sub.id}').value)" class="w-full mt-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-1 px-3 rounded btn-action">Save Answer Text</button>`;
             modalContent.appendChild(answerDiv);
         });
         modal.classList.remove('hidden');
     }
     
-    function executeChecker(submission) {
-        const slideIndex = submission.slideIndex;
-        const funcString = assignmentData.checkerFunctions?.[`calc${slideIndex + 1}`];
-        if (funcString) {
-            try {
-                const funcNameMatch = funcString.match(/function\s+([a-zA-Z0-9_]+)\s*\(/);
-                if (!funcNameMatch || !funcNameMatch[1]) {
-                    throw new Error("Could not find a valid function definition (e.g., 'function calc1(...)') in the checker code.");
-                }
-                const funcNameToRun = funcNameMatch[1];
-                const runner = new Function('studentAnswer', 'userProfile', 'isLate', `
-                    const showToast = () => {}; const window = { open: () => {} }; const alert = () => {}; const confirm = () => {};
-                    ${funcString}
-                    if (typeof ${funcNameToRun} === 'function') {
-                        return ${funcNameToRun}(studentAnswer, showToast, userProfile, isLate);
-                    } else {
-                        throw new Error("The function '${funcNameToRun}' defined in your code could not be executed.");
-                    }
-                `);
-                const userProfile = { name: submission.studentName, email: submission.studentEmail };
-                return runner(submission.answer, userProfile, false); 
-            } catch (e) {
-                console.error(`Error executing checker function for submission ${submission.id}:`, e);
-                showToast(`Error in checker for Q${slideIndex + 1}: ${e.message}`, { color: 'red' });
-                return 0;
-            }
+    async function saveAnswerText(submissionId, newAnswer) {
+        if (!newAnswer.trim()) {
+            showToast("Answer cannot be empty.", {color: 'red'});
+            return;
         }
-        return 0;
+        try {
+            await db.collection("submissions").doc(submissionId).update({ answer: newAnswer });
+            showToast("Answer text updated successfully!", {color: 'green'});
+        } catch (error) {
+            console.error("Error saving answer text:", error);
+            showToast("Failed to save answer text.", {color: 'red'});
+        }
     }
     
     async function saveManualScore(submissionId, newScoreStr) {
@@ -364,20 +337,6 @@
         } catch (error) {
             console.error("Error saving manual score:", error);
             showToast("Failed to save score.", {color: 'red'});
-        }
-    }
-
-    async function saveAnswerText(submissionId, newAnswer) {
-        if (!newAnswer.trim()) {
-            showToast("Answer cannot be empty.", {color: 'red'});
-            return;
-        }
-        try {
-            await db.collection("submissions").doc(submissionId).update({ answer: newAnswer });
-            showToast("Answer text updated successfully!", {color: 'green'});
-        } catch (error) {
-            console.error("Error saving answer text:", error);
-            showToast("Failed to save answer text.", {color: 'red'});
         }
     }
 
@@ -423,35 +382,68 @@
         }
     }
     
+    function executeChecker(submission) {
+        const slideIndex = submission.slideIndex;
+        const funcString = assignmentData.checkerFunctions?.[`calc${slideIndex + 1}`];
+        if (funcString) {
+            try {
+                const funcNameMatch = funcString.match(/function\s+([a-zA-Z0-9_]+)\s*\(/);
+                if (!funcNameMatch || !funcNameMatch[1]) { throw new Error("Could not find a valid function definition in the checker code."); }
+                const funcNameToRun = funcNameMatch[1];
+                const runner = new Function('studentAnswer', 'userProfile', `
+                    const showToast = () => {}; const window = { open: () => {} }; const alert = () => {}; const confirm = () => {};
+                    ${funcString}
+                    if (typeof ${funcNameToRun} === 'function') {
+                        return ${funcNameToRun}(studentAnswer, showToast, userProfile);
+                    } else {
+                        throw new Error("The function '${funcNameToRun}' could not be executed.");
+                    }
+                `);
+                const userProfile = { name: submission.studentName, email: submission.studentEmail };
+                return runner(submission.answer, userProfile);
+            } catch (e) {
+                console.error(`Error executing checker function for submission ${submission.id}:`, e);
+                showToast(`Error in checker for Q${slideIndex + 1}: ${e.message}`, { color: 'red' });
+                return 0;
+            }
+        }
+        return 0;
+    }
+    
     function showToast(message, options = {}) { const { color = 'default', duration = 3000 } = options; const wrapper = document.getElementById('toast-wrapper'); if (!wrapper) return; const toast = document.createElement('div'); toast.className = 'flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm animate-fade-in-right'; const colors = { default: 'bg-gray-700', green: 'bg-green-600', red: 'bg-red-600', blue: 'bg-blue-600' }; toast.classList.add(colors[color] || colors['default']); const messageSpan = document.createElement('span'); messageSpan.textContent = message; toast.appendChild(messageSpan); const closeButton = document.createElement('button'); closeButton.innerHTML = '&times;'; closeButton.className = 'ml-4 text-2xl font-bold leading-none hover:text-gray-300 focus:outline-none'; let timeoutId = null; const dismiss = () => { if (timeoutId) clearTimeout(timeoutId); toast.classList.remove('animate-fade-in-right'); toast.classList.add('animate-fade-out-right'); toast.addEventListener('animationend', () => toast.remove()); }; closeButton.onclick = dismiss; toast.appendChild(closeButton); wrapper.appendChild(toast); timeoutId = setTimeout(dismiss, duration); }
     
     document.getElementById('signOutButton').onclick = () => { auth.signOut(); };
     
     function splitName(fullName) { if (!fullName) return { firstName: '', lastName: '' }; const parts = fullName.trim().split(' '); if (parts.length === 1) return { firstName: parts[0], lastName: '' }; const lastName = parts.pop(); const firstName = parts.join(' '); return { firstName, lastName }; }
     
-    document.getElementById('exportButton').onclick = exportToCSV;
-    
     document.getElementById('sortOptions').onchange = function(event) {
         currentSortOrder = event.target.value;
-        if(processedClassData) {
-            renderTables(processedClassData);
-        }
+        if(processedClassData) { renderTables(processedClassData); }
     };
-
+    
     function exportToCSV() {
-        if (!processedClassData || !activeClass) {
-            showToast("Data not loaded or no class selected.", {color: 'red'}); return;
+        if (!processedClassData) {
+            showToast("Student data has not been loaded yet.", {color: 'red'});
+            return;
         }
+        let allStudents = [];
+        for (const className in processedClassData) {
+            processedClassData[className].forEach(student => {
+                allStudents.push({ ...student, className });
+            });
+        }
+        
         let csvContent = "data:text/csv;charset=utf-8,";
         const numQuestions = assignmentData.slideIds.length;
         const questionHeaders = Array.from({length: numQuestions}, (_, i) => `Score Q${i + 1}`).join(',');
-        const headers = ["Email", "Last Name", "First Name", questionHeaders, "Average Score", "Completion (%)"].join(',');
+        const headers = ["Email", "Last Name", "First Name", "Last, First", "Class", "Average Score", "Completion (%)", questionHeaders].join(',');
         csvContent += headers + "\r\n";
-        const studentsToExport = [...processedClassData[activeClass]];
-        if (currentSortOrder === 'lastName') { studentsToExport.sort((a, b) => splitName(a.name).lastName.localeCompare(splitName(b.name).lastName)); } 
-        else if (currentSortOrder === 'firstName') { studentsToExport.sort((a, b) => splitName(a.name).firstName.localeCompare(splitName(b.name).firstName)); }
-        studentsToExport.forEach(student => {
+
+        allStudents.sort((a, b) => splitName(a.name).lastName.localeCompare(splitName(b.name).lastName));
+        
+        allStudents.forEach(student => {
             const { firstName, lastName } = splitName(student.name);
+            const lastFirst = `"${lastName}, ${firstName}"`;
             let scores = []; let totalScore = 0; let attemptedQuestions = 0;
             for (let i = 0; i < numQuestions; i++) {
                 const latestSubmission = student.submissions.find(s => s.slideIndex === i);
@@ -460,14 +452,15 @@
             }
             const averageScore = attemptedQuestions > 0 ? (totalScore / attemptedQuestions).toFixed(2) : "";
             const completionPercentage = ((attemptedQuestions / numQuestions) * 100).toFixed(2);
-            let row = [student.email, `"${lastName}"`, `"${firstName}"`, ...scores, averageScore, completionPercentage].join(',');
+            let row = [student.email, `"${lastName}"`, `"${firstName}"`, lastFirst, student.className, averageScore, completionPercentage, ...scores].join(',');
             csvContent += row + "\r\n";
         });
+
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
-        const safeClassName = activeClass.replace(/\s+/g, '_');
+        const safeAssignmentName = assignmentData.name.replace(/[^a-z0-9]/gi, '_');
         link.setAttribute("href", encodedUri);
-        link.setAttribute("download", `submissions_${safeClassName}.csv`);
+        link.setAttribute("download", `submissions_${safeAssignmentName}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
