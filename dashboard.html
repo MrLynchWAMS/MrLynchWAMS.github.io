@@ -421,22 +421,26 @@
         if(processedClassData) { renderTables(processedClassData); }
     };
     
-    // UPDATED: Reverted to the per-class export logic
     function exportToCSV() {
-        if (!processedClassData || !activeClass) {
-            showToast("Data not loaded or no class is selected.", {color: 'red'});
+        if (!processedClassData) {
+            showToast("Student data has not been loaded yet.", {color: 'red'});
             return;
         }
 
+        // --- FIX: Reverted to per-class logic ---
+        if (!activeClass) {
+            showToast("Please select a class tab to export.", {color: 'red'});
+            return;
+        }
+        
         let csvContent = "data:text/csv;charset=utf-8,";
         const numQuestions = assignmentData.slideIds ? assignmentData.slideIds.length : 0;
-        const questionHeaders = Array.from({length: numQuestions}, (_, i) => `Score Q${i + 1}`);
-        const headers = ["Email", "Last Name", "First Name", "Last, First", "Class", "Average Score", "Completion (%)", ...questionHeaders].join(',');
+        const questionHeaders = Array.from({length: numQuestions}, (_, i) => `Score Q${i + 1}`).join(',');
+        const headers = ["Email", "Last Name", "First Name", "Last, First", "Class", "Average Score", "Completion (%)", questionHeaders].join(',');
         csvContent += headers + "\r\n";
 
         const studentsToExport = [...processedClassData[activeClass]];
         
-        // Apply the current sort order to the export
         if (currentSortOrder === 'lastName') {
             studentsToExport.sort((a, b) => splitName(a.name).lastName.localeCompare(splitName(b.name).lastName));
         } else if (currentSortOrder === 'firstName') {
@@ -446,18 +450,11 @@
         studentsToExport.forEach(student => {
             const { firstName, lastName } = splitName(student.name);
             const lastFirst = `"${lastName}, ${firstName}"`;
-            let scores = [];
-            let totalScore = 0;
-            let attemptedQuestions = 0;
+            let scores = []; let totalScore = 0; let attemptedQuestions = 0;
             for (let i = 0; i < numQuestions; i++) {
                 const latestSubmission = student.submissions.find(s => s.slideIndex === i);
-                if (latestSubmission) {
-                    scores.push(latestSubmission.score);
-                    totalScore += latestSubmission.score;
-                    attemptedQuestions++;
-                } else {
-                    scores.push("");
-                }
+                if (latestSubmission) { scores.push(latestSubmission.score); totalScore += latestSubmission.score; attemptedQuestions++; } 
+                else { scores.push(""); }
             }
             const averageScore = attemptedQuestions > 0 ? (totalScore / attemptedQuestions).toFixed(2) : "";
             const completionPercentage = ((attemptedQuestions / numQuestions) * 100).toFixed(2);
@@ -466,7 +463,7 @@
                 `"${lastName}"`,
                 `"${firstName}"`,
                 lastFirst,
-                String(student.class),
+                student.class,
                 averageScore,
                 completionPercentage,
                 ...scores
