@@ -421,49 +421,65 @@
         if(processedClassData) { renderTables(processedClassData); }
     };
     
-    // UPDATED: New Export function
+    // UPDATED: Reverted to the per-class export logic
     function exportToCSV() {
-        if (!processedClassData) {
-            showToast("Student data has not been loaded yet.", {color: 'red'});
+        if (!processedClassData || !activeClass) {
+            showToast("Data not loaded or no class is selected.", {color: 'red'});
             return;
         }
-        let allStudents = [];
-        // Flatten all students from all classes into a single array
-        for (const className in processedClassData) {
-            processedClassData[className].forEach(student => {
-                allStudents.push({ ...student, className: String(className) });
-            });
-        }
-        
+
         let csvContent = "data:text/csv;charset=utf-8,";
         const numQuestions = assignmentData.slideIds ? assignmentData.slideIds.length : 0;
         const questionHeaders = Array.from({length: numQuestions}, (_, i) => `Score Q${i + 1}`).join(',');
         const headers = ["Email", "Last Name", "First Name", "Last, First", "Class", "Average Score", "Completion (%)", questionHeaders].join(',');
         csvContent += headers + "\r\n";
 
-        // Sort all students together by last name
-        allStudents.sort((a, b) => splitName(a.name).lastName.localeCompare(splitName(b.name).lastName));
+        const studentsToExport = [...processedClassData[activeClass]];
         
-        allStudents.forEach(student => {
+        // Apply the current sort order to the export
+        if (currentSortOrder === 'lastName') {
+            studentsToExport.sort((a, b) => splitName(a.name).lastName.localeCompare(splitName(b.name).lastName));
+        } else if (currentSortOrder === 'firstName') {
+            studentsToExport.sort((a, b) => splitName(a.name).firstName.localeCompare(splitName(b.name).firstName));
+        }
+        
+        studentsToExport.forEach(student => {
             const { firstName, lastName } = splitName(student.name);
             const lastFirst = `"${lastName}, ${firstName}"`;
-            let scores = []; let totalScore = 0; let attemptedQuestions = 0;
+            let scores = [];
+            let totalScore = 0;
+            let attemptedQuestions = 0;
             for (let i = 0; i < numQuestions; i++) {
                 const latestSubmission = student.submissions.find(s => s.slideIndex === i);
-                if (latestSubmission) { scores.push(latestSubmission.score); totalScore += latestSubmission.score; attemptedQuestions++; } 
-                else { scores.push(""); }
+                if (latestSubmission) {
+                    scores.push(latestSubmission.score);
+                    totalScore += latestSubmission.score;
+                    attemptedQuestions++;
+                } else {
+                    scores.push("");
+                }
             }
             const averageScore = attemptedQuestions > 0 ? (totalScore / attemptedQuestions).toFixed(2) : "";
             const completionPercentage = ((attemptedQuestions / numQuestions) * 100).toFixed(2);
-            let row = [student.email, `"${lastName}"`, `"${firstName}"`, lastFirst, student.className, averageScore, completionPercentage, ...scores].join(',');
+            let row = [
+                student.email,
+                `"${lastName}"`,
+                `"${firstName}"`,
+                lastFirst,
+                student.class,
+                averageScore,
+                completionPercentage,
+                ...scores
+            ].join(',');
             csvContent += row + "\r\n";
         });
 
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
+        const safeClassName = activeClass.replace(/\s+/g, '_');
         const safeAssignmentName = assignmentData.name.replace(/[^a-z0-9]/gi, '_');
         link.setAttribute("href", encodedUri);
-        link.setAttribute("download", `submissions_${safeAssignmentName}.csv`);
+        link.setAttribute("download", `submissions_${safeAssignmentName}_${safeClassName}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
