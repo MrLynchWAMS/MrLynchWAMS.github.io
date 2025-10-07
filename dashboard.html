@@ -54,7 +54,7 @@
             </div>
             <div class="flex items-center gap-4">
                  <a href="./assignments.html" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg btn-action">&larr; All Assignments</a>
-                <button id="exportButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Export Class to CSV</button>
+                <button id="exportButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Export All to CSV</button>
                 <button id="signOutButton" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Sign Out</button>
             </div>
         </div>
@@ -430,8 +430,8 @@
 
         let csvContent = "data:text/csv;charset=utf-8,";
         const numQuestions = assignmentData.slideIds ? assignmentData.slideIds.length : 0;
-        const questionHeaders = Array.from({length: numQuestions}, (_, i) => `Score Q${i + 1}`).join(',');
-        const headers = ["Email", "Last Name", "First Name", "Last, First", "Class", "Average Score", "Completion (%)", questionHeaders].join(',');
+        const questionHeaders = Array.from({length: numQuestions}, (_, i) => `Score Q${i + 1}`);
+        const headers = ["Email", "Last Name", "First Name", "Last, First", "Class", "Average Score", "Completion (%)", ...questionHeaders].join(',');
         csvContent += headers + "\r\n";
 
         const studentsToExport = [...processedClassData[activeClass]];
@@ -466,7 +466,7 @@
                 `"${lastName}"`,
                 `"${firstName}"`,
                 lastFirst,
-                student.class,
+                String(student.class),
                 averageScore,
                 completionPercentage,
                 ...scores
