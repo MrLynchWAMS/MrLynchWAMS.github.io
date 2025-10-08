@@ -49,12 +49,16 @@
                     <label for="showAverageToggle" class="font-semibold select-none cursor-pointer">Show Averages</label>
                 </div>
                 <div class="flex items-center gap-2">
+                    <input type="checkbox" id="hideNamesToggle" class="h-4 w-4 rounded border-gray-300 text-blue-500 focus:ring-blue-400">
+                    <label for="hideNamesToggle" class="font-semibold select-none cursor-pointer">Hide Names</label>
+                </div>
+                <div class="flex items-center gap-2">
                     <label for="sortOptions" class="font-semibold">Sort by:</label>
                     <select id="sortOptions" class="bg-gray-700 border border-gray-600 rounded-md p-2 text-white">
                         <option value="lastName">Last Name (A-Z)</option>
                         <option value="firstName">First Name (A-Z)</option>
                         <option value="staticRandom">Randomize (Static)</option>
-                        <option value="dynamicRandomHide">Anonymous (Live)</option>
+                        <option value="dynamicRandom">Randomize (Live)</option>
                     </select>
                 </div>
             </div>
@@ -104,7 +108,7 @@
     let currentSortOrder = 'lastName';
     let assignmentId;
     let studentRoster = [];
-    let staticRandomOrders = {}; // Store shuffled orders for static random sort
+    let staticRandomOrders = {};
 
     const urlParams = new URLSearchParams(window.location.search);
     assignmentId = urlParams.get('assignmentId');
@@ -140,7 +144,7 @@
             if (!assignmentDoc.exists) { showToast("Error: Assignment not found!", {color: 'red'}); return; }
             assignmentData = { id: assignmentDoc.id, ...assignmentDoc.data() };
             document.getElementById('assignmentName').textContent = assignmentData.name;
-            document.title = `${assignmentData.name} - Dashboard`; // Set page title
+            document.title = `${assignmentData.name} - Dashboard`;
             const studentSnapshot = await db.collection("students").get();
             studentRoster = studentSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             db.collection("submissions").where("assignmentId", "==", assignmentId)
@@ -196,6 +200,7 @@
         const classNames = Object.keys(classData).sort();
         const numQuestions = assignmentData.slideIds ? assignmentData.slideIds.length : 0;
         const showAverages = document.getElementById('showAverageToggle').checked;
+        const hideNames = document.getElementById('hideNamesToggle').checked;
 
         classNames.forEach(className => {
             const tableWrapper = document.createElement('div');
@@ -213,7 +218,7 @@
                 }
                 studentsInClass = staticRandomOrders[className];
             }
-            else if (currentSortOrder === 'dynamicRandomHide') {
+            else if (currentSortOrder === 'dynamicRandom') {
                 for (let i = studentsInClass.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [studentsInClass[i], studentsInClass[j]] = [studentsInClass[j], studentsInClass[i]]; }
             }
 
@@ -233,9 +238,9 @@
                 const nameTd = document.createElement('td');
                 nameTd.className = "p-4 font-medium cursor-pointer";
                 
-                const displayName = currentSortOrder === 'dynamicRandomHide' ? `Student ${studentIndex + 1}` : student.name;
+                const displayName = hideNames ? `Student ${studentIndex + 1}` : student.name;
                 let averageScoreHTML = '';
-                if (showAverages) {
+                if (showAverages && !hideNames) {
                     let totalScore = 0; let attempted = 0;
                     for (let i = 0; i < numQuestions; i++) {
                         const sub = student.submissions.find(s => s.slideIndex === i);
@@ -246,7 +251,7 @@
                 }
 
                 nameTd.innerHTML = displayName + averageScoreHTML;
-                nameTd.onclick = () => showModalByStudent(student);
+                nameTd.onclick = () => showModalByStudent(student, hideNames ? displayName : null);
                 tr.appendChild(nameTd);
 
                 for (let i = 0; i < numQuestions; i++) {
@@ -260,7 +265,7 @@
                         const barWidth = Math.max(score, 2); 
                         const scoreBarBg = document.createElement('div');
                         scoreBarBg.className = "score-bar-bg w-full h-6 rounded-md overflow-hidden cursor-pointer";
-                        scoreBarBg.onclick = () => showModalForAnswerHistory(student.name, i + 1, submissionsForQuestion);
+                        scoreBarBg.onclick = () => showModalForAnswerHistory(student.name, i + 1, submissionsForQuestion, hideNames ? displayName : null);
                         const scoreBar = document.createElement('div');
                         scoreBar.className = `score-bar h-full rounded-md ${color}`;
                         scoreBar.style.width = `${barWidth}%`;
@@ -283,7 +288,6 @@
         activeClass = className;
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
         document.querySelector(`.tab[data-class-name="${className}"]`).classList.add('active');
-        // Re-render tables to apply sort order to the newly visible tab
         renderTables(processedClassData);
     }
     
@@ -293,9 +297,9 @@
     const modalContent = document.getElementById('modalContent');
     document.getElementById('closeModal').onclick = () => modal.classList.add('hidden');
 
-    function showModalByStudent(student) {
+    function showModalByStudent(student, anonymousName = null) {
         const numQuestions = assignmentData.slideIds.length;
-        modalTitle.innerText = `Latest Answers for ${student.name}`;
+        modalTitle.innerText = `Latest Answers for ${anonymousName || student.name}`;
         
         let totalScore = 0, attempted = 0;
         for (let i = 0; i < numQuestions; i++) {
@@ -319,19 +323,24 @@
     }
 
     function showModalByQuestion(qNumber, className) {
-        const studentsInClass = [...processedClassData[className]];
-        if (currentSortOrder === 'dynamicRandomHide') {
-            // Use the same shuffle logic as renderTables for consistency
-            for (let i = studentsInClass.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [studentsInClass[i], studentsInClass[j]] = [studentsInClass[j], studentsInClass[i]]; }
-        }
+        const hideNames = document.getElementById('hideNamesToggle').checked;
+        let studentsInClass = [...processedClassData[className]];
         
-        modalTitle.innerText = `All Latest Answers for Question ${qNumber} (${className})`;
+        if (currentSortOrder === 'staticRandom' || (currentSortOrder === 'dynamicRandom' && hideNames)) {
+             if (!staticRandomOrders[className]) { // generate if doesn't exist
+                staticRandomOrders[className] = [...studentsInClass].sort(() => Math.random() - 0.5);
+            }
+            studentsInClass = staticRandomOrders[className];
+        } else if (currentSortOrder === 'lastName') { studentsInClass.sort((a, b) => splitName(a.name).lastName.localeCompare(splitName(b.name).lastName)); }
+        else if (currentSortOrder === 'firstName') { studentsInClass.sort((a, b) => splitName(a.name).firstName.localeCompare(splitName(b.name).firstName)); }
+
+        modalTitle.innerText = `All Latest Answers for Question ${qNumber}`;
         modalHeader.innerHTML = `<button onclick="bulkRegrade(${qNumber - 1}, '${className}')" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Re-grade All Answers for this Question</button>`;
         modalHeader.classList.remove('hidden');
         modalContent.innerHTML = '';
         
         studentsInClass.forEach((student, index) => {
-            const displayName = currentSortOrder === 'dynamicRandomHide' ? `Student ${index + 1}` : student.name;
+            const displayName = hideNames ? `Student ${index + 1}` : student.name;
             const latestSub = student.submissions.find(s => s.slideIndex === qNumber - 1);
             const answerDiv = document.createElement('div');
             answerDiv.className = "mb-4 p-4 bg-gray-700 rounded-lg";
@@ -342,13 +351,8 @@
         modal.classList.remove('hidden');
     }
     
-    // (The rest of the functions are unchanged)
-</script>
-
-<!-- Unchanged utility functions -->
-<script>
-    function showModalForAnswerHistory(studentName, qNumber, submissions) {
-        modalTitle.innerText = `Answer History for ${studentName} - Question ${qNumber}`;
+    function showModalForAnswerHistory(studentName, qNumber, submissions, anonymousName = null) {
+        modalTitle.innerText = `Answer History for ${anonymousName || studentName} - Question ${qNumber}`;
         modalHeader.classList.add('hidden');
         modalContent.innerHTML = '';
         if (!submissions || submissions.length === 0) {
@@ -365,6 +369,12 @@
         });
         modal.classList.remove('hidden');
     }
+    
+    // (The rest of the functions are unchanged)
+</script>
+
+<!-- Unchanged utility functions -->
+<script>
     async function saveAnswerText(submissionId, newAnswer) {
         if (!newAnswer.trim()) {
             showToast("Answer cannot be empty.", {color: 'red'});
@@ -464,9 +474,12 @@
     function splitName(fullName) { if (!fullName) return { firstName: '', lastName: '' }; const parts = fullName.trim().split(' '); if (parts.length === 1) return { firstName: parts[0], lastName: '' }; const lastName = parts.pop(); const firstName = parts.join(' '); return { firstName, lastName }; }
     document.getElementById('sortOptions').onchange = function(event) {
         currentSortOrder = event.target.value;
-        if (currentSortOrder === 'staticRandom') {
-            staticRandomOrders = {}; // Clear static orders to force a new shuffle
+        if (currentSortOrder !== 'dynamicRandom') {
+            staticRandomOrders = {}; // Clear static orders unless we are using dynamic
         }
+        if(processedClassData) { renderTables(processedClassData); }
+    };
+    document.getElementById('hideNamesToggle').onchange = function() {
         if(processedClassData) { renderTables(processedClassData); }
     };
     document.getElementById('showAverageToggle').onchange = function() {
