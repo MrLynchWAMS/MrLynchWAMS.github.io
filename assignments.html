@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale-1.0">
     <title>Assignment Dashboard</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👩‍🚀</text></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
@@ -36,6 +36,8 @@
         <div class="flex justify-between items-center mb-6 flex-wrap gap-4">
             <h1 class="text-3xl font-bold text-yellow-400">Your Assignments</h1>
             <div>
+                <!-- UPDATED: "New Assignment" button moved here -->
+                <button onclick="openCreateModal()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg btn-action">+ New Assignment</button>
                 <a href="./roster.html" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Manage Roster</a>
                 <button id="signOutButton" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Sign Out</button>
             </div>
@@ -73,7 +75,15 @@
                 <h2 id="statusModalTitle" class="text-2xl font-bold text-yellow-400">Manage Status</h2>
                 <button onclick="closeStatusModal()" class="text-gray-400 hover:text-white text-3xl">&times;</button>
             </div>
-            <div id="statusModalContent" class="p-6 max-h-[60vh] overflow-y-auto"></div>
+            <!-- UPDATED: New section for the share link -->
+            <div class="p-6 border-b border-gray-700">
+                <label for="studentShareLink" class="block text-sm font-medium text-gray-300 mb-2">Student Share Link</label>
+                <div class="flex gap-2">
+                    <input id="studentShareLink" type="text" readonly class="w-full p-2 bg-gray-700 border border-gray-600 rounded">
+                    <button onclick="copyShareLink()" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-3 rounded-lg btn-action">Copy</button>
+                </div>
+            </div>
+            <div id="statusModalContent" class="p-6 max-h-[50vh] overflow-y-auto"></div>
             <div class="p-4 bg-gray-700/50 flex justify-end">
                  <button onclick="handleSaveAssignmentStatus()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Save Changes</button>
             </div>
@@ -97,6 +107,7 @@
     const auth = firebase.auth();
     let activeAssignmentId = null;
     let allClassNames = [];
+    let allAssignments = []; // Store all assignments for easy access
 
     auth.onAuthStateChanged(user => {
         if (user && TEACHER_EMAILS.map(e => e.toLowerCase()).includes(user.email.toLowerCase())) {
@@ -135,17 +146,17 @@
     }
 
     function renderAssignments(snapshot) {
+        allAssignments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); // Store for later
         const listContainer = document.getElementById('assignmentsList');
         const loadingState = document.getElementById('loadingState');
         listContainer.innerHTML = '';
         if (snapshot.empty) {
-            loadingState.innerText = "No assignments found. Click '+' to create your first one!";
+            loadingState.innerText = "No assignments found. Click '+ New Assignment' to create your first one!";
             loadingState.classList.remove('hidden');
         } else {
             loadingState.classList.add('hidden');
         }
-        snapshot.docs.forEach(doc => {
-            const assignment = { id: doc.id, ...doc.data() };
+        allAssignments.forEach(assignment => {
             const card = document.createElement('div');
             card.className = "bg-gray-800 rounded-lg p-6 shadow-lg flex flex-col justify-between";
             const date = assignment.createdAt ? new Date(assignment.createdAt.seconds * 1000).toLocaleDateString() : 'No date';
@@ -181,11 +192,6 @@
             `;
             listContainer.appendChild(card);
         });
-        const createCard = document.createElement('div');
-        createCard.className = "bg-gray-800 hover:bg-gray-700/50 border-2 border-dashed border-gray-600 rounded-lg flex items-center justify-center min-h-[16rem] cursor-pointer transition-all";
-        createCard.onclick = openCreateModal;
-        createCard.innerHTML = `<div class="text-center"><span class="text-5xl text-gray-500">+</span><p class="text-xl font-semibold text-gray-400 mt-2">Create New Assignment</p></div>`;
-        listContainer.appendChild(createCard);
     }
     
     const createModal = document.getElementById('createModal');
@@ -230,52 +236,51 @@
     }
 
     const statusModal = document.getElementById('statusModal');
-    async function openStatusModal(assignmentId) {
-        activeAssignmentId = assignmentId;
+    function openStatusModal(assignmentId) {
+        const assignment = allAssignments.find(a => a.id === assignmentId);
+        if (!assignment) {
+            showToast("Could not find assignment data.", {color: 'red'});
+            return;
+        }
+
+        activeAssignmentId = assignment.id;
         const modalTitle = document.getElementById('statusModalTitle');
         const modalContent = document.getElementById('statusModalContent');
-        modalContent.innerHTML = '<p class="text-gray-400">Loading data...</p>';
-        statusModal.classList.remove('hidden');
+        const shareLinkInput = document.getElementById('studentShareLink');
+        
+        modalTitle.innerText = `Manage Status for: ${assignment.name}`;
+        shareLinkInput.value = `https://custom.scienceclass.rocks/classroompicker.html?assignmentId=${assignment.id}`;
+        
+        let contentHTML = `
+            <div class="flex justify-end gap-2 mb-4">
+                <button onclick="setAllStatuses('open')" class="text-sm bg-green-600 hover:bg-green-700 px-3 py-1 rounded-md btn-action">Open All</button>
+                <button onclick="setAllStatuses('closed')" class="text-sm bg-yellow-600 hover:bg-yellow-700 px-3 py-1 rounded-md btn-action">Close All</button>
+                <button onclick="setAllStatuses('not-assigned')" class="text-sm bg-gray-600 hover:bg-gray-500 px-3 py-1 rounded-md btn-action">Unassign All</button>
+            </div>
+            <div class="space-y-4">
+        `;
+        const classStatus = assignment.classStatus || {};
 
-        try {
-            const assignmentDoc = await db.collection("assignments").doc(assignmentId).get();
-            const assignment = assignmentDoc.data();
-            modalTitle.innerText = `Manage Status for: ${assignment.name}`;
-            
-            let contentHTML = `
-                <div class="flex justify-end gap-2 mb-4">
-                    <button onclick="setAllStatuses('open')" class="text-sm bg-green-600 hover:bg-green-700 px-3 py-1 rounded-md btn-action">Open All</button>
-                    <button onclick="setAllStatuses('closed')" class="text-sm bg-yellow-600 hover:bg-yellow-700 px-3 py-1 rounded-md btn-action">Close All</button>
-                    <button onclick="setAllStatuses('not-assigned')" class="text-sm bg-gray-600 hover:bg-gray-500 px-3 py-1 rounded-md btn-action">Unassign All</button>
-                </div>
-                <div class="space-y-4">
-            `;
-            const classStatus = assignment.classStatus || {};
-
-            if (allClassNames.length === 0) {
-                contentHTML += '<p class="text-gray-400">No classes found in your roster.</p>';
-            } else {
-                allClassNames.forEach(className => {
-                    const currentStatus = classStatus[className] || 'not-assigned';
-                    contentHTML += `
-                        <div class="flex justify-between items-center bg-gray-700 p-3 rounded-lg">
-                            <label for="status-${className}" class="font-semibold">${className}</label>
-                            <select id="status-${className}" data-class-name="${className}" class="bg-gray-600 rounded p-2 border border-gray-500">
-                                <option value="open" ${currentStatus === 'open' ? 'selected' : ''}>Open</option>
-                                <option value="closed" ${currentStatus === 'closed' ? 'selected' : ''}>Closed</option>
-                                <option value="not-assigned" ${currentStatus === 'not-assigned' ? 'selected' : ''}>Not Assigned</option>
-                            </select>
-                        </div>
-                    `;
-                });
-            }
-            contentHTML += '</div>';
-            modalContent.innerHTML = contentHTML;
-
-        } catch (error) {
-            console.error("Error loading status modal data:", error);
-            modalContent.innerHTML = '<p class="text-red-500">Could not load class data.</p>';
+        if (allClassNames.length === 0) {
+            contentHTML += '<p class="text-gray-400">No classes found in your roster.</p>';
+        } else {
+            allClassNames.forEach(className => {
+                const currentStatus = classStatus[className] || 'not-assigned';
+                contentHTML += `
+                    <div class="flex justify-between items-center bg-gray-700 p-3 rounded-lg">
+                        <label for="status-${className}" class="font-semibold">${className}</label>
+                        <select id="status-${className}" data-class-name="${className}" class="bg-gray-600 rounded p-2 border border-gray-500">
+                            <option value="open" ${currentStatus === 'open' ? 'selected' : ''}>Open</option>
+                            <option value="closed" ${currentStatus === 'closed' ? 'selected' : ''}>Closed</option>
+                            <option value="not-assigned" ${currentStatus === 'not-assigned' ? 'selected' : ''}>Not Assigned</option>
+                        </select>
+                    </div>
+                `;
+            });
         }
+        contentHTML += '</div>';
+        modalContent.innerHTML = contentHTML;
+        statusModal.classList.remove('hidden');
     }
     
     function setAllStatuses(status) {
@@ -296,9 +301,9 @@
         document.querySelectorAll('#statusModalContent select').forEach(select => {
             const className = select.dataset.className;
             const status = select.value;
+            newClassStatus[className] = status;
             if (status !== 'not-assigned') {
                 newAssignedClasses.push(className);
-                newClassStatus[className] = status;
             }
         });
         try {
@@ -324,6 +329,13 @@
                 showToast("Could not delete assignment.", {color: 'red'});
             }
         }
+    }
+
+    function copyShareLink() {
+        const linkInput = document.getElementById('studentShareLink');
+        linkInput.select();
+        document.execCommand('copy');
+        showToast("Link copied to clipboard!", { color: 'blue' });
     }
 
     document.getElementById('signOutButton').onclick = () => { auth.signOut(); };
