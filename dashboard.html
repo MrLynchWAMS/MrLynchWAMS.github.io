@@ -54,7 +54,7 @@
             </div>
             <div class="flex items-center gap-4">
                  <a href="./assignments.html" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg btn-action">&larr; All Assignments</a>
-                <button id="exportButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Export Class to CSV</button>
+                <button id="exportButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Export All to CSV</button>
                 <button id="signOutButton" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Sign Out</button>
             </div>
         </div>
@@ -423,8 +423,10 @@
     
     // UPDATED: Reverted to per-class export logic
     function exportToCSV() {
+        console.log("--- Starting CSV Export ---");
         if (!processedClassData || !activeClass) {
             showToast("Data not loaded or no class is selected.", {color: 'red'});
+            console.log("Export aborted: No processed data or active class.");
             return;
         }
 
@@ -433,9 +435,18 @@
         const questionHeaders = Array.from({length: numQuestions}, (_, i) => `Score Q${i + 1}`).join(',');
         const headers = ["Email", "Last Name", "First Name", "Last, First", "Class", "Average Score", "Completion (%)", questionHeaders].join(',');
         csvContent += headers + "\r\n";
+        console.log("CSV Headers:", headers);
 
         const studentsToExport = [...processedClassData[activeClass]];
         
+        if (studentsToExport.length === 0) {
+            showToast("No students in the selected class to export.", {color: 'red'});
+            console.log("Export aborted: No students in the active class.");
+            return;
+        }
+        
+        console.log(`Processing ${studentsToExport.length} students for export...`);
+
         if (currentSortOrder === 'lastName') {
             studentsToExport.sort((a, b) => splitName(a.name).lastName.localeCompare(splitName(b.name).lastName));
         } else if (currentSortOrder === 'firstName') {
@@ -465,6 +476,8 @@
             ].join(',');
             csvContent += row + "\r\n";
         });
+        
+        console.log("Generated CSV Content (first 500 chars):", csvContent.substring(0, 500));
 
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
@@ -473,7 +486,11 @@
         link.setAttribute("href", encodedUri);
         link.setAttribute("download", `submissions_${safeAssignmentName}_${safeClassName}.csv`);
         document.body.appendChild(link);
+        
+        console.log("Attempting to trigger download...");
         link.click();
+        console.log("Download trigger command issued.");
+        
         document.body.removeChild(link);
     }
 </script>
