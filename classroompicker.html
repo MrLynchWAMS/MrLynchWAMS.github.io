@@ -59,9 +59,19 @@
                 <button onclick="handleSignOut()" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Sign Out</button>
              </div>
              <div class="main-content-grid grid grid-cols-1 md:grid-cols-3 gap-8">
-                <div class="slides-column md:col-span-2 bg-gray-800 p-4 rounded-lg">
-                    <div id="slide-loader" class="text-center py-10 flex items-center justify-center h-full"><p>Loading Slide...</p></div>
-                    <img id="slide-image" src="" alt="Current Slide" class="w-full border border-gray-700 rounded hidden">
+                <div class="slides-column md:col-span-2 bg-gray-800 p-4 rounded-lg flex flex-col">
+                    <div class="flex-grow flex items-center justify-center">
+                        <div id="slide-loader" class="text-center py-10"><p>Loading Slide...</p></div>
+                        <img id="slide-image" src="" alt="Current Slide" class="w-full border border-gray-700 rounded hidden">
+                        <!-- NEW: Error state with retry button -->
+                        <div id="slide-error-state" class="hidden text-center p-8 bg-gray-700 rounded-lg flex flex-col items-center justify-center">
+                            <p class="text-xl font-semibold mb-4">Slide Image Failed to Load</p>
+                            <p class="text-gray-400 mb-6">This might be a temporary network issue. You can try reloading the image.</p>
+                            <button onclick="updateSlideDisplay()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">
+                                Retry Load
+                            </button>
+                        </div>
+                    </div>
                     <div class="slide-nav flex justify-center items-center mt-4 gap-4">
                         <button onclick="prevSlide()" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg">Previous</button>
                         <span id="slide-counter" class="text-lg"></span>
@@ -271,9 +281,13 @@
         const slideImageElement = document.getElementById('slide-image');
         const slideCounterElement = document.getElementById('slide-counter');
         const slideLoader = document.getElementById('slide-loader');
+        const errorState = document.getElementById('slide-error-state');
         
+        // Reset view
         slideLoader.classList.remove('hidden');
+        slideLoader.innerHTML = `<p>Loading Slide...</p>`;
         slideImageElement.classList.add('hidden');
+        errorState.classList.add('hidden');
         
         const imageUrl = `https://docs.google.com/presentation/d/${assignmentData.presentationId}/export/png?id=${assignmentData.presentationId}&pageid=${slideId}&time=${new Date().getTime()}`;
         
@@ -313,13 +327,13 @@
         slideImageElement.onerror = () => {
             console.warn(`Attempt ${retryCount + 1} to load slide image failed.`);
             if (retryCount < MAX_RETRIES) {
+                slideLoader.innerHTML = `<p>Load failed. Retrying...</p>`;
                 setTimeout(() => { updateSlideDisplay(retryCount + 1); }, 1000);
             } else {
                 console.error("Failed to load slide image after multiple retries:", imageUrl);
                 slideLoader.classList.add('hidden');
-                slideImageElement.src = 'https://placehold.co/800x600/374151/9ca3af?text=Image+could+not+be+loaded';
-                slideImageElement.classList.remove('hidden');
-                showToast("Slide image failed to load, but you can still answer.", { color: 'red' });
+                slideImageElement.classList.add('hidden');
+                errorState.classList.remove('hidden');
             }
         };
     }
@@ -332,7 +346,6 @@
 
     function saveCurrentState() {
         const currentAnswer = document.getElementById('inputbox').value;
-        // Only save the text, not the score. The score is only set upon checking.
         slideStates[currentSlideIndex] = { ...slideStates[currentSlideIndex], answer: currentAnswer };
     }
 
@@ -360,30 +373,19 @@
         let perQuestionHTML = '';
 
         slideStates.forEach((state, index) => {
-            // Unanswered questions are treated as 0 for the final grade
             let score = (state && state.score !== undefined) ? state.score : 0;
             totalScore += score;
-            
             let displayScore = 'N/A';
             let color = 'text-gray-500';
-
             if (state && state.score !== undefined) {
                 displayScore = state.score;
                 color = displayScore >= 90 ? 'text-green-400' : 'text-yellow-400';
             }
-            
-            perQuestionHTML += `
-                <div onclick="jumpToSlide(${index})" class="flex justify-between items-center bg-gray-700 p-3 rounded-lg cursor-pointer hover:bg-gray-600 transition-colors">
-                    <span class="font-semibold">Question ${index + 1}</span>
-                    <span class="font-bold text-lg ${color}">${displayScore === 'N/A' ? 'Not Answered' : `${displayScore}/100`}</span>
-                </div>
-            `;
+            perQuestionHTML += `<div onclick="jumpToSlide(${index})" class="flex justify-between items-center bg-gray-700 p-3 rounded-lg cursor-pointer hover:bg-gray-600 transition-colors"><span class="font-semibold">Question ${index + 1}</span><span class="font-bold text-lg ${color}">${displayScore === 'N/A' ? 'Not Answered' : `${displayScore}/100`}</span></div>`;
         });
         
-        // The overall score is based on the total number of questions
         const overallAverage = (totalScore / slideStates.length).toFixed(1);
         const overallColor = overallAverage >= 90 ? 'text-green-400' : overallAverage >= 60 ? 'text-yellow-400' : 'text-red-400';
-
         document.getElementById('overallScore').innerHTML = `<span class="${overallColor}">${overallAverage}%</span>`;
         document.getElementById('perQuestionScores').innerHTML = perQuestionHTML;
     }
@@ -452,7 +454,6 @@
     
     function showToast(message, options = {}) {
         const { color = 'default', duration = 5000, position = 'top-right' } = options;
-        
         let wrapper = document.getElementById(`toast-wrapper-${position}`);
         if (!wrapper) {
             wrapper = document.createElement('div');
@@ -464,40 +465,31 @@
             wrapper.className = `toast-wrapper fixed z-[100] p-4 pointer-events-none w-full max-w-sm space-y-3 ${positionClasses[position] || positionClasses['top-right']}`;
             document.body.appendChild(wrapper);
         }
-        
         const toast = document.createElement('div');
         toast.className = 'flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm w-full animate-fade-in-up pointer-events-auto';
-
         const colors = { default: 'bg-gray-700', green: 'bg-green-600', red: 'bg-red-600', blue: 'bg-blue-600' };
         toast.classList.add(colors[color] || colors['default']);
-
         const messageSpan = document.createElement('span');
         messageSpan.className = "text-left";
         messageSpan.textContent = message;
         toast.appendChild(messageSpan);
-        
         const closeButton = document.createElement('button');
         closeButton.innerHTML = '&times;';
         closeButton.className = 'ml-4 text-2xl font-bold leading-none hover:text-gray-300 focus:outline-none';
-        
         let timeoutId = null;
-
         const dismiss = () => {
             if (timeoutId) clearTimeout(timeoutId);
             toast.classList.remove('animate-fade-in-up');
             toast.classList.add('animate-fade-out-down');
             toast.addEventListener('animationend', () => toast.remove());
         };
-
         closeButton.onclick = dismiss;
         toast.appendChild(closeButton);
-        
         if(position.includes('top')) {
             wrapper.appendChild(toast);
         } else {
             wrapper.prepend(toast);
         }
-        
         timeoutId = setTimeout(dismiss, duration);
     }
     
