@@ -321,6 +321,8 @@
         }
 
         const nextButton = document.getElementById('nextButton');
+        const checkSaveBtn = document.getElementById('checkSaveBtn');
+        
         if (currentSlideIndex === assignmentData.slideIds.length - 1) {
             nextButton.textContent = "View Summary";
             nextButton.onclick = showSummary;
