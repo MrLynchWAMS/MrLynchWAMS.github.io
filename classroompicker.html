@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mr. Lynch's Interactive Slides</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👩‍🚀</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💡</text></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
@@ -65,7 +65,7 @@
                     <div class="slide-nav flex justify-center items-center mt-4 gap-4">
                         <button onclick="prevSlide()" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg">Previous</button>
                         <span id="slide-counter" class="text-lg"></span>
-                        <button onclick="nextSlide()" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg">Next</button>
+                        <button id="nextButton" onclick="nextSlide()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Next</button>
                     </div>
                 </div>
                 <div class="interactive-column bg-gray-800 p-4 rounded-lg flex flex-col">
@@ -73,6 +73,21 @@
                     <textarea id="inputbox" placeholder="Your answer here..." rows="8" class="flex-grow w-full p-3 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500"></textarea>
                     <button id="btn" onclick="myfunction()" class="w-full mt-4 bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition-colors">Check & Save Answer</button>
                     <p id="result" class="mt-4 text-xl font-bold text-center"></p>
+                </div>
+            </div>
+        </div>
+
+        <div id="summaryContainer" class="hidden">
+            <div class="bg-gray-800 p-8 rounded-lg shadow-xl max-w-2xl mx-auto">
+                <h1 id="summaryTitle" class="text-3xl font-bold text-yellow-400 mb-4 text-center">Assignment Summary</h1>
+                <div class="text-center mb-6">
+                    <p class="text-lg text-gray-400">Overall Score</p>
+                    <p id="overallScore" class="text-5xl font-bold"></p>
+                </div>
+                <div id="perQuestionScores" class="space-y-3"></div>
+                <div class="mt-8 flex gap-4">
+                    <button onclick="hideSummary()" class="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 rounded-lg transition-colors">&larr; Back to Assignment</button>
+                    <button onclick="handleSignOut()" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-lg transition-colors">Sign Out & Finish</button>
                 </div>
             </div>
         </div>
@@ -292,6 +307,15 @@
             resultElement.innerHTML = "";
         }
 
+        const nextButton = document.getElementById('nextButton');
+        if (currentSlideIndex === assignmentData.slideIds.length - 1) {
+            nextButton.textContent = "Submit & View Summary";
+            nextButton.onclick = showSummary;
+        } else {
+            nextButton.textContent = "Next";
+            nextButton.onclick = nextSlide;
+        }
+        
         slideImageElement.onload = () => {
             slideLoader.classList.add('hidden');
             slideImageElement.classList.remove('hidden');
@@ -311,8 +335,12 @@
         };
     }
 
-    function handleSignOut() { auth.signOut().then(() => { window.location.reload(); }); }
-    
+    function handleSignOut() {
+        auth.signOut().then(() => {
+            window.location.reload();
+        });
+    }
+
     function saveCurrentState() {
         const currentAnswer = document.getElementById('inputbox').value;
         if (currentAnswer.trim() !== "") {
@@ -330,13 +358,41 @@
             updateSlideDisplay(); 
         } 
     }
-
     function prevSlide() { 
         saveCurrentState();
         if (currentSlideIndex > 0) { 
             currentSlideIndex--; 
             updateSlideDisplay(); 
         } 
+    }
+
+    function showSummary() {
+        saveCurrentState();
+        document.getElementById('mainContainer').classList.add('hidden');
+        document.getElementById('summaryContainer').classList.remove('hidden');
+        let totalScore = 0;
+        let attemptedQuestions = 0;
+        let perQuestionHTML = '';
+        slideStates.forEach((state, index) => {
+            let score = 'N/A';
+            let color = 'text-gray-500';
+            if (state && state.score !== undefined) {
+                score = state.score;
+                totalScore += score;
+                attemptedQuestions++;
+                color = score >= 90 ? 'text-green-400' : 'text-yellow-400';
+            }
+            perQuestionHTML += `<div class="flex justify-between items-center bg-gray-700 p-3 rounded-lg"><span class="font-semibold">Question ${index + 1}</span><span class="font-bold text-lg ${color}">${score === 'N/A' ? 'Not Answered' : `${score}/100`}</span></div>`;
+        });
+        const overallAverage = attemptedQuestions > 0 ? (totalScore / attemptedQuestions).toFixed(1) : 0;
+        const overallColor = overallAverage >= 90 ? 'text-green-400' : overallAverage >= 60 ? 'text-yellow-400' : 'text-red-400';
+        document.getElementById('overallScore').innerHTML = `<span class="${overallColor}">${overallAverage}%</span>`;
+        document.getElementById('perQuestionScores').innerHTML = perQuestionHTML;
+    }
+
+    function hideSummary() {
+        document.getElementById('summaryContainer').classList.add('hidden');
+        document.getElementById('mainContainer').classList.remove('hidden');
     }
 
     async function myfunction() {
@@ -346,8 +402,8 @@
             showToast("Please enter your answer first!", {color: 'red'});
             return;
         }
-        let isLate = false;
-        let minutesLate = 0;
+        let baseScore = checkCurrentSlideAnswer(studentAnswer);
+        let finalScore = baseScore;
         const policy = assignmentData.deadlinePolicy;
 
         if (policy && userProfile.class !== 'Teacher') {
@@ -362,26 +418,17 @@
                 const deadline = new Date(startTime.getTime() + qPolicy.deadlineMinutes * 60000);
                 
                 if (now > deadline) {
-                    isLate = true;
-                    minutesLate = Math.ceil((now - deadline) / 60000);
+                    const minutesLate = Math.ceil((now - deadline) / 60000);
+                    switch (qPolicy.penaltyType) {
+                        case 'zero': finalScore = 0; showToast(`Submitted ${minutesLate} mins late. Score is 0.`, {color: 'red', duration: 7000}); break;
+                        case 'deduction': const deduction = baseScore * (qPolicy.penaltyValue / 100); finalScore = Math.round(baseScore - deduction); showToast(`-${qPolicy.penaltyValue}% for being ${minutesLate} mins late.`, {color: 'red', duration: 7000}); break;
+                        case 'incremental': const pointsOff = minutesLate * qPolicy.penaltyValue; finalScore = baseScore - pointsOff; showToast(`-${pointsOff} points for being ${minutesLate} mins late.`, {color: 'red', duration: 7000}); break;
+                        default: finalScore = baseScore; break;
+                    }
+                    finalScore = Math.max(0, finalScore);
                 }
             }
         }
-        
-        let baseScore = checkCurrentSlideAnswer(studentAnswer, isLate);
-        let finalScore = baseScore;
-
-        if (isLate) {
-            const qPolicy = policy[`q${currentSlideIndex + 1}`];
-            switch (qPolicy.penaltyType) {
-                case 'zero': finalScore = 0; showToast(`Submitted ${minutesLate} mins late. Score is 0.`, {color: 'red', duration: 7000}); break;
-                case 'deduction': const deduction = baseScore * (qPolicy.penaltyValue / 100); finalScore = Math.round(baseScore - deduction); showToast(`-${qPolicy.penaltyValue}% for being ${minutesLate} mins late.`, {color: 'red', duration: 7000}); break;
-                case 'incremental': const pointsOff = minutesLate * qPolicy.penaltyValue; finalScore = baseScore - pointsOff; showToast(`-${pointsOff} points for being ${minutesLate} mins late.`, {color: 'red', duration: 7000}); break;
-                default: finalScore = baseScore; break;
-            }
-            finalScore = Math.max(0, finalScore);
-        }
-        
         resultElement.innerHTML = "Your Score: " + finalScore;
         resultElement.style.color = finalScore >= 90 ? "lightgreen" : "orange";
         slideStates[currentSlideIndex] = { answer: studentAnswer, score: finalScore };
@@ -411,7 +458,6 @@
                 'bottom-right': 'bottom-0 right-0', 'bottom-left': 'bottom-0 left-0', 'bottom-center': 'bottom-0 left-1/2 -translate-x-1/2'
             };
             wrapper.className = `toast-wrapper fixed z-[100] p-4 pointer-events-none w-full max-w-sm space-y-3 ${positionClasses[position] || positionClasses['top-right']}`;
-            if(position.includes('bottom')) wrapper.classList.add('flex', 'flex-col-reverse');
             document.body.appendChild(wrapper);
         }
         
@@ -451,23 +497,25 @@
         timeoutId = setTimeout(dismiss, duration);
     }
     
-    function checkCurrentSlideAnswer(answer, isLate) {
+    function checkCurrentSlideAnswer(answer) {
         const funcNameKey = `calc${currentSlideIndex + 1}`;
         const funcString = checkerFunctionStrings[funcNameKey];
         if (funcString) {
             try {
                 const funcNameMatch = funcString.match(/function\s+([a-zA-Z0-9_]+)\s*\(/);
-                if (!funcNameMatch || !funcNameMatch[1]) { throw new Error("Could not find a valid function definition in the checker code."); }
+                if (!funcNameMatch || !funcNameMatch[1]) {
+                    throw new Error("Could not find a valid function definition (e.g., 'function calc1(...)') in the checker code.");
+                }
                 const funcNameToRun = funcNameMatch[1];
-                const runner = new Function('studentAnswer', 'showToast', 'userProfile', 'isLate', 'showVideo', `
+                const runner = new Function('studentAnswer', 'showToast', 'userProfile', `
                     ${funcString}
                     if (typeof ${funcNameToRun} === 'function') {
-                        return ${funcNameToRun}(studentAnswer, showToast, userProfile, isLate, showVideo);
+                        return ${funcNameToRun}(studentAnswer, showToast, userProfile);
                     } else {
-                        throw new Error("The function '${funcNameToRun}' could not be executed.");
+                        throw new Error("The function '${funcNameToRun}' defined in your code could not be executed.");
                     }
                 `);
-                return runner(answer, showToast, userProfile, isLate, showVideo);
+                return runner(answer, showToast, userProfile);
             } catch (e) {
                 console.error(`Error executing checker function ${funcNameKey}:`, e);
                 showToast(`Error in checking logic: ${e.message}`, {color: 'red'});
@@ -476,28 +524,6 @@
         }
         showToast("No checking logic for this slide.");
         return 0;
-    }
-
-    function showVideo(youtubeUrl) {
-        if (!youtubeUrl) { console.error("showVideo error: No URL provided."); return; }
-        const youtubeIdRegex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
-        const match = youtubeUrl.match(youtubeIdRegex);
-        if (!match || !match[1]) { console.error("showVideo error: Could not extract a valid YouTube ID from the URL:", youtubeUrl); return; }
-        const videoId = match[1];
-        const videoContainer = document.createElement('div');
-        videoContainer.style.cssText = 'position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); z-index:10000; background:#000; padding:10px; border-radius:8px; box-shadow:0 10px 30px rgba(0,0,0,0.5);';
-        const videoFrame = document.createElement('iframe');
-        videoFrame.src = `https://www.youtube.com/embed/${videoId}?autoplay=1`;
-        videoFrame.width = "560"; videoFrame.height = "315"; videoFrame.style.border = 'none';
-        videoFrame.setAttribute('allow', 'autoplay; encrypted-media');
-        videoFrame.setAttribute('allowfullscreen', 'true');
-        const closeButton = document.createElement('button');
-        closeButton.innerText = '✖';
-        closeButton.style.cssText = 'position:absolute; top:-15px; right:-15px; width:30px; height:30px; border-radius:50%; border:2px solid white; background:black; color:white; cursor:pointer; font-size:16px;';
-        closeButton.addEventListener('click', () => { document.body.removeChild(videoContainer); });
-        videoContainer.appendChild(videoFrame);
-        videoContainer.appendChild(closeButton);
-        document.body.appendChild(videoContainer);
     }
 </script>
 </body>
