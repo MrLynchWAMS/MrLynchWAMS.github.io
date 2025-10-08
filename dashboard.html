@@ -422,18 +422,14 @@
     };
     
     // UPDATED: Reverted to per-class export logic
-    function exportToCSV() {
-        console.log("--- Starting CSV Export ---");
+ function exportToCSV() {
         if (!processedClassData || !activeClass) {
-            showToast("Data not loaded or no class is selected.", {color: 'red'});
-            console.log("Export aborted: No processed data or active class.");
-            return;
+            showToast("Data not loaded or no class selected.", {color: 'red'}); return;
         }
-
         let csvContent = "data:text/csv;charset=utf-8,";
-        const numQuestions = assignmentData.slideIds ? assignmentData.slideIds.length : 0;
-        const questionHeaders = Array.from({length: numQuestions}, (_, i) => `Score Q${i + 1}`).join(',');
-        const headers = ["Email", "Last Name", "First Name", "Last, First", "Class", "Average Score", "Completion (%)", questionHeaders].join(',');
+        const numQuestions = assignmentData.slideIds.length;
+        const questionHeaders = Array.from({length: numQuestions}, (_, i) => `Score Q${i + 1}`);
+        const headers = ["Email", "Last Name", "First Name", ...questionHeaders, "Average Score", "Completion (%)"].join(',');
         csvContent += headers + "\r\n";
         console.log("CSV Headers:", headers);
 
