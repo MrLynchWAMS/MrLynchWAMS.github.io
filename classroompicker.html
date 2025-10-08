@@ -79,7 +79,6 @@
                     <p id="prompt" class="font-semibold mb-2">Enter your answer for the current slide:</p>
                     <textarea id="inputbox" placeholder="Your answer here..." rows="8" class="flex-grow w-full p-3 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500"></textarea>
                     <button id="checkSaveBtn" onclick="myfunction()" class="w-full mt-4 bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition-colors">Check & Save Answer</button>
-                    <button id="submitBtn" onclick="showSummary()" class="hidden w-full mt-4 bg-yellow-600 hover:bg-yellow-700 text-black font-bold py-3 rounded-lg transition-colors">Submit & View Summary</button>
                     <p id="result" class="mt-4 text-xl font-bold text-center"></p>
                 </div>
             </div>
@@ -95,7 +94,7 @@
                 <div id="perQuestionScores" class="space-y-3"></div>
                 <div class="mt-8 flex gap-4">
                     <button id="backToAssignBtn" onclick="hideSummary()" class="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 rounded-lg transition-colors">&larr; Back to Assignment</button>
-                    <button onclick="handleSignOut()" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-lg transition-colors">Sign Out & Finish</button>
+                    <button id="finalSubmitBtn" onclick="handleFinalSubmit()" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition-colors">Submit Assignment</button>
                 </div>
             </div>
         </div>
@@ -268,7 +267,6 @@
             } else {
                 const studentData = querySnapshot.docs[0].data();
                 const profile = { name: studentData.name, email: studentData.email };
-                // Passcode login is not persistent, so we don't use Firebase Auth here.
                 authorizeAndStart(profile);
             }
         } catch (error) {
@@ -281,10 +279,11 @@
 
     function handleCredentialResponse(response) {
         const credential = firebase.auth.GoogleAuthProvider.credential(response.credential);
-        auth.signInWithCredential(credential).catch(error => {
-            console.error("Firebase sign-in with Google failed:", error);
-            document.getElementById('loginError').textContent = "Google Sign-In failed. Please try again.";
-        });
+        auth.signInWithCredential(credential)
+            .catch(error => {
+                console.error("Firebase sign-in with Google failed:", error);
+                document.getElementById('loginError').textContent = "Google Sign-In failed. Please try again.";
+            });
     }
     
     function updateSlideDisplay(retryCount = 0) {
@@ -322,15 +321,12 @@
         }
 
         const nextButton = document.getElementById('nextButton');
-        const checkSaveBtn = document.getElementById('checkSaveBtn');
-        const submitBtn = document.getElementById('submitBtn');
-
         if (currentSlideIndex === assignmentData.slideIds.length - 1) {
-            nextButton.classList.add('hidden');
-            submitBtn.classList.remove('hidden');
+            nextButton.textContent = "View Summary";
+            nextButton.onclick = showSummary;
         } else {
-            nextButton.classList.remove('hidden');
-            submitBtn.classList.add('hidden');
+            nextButton.textContent = "Next";
+            nextButton.onclick = nextSlide;
         }
         
         slideImageElement.onload = () => {
@@ -365,8 +361,8 @@
             submittedMessage.textContent = "Your work has been submitted and is no longer viewable. You may now close this page.";
             submittedContainer.classList.remove('hidden');
             summaryContainer.classList.add('hidden');
-        } else { // 'lock' or 'open' rules
-             showSummary(true); // pass 'isLocked = true'
+        } else { 
+             showSummary(true);
         }
     }
 
@@ -397,18 +393,7 @@
     }
 
     function showSummary(isLocked = false) {
-        if (!isLocked) {
-             saveCurrentState();
-             const statusRef = db.collection("submissionStatus").doc(`${assignmentId}_${userProfile.email}`);
-             statusRef.set({
-                assignmentId: assignmentId,
-                studentEmail: userProfile.email,
-                studentName: userProfile.name,
-                status: 'submitted',
-                submittedAt: firebase.firestore.FieldValue.serverTimestamp()
-             });
-        }
-        
+        saveCurrentState();
         document.getElementById('mainContainer').classList.add('hidden');
         document.getElementById('summaryContainer').classList.remove('hidden');
         
@@ -436,8 +421,10 @@
 
         if (isLocked) {
             document.getElementById('backToAssignBtn').classList.add('hidden');
+            document.getElementById('finalSubmitBtn').classList.add('hidden');
         } else {
              document.getElementById('backToAssignBtn').classList.remove('hidden');
+             document.getElementById('finalSubmitBtn').classList.remove('hidden');
         }
     }
 
@@ -450,6 +437,25 @@
         currentSlideIndex = index;
         hideSummary();
         updateSlideDisplay();
+    }
+
+    function handleFinalSubmit() {
+        if (!confirm("Are you sure you want to submit your assignment? You may not be able to make changes after submitting.")) return;
+
+        const statusRef = db.collection("submissionStatus").doc(`${assignmentId}_${userProfile.email}`);
+        statusRef.set({
+            assignmentId: assignmentId,
+            studentEmail: userProfile.email,
+            studentName: userProfile.name,
+            status: 'submitted',
+            submittedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }).then(() => {
+            showToast("Assignment submitted successfully!", { color: 'green' });
+            handleSubmittedState();
+        }).catch(error => {
+            console.error("Error finalizing submission:", error);
+            showToast("There was an error submitting your assignment.", { color: 'red' });
+        });
     }
 
     async function myfunction() {
@@ -585,3 +591,4 @@
 </script>
 </body>
 </html>
+
