@@ -63,13 +63,10 @@
                     <div class="flex-grow flex items-center justify-center">
                         <div id="slide-loader" class="text-center py-10"><p>Loading Slide...</p></div>
                         <img id="slide-image" src="" alt="Current Slide" class="w-full border border-gray-700 rounded hidden">
-                        <!-- NEW: Error state with retry button -->
                         <div id="slide-error-state" class="hidden text-center p-8 bg-gray-700 rounded-lg flex flex-col items-center justify-center">
                             <p class="text-xl font-semibold mb-4">Slide Image Failed to Load</p>
-                            <p class="text-gray-400 mb-6">This might be a temporary network issue. You can try reloading the image.</p>
-                            <button onclick="updateSlideDisplay()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">
-                                Retry Load
-                            </button>
+                            <p class="text-gray-400 mb-6">You can try reloading the image, or continue working without it.</p>
+                            <button onclick="updateSlideDisplay()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Retry Load</button>
                         </div>
                     </div>
                     <div class="slide-nav flex justify-center items-center mt-4 gap-4">
@@ -96,9 +93,17 @@
                 </div>
                 <div id="perQuestionScores" class="space-y-3"></div>
                 <div class="mt-8 flex gap-4">
-                    <button onclick="hideSummary()" class="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 rounded-lg transition-colors">&larr; Back to Assignment</button>
+                    <button id="backToAssignBtn" onclick="hideSummary()" class="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 rounded-lg transition-colors">&larr; Back to Assignment</button>
                     <button onclick="handleSignOut()" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-lg transition-colors">Sign Out & Finish</button>
                 </div>
+            </div>
+        </div>
+
+        <div id="submittedContainer" class="hidden">
+             <div class="bg-gray-800 p-8 rounded-lg shadow-xl max-w-lg mx-auto text-center">
+                 <h1 class="text-3xl font-bold text-green-400 mb-4">Assignment Submitted! ✅</h1>
+                 <p id="submittedMessage" class="text-gray-300 mb-6"></p>
+                 <button onclick="handleSignOut()" class="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg transition-colors">Sign Out</button>
             </div>
         </div>
     </div>
@@ -203,6 +208,12 @@
                 auth.signOut();
                 return;
             }
+            const statusDoc = await db.collection("submissionStatus").doc(`${assignmentId}_${profile.email}`).get();
+            if (statusDoc.exists && statusDoc.data().status === 'submitted') {
+                await fetchStudentSubmissions(); // Load their work first
+                handleSubmittedState();
+                return;
+            }
             userProfile = profile;
             initializeStudentSession();
         } catch (error) {
@@ -283,7 +294,6 @@
         const slideLoader = document.getElementById('slide-loader');
         const errorState = document.getElementById('slide-error-state');
         
-        // Reset view
         slideLoader.classList.remove('hidden');
         slideLoader.innerHTML = `<p>Loading Slide...</p>`;
         slideImageElement.classList.add('hidden');
@@ -338,6 +348,21 @@
         };
     }
 
+    function handleSubmittedState() {
+        document.getElementById('pageLoader').classList.add('hidden');
+        document.getElementById('loginContainer').classList.add('hidden');
+        const submittedContainer = document.getElementById('submittedContainer');
+        const submittedMessage = document.getElementById('submittedMessage');
+        const rule = assignmentData.postSubmissionRule || 'open';
+        
+        if (rule === 'hide') {
+            submittedMessage.textContent = "Your work has been submitted and is no longer viewable. You may now close this page.";
+            submittedContainer.classList.remove('hidden');
+        } else {
+             showSummary(true);
+        }
+    }
+
     function handleSignOut() {
         auth.signOut().then(() => {
             window.location.reload();
@@ -364,8 +389,19 @@
         } 
     }
 
-    function showSummary() {
-        saveCurrentState();
+    function showSummary(isLocked = false) {
+        if (!isLocked) {
+             saveCurrentState();
+             const statusRef = db.collection("submissionStatus").doc(`${assignmentId}_${userProfile.email}`);
+             statusRef.set({
+                assignmentId: assignmentId,
+                studentEmail: userProfile.email,
+                studentName: userProfile.name,
+                status: 'submitted',
+                submittedAt: firebase.firestore.FieldValue.serverTimestamp()
+             });
+        }
+        
         document.getElementById('mainContainer').classList.add('hidden');
         document.getElementById('summaryContainer').classList.remove('hidden');
         
@@ -381,13 +417,21 @@
                 displayScore = state.score;
                 color = displayScore >= 90 ? 'text-green-400' : 'text-yellow-400';
             }
-            perQuestionHTML += `<div onclick="jumpToSlide(${index})" class="flex justify-between items-center bg-gray-700 p-3 rounded-lg cursor-pointer hover:bg-gray-600 transition-colors"><span class="font-semibold">Question ${index + 1}</span><span class="font-bold text-lg ${color}">${displayScore === 'N/A' ? 'Not Answered' : `${displayScore}/100`}</span></div>`;
+            const clickableClass = isLocked ? '' : 'cursor-pointer hover:bg-gray-600 transition-colors';
+            const clickAction = isLocked ? '' : `onclick="jumpToSlide(${index})"`;
+            perQuestionHTML += `<div ${clickAction} class="flex justify-between items-center bg-gray-700 p-3 rounded-lg ${clickableClass}"><span class="font-semibold">Question ${index + 1}</span><span class="font-bold text-lg ${color}">${displayScore === 'N/A' ? 'Not Answered' : `${displayScore}/100`}</span></div>`;
         });
         
         const overallAverage = (totalScore / slideStates.length).toFixed(1);
         const overallColor = overallAverage >= 90 ? 'text-green-400' : overallAverage >= 60 ? 'text-yellow-400' : 'text-red-400';
         document.getElementById('overallScore').innerHTML = `<span class="${overallColor}">${overallAverage}%</span>`;
         document.getElementById('perQuestionScores').innerHTML = perQuestionHTML;
+
+        if (isLocked) {
+            document.getElementById('backToAssignBtn').classList.add('hidden');
+        } else {
+             document.getElementById('backToAssignBtn').classList.remove('hidden');
+        }
     }
 
     function hideSummary() {
@@ -454,6 +498,7 @@
     
     function showToast(message, options = {}) {
         const { color = 'default', duration = 5000, position = 'top-right' } = options;
+        
         let wrapper = document.getElementById(`toast-wrapper-${position}`);
         if (!wrapper) {
             wrapper = document.createElement('div');
@@ -465,31 +510,40 @@
             wrapper.className = `toast-wrapper fixed z-[100] p-4 pointer-events-none w-full max-w-sm space-y-3 ${positionClasses[position] || positionClasses['top-right']}`;
             document.body.appendChild(wrapper);
         }
+        
         const toast = document.createElement('div');
         toast.className = 'flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm w-full animate-fade-in-up pointer-events-auto';
+
         const colors = { default: 'bg-gray-700', green: 'bg-green-600', red: 'bg-red-600', blue: 'bg-blue-600' };
         toast.classList.add(colors[color] || colors['default']);
+
         const messageSpan = document.createElement('span');
         messageSpan.className = "text-left";
         messageSpan.textContent = message;
         toast.appendChild(messageSpan);
+        
         const closeButton = document.createElement('button');
         closeButton.innerHTML = '&times;';
         closeButton.className = 'ml-4 text-2xl font-bold leading-none hover:text-gray-300 focus:outline-none';
+        
         let timeoutId = null;
+
         const dismiss = () => {
             if (timeoutId) clearTimeout(timeoutId);
             toast.classList.remove('animate-fade-in-up');
             toast.classList.add('animate-fade-out-down');
             toast.addEventListener('animationend', () => toast.remove());
         };
+
         closeButton.onclick = dismiss;
         toast.appendChild(closeButton);
+        
         if(position.includes('top')) {
             wrapper.appendChild(toast);
         } else {
             wrapper.prepend(toast);
         }
+        
         timeoutId = setTimeout(dismiss, duration);
     }
     
