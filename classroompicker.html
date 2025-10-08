@@ -126,12 +126,10 @@
         assignmentId = urlParams.get('assignmentId');
         const loader = document.getElementById('pageLoader');
         const errorP = document.getElementById('loadingError');
-
         if (!assignmentId) {
             errorP.textContent = "Error: No assignment ID provided in the URL.";
             return;
         }
-
         try {
             const doc = await db.collection("assignments").doc(assignmentId).get();
             if (!doc.exists) {
@@ -139,12 +137,10 @@
                 return;
             }
             assignmentData = { id: doc.id, ...doc.data() };
-
             if (assignmentData.checkerFunctions) {
                 checkerFunctionStrings = assignmentData.checkerFunctions;
             }
             slideStates = new Array(assignmentData.slideIds.length).fill(null);
-            
             auth.onAuthStateChanged(user => {
                 if (user) {
                     const profile = { name: user.displayName, email: user.email };
@@ -155,7 +151,6 @@
                     document.getElementById('loginContainer').classList.remove('hidden');
                 }
             });
-
         } catch (error) {
             console.error("Error loading assignment:", error);
             errorP.textContent = "An error occurred while loading the assignment.";
@@ -165,13 +160,11 @@
     async function authorizeAndStart(profile) {
         const errorP = document.getElementById('loadingError');
         const loader = document.getElementById('pageLoader');
-
         if (TEACHER_EMAILS.map(e => e.toLowerCase()).includes(profile.email.toLowerCase())) {
             userProfile = { name: profile.name, email: profile.email, class: 'Teacher' };
             initializeStudentSession();
             return;
         }
-
         try {
             const studentQuery = await db.collection("students").where("email", "==", profile.email).get();
             if (studentQuery.empty) {
@@ -184,7 +177,6 @@
             const studentData = studentQuery.docs[0].data();
             const studentClass = String(studentData.class);
             profile.class = studentClass;
-
             const assignedClasses = assignmentData.assignedClasses || [];
             if (!assignedClasses.includes(studentClass)) {
                 loader.classList.remove('hidden');
@@ -193,7 +185,6 @@
                 auth.signOut();
                 return;
             }
-            
             const classStatus = assignmentData.classStatus?.[studentClass];
             if (classStatus !== 'open') {
                 loader.classList.remove('hidden');
@@ -202,10 +193,8 @@
                 auth.signOut();
                 return;
             }
-            
             userProfile = profile;
             initializeStudentSession();
-
         } catch (error) {
             console.error("Authorization Error:", error);
             errorP.textContent = "An error occurred during authorization.";
@@ -343,12 +332,8 @@
 
     function saveCurrentState() {
         const currentAnswer = document.getElementById('inputbox').value;
-        if (currentAnswer.trim() !== "") {
-            const currentState = slideStates[currentSlideIndex];
-            if (!currentState || currentState.score === undefined) {
-                 slideStates[currentSlideIndex] = { answer: currentAnswer, score: undefined };
-            }
-        }
+        // Only save the text, not the score. The score is only set upon checking.
+        slideStates[currentSlideIndex] = { ...slideStates[currentSlideIndex], answer: currentAnswer };
     }
 
     function nextSlide() { 
@@ -370,22 +355,35 @@
         saveCurrentState();
         document.getElementById('mainContainer').classList.add('hidden');
         document.getElementById('summaryContainer').classList.remove('hidden');
+        
         let totalScore = 0;
-        let attemptedQuestions = 0;
         let perQuestionHTML = '';
+
         slideStates.forEach((state, index) => {
-            let score = 'N/A';
+            // Unanswered questions are treated as 0 for the final grade
+            let score = (state && state.score !== undefined) ? state.score : 0;
+            totalScore += score;
+            
+            let displayScore = 'N/A';
             let color = 'text-gray-500';
+
             if (state && state.score !== undefined) {
-                score = state.score;
-                totalScore += score;
-                attemptedQuestions++;
-                color = score >= 90 ? 'text-green-400' : 'text-yellow-400';
+                displayScore = state.score;
+                color = displayScore >= 90 ? 'text-green-400' : 'text-yellow-400';
             }
-            perQuestionHTML += `<div class="flex justify-between items-center bg-gray-700 p-3 rounded-lg"><span class="font-semibold">Question ${index + 1}</span><span class="font-bold text-lg ${color}">${score === 'N/A' ? 'Not Answered' : `${score}/100`}</span></div>`;
+            
+            perQuestionHTML += `
+                <div onclick="jumpToSlide(${index})" class="flex justify-between items-center bg-gray-700 p-3 rounded-lg cursor-pointer hover:bg-gray-600 transition-colors">
+                    <span class="font-semibold">Question ${index + 1}</span>
+                    <span class="font-bold text-lg ${color}">${displayScore === 'N/A' ? 'Not Answered' : `${displayScore}/100`}</span>
+                </div>
+            `;
         });
-        const overallAverage = attemptedQuestions > 0 ? (totalScore / attemptedQuestions).toFixed(1) : 0;
+        
+        // The overall score is based on the total number of questions
+        const overallAverage = (totalScore / slideStates.length).toFixed(1);
         const overallColor = overallAverage >= 90 ? 'text-green-400' : overallAverage >= 60 ? 'text-yellow-400' : 'text-red-400';
+
         document.getElementById('overallScore').innerHTML = `<span class="${overallColor}">${overallAverage}%</span>`;
         document.getElementById('perQuestionScores').innerHTML = perQuestionHTML;
     }
@@ -393,6 +391,12 @@
     function hideSummary() {
         document.getElementById('summaryContainer').classList.add('hidden');
         document.getElementById('mainContainer').classList.remove('hidden');
+    }
+
+    function jumpToSlide(index) {
+        currentSlideIndex = index;
+        hideSummary();
+        updateSlideDisplay();
     }
 
     async function myfunction() {
