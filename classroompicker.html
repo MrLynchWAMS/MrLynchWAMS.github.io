@@ -78,7 +78,8 @@
                 <div class="interactive-column bg-gray-800 p-4 rounded-lg flex flex-col">
                     <p id="prompt" class="font-semibold mb-2">Enter your answer for the current slide:</p>
                     <textarea id="inputbox" placeholder="Your answer here..." rows="8" class="flex-grow w-full p-3 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500"></textarea>
-                    <button id="btn" onclick="myfunction()" class="w-full mt-4 bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition-colors">Check & Save Answer</button>
+                    <button id="checkSaveBtn" onclick="myfunction()" class="w-full mt-4 bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition-colors">Check & Save Answer</button>
+                    <button id="submitBtn" onclick="showSummary()" class="hidden w-full mt-4 bg-yellow-600 hover:bg-yellow-700 text-black font-bold py-3 rounded-lg transition-colors">Submit & View Summary</button>
                     <p id="result" class="mt-4 text-xl font-bold text-center"></p>
                 </div>
             </div>
@@ -210,7 +211,7 @@
             }
             const statusDoc = await db.collection("submissionStatus").doc(`${assignmentId}_${profile.email}`).get();
             if (statusDoc.exists && statusDoc.data().status === 'submitted') {
-                await fetchStudentSubmissions(); // Load their work first
+                await fetchStudentSubmissions();
                 handleSubmittedState();
                 return;
             }
@@ -267,6 +268,7 @@
             } else {
                 const studentData = querySnapshot.docs[0].data();
                 const profile = { name: studentData.name, email: studentData.email };
+                // Passcode login is not persistent, so we don't use Firebase Auth here.
                 authorizeAndStart(profile);
             }
         } catch (error) {
@@ -279,11 +281,10 @@
 
     function handleCredentialResponse(response) {
         const credential = firebase.auth.GoogleAuthProvider.credential(response.credential);
-        auth.signInWithCredential(credential)
-            .catch(error => {
-                console.error("Firebase sign-in with Google failed:", error);
-                document.getElementById('loginError').textContent = "Google Sign-In failed. Please try again.";
-            });
+        auth.signInWithCredential(credential).catch(error => {
+            console.error("Firebase sign-in with Google failed:", error);
+            document.getElementById('loginError').textContent = "Google Sign-In failed. Please try again.";
+        });
     }
     
     function updateSlideDisplay(retryCount = 0) {
@@ -321,12 +322,15 @@
         }
 
         const nextButton = document.getElementById('nextButton');
+        const checkSaveBtn = document.getElementById('checkSaveBtn');
+        const submitBtn = document.getElementById('submitBtn');
+
         if (currentSlideIndex === assignmentData.slideIds.length - 1) {
-            nextButton.textContent = "Submit & View Summary";
-            nextButton.onclick = showSummary;
+            nextButton.classList.add('hidden');
+            submitBtn.classList.remove('hidden');
         } else {
-            nextButton.textContent = "Next";
-            nextButton.onclick = nextSlide;
+            nextButton.classList.remove('hidden');
+            submitBtn.classList.add('hidden');
         }
         
         slideImageElement.onload = () => {
@@ -351,15 +355,18 @@
     function handleSubmittedState() {
         document.getElementById('pageLoader').classList.add('hidden');
         document.getElementById('loginContainer').classList.add('hidden');
+        document.getElementById('mainContainer').classList.add('hidden');
         const submittedContainer = document.getElementById('submittedContainer');
+        const summaryContainer = document.getElementById('summaryContainer');
         const submittedMessage = document.getElementById('submittedMessage');
         const rule = assignmentData.postSubmissionRule || 'open';
         
         if (rule === 'hide') {
             submittedMessage.textContent = "Your work has been submitted and is no longer viewable. You may now close this page.";
             submittedContainer.classList.remove('hidden');
-        } else {
-             showSummary(true);
+            summaryContainer.classList.add('hidden');
+        } else { // 'lock' or 'open' rules
+             showSummary(true); // pass 'isLocked = true'
         }
     }
 
@@ -578,4 +585,3 @@
 </script>
 </body>
 </html>
-
