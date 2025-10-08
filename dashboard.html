@@ -4,8 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Teacher Dashboard</title>
-        <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📊</text></svg>">
-
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📊</text></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
@@ -44,18 +43,24 @@
     <div id="dashboardContent" class="hidden container mx-auto p-4 md:p-8">
         <div class="flex justify-between items-center mb-6 flex-wrap gap-4">
             <h1 id="assignmentName" class="text-3xl font-bold text-yellow-400"></h1>
-            <div class="flex items-center gap-2">
-                <label for="sortOptions" class="font-semibold">Sort by:</label>
-                <select id="sortOptions" class="bg-gray-700 border border-gray-600 rounded-md p-2 text-white">
-                    <option value="lastName">Last Name (A-Z)</option>
-                    <option value="firstName">First Name (A-Z)</option>
-                    <option value="random">Randomize</option>
-                    <option value="randomHide">Randomize & Hide Names</option>
-                </select>
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" id="showAverageToggle" class="h-4 w-4 rounded border-gray-300 text-blue-500 focus:ring-blue-400">
+                    <label for="showAverageToggle" class="font-semibold select-none cursor-pointer">Show Averages</label>
+                </div>
+                <div class="flex items-center gap-2">
+                    <label for="sortOptions" class="font-semibold">Sort by:</label>
+                    <select id="sortOptions" class="bg-gray-700 border border-gray-600 rounded-md p-2 text-white">
+                        <option value="lastName">Last Name (A-Z)</option>
+                        <option value="firstName">First Name (A-Z)</option>
+                        <option value="staticRandom">Randomize (Static)</option>
+                        <option value="dynamicRandomHide">Anonymous (Live)</option>
+                    </select>
+                </div>
             </div>
             <div class="flex items-center gap-4">
                  <a href="./assignments.html" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg btn-action">&larr; All Assignments</a>
-                <button id="exportButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Export Class to CSV</button>
+                <button id="exportButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Export All to CSV</button>
                 <button id="signOutButton" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Sign Out</button>
             </div>
         </div>
@@ -99,11 +104,12 @@
     let currentSortOrder = 'lastName';
     let assignmentId;
     let studentRoster = [];
+    let staticRandomOrders = {}; // Store shuffled orders for static random sort
 
     const urlParams = new URLSearchParams(window.location.search);
     assignmentId = urlParams.get('assignmentId');
     if (!assignmentId) {
-        document.getElementById('loading-text').textContent = "Error: No assignment ID specified in URL. Please go back to the assignments page.";
+        document.getElementById('loading-text').textContent = "Error: No assignment ID specified in URL.";
         document.getElementById('signInButtonContainer').classList.add('hidden');
     }
 
@@ -134,6 +140,7 @@
             if (!assignmentDoc.exists) { showToast("Error: Assignment not found!", {color: 'red'}); return; }
             assignmentData = { id: assignmentDoc.id, ...assignmentDoc.data() };
             document.getElementById('assignmentName').textContent = assignmentData.name;
+            document.title = `${assignmentData.name} - Dashboard`; // Set page title
             const studentSnapshot = await db.collection("students").get();
             studentRoster = studentSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             db.collection("submissions").where("assignmentId", "==", assignmentId)
@@ -188,18 +195,28 @@
         tablesContainer.innerHTML = '';
         const classNames = Object.keys(classData).sort();
         const numQuestions = assignmentData.slideIds ? assignmentData.slideIds.length : 0;
+        const showAverages = document.getElementById('showAverageToggle').checked;
+
         classNames.forEach(className => {
             const tableWrapper = document.createElement('div');
             tableWrapper.id = `table-${className.replace(/\s+/g, '-')}`;
             if (activeClass ? className !== activeClass : classNames.indexOf(className) > 0) {
                  tableWrapper.classList.add('hidden');
             }
-            const studentsInClass = [...classData[className]];
+            
+            let studentsInClass = [...classData[className]];
             if (currentSortOrder === 'lastName') { studentsInClass.sort((a, b) => splitName(a.name).lastName.localeCompare(splitName(b.name).lastName)); } 
             else if (currentSortOrder === 'firstName') { studentsInClass.sort((a, b) => splitName(a.name).firstName.localeCompare(splitName(b.name).firstName)); } 
-            else if (currentSortOrder === 'random' || currentSortOrder === 'randomHide') {
+            else if (currentSortOrder === 'staticRandom') {
+                if (!staticRandomOrders[className]) {
+                    staticRandomOrders[className] = [...studentsInClass].sort(() => Math.random() - 0.5);
+                }
+                studentsInClass = staticRandomOrders[className];
+            }
+            else if (currentSortOrder === 'dynamicRandomHide') {
                 for (let i = studentsInClass.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [studentsInClass[i], studentsInClass[j]] = [studentsInClass[j], studentsInClass[i]]; }
             }
+
             const table = document.createElement('table');
             table.className = "min-w-full";
             let tableHTML = `<thead class="bg-gray-700"><tr><th class="p-4 text-left font-semibold">Student Name</th>`;
@@ -209,14 +226,29 @@
             tableHTML += `</tr></thead><tbody></tbody>`;
             table.innerHTML = tableHTML;
             const tbody = table.querySelector('tbody');
+
             studentsInClass.forEach((student, studentIndex) => {
                 const tr = document.createElement('tr');
                 tr.className = "border-b border-gray-700 hover:bg-gray-700/50";
                 const nameTd = document.createElement('td');
                 nameTd.className = "p-4 font-medium cursor-pointer";
-                nameTd.innerText = currentSortOrder === 'randomHide' ? `Student ${studentIndex + 1}` : student.name;
+                
+                const displayName = currentSortOrder === 'dynamicRandomHide' ? `Student ${studentIndex + 1}` : student.name;
+                let averageScoreHTML = '';
+                if (showAverages) {
+                    let totalScore = 0; let attempted = 0;
+                    for (let i = 0; i < numQuestions; i++) {
+                        const sub = student.submissions.find(s => s.slideIndex === i);
+                        if (sub) { totalScore += sub.score; attempted++; }
+                    }
+                    const avg = attempted > 0 ? (totalScore / attempted).toFixed(1) : 'N/A';
+                    averageScoreHTML = ` <span class="text-gray-400 text-sm ml-2">(${avg}%)</span>`;
+                }
+
+                nameTd.innerHTML = displayName + averageScoreHTML;
                 nameTd.onclick = () => showModalByStudent(student);
                 tr.appendChild(nameTd);
+
                 for (let i = 0; i < numQuestions; i++) {
                     const scoreTd = document.createElement('td');
                     scoreTd.className = "p-4 text-center";
@@ -251,8 +283,8 @@
         activeClass = className;
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
         document.querySelector(`.tab[data-class-name="${className}"]`).classList.add('active');
-        document.querySelectorAll('#classTablesContainer > div').forEach(t => t.classList.add('hidden'));
-        document.getElementById(`table-${className.replace(/\s+/g, '-')}`).classList.remove('hidden');
+        // Re-render tables to apply sort order to the newly visible tab
+        renderTables(processedClassData);
     }
     
     const modal = document.getElementById('answerModal');
@@ -264,13 +296,22 @@
     function showModalByStudent(student) {
         const numQuestions = assignmentData.slideIds.length;
         modalTitle.innerText = `Latest Answers for ${student.name}`;
-        modalHeader.classList.add('hidden');
+        
+        let totalScore = 0, attempted = 0;
+        for (let i = 0; i < numQuestions; i++) {
+            const sub = student.submissions.find(s => s.slideIndex === i);
+            if (sub) { totalScore += sub.score; attempted++; }
+        }
+        const avg = attempted > 0 ? (totalScore / attempted).toFixed(1) : 'N/A';
+        modalHeader.innerHTML = `<p class="text-lg text-center font-semibold">Overall Average: <span class="text-yellow-400">${avg}%</span></p>`;
+        modalHeader.classList.remove('hidden');
+
         modalContent.innerHTML = '';
         for (let i = 0; i < numQuestions; i++) {
             const latestSub = student.submissions.find(s => s.slideIndex === i);
             const answerDiv = document.createElement('div');
             answerDiv.className = "mb-6 p-4 bg-gray-700 rounded-lg";
-            const status = latestSub ? `<span class="font-bold text-lg ${latestSub.score === 100 ? 'text-green-400' : 'text-yellow-400'}">${latestSub.score}/100</span>` : '<span class="text-gray-500">No submission</span>';
+            const status = latestSub ? `<span class="font-bold text-lg ${latestSub.score >= 90 ? 'text-green-400' : 'text-yellow-400'}">${latestSub.score}/100</span>` : '<span class="text-gray-500">No submission</span>';
             answerDiv.innerHTML = `<div class="flex justify-between items-center mb-2"><h3 class="text-xl font-bold">Question ${i + 1}</h3>${status}</div><p class="text-gray-300 whitespace-pre-wrap">${latestSub ? latestSub.answer : ''}</p>`;
             modalContent.appendChild(answerDiv);
         }
@@ -278,21 +319,34 @@
     }
 
     function showModalByQuestion(qNumber, className) {
+        const studentsInClass = [...processedClassData[className]];
+        if (currentSortOrder === 'dynamicRandomHide') {
+            // Use the same shuffle logic as renderTables for consistency
+            for (let i = studentsInClass.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [studentsInClass[i], studentsInClass[j]] = [studentsInClass[j], studentsInClass[i]]; }
+        }
+        
         modalTitle.innerText = `All Latest Answers for Question ${qNumber} (${className})`;
         modalHeader.innerHTML = `<button onclick="bulkRegrade(${qNumber - 1}, '${className}')" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Re-grade All Answers for this Question</button>`;
         modalHeader.classList.remove('hidden');
         modalContent.innerHTML = '';
-        processedClassData[className].forEach(student => {
+        
+        studentsInClass.forEach((student, index) => {
+            const displayName = currentSortOrder === 'dynamicRandomHide' ? `Student ${index + 1}` : student.name;
             const latestSub = student.submissions.find(s => s.slideIndex === qNumber - 1);
             const answerDiv = document.createElement('div');
             answerDiv.className = "mb-4 p-4 bg-gray-700 rounded-lg";
-            const status = latestSub ? `<span class="font-bold ${latestSub.score === 100 ? 'text-green-400' : 'text-yellow-400'}">${latestSub.score}/100</span>` : '<span class="text-gray-500">N/A</span>';
-            answerDiv.innerHTML = `<div class="flex justify-between items-center mb-2"><h3 class="font-bold">${student.name}</h3>${status}</div><p class="text-gray-300 whitespace-pre-wrap">${latestSub ? latestSub.answer : ''}</p>`;
+            const status = latestSub ? `<span class="font-bold ${latestSub.score >= 90 ? 'text-green-400' : 'text-yellow-400'}">${latestSub.score}/100</span>` : '<span class="text-gray-500">N/A</span>';
+            answerDiv.innerHTML = `<div class="flex justify-between items-center mb-2"><h3 class="font-bold">${displayName}</h3>${status}</div><p class="text-gray-300 whitespace-pre-wrap">${latestSub ? latestSub.answer : ''}</p>`;
             modalContent.appendChild(answerDiv);
         });
         modal.classList.remove('hidden');
     }
     
+    // (The rest of the functions are unchanged)
+</script>
+
+<!-- Unchanged utility functions -->
+<script>
     function showModalForAnswerHistory(studentName, qNumber, submissions) {
         modalTitle.innerText = `Answer History for ${studentName} - Question ${qNumber}`;
         modalHeader.classList.add('hidden');
@@ -306,53 +360,24 @@
             const date = sub.timestamp ? new Date(sub.timestamp.seconds * 1000).toLocaleString() : 'Timestamp not available';
             const answerDiv = document.createElement('div');
             answerDiv.className = "mb-4 p-4 bg-gray-700 rounded-lg";
-            answerDiv.innerHTML = `
-                <div class="flex justify-between items-center mb-2 flex-wrap gap-2">
-                    <h3 class="text-gray-400 text-sm">${date}</h3>
-                    <div class="flex items-center gap-2">
-                        <input type="number" id="score-input-${sub.id}" value="${sub.score}" class="bg-gray-600 rounded p-1 w-20 text-center">
-                        <button onclick="saveManualScore('${sub.id}', document.getElementById('score-input-${sub.id}').value)" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-1 px-3 rounded btn-action">Save Score</button>
-                        <button onclick="rerunAutograder('${sub.id}')" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold py-1 px-3 rounded btn-action">Re-run Auto</button>
-                    </div>
-                </div>
-                <textarea id="answer-text-${sub.id}" class="w-full h-32 p-2 bg-gray-600 rounded border border-gray-500 mt-2">${sub.answer}</textarea>
-                <button onclick="saveAnswerText('${sub.id}', document.getElementById('answer-text-${sub.id}').value)" class="w-full mt-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-1 px-3 rounded btn-action">Save Answer Text</button>
-            `;
+            answerDiv.innerHTML = `<div class="flex justify-between items-center mb-2 flex-wrap gap-2"><h3 class="text-gray-400 text-sm">${date}</h3><div class="flex items-center gap-2"><input type="number" id="score-input-${sub.id}" value="${sub.score}" class="bg-gray-600 rounded p-1 w-20 text-center"><button onclick="saveManualScore('${sub.id}', document.getElementById('score-input-${sub.id}').value)" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-1 px-3 rounded btn-action">Save Score</button><button onclick="rerunAutograder('${sub.id}')" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold py-1 px-3 rounded btn-action">Re-run Auto</button></div></div><textarea id="answer-text-${sub.id}" class="w-full h-32 p-2 bg-gray-600 rounded border border-gray-500 mt-2">${sub.answer}</textarea><button onclick="saveAnswerText('${sub.id}', document.getElementById('answer-text-${sub.id}').value)" class="w-full mt-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-1 px-3 rounded btn-action">Save Answer Text</button>`;
             modalContent.appendChild(answerDiv);
         });
         modal.classList.remove('hidden');
     }
-    
-    function executeChecker(submission) {
-        const slideIndex = submission.slideIndex;
-        const funcString = assignmentData.checkerFunctions?.[`calc${slideIndex + 1}`];
-        if (funcString) {
-            try {
-                const funcNameMatch = funcString.match(/function\s+([a-zA-Z0-9_]+)\s*\(/);
-                if (!funcNameMatch || !funcNameMatch[1]) {
-                    throw new Error("Could not find a valid function definition (e.g., 'function calc1(...)') in the checker code.");
-                }
-                const funcNameToRun = funcNameMatch[1];
-                const runner = new Function('studentAnswer', 'userProfile', 'isLate', `
-                    const showToast = () => {}; const window = { open: () => {} }; const alert = () => {}; const confirm = () => {};
-                    ${funcString}
-                    if (typeof ${funcNameToRun} === 'function') {
-                        return ${funcNameToRun}(studentAnswer, showToast, userProfile, isLate);
-                    } else {
-                        throw new Error("The function '${funcNameToRun}' defined in your code could not be executed.");
-                    }
-                `);
-                const userProfile = { name: submission.studentName, email: submission.studentEmail };
-                return runner(submission.answer, userProfile, false); 
-            } catch (e) {
-                console.error(`Error executing checker function for submission ${submission.id}:`, e);
-                showToast(`Error in checker for Q${slideIndex + 1}: ${e.message}`, { color: 'red' });
-                return 0;
-            }
+    async function saveAnswerText(submissionId, newAnswer) {
+        if (!newAnswer.trim()) {
+            showToast("Answer cannot be empty.", {color: 'red'});
+            return;
         }
-        return 0;
+        try {
+            await db.collection("submissions").doc(submissionId).update({ answer: newAnswer });
+            showToast("Answer text updated successfully!", {color: 'green'});
+        } catch (error) {
+            console.error("Error saving answer text:", error);
+            showToast("Failed to save answer text.", {color: 'red'});
+        }
     }
-    
     async function saveManualScore(submissionId, newScoreStr) {
         const newScore = parseInt(newScoreStr, 10);
         if (isNaN(newScore) || newScore < 0 || newScore > 100) {
@@ -367,21 +392,6 @@
             showToast("Failed to save score.", {color: 'red'});
         }
     }
-
-    async function saveAnswerText(submissionId, newAnswer) {
-        if (!newAnswer.trim()) {
-            showToast("Answer cannot be empty.", {color: 'red'});
-            return;
-        }
-        try {
-            await db.collection("submissions").doc(submissionId).update({ answer: newAnswer });
-            showToast("Answer text updated successfully!", {color: 'green'});
-        } catch (error) {
-            console.error("Error saving answer text:", error);
-            showToast("Failed to save answer text.", {color: 'red'});
-        }
-    }
-
     async function rerunAutograder(submissionId) {
         try {
             const doc = await db.collection("submissions").doc(submissionId).get();
@@ -395,7 +405,6 @@
             showToast("Failed to re-grade.", {color: 'red'});
         }
     }
-
     async function bulkRegrade(slideIndex, className) {
         if (!confirm(`Are you sure you want to re-grade all answers for Question ${slideIndex + 1} in ${className}? This cannot be undone.`)) {
             return;
@@ -423,36 +432,76 @@
             showToast("Bulk re-grade failed. See console.", {color: 'red'});
         }
     }
-    
+    function executeChecker(submission) {
+        const slideIndex = submission.slideIndex;
+        const funcString = assignmentData.checkerFunctions?.[`calc${slideIndex + 1}`];
+        if (funcString) {
+            try {
+                const funcNameMatch = funcString.match(/function\s+([a-zA-Z0-9_]+)\s*\(/);
+                if (!funcNameMatch || !funcNameMatch[1]) { throw new Error("Could not find a valid function definition in the checker code."); }
+                const funcNameToRun = funcNameMatch[1];
+                const runner = new Function('studentAnswer', 'userProfile', `
+                    const showToast = () => {}; const window = { open: () => {} }; const alert = () => {}; const confirm = () => {};
+                    ${funcString}
+                    if (typeof ${funcNameToRun} === 'function') {
+                        return ${funcNameToRun}(studentAnswer, showToast, userProfile);
+                    } else {
+                        throw new Error("The function '${funcNameToRun}' could not be executed.");
+                    }
+                `);
+                const userProfile = { name: submission.studentName, email: submission.studentEmail };
+                return runner(submission.answer, userProfile);
+            } catch (e) {
+                console.error(`Error executing checker function for submission ${submission.id}:`, e);
+                showToast(`Error in checker for Q${slideIndex + 1}: ${e.message}`, { color: 'red' });
+                return 0;
+            }
+        }
+        return 0;
+    }
     function showToast(message, options = {}) { const { color = 'default', duration = 3000 } = options; const wrapper = document.getElementById('toast-wrapper'); if (!wrapper) return; const toast = document.createElement('div'); toast.className = 'flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm animate-fade-in-right'; const colors = { default: 'bg-gray-700', green: 'bg-green-600', red: 'bg-red-600', blue: 'bg-blue-600' }; toast.classList.add(colors[color] || colors['default']); const messageSpan = document.createElement('span'); messageSpan.textContent = message; toast.appendChild(messageSpan); const closeButton = document.createElement('button'); closeButton.innerHTML = '&times;'; closeButton.className = 'ml-4 text-2xl font-bold leading-none hover:text-gray-300 focus:outline-none'; let timeoutId = null; const dismiss = () => { if (timeoutId) clearTimeout(timeoutId); toast.classList.remove('animate-fade-in-right'); toast.classList.add('animate-fade-out-right'); toast.addEventListener('animationend', () => toast.remove()); }; closeButton.onclick = dismiss; toast.appendChild(closeButton); wrapper.appendChild(toast); timeoutId = setTimeout(dismiss, duration); }
-    
     document.getElementById('signOutButton').onclick = () => { auth.signOut(); };
-    
     function splitName(fullName) { if (!fullName) return { firstName: '', lastName: '' }; const parts = fullName.trim().split(' '); if (parts.length === 1) return { firstName: parts[0], lastName: '' }; const lastName = parts.pop(); const firstName = parts.join(' '); return { firstName, lastName }; }
-    
-    document.getElementById('exportButton').onclick = exportToCSV;
-    
     document.getElementById('sortOptions').onchange = function(event) {
         currentSortOrder = event.target.value;
-        if(processedClassData) {
-            renderTables(processedClassData);
+        if (currentSortOrder === 'staticRandom') {
+            staticRandomOrders = {}; // Clear static orders to force a new shuffle
         }
+        if(processedClassData) { renderTables(processedClassData); }
     };
-
+    document.getElementById('showAverageToggle').onchange = function() {
+        if(processedClassData) { renderTables(processedClassData); }
+    };
     function exportToCSV() {
-        if (!processedClassData || !activeClass) {
-            showToast("Data not loaded or no class selected.", {color: 'red'}); return;
+        if (!processedClassData) {
+            showToast("Student data has not been loaded yet.", {color: 'red'});
+            return;
+        }
+        let allStudents = [];
+        for (const className in processedClassData) {
+            if (Object.hasOwnProperty.call(processedClassData, className)) {
+                processedClassData[className].forEach(student => {
+                    allStudents.push({ ...student, className: String(className) });
+                });
+            }
+        }
+        if (allStudents.length === 0) {
+            showToast("No student data to export for this assignment.", {color: 'red'});
+            return;
         }
         let csvContent = "data:text/csv;charset=utf-8,";
-        const numQuestions = assignmentData.slideIds.length;
+        const numQuestions = assignmentData.slideIds ? assignmentData.slideIds.length : 0;
         const questionHeaders = Array.from({length: numQuestions}, (_, i) => `Score Q${i + 1}`).join(',');
-        const headers = ["Email", "Last Name", "First Name", questionHeaders, "Average Score", "Completion (%)"].join(',');
+        const headers = ["Email", "Last Name", "First Name", "Last, First", "Class", "Average Score", "Completion (%)", questionHeaders].join(',');
         csvContent += headers + "\r\n";
-        const studentsToExport = [...processedClassData[activeClass]];
-        if (currentSortOrder === 'lastName') { studentsToExport.sort((a, b) => splitName(a.name).lastName.localeCompare(splitName(b.name).lastName)); } 
-        else if (currentSortOrder === 'firstName') { studentsToExport.sort((a, b) => splitName(a.name).firstName.localeCompare(splitName(b.name).firstName)); }
-        studentsToExport.forEach(student => {
+        allStudents.sort((a, b) => {
+            const classCompare = String(a.className).localeCompare(String(b.className));
+            if (classCompare !== 0) return classCompare;
+            return splitName(a.name).lastName.localeCompare(splitName(b.name).lastName);
+        });
+        allStudents.forEach(student => {
             const { firstName, lastName } = splitName(student.name);
+            const lastFirst = `"${lastName}, ${firstName}"`;
             let scores = []; let totalScore = 0; let attemptedQuestions = 0;
             for (let i = 0; i < numQuestions; i++) {
                 const latestSubmission = student.submissions.find(s => s.slideIndex === i);
@@ -460,15 +509,15 @@
                 else { scores.push(""); }
             }
             const averageScore = attemptedQuestions > 0 ? (totalScore / attemptedQuestions).toFixed(2) : "";
-            const completionPercentage = ((attemptedQuestions / numQuestions) * 100).toFixed(2);
-            let row = [student.email, `"${lastName}"`, `"${firstName}"`, ...scores, averageScore, completionPercentage].join(',');
+            const completionPercentage = numQuestions > 0 ? ((attemptedQuestions / numQuestions) * 100).toFixed(2) : "0.00";
+            let row = [student.email, `"${lastName}"`, `"${firstName}"`, lastFirst, student.className, averageScore, completionPercentage, ...scores].join(',');
             csvContent += row + "\r\n";
         });
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
-        const safeClassName = activeClass.replace(/\s+/g, '_');
+        const safeAssignmentName = assignmentData.name.replace(/[^a-z0-9]/gi, '_');
         link.setAttribute("href", encodedUri);
-        link.setAttribute("download", `submissions_${safeClassName}.csv`);
+        link.setAttribute("download", `submissions_${safeAssignmentName}_all.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -476,3 +525,4 @@
 </script>
 </body>
 </html>
+
