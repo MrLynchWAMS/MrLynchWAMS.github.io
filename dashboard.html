@@ -41,35 +41,8 @@
     </div>
 
     <div id="dashboardContent" class="hidden container mx-auto p-4 md:p-8">
-        <div class="flex justify-between items-center mb-6 flex-wrap gap-4">
+        <div class="flex justify-between items-center mb-4 flex-wrap gap-4">
             <h1 id="assignmentName" class="text-3xl font-bold text-yellow-400"></h1>
-            <div class="flex items-center gap-6">
-                <!-- Display Options -->
-                <div class="flex flex-col items-start gap-1">
-                    <div class="flex items-center gap-2">
-                        <input type="checkbox" id="showAverageToggle" class="h-4 w-4 rounded border-gray-300 text-blue-500 focus:ring-blue-400">
-                        <label for="showAverageToggle" class="font-semibold select-none cursor-pointer text-sm">Show Averages</label>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <input type="checkbox" id="hideNamesToggle" class="h-4 w-4 rounded border-gray-300 text-blue-500 focus:ring-blue-400">
-                        <label for="hideNamesToggle" class="font-semibold select-none cursor-pointer text-sm">Hide Names</label>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <input type="checkbox" id="blackoutBarsToggle" class="h-4 w-4 rounded border-gray-300 text-blue-500 focus:ring-blue-400">
-                        <label for="blackoutBarsToggle" class="font-semibold select-none cursor-pointer text-sm">Blackout Bars</label>
-                    </div>
-                </div>
-                <!-- Sort Options -->
-                <div class="flex items-center gap-2">
-                    <label for="sortOptions" class="font-semibold">Sort by:</label>
-                    <select id="sortOptions" class="bg-gray-700 border border-gray-600 rounded-md p-2 text-white">
-                        <option value="lastName">Last Name (A-Z)</option>
-                        <option value="firstName">First Name (A-Z)</option>
-                        <option value="staticRandom">Randomize (Static)</option>
-                        <option value="dynamicRandom">Randomize (Live)</option>
-                    </select>
-                </div>
-            </div>
             <div class="flex items-center gap-4">
                  <a href="./assignments.html" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg btn-action">&larr; All Assignments</a>
                 <button id="exportButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Export to CSV</button>
@@ -77,6 +50,33 @@
             </div>
         </div>
         
+        <!-- NEW: Control Bar -->
+        <div class="bg-gray-800 p-4 rounded-lg mb-6 flex justify-between items-center flex-wrap gap-4">
+            <div class="flex items-center gap-6">
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" id="showAverageToggle" class="h-4 w-4 rounded border-gray-300 text-blue-500 focus:ring-blue-400">
+                    <label for="showAverageToggle" class="font-semibold select-none cursor-pointer text-sm">Show Averages</label>
+                </div>
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" id="hideNamesToggle" class="h-4 w-4 rounded border-gray-300 text-blue-500 focus:ring-blue-400">
+                    <label for="hideNamesToggle" class="font-semibold select-none cursor-pointer text-sm">Hide Names</label>
+                </div>
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" id="blackoutBarsToggle" class="h-4 w-4 rounded border-gray-300 text-blue-500 focus:ring-blue-400">
+                    <label for="blackoutBarsToggle" class="font-semibold select-none cursor-pointer text-sm">Blackout Bars</label>
+                </div>
+            </div>
+             <div class="flex items-center gap-2">
+                <label for="sortOptions" class="font-semibold text-sm">Sort by:</label>
+                <select id="sortOptions" class="bg-gray-700 border border-gray-600 rounded-md p-2 text-white text-sm">
+                    <option value="lastName">Last Name (A-Z)</option>
+                    <option value="firstName">First Name (A-Z)</option>
+                    <option value="staticRandom">Randomize (Static)</option>
+                    <option value="dynamicRandom">Randomize (Live)</option>
+                </select>
+            </div>
+        </div>
+
         <div id="classDataContainer">
             <div id="classTabs" class="flex border-b border-gray-700 mb-4"></div>
             <div id="classTablesContainer"></div>
@@ -520,28 +520,25 @@
     };
     document.getElementById('hideNamesToggle').onchange = function() { if(processedClassData) { renderTables(processedClassData); } };
     document.getElementById('showAverageToggle').onchange = function() { if(processedClassData) { renderTables(processedClassData); } };
+    document.getElementById('blackoutBarsToggle').onchange = function() { if(processedClassData) { renderTables(processedClassData); } };
     
     function exportToCSV() {
         if (!processedClassData) {
             showToast("Student data has not been loaded yet.", {color: 'red'});
             return;
         }
-
         const studentsToExport = processedClassData[activeClass] || [];
         if (studentsToExport.length === 0) {
             showToast("No students in the selected view to export.", {color: 'red'});
             return;
         }
-        
         let csvContent = "";
         const numQuestions = assignmentData.slideIds ? assignmentData.slideIds.length : 0;
         const questionHeaders = Array.from({length: numQuestions}, (_, i) => `Score Q${i + 1}`).join(',');
         const headers = ["Email", "Last Name", "First Name", "Last, First", "Class", "Average Score", "Completion (%)", questionHeaders].join(',');
         csvContent += headers + "\r\n";
-
         if (currentSortOrder === 'lastName') { studentsToExport.sort((a, b) => splitName(a.name).lastName.localeCompare(splitName(b.name).lastName)); } 
         else if (currentSortOrder === 'firstName') { studentsToExport.sort((a, b) => splitName(a.name).firstName.localeCompare(splitName(b.name).firstName)); }
-        
         studentsToExport.forEach(student => {
             const { firstName, lastName } = splitName(student.name);
             const lastFirst = `"${lastName}, ${firstName}"`;
@@ -559,7 +556,6 @@
             ].join(',');
             csvContent += row + "\r\n";
         });
-
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement("a");
         const url = URL.createObjectURL(blob);
