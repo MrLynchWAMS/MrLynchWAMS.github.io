@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Assignment Editor</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👩‍🚀</text></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://apis.google.com/js/api.js" async defer></script>
@@ -17,6 +18,7 @@
         @keyframes fade-out-right { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(100%); } }
         .animate-fade-in-right { animation: fade-in-right 0.5s ease-out forwards; }
         .animate-fade-out-right { animation: fade-out-right 0.5s ease-in forwards; }
+        .collapsible-content { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; }
     </style>
 </head>
 <body class="bg-gray-900 text-white font-sans">
@@ -43,18 +45,25 @@
 
         <div class="bg-gray-800 p-4 rounded-lg mb-6">
             <h2 class="text-xl font-semibold mb-2">Student Link</h2>
-            <p class="text-gray-400 mb-2">Share this link with your students to have them complete this assignment.</p>
-            <input id="shareLink" type="text" readonly class="w-full p-2 bg-gray-700 border border-gray-600 rounded">
+            <div class="flex gap-2">
+                <input id="shareLink" type="text" readonly class="w-full p-2 bg-gray-700 border border-gray-600 rounded">
+                <button onclick="copyShareLink()" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-3 rounded-lg">Copy</button>
+            </div>
         </div>
         
-        <div id="deadline-section" class="bg-gray-800 p-6 rounded-lg mb-8">
-            <div class="flex justify-between items-center mb-4">
+        <div id="deadline-section" class="bg-gray-800 rounded-lg mb-8 overflow-hidden">
+            <div id="deadline-header" class="flex justify-between items-center p-6 cursor-pointer" onclick="toggleDeadlineSection()">
                  <h2 class="text-2xl font-bold text-yellow-400">Class Start Times & Deadlines</h2>
-                 <button onclick="saveTeacherDefaults()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">Save as Defaults</button>
+                 <span id="deadline-chevron" class="text-2xl transform transition-transform">▶</span>
             </div>
-            <p class="text-gray-400 mb-4">Set the official start time for each class period. Per-question deadlines are calculated in minutes after this time.</p>
-            <div id="class-start-times" class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <!-- Time inputs will be added here -->
+            <div id="deadline-content" class="collapsible-content px-6 pb-6">
+                <p class="text-gray-400 mb-4">Set the official start time for each class period. Per-question deadlines are calculated in minutes after this time.</p>
+                <div id="class-start-times" class="flex flex-wrap gap-4">
+                    <!-- Time inputs will be added here -->
+                </div>
+                <div class="mt-4 border-t border-gray-700 pt-4 flex justify-end">
+                    <button onclick="saveTeacherDefaults()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">Save These Times as My Defaults</button>
+                </div>
             </div>
         </div>
 
@@ -64,7 +73,7 @@
     <div id="toast-wrapper" class="fixed top-4 right-4 z-[100] space-y-3 w-full max-w-sm"></div>
 
 <script>
-    const TEACHER_EMAILS = ["klynch@mtps.us"];
+    const TEACHER_EMAILS = ["klynch@mtps.us", "mstuart@mtps.us", "cfiori@mtps.us", "mlock@mtps.us", "cheine@mtps.us"];
     const CLIENT_ID = "1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com";
     const SCOPES = "https://www.googleapis.com/auth/presentations.readonly";
     const firebaseConfig = {
@@ -188,7 +197,7 @@
             const slidePolicy = deadlinePolicy[`q${qNum}`] || {};
             const editorBox = document.createElement('div');
             editorBox.className = "slide-editor-box grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-800 p-4 rounded-lg";
-            const placeholderText = `// Example with all parameters:\nfunction calc${qNum}(studentAnswer, showToast, userProfile, isLate) {\n  let grade = 0;\n  if (studentAnswer.includes('correct') && !isLate) {\n    grade = 100;\n  }\n  return grade;\n}`;
+            const placeholderText = `// Example with all parameters:\nfunction calc${qNum}(studentAnswer, showToast, userProfile) {\n  let grade = 0;\n  const name = userProfile.name.split(' ')[0];\n  showToast('Keep going, ' + name + '!');\n  // ... your grading logic ...\n  return grade;\n}`;
             editorBox.innerHTML = `
                 <div>
                     <h3 class="text-xl font-semibold mb-2">Slide ${qNum}</h3>
@@ -283,6 +292,25 @@
             console.error("Error saving defaults:", error);
             showToast("Could not save defaults.", { color: 'red' });
         }
+    }
+
+    function toggleDeadlineSection() {
+        const content = document.getElementById('deadline-content');
+        const chevron = document.getElementById('deadline-chevron');
+        if (content.style.maxHeight && content.style.maxHeight !== '0px') {
+            content.style.maxHeight = '0px';
+            chevron.style.transform = 'rotate(0deg)';
+        } else {
+            content.style.maxHeight = content.scrollHeight + "px";
+            chevron.style.transform = 'rotate(90deg)';
+        }
+    }
+
+    function copyShareLink() {
+        const linkInput = document.getElementById('shareLink');
+        linkInput.select();
+        document.execCommand('copy');
+        showToast("Link copied to clipboard!", { color: 'blue' });
     }
 
     function showToast(message, options = {}) {
