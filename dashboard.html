@@ -50,7 +50,6 @@
             </div>
         </div>
         
-        <!-- NEW: Control Bar -->
         <div class="bg-gray-800 p-4 rounded-lg mb-6 flex justify-between items-center flex-wrap gap-4">
             <div class="flex items-center gap-6">
                 <div class="flex items-center gap-2">
@@ -193,13 +192,13 @@
         const tabsContainer = document.getElementById('classTabs');
         tabsContainer.innerHTML = '';
         const classNames = [...Object.keys(classData).filter(c => c !== "All Classes").sort(), "All Classes"];
-        classNames.forEach((className, index) => {
+        classNames.forEach((className) => {
             const tab = document.createElement('div');
             tab.className = 'tab';
             tab.innerText = className;
             tab.dataset.className = className;
-            if (index === 0 && !activeClass) { tab.classList.add('active'); activeClass = className; } 
-            else if (className === activeClass) { tab.classList.add('active'); }
+            if (!activeClass) { activeClass = classNames[0]; }
+            if (className === activeClass) { tab.classList.add('active'); }
             tab.onclick = () => switchTab(className);
             tabsContainer.appendChild(tab);
         });
@@ -523,22 +522,26 @@
     document.getElementById('blackoutBarsToggle').onchange = function() { if(processedClassData) { renderTables(processedClassData); } };
     
     function exportToCSV() {
-        if (!processedClassData) {
-            showToast("Student data has not been loaded yet.", {color: 'red'});
+        if (!processedClassData || !activeClass) {
+            showToast("Data not loaded or no class is selected.", {color: 'red'});
             return;
         }
+
         const studentsToExport = processedClassData[activeClass] || [];
         if (studentsToExport.length === 0) {
             showToast("No students in the selected view to export.", {color: 'red'});
             return;
         }
+        
         let csvContent = "";
         const numQuestions = assignmentData.slideIds ? assignmentData.slideIds.length : 0;
         const questionHeaders = Array.from({length: numQuestions}, (_, i) => `Score Q${i + 1}`).join(',');
         const headers = ["Email", "Last Name", "First Name", "Last, First", "Class", "Average Score", "Completion (%)", questionHeaders].join(',');
         csvContent += headers + "\r\n";
+
         if (currentSortOrder === 'lastName') { studentsToExport.sort((a, b) => splitName(a.name).lastName.localeCompare(splitName(b.name).lastName)); } 
         else if (currentSortOrder === 'firstName') { studentsToExport.sort((a, b) => splitName(a.name).firstName.localeCompare(splitName(b.name).firstName)); }
+        
         studentsToExport.forEach(student => {
             const { firstName, lastName } = splitName(student.name);
             const lastFirst = `"${lastName}, ${firstName}"`;
@@ -556,6 +559,7 @@
             ].join(',');
             csvContent += row + "\r\n";
         });
+
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement("a");
         const url = URL.createObjectURL(blob);
