@@ -43,15 +43,23 @@
     <div id="dashboardContent" class="hidden container mx-auto p-4 md:p-8">
         <div class="flex justify-between items-center mb-6 flex-wrap gap-4">
             <h1 id="assignmentName" class="text-3xl font-bold text-yellow-400"></h1>
-            <div class="flex items-center gap-4">
-                <div class="flex items-center gap-2">
-                    <input type="checkbox" id="showAverageToggle" class="h-4 w-4 rounded border-gray-300 text-blue-500 focus:ring-blue-400">
-                    <label for="showAverageToggle" class="font-semibold select-none cursor-pointer">Show Averages</label>
+            <div class="flex items-center gap-6">
+                <!-- Display Options -->
+                <div class="flex flex-col items-start gap-1">
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" id="showAverageToggle" class="h-4 w-4 rounded border-gray-300 text-blue-500 focus:ring-blue-400">
+                        <label for="showAverageToggle" class="font-semibold select-none cursor-pointer text-sm">Show Averages</label>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" id="hideNamesToggle" class="h-4 w-4 rounded border-gray-300 text-blue-500 focus:ring-blue-400">
+                        <label for="hideNamesToggle" class="font-semibold select-none cursor-pointer text-sm">Hide Names</label>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" id="blackoutBarsToggle" class="h-4 w-4 rounded border-gray-300 text-blue-500 focus:ring-blue-400">
+                        <label for="blackoutBarsToggle" class="font-semibold select-none cursor-pointer text-sm">Blackout Bars</label>
+                    </div>
                 </div>
-                <div class="flex items-center gap-2">
-                    <input type="checkbox" id="hideNamesToggle" class="h-4 w-4 rounded border-gray-300 text-blue-500 focus:ring-blue-400">
-                    <label for="hideNamesToggle" class="font-semibold select-none cursor-pointer">Hide Names</label>
-                </div>
+                <!-- Sort Options -->
                 <div class="flex items-center gap-2">
                     <label for="sortOptions" class="font-semibold">Sort by:</label>
                     <select id="sortOptions" class="bg-gray-700 border border-gray-600 rounded-md p-2 text-white">
@@ -185,7 +193,6 @@
         const tabsContainer = document.getElementById('classTabs');
         tabsContainer.innerHTML = '';
         const classNames = [...Object.keys(classData).filter(c => c !== "All Classes").sort(), "All Classes"];
-        
         classNames.forEach((className, index) => {
             const tab = document.createElement('div');
             tab.className = 'tab';
@@ -205,6 +212,7 @@
         const numQuestions = assignmentData.slideIds ? assignmentData.slideIds.length : 0;
         const showAverages = document.getElementById('showAverageToggle').checked;
         const hideNames = document.getElementById('hideNamesToggle').checked;
+        const blackoutBars = document.getElementById('blackoutBarsToggle').checked;
 
         classNames.forEach(className => {
             const tableWrapper = document.createElement('div');
@@ -231,7 +239,7 @@
 
             let averagesHeader = '';
             const tabEl = document.querySelector(`div[data-class-name="${className}"]`);
-            if (showAverages && !hideNames) {
+            if (showAverages) {
                 averagesHeader = `<tr class="bg-gray-700/50"><th class="p-2 text-left font-semibold text-sm text-yellow-400">Class Averages</th>`;
                 let totalOverallScore = 0;
                 let totalAttemptedSubmissions = 0;
@@ -251,7 +259,6 @@
                     averagesHeader += `<th class="p-2 text-center font-semibold text-sm text-yellow-400">${qAvg}%</th>`;
                 }
                 averagesHeader += `</tr>`;
-                
                 const overallClassAverage = totalAttemptedSubmissions > 0 ? (totalOverallScore / totalAttemptedSubmissions).toFixed(1) : 'N/A';
                 if(tabEl) tabEl.innerHTML = `${className} <span class="text-xs text-gray-400">(${overallClassAverage}%)</span>`;
             } else {
@@ -295,8 +302,8 @@
                     if (submissionsForQuestion.length > 0) {
                         const latestSubmission = submissionsForQuestion[0];
                         const score = latestSubmission.score || 0;
-                        const color = score >= 90 ? 'bg-green-500' : score >= 60 ? 'bg-yellow-500' : 'bg-red-500';
-                        const barWidth = Math.max(score, 2); 
+                        const color = blackoutBars ? 'bg-black' : (score >= 90 ? 'bg-green-500' : score >= 60 ? 'bg-yellow-500' : 'bg-red-500');
+                        const barWidth = blackoutBars ? 100 : Math.max(score, 2); 
                         const scoreBarBg = document.createElement('div');
                         scoreBarBg.className = "score-bar-bg w-full h-6 rounded-md overflow-hidden cursor-pointer";
                         scoreBarBg.onclick = () => showModalForAnswerHistory(student, i + 1, submissionsForQuestion, hideNames ? displayName : null);
@@ -334,7 +341,6 @@
     function showModalByStudent(student, anonymousName = null) {
         const numQuestions = assignmentData.slideIds.length;
         modalTitle.innerText = `Latest Answers for ${anonymousName || student.name}`;
-        
         let totalScore = 0, attempted = 0;
         for (let i = 0; i < numQuestions; i++) {
             const sub = student.submissions.find(s => s.slideIndex === i);
@@ -343,7 +349,6 @@
         const avg = attempted > 0 ? (totalScore / attempted).toFixed(1) : 'N/A';
         modalHeader.innerHTML = `<p class="text-lg text-center font-semibold">Overall Average: <span class="text-yellow-400">${avg}%</span></p>`;
         modalHeader.classList.remove('hidden');
-
         modalContent.innerHTML = '';
         for (let i = 0; i < numQuestions; i++) {
             const latestSub = student.submissions.find(s => s.slideIndex === i);
@@ -359,8 +364,7 @@
     function showModalByQuestion(qNumber, className) {
         const hideNames = document.getElementById('hideNamesToggle').checked;
         let studentsInClass = [...processedClassData[className]];
-        
-        if (currentSortOrder === 'staticRandom' || (currentSortOrder === 'dynamicRandom' && hideNames)) {
+        if (currentSortOrder === 'staticRandom' || currentSortOrder === 'dynamicRandom') {
              if (!staticRandomOrders[className]) {
                 staticRandomOrders[className] = [...studentsInClass].sort(() => Math.random() - 0.5);
             }
@@ -524,7 +528,6 @@
         }
 
         const studentsToExport = processedClassData[activeClass] || [];
-        
         if (studentsToExport.length === 0) {
             showToast("No students in the selected view to export.", {color: 'red'});
             return;
