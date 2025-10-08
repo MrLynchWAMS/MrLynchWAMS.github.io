@@ -66,6 +66,16 @@
                 </div>
             </div>
         </div>
+        
+        <div class="bg-gray-800 p-6 rounded-lg mb-8">
+            <label for="postSubmissionRule" class="block text-2xl font-bold text-yellow-400 mb-2">Post-Submission Policy</label>
+            <p class="text-gray-400 mb-4">Choose what happens after a student officially submits this assignment.</p>
+            <select id="postSubmissionRule" class="w-full md:w-1/2 p-2 bg-gray-700 rounded border border-gray-600">
+                <option value="open">Remain Open (Students can review and resubmit)</option>
+                <option value="lock">Lock (Students can review but not edit)</option>
+                <option value="hide">Lock & Hide (Students cannot see answers or scores)</option>
+            </select>
+        </div>
 
         <div id="slidesContainer" class="space-y-8"></div>
     </div>
@@ -147,9 +157,7 @@
         try {
             loadingText.textContent = "Loading assignment data...";
             const teacherDefaultsDoc = await db.collection("teachers").doc(auth.currentUser.email).get();
-            if(teacherDefaultsDoc.exists) {
-                teacherDefaults = teacherDefaultsDoc.data();
-            }
+            if(teacherDefaultsDoc.exists) { teacherDefaults = teacherDefaultsDoc.data(); }
             const assignmentDoc = await db.collection("assignments").doc(assignmentId).get();
             if (!assignmentDoc.exists) { loadingText.textContent = "Error: Assignment not found."; return; }
             assignmentData = { id: assignmentDoc.id, ...assignmentDoc.data() };
@@ -165,6 +173,7 @@
             document.getElementById('editorContent').classList.remove('hidden');
             document.getElementById('assignmentTitle').textContent = `Editing: ${assignmentData.name}`;
             document.getElementById('shareLink').value = `https://custom.scienceclass.rocks/classroompicker.html?assignmentId=${assignmentId}`;
+            document.getElementById('postSubmissionRule').value = assignmentData.postSubmissionRule || 'open';
             renderDeadlineUI();
             renderEditor();
         } catch (error) {
@@ -262,10 +271,12 @@
                     penaltyValue: parseInt(document.getElementById(`penalty-value-${index}`).value, 10) || 0,
                 };
             });
+            const postSubmissionRule = document.getElementById('postSubmissionRule').value;
             await db.collection("assignments").doc(assignmentId).update({
                 slideIds: assignmentData.slideIds,
                 checkerFunctions: checkerFunctions,
-                deadlinePolicy: deadlinePolicy
+                deadlinePolicy: deadlinePolicy,
+                postSubmissionRule: postSubmissionRule
             });
             showToast("Assignment saved successfully!", { color: 'green' });
         } catch (error) {
