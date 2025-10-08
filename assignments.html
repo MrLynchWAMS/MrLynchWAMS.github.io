@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale-1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Assignment Dashboard</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👩‍🚀</text></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
@@ -33,16 +33,20 @@
     </div>
 
     <div id="assignmentContent" class="hidden container mx-auto p-4 md:p-8">
-        <div class="flex justify-between items-center mb-6 flex-wrap gap-4">
+        <div class="flex justify-between items-center mb-4 flex-wrap gap-4">
             <h1 class="text-3xl font-bold text-yellow-400">Your Assignments</h1>
             <div>
-                <!-- UPDATED: "New Assignment" button moved here -->
                 <button onclick="openCreateModal()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg btn-action">+ New Assignment</button>
                 <a href="./roster.html" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Manage Roster</a>
                 <button id="signOutButton" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Sign Out</button>
             </div>
         </div>
         
+        <!-- NEW: Search Bar -->
+        <div class="mb-6">
+            <input type="search" id="searchInput" placeholder="Search assignments by name..." class="w-full p-3 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500">
+        </div>
+
         <div id="loadingState" class="text-center py-10"><p class="text-xl">Loading assignments...</p></div>
 
         <div id="assignmentsList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -75,7 +79,6 @@
                 <h2 id="statusModalTitle" class="text-2xl font-bold text-yellow-400">Manage Status</h2>
                 <button onclick="closeStatusModal()" class="text-gray-400 hover:text-white text-3xl">&times;</button>
             </div>
-            <!-- UPDATED: New section for the share link -->
             <div class="p-6 border-b border-gray-700">
                 <label for="studentShareLink" class="block text-sm font-medium text-gray-300 mb-2">Student Share Link</label>
                 <div class="flex gap-2">
@@ -107,7 +110,7 @@
     const auth = firebase.auth();
     let activeAssignmentId = null;
     let allClassNames = [];
-    let allAssignments = []; // Store all assignments for easy access
+    let allAssignments = [];
 
     auth.onAuthStateChanged(user => {
         if (user && TEACHER_EMAILS.map(e => e.toLowerCase()).includes(user.email.toLowerCase())) {
@@ -139,39 +142,50 @@
         }
         
         db.collection("assignments").orderBy("createdAt", "desc")
-          .onSnapshot(renderAssignments, error => {
+          .onSnapshot(snapshot => {
+              allAssignments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+              displayFilteredAssignments();
+          }, error => {
               console.error("Error loading assignments:", error);
               document.getElementById('loadingState').innerText = "Error loading assignments. See console for details.";
           });
     }
-
-    function renderAssignments(snapshot) {
-        allAssignments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); // Store for later
+    
+    // NEW: Function to display assignments based on search filter
+    function displayFilteredAssignments() {
         const listContainer = document.getElementById('assignmentsList');
         const loadingState = document.getElementById('loadingState');
+        const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+
+        const filteredAssignments = allAssignments.filter(assignment => 
+            assignment.name.toLowerCase().includes(searchTerm)
+        );
+
         listContainer.innerHTML = '';
-        if (snapshot.empty) {
-            loadingState.innerText = "No assignments found. Click '+ New Assignment' to create your first one!";
+        if (filteredAssignments.length === 0) {
+            loadingState.innerText = "No assignments found matching your search.";
             loadingState.classList.remove('hidden');
         } else {
             loadingState.classList.add('hidden');
         }
-        allAssignments.forEach(assignment => {
+
+        filteredAssignments.forEach(assignment => {
             const card = document.createElement('div');
             card.className = "bg-gray-800 rounded-lg p-6 shadow-lg flex flex-col justify-between";
             const date = assignment.createdAt ? new Date(assignment.createdAt.seconds * 1000).toLocaleDateString() : 'No date';
             
-            let statusHTML = '<ul class="text-xs space-y-1">';
+            // UPDATED: Horizontal, space-saving class status layout
+            let statusHTML = '<div class="flex flex-wrap gap-x-4 gap-y-1 text-xs">';
             if (assignment.assignedClasses && assignment.assignedClasses.length > 0) {
                 assignment.assignedClasses.sort().forEach(className => {
                     const status = assignment.classStatus?.[className] || 'closed';
                     const color = status === 'open' ? 'text-green-400' : 'text-red-400';
-                    statusHTML += `<li><span class="font-semibold">${className}:</span> <span class="${color}">${status}</span></li>`;
+                    statusHTML += `<div><span class="font-semibold">${className}:</span> <span class="${color}">${status}</span></div>`;
                 });
             } else {
-                statusHTML += '<li>Not yet assigned to any classes.</li>';
+                statusHTML += '<span class="text-gray-400">Not yet assigned.</span>';
             }
-            statusHTML += '</ul>';
+            statusHTML += '</div>';
 
             card.innerHTML = `
                 <div>
@@ -194,6 +208,8 @@
         });
     }
     
+    document.getElementById('searchInput').addEventListener('input', displayFilteredAssignments);
+
     const createModal = document.getElementById('createModal');
     function openCreateModal() { createModal.classList.remove('hidden'); }
     function closeCreateModal() { 
@@ -242,15 +258,12 @@
             showToast("Could not find assignment data.", {color: 'red'});
             return;
         }
-
         activeAssignmentId = assignment.id;
         const modalTitle = document.getElementById('statusModalTitle');
         const modalContent = document.getElementById('statusModalContent');
         const shareLinkInput = document.getElementById('studentShareLink');
-        
         modalTitle.innerText = `Manage Status for: ${assignment.name}`;
         shareLinkInput.value = `https://custom.scienceclass.rocks/classroompicker.html?assignmentId=${assignment.id}`;
-        
         let contentHTML = `
             <div class="flex justify-end gap-2 mb-4">
                 <button onclick="setAllStatuses('open')" class="text-sm bg-green-600 hover:bg-green-700 px-3 py-1 rounded-md btn-action">Open All</button>
@@ -260,7 +273,6 @@
             <div class="space-y-4">
         `;
         const classStatus = assignment.classStatus || {};
-
         if (allClassNames.length === 0) {
             contentHTML += '<p class="text-gray-400">No classes found in your roster.</p>';
         } else {
