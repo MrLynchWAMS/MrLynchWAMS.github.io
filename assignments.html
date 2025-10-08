@@ -33,7 +33,7 @@
     </div>
 
     <div id="assignmentContent" class="hidden container mx-auto p-4 md:p-8">
-        <div class="flex justify-between items-center mb-4 flex-wrap gap-4">
+        <div class="flex justify-between items-center mb-6 flex-wrap gap-4">
             <h1 class="text-3xl font-bold text-yellow-400">Your Assignments</h1>
             <div>
                 <button onclick="openCreateModal()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg btn-action">+ New Assignment</button>
@@ -42,7 +42,6 @@
             </div>
         </div>
         
-        <!-- NEW: Search Bar -->
         <div class="mb-6">
             <input type="search" id="searchInput" placeholder="Search assignments by name..." class="w-full p-3 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500">
         </div>
@@ -74,7 +73,7 @@
     
     <!-- Status/Scheduling Modal -->
     <div id="statusModal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
-        <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-xl">
+        <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-2xl">
             <div class="flex justify-between items-center p-4 border-b border-gray-700">
                 <h2 id="statusModalTitle" class="text-2xl font-bold text-yellow-400">Manage Status</h2>
                 <button onclick="closeStatusModal()" class="text-gray-400 hover:text-white text-3xl">&times;</button>
@@ -111,12 +110,14 @@
     let activeAssignmentId = null;
     let allClassNames = [];
     let allAssignments = [];
+    let studentRoster = [];
+    let submissionStatuses = {};
 
     auth.onAuthStateChanged(user => {
         if (user && TEACHER_EMAILS.map(e => e.toLowerCase()).includes(user.email.toLowerCase())) {
             document.getElementById('pageLoader').classList.add('hidden');
             document.getElementById('assignmentContent').classList.remove('hidden');
-            loadAssignmentsAndClasses();
+            loadInitialData();
         } else {
             document.getElementById('loading-text').textContent = "Please sign in to continue.";
             document.getElementById('signInButtonContainer').classList.remove('hidden');
@@ -131,39 +132,53 @@
         });
     }
 
-    async function loadAssignmentsAndClasses() {
+    async function loadInitialData() {
         try {
             const studentSnapshot = await db.collection("students").get();
-            const students = studentSnapshot.docs.map(doc => doc.data());
-            allClassNames = [...new Set(students.map(s => String(s.class)))].sort();
+            studentRoster = studentSnapshot.docs.map(doc => doc.data());
+            allClassNames = [...new Set(studentRoster.map(s => String(s.class)))].sort();
         } catch (error) {
             console.error("Could not load class roster:", error);
             showToast("Error: Could not load class roster.", { color: 'red' });
         }
         
-        db.collection("assignments").orderBy("createdAt", "desc")
-          .onSnapshot(snapshot => {
-              allAssignments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-              displayFilteredAssignments();
-          }, error => {
-              console.error("Error loading assignments:", error);
-              document.getElementById('loadingState').innerText = "Error loading assignments. See console for details.";
-          });
+        db.collection("assignments").orderBy("createdAt", "desc").onSnapshot(handleAssignmentsUpdate, handleError);
+        db.collection("submissionStatus").onSnapshot(handleStatusUpdate, handleError);
+    }
+
+    function handleAssignmentsUpdate(snapshot) {
+        allAssignments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        displayFilteredAssignments();
+    }
+
+    function handleStatusUpdate(snapshot) {
+        submissionStatuses = {};
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            if (!submissionStatuses[data.assignmentId]) {
+                submissionStatuses[data.assignmentId] = {};
+            }
+            submissionStatuses[data.assignmentId][data.studentEmail] = data.status;
+        });
+        displayFilteredAssignments(); // Re-render to update submission counts
+    }
+
+    function handleError(error) {
+        console.error("Real-time listener failed:", error);
+        document.getElementById('loadingState').innerText = "Error loading data. See console for details.";
     }
     
-    // NEW: Function to display assignments based on search filter
     function displayFilteredAssignments() {
         const listContainer = document.getElementById('assignmentsList');
         const loadingState = document.getElementById('loadingState');
         const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-
         const filteredAssignments = allAssignments.filter(assignment => 
             assignment.name.toLowerCase().includes(searchTerm)
         );
 
         listContainer.innerHTML = '';
         if (filteredAssignments.length === 0) {
-            loadingState.innerText = "No assignments found matching your search.";
+            loadingState.innerText = searchTerm ? "No assignments found matching your search." : "No assignments found. Click '+ New Assignment' to create your first one!";
             loadingState.classList.remove('hidden');
         } else {
             loadingState.classList.add('hidden');
@@ -174,13 +189,23 @@
             card.className = "bg-gray-800 rounded-lg p-6 shadow-lg flex flex-col justify-between";
             const date = assignment.createdAt ? new Date(assignment.createdAt.seconds * 1000).toLocaleDateString() : 'No date';
             
-            // UPDATED: Horizontal, space-saving class status layout
-            let statusHTML = '<div class="flex flex-wrap gap-x-4 gap-y-1 text-xs">';
-            if (assignment.assignedClasses && assignment.assignedClasses.length > 0) {
-                assignment.assignedClasses.sort().forEach(className => {
+            let statusHTML = '<div class="space-y-2 text-xs">';
+            const assignedClasses = assignment.assignedClasses || [];
+            if (assignedClasses.length > 0) {
+                assignedClasses.sort().forEach(className => {
                     const status = assignment.classStatus?.[className] || 'closed';
                     const color = status === 'open' ? 'text-green-400' : 'text-red-400';
-                    statusHTML += `<div><span class="font-semibold">${className}:</span> <span class="${color}">${status}</span></div>`;
+                    const studentsInClass = studentRoster.filter(s => String(s.class) === className);
+                    const submissionCount = Object.values(submissionStatuses[assignment.id] || {}).filter(email => 
+                        studentsInClass.some(s => s.email === email)
+                    ).length;
+                    
+                    statusHTML += `
+                        <div class="flex justify-between items-center">
+                            <div><span class="font-semibold">${className}:</span> <span class="${color}">${status}</span></div>
+                            <div class="text-gray-400">${submissionCount} / ${studentsInClass.length} Submitted</div>
+                        </div>
+                    `;
                 });
             } else {
                 statusHTML += '<span class="text-gray-400">Not yet assigned.</span>';
@@ -212,13 +237,127 @@
 
     const createModal = document.getElementById('createModal');
     function openCreateModal() { createModal.classList.remove('hidden'); }
+    function closeCreateModal() { /* ... */ }
+    async function handleCreateAssignment() { /* ... */ }
+
+    const statusModal = document.getElementById('statusModal');
+    function openStatusModal(assignmentId) {
+        const assignment = allAssignments.find(a => a.id === assignmentId);
+        if (!assignment) { showToast("Could not find assignment data.", {color: 'red'}); return; }
+        activeAssignmentId = assignment.id;
+        const modalTitle = document.getElementById('statusModalTitle');
+        const modalContent = document.getElementById('statusModalContent');
+        const shareLinkInput = document.getElementById('studentShareLink');
+        modalTitle.innerText = `Manage Status for: ${assignment.name}`;
+        shareLinkInput.value = `https://custom.scienceclass.rocks/classroompicker.html?assignmentId=${assignment.id}`;
+        
+        let contentHTML = `
+            <div class="flex justify-end gap-2 mb-4">
+                <button onclick="setAllStatuses('open')" class="text-sm bg-green-600 hover:bg-green-700 px-3 py-1 rounded-md btn-action">Open All</button>
+                <button onclick="setAllStatuses('closed')" class="text-sm bg-yellow-600 hover:bg-yellow-700 px-3 py-1 rounded-md btn-action">Close All</button>
+                <button onclick="setAllStatuses('not-assigned')" class="text-sm bg-gray-600 hover:bg-gray-500 px-3 py-1 rounded-md btn-action">Unassign All</button>
+            </div>
+            <div class="space-y-4">
+        `;
+        const classStatus = assignment.classStatus || {};
+        if (allClassNames.length === 0) {
+            contentHTML += '<p class="text-gray-400">No classes found in your roster.</p>';
+        } else {
+            allClassNames.forEach(className => {
+                const isAssigned = (assignment.assignedClasses || []).includes(className);
+                const currentStatus = isAssigned ? (classStatus[className] || 'closed') : 'not-assigned';
+                const studentsInClass = studentRoster.filter(s => String(s.class) === className);
+                const submissionCount = Object.values(submissionStatuses[assignment.id] || {}).filter(email => 
+                    studentsInClass.some(s => s.email === email)
+                ).length;
+
+                contentHTML += `
+                    <div class="bg-gray-700 p-3 rounded-lg">
+                        <div class="flex justify-between items-center">
+                            <label for="status-${className}" class="font-semibold">${className}</label>
+                            <select id="status-${className}" data-class-name="${className}" class="bg-gray-600 rounded p-2 border border-gray-500">
+                                <option value="open" ${currentStatus === 'open' ? 'selected' : ''}>Open</option>
+                                <option value="closed" ${currentStatus === 'closed' ? 'selected' : ''}>Closed</option>
+                                <option value="not-assigned" ${currentStatus === 'not-assigned' ? 'selected' : ''}>Not Assigned</option>
+                            </select>
+                        </div>
+                        <div class="mt-3 pt-3 border-t border-gray-600 flex justify-end gap-2 text-sm">
+                            <span class="text-gray-400">${submissionCount} / ${studentsInClass.length} Submitted</span>
+                            <button onclick="unsubmitClass('${assignment.id}', '${className}')" class="text-yellow-400 hover:text-yellow-300">Unsubmit All</button>
+                            <button onclick="forceSubmitClass('${assignment.id}', '${className}')" class="text-blue-400 hover:text-blue-300">Force Submit All</button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+        contentHTML += '</div>';
+        modalContent.innerHTML = contentHTML;
+        statusModal.classList.remove('hidden');
+    }
+    
+    function setAllStatuses(status) { /* ... */ }
+    function closeStatusModal() { /* ... */ }
+    async function handleSaveAssignmentStatus() { /* ... */ }
+    async function deleteAssignment(id, name) { /* ... */ }
+    function copyShareLink() { /* ... */ }
+
+    async function forceSubmitClass(assignmentId, className) {
+        if (!confirm(`Are you sure you want to force submit for all unsubmitted students in ${className}?`)) return;
+        const studentsToSubmit = studentRoster.filter(s => String(s.class) === className && !(submissionStatuses[assignmentId] && submissionStatuses[assignmentId][s.email]));
+        if (studentsToSubmit.length === 0) {
+            showToast("All students in this class have already submitted.", {color: 'blue'});
+            return;
+        }
+        const batch = db.batch();
+        studentsToSubmit.forEach(student => {
+            const docRef = db.collection("submissionStatus").doc(`${assignmentId}_${student.email}`);
+            batch.set(docRef, {
+                assignmentId, studentEmail: student.email, studentName: student.name,
+                status: 'submitted', submittedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        });
+        try {
+            await batch.commit();
+            showToast(`Force submitted for ${studentsToSubmit.length} students in ${className}.`, {color: 'green'});
+        } catch (e) {
+            showToast("An error occurred.", {color: 'red'});
+            console.error(e);
+        }
+    }
+
+    async function unsubmitClass(assignmentId, className) {
+        if (!confirm(`Are you sure you want to un-submit for all students in ${className}? This will allow them to work on the assignment again.`)) return;
+        const studentsToUnsubmit = studentRoster.filter(s => String(s.class) === className && (submissionStatuses[assignmentId] && submissionStatuses[assignmentId][s.email]));
+        if (studentsToUnsubmit.length === 0) {
+            showToast("No students in this class have submitted yet.", {color: 'blue'});
+            return;
+        }
+        const batch = db.batch();
+        studentsToUnsubmit.forEach(student => {
+            const docRef = db.collection("submissionStatus").doc(`${assignmentId}_${student.email}`);
+            batch.delete(docRef);
+        });
+        try {
+            await batch.commit();
+            showToast(`Un-submitted for ${studentsToUnsubmit.length} students in ${className}.`, {color: 'green'});
+        } catch (e) {
+            showToast("An error occurred.", {color: 'red'});
+            console.error(e);
+        }
+    }
+    
+    document.getElementById('signOutButton').onclick = () => { auth.signOut(); };
+    function showToast(message, options = {}) { /* ... */ }
+</script>
+
+<script>
+    // Unchanged utility functions
     function closeCreateModal() { 
         createModal.classList.add('hidden'); 
         document.getElementById('assignmentName').value = '';
         document.getElementById('slidesLink').value = '';
         document.getElementById('modal-error').innerText = '';
     }
-    
     async function handleCreateAssignment() {
         const name = document.getElementById('assignmentName').value.trim();
         const link = document.getElementById('slidesLink').value.trim();
@@ -250,62 +389,15 @@
             document.getElementById('createAssignmentBtn').innerText = "Create Assignment";
         }
     }
-
-    const statusModal = document.getElementById('statusModal');
-    function openStatusModal(assignmentId) {
-        const assignment = allAssignments.find(a => a.id === assignmentId);
-        if (!assignment) {
-            showToast("Could not find assignment data.", {color: 'red'});
-            return;
-        }
-        activeAssignmentId = assignment.id;
-        const modalTitle = document.getElementById('statusModalTitle');
-        const modalContent = document.getElementById('statusModalContent');
-        const shareLinkInput = document.getElementById('studentShareLink');
-        modalTitle.innerText = `Manage Status for: ${assignment.name}`;
-        shareLinkInput.value = `https://custom.scienceclass.rocks/classroompicker.html?assignmentId=${assignment.id}`;
-        let contentHTML = `
-            <div class="flex justify-end gap-2 mb-4">
-                <button onclick="setAllStatuses('open')" class="text-sm bg-green-600 hover:bg-green-700 px-3 py-1 rounded-md btn-action">Open All</button>
-                <button onclick="setAllStatuses('closed')" class="text-sm bg-yellow-600 hover:bg-yellow-700 px-3 py-1 rounded-md btn-action">Close All</button>
-                <button onclick="setAllStatuses('not-assigned')" class="text-sm bg-gray-600 hover:bg-gray-500 px-3 py-1 rounded-md btn-action">Unassign All</button>
-            </div>
-            <div class="space-y-4">
-        `;
-        const classStatus = assignment.classStatus || {};
-        if (allClassNames.length === 0) {
-            contentHTML += '<p class="text-gray-400">No classes found in your roster.</p>';
-        } else {
-            allClassNames.forEach(className => {
-                const currentStatus = classStatus[className] || 'not-assigned';
-                contentHTML += `
-                    <div class="flex justify-between items-center bg-gray-700 p-3 rounded-lg">
-                        <label for="status-${className}" class="font-semibold">${className}</label>
-                        <select id="status-${className}" data-class-name="${className}" class="bg-gray-600 rounded p-2 border border-gray-500">
-                            <option value="open" ${currentStatus === 'open' ? 'selected' : ''}>Open</option>
-                            <option value="closed" ${currentStatus === 'closed' ? 'selected' : ''}>Closed</option>
-                            <option value="not-assigned" ${currentStatus === 'not-assigned' ? 'selected' : ''}>Not Assigned</option>
-                        </select>
-                    </div>
-                `;
-            });
-        }
-        contentHTML += '</div>';
-        modalContent.innerHTML = contentHTML;
-        statusModal.classList.remove('hidden');
-    }
-    
     function setAllStatuses(status) {
         document.querySelectorAll('#statusModalContent select').forEach(select => {
             select.value = status;
         });
     }
-
     function closeStatusModal() {
         statusModal.classList.add('hidden');
         activeAssignmentId = null;
     }
-
     async function handleSaveAssignmentStatus() {
         if (!activeAssignmentId) return;
         const newAssignedClasses = [];
@@ -330,7 +422,6 @@
             showToast("Failed to update assignment.", {color: 'red'});
         }
     }
-    
     async function deleteAssignment(id, name) {
         if (confirm(`Are you sure you want to permanently delete the assignment "${name}"? This action cannot be undone.`)) {
              try {
@@ -342,15 +433,12 @@
             }
         }
     }
-
     function copyShareLink() {
         const linkInput = document.getElementById('studentShareLink');
         linkInput.select();
         document.execCommand('copy');
         showToast("Link copied to clipboard!", { color: 'blue' });
     }
-
-    document.getElementById('signOutButton').onclick = () => { auth.signOut(); };
     function showToast(message, options = {}) { const { color = 'default', duration = 3000 } = options; const wrapper = document.getElementById('toast-wrapper'); if (!wrapper) return; const toast = document.createElement('div'); toast.className = 'flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm animate-fade-in-right'; const colors = { default: 'bg-gray-700', green: 'bg-green-600', red: 'bg-red-600', blue: 'bg-blue-600' }; toast.classList.add(colors[color] || colors['default']); const messageSpan = document.createElement('span'); messageSpan.textContent = message; toast.appendChild(messageSpan); const closeButton = document.createElement('button'); closeButton.innerHTML = '&times;'; closeButton.className = 'ml-4 text-2xl font-bold leading-none hover:text-gray-300 focus:outline-none'; let timeoutId = null; const dismiss = () => { if (timeoutId) clearTimeout(timeoutId); toast.classList.remove('animate-fade-in-right'); toast.classList.add('animate-fade-out-right'); toast.addEventListener('animationend', () => toast.remove()); }; closeButton.onclick = dismiss; toast.appendChild(closeButton); wrapper.appendChild(toast); timeoutId = setTimeout(dismiss, duration); }
 </script>
 </body>
