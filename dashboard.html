@@ -154,21 +154,33 @@
             document.title = `${assignmentData.name} - Dashboard`;
             const studentSnapshot = await db.collection("students").get();
             studentRoster = studentSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            db.collection("submissions").where("assignmentId", "==", assignmentId)
-              .onSnapshot(submissionSnapshot => {
-                let submissions = submissionSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                processAndRender(submissions);
-              }, error => {
-                console.error("Real-time listener failed:", error);
-                showToast("Connection to the database was lost. Please refresh.", {color: 'red', duration: 10000});
-              });
+            
+            let submissions = [];
+            let statuses = {};
+
+            db.collection("submissions").where("assignmentId", "==", assignmentId).onSnapshot(subSnapshot => {
+                submissions = subSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                processAndRender(submissions, statuses);
+            }, handleError);
+            
+            db.collection("submissionStatus").where("assignmentId", "==", assignmentId).onSnapshot(statusSnapshot => {
+                statuses = {};
+                statusSnapshot.forEach(doc => { statuses[doc.data().studentEmail] = doc.data().status; });
+                processAndRender(submissions, statuses);
+            }, handleError);
+
         } catch (error) {
             console.error("Error loading initial data:", error);
             showToast("An error occurred while loading initial data.", {color: 'red'});
         }
     }
+    
+    function handleError(error) {
+        console.error("Real-time listener failed:", error);
+        showToast("Connection to the database was lost. Please refresh.", {color: 'red', duration: 10000});
+    }
 
-    function processAndRender(submissions) {
+    function processAndRender(submissions, statuses) {
         submissions.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
         const classData = {};
         let allStudents = [];
@@ -177,6 +189,7 @@
             if (!classData[className]) classData[className] = [];
             const studentWithSubs = { ...student };
             studentWithSubs.submissions = submissions.filter(s => s.studentEmail === student.email);
+            studentWithSubs.isSubmitted = statuses[student.email] === 'submitted';
             classData[className].push(studentWithSubs);
             allStudents.push(studentWithSubs);
         });
@@ -192,13 +205,13 @@
         const tabsContainer = document.getElementById('classTabs');
         tabsContainer.innerHTML = '';
         const classNames = [...Object.keys(classData).filter(c => c !== "All Classes").sort(), "All Classes"];
-        classNames.forEach((className) => {
+        classNames.forEach((className, index) => {
             const tab = document.createElement('div');
             tab.className = 'tab';
             tab.innerText = className;
             tab.dataset.className = className;
-            if (!activeClass) { activeClass = classNames[0]; }
-            if (className === activeClass) { tab.classList.add('active'); }
+            if (index === 0 && !activeClass) { tab.classList.add('active'); activeClass = className; } 
+            else if (className === activeClass) { tab.classList.add('active'); }
             tab.onclick = () => switchTab(className);
             tabsContainer.appendChild(tab);
         });
@@ -219,7 +232,6 @@
             if (activeClass !== className) {
                  tableWrapper.classList.add('hidden');
             }
-            
             let studentsInClass = [...classData[className]];
             if (currentSortOrder === 'lastName') { studentsInClass.sort((a, b) => splitName(a.name).lastName.localeCompare(splitName(b.name).lastName)); } 
             else if (currentSortOrder === 'firstName') { studentsInClass.sort((a, b) => splitName(a.name).firstName.localeCompare(splitName(b.name).firstName)); } 
@@ -232,14 +244,12 @@
             else if (currentSortOrder === 'dynamicRandom') {
                 studentsInClass.sort(() => Math.random() - 0.5);
             }
-
             const table = document.createElement('table');
             table.className = "min-w-full";
-
             let averagesHeader = '';
             const tabEl = document.querySelector(`div[data-class-name="${className}"]`);
             if (showAverages) {
-                averagesHeader = `<tr class="bg-gray-700/50"><th class="p-2 text-left font-semibold text-sm text-yellow-400">Class Averages</th>`;
+                averagesHeader = `<tr class="bg-gray-700/50"><th class="p-2 text-left font-semibold text-sm text-yellow-400">Class Averages</th><th class="p-2"></th>`;
                 let totalOverallScore = 0;
                 let totalAttemptedSubmissions = 0;
                 for(let i = 0; i < numQuestions; i++) {
@@ -247,10 +257,7 @@
                     let numSubmissions = 0;
                     studentsInClass.forEach(s => {
                         const sub = s.submissions.find(sub => sub.slideIndex === i);
-                        if(sub) {
-                            totalScore += sub.score;
-                            numSubmissions++;
-                        }
+                        if(sub) { totalScore += sub.score; numSubmissions++; }
                     });
                     const qAvg = numSubmissions > 0 ? (totalScore / numSubmissions).toFixed(1) : 'N/A';
                     totalOverallScore += totalScore;
@@ -263,21 +270,18 @@
             } else {
                  if(tabEl) tabEl.innerHTML = `${className}`;
             }
-
-            let tableHTML = `<thead class="bg-gray-700">${averagesHeader}<tr><th class="p-4 text-left font-semibold">Student Name</th>`;
+            let tableHTML = `<thead class="bg-gray-700">${averagesHeader}<tr><th class="p-4 text-left font-semibold">Student Name</th><th class="p-4 font-semibold text-xs">Sub.</th>`;
             for (let i = 0; i < numQuestions; i++) {
                 tableHTML += `<th class="p-4 font-semibold cursor-pointer" onclick="showModalByQuestion(${i + 1}, '${className}')">Q${i + 1}</th>`;
             }
             tableHTML += `</tr></thead><tbody></tbody>`;
             table.innerHTML = tableHTML;
             const tbody = table.querySelector('tbody');
-
             studentsInClass.forEach((student, studentIndex) => {
                 const tr = document.createElement('tr');
                 tr.className = "border-b border-gray-700 hover:bg-gray-700/50";
                 const nameTd = document.createElement('td');
                 nameTd.className = "p-4 font-medium cursor-pointer";
-                
                 const displayName = hideNames ? `Student ${studentIndex + 1}` : student.name;
                 let averageScoreHTML = '';
                 if (showAverages && !hideNames) {
@@ -289,10 +293,15 @@
                     const avg = attempted > 0 ? (totalScore / attempted).toFixed(1) : 'N/A';
                     averageScoreHTML = ` <span class="text-gray-400 text-sm ml-2">(${avg}%)</span>`;
                 }
-
                 nameTd.innerHTML = displayName + averageScoreHTML;
                 nameTd.onclick = () => showModalByStudent(student, hideNames ? displayName : null);
                 tr.appendChild(nameTd);
+
+                const submittedTd = document.createElement('td');
+                submittedTd.className = "p-4 text-center";
+                const isSubmitted = student.isSubmitted;
+                submittedTd.innerHTML = `<input type="checkbox" ${isSubmitted ? 'checked' : ''} class="h-5 w-5" onclick="toggleSubmissionStatus(event, '${student.email}', '${student.name}', ${isSubmitted})">`;
+                tr.appendChild(submittedTd);
 
                 for (let i = 0; i < numQuestions; i++) {
                     const scoreTd = document.createElement('td');
@@ -526,22 +535,18 @@
             showToast("Data not loaded or no class is selected.", {color: 'red'});
             return;
         }
-
         const studentsToExport = processedClassData[activeClass] || [];
         if (studentsToExport.length === 0) {
             showToast("No students in the selected view to export.", {color: 'red'});
             return;
         }
-        
         let csvContent = "";
         const numQuestions = assignmentData.slideIds ? assignmentData.slideIds.length : 0;
         const questionHeaders = Array.from({length: numQuestions}, (_, i) => `Score Q${i + 1}`).join(',');
         const headers = ["Email", "Last Name", "First Name", "Last, First", "Class", "Average Score", "Completion (%)", questionHeaders].join(',');
         csvContent += headers + "\r\n";
-
         if (currentSortOrder === 'lastName') { studentsToExport.sort((a, b) => splitName(a.name).lastName.localeCompare(splitName(b.name).lastName)); } 
         else if (currentSortOrder === 'firstName') { studentsToExport.sort((a, b) => splitName(a.name).firstName.localeCompare(splitName(b.name).firstName)); }
-        
         studentsToExport.forEach(student => {
             const { firstName, lastName } = splitName(student.name);
             const lastFirst = `"${lastName}, ${firstName}"`;
@@ -559,7 +564,6 @@
             ].join(',');
             csvContent += row + "\r\n";
         });
-
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement("a");
         const url = URL.createObjectURL(blob);
