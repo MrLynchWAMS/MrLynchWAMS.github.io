@@ -152,7 +152,10 @@
                 return;
             }
             assignmentData = { id: doc.id, ...doc.data() };
+            
+            // --- The only change is this line ---
             document.title = `IterātED - ${assignmentData.name}`;
+
             if (assignmentData.checkerFunctions) {
                 checkerFunctionStrings = assignmentData.checkerFunctions;
             }
@@ -422,10 +425,10 @@
 
         if (isLocked) {
             document.getElementById('backToAssignBtn').classList.add('hidden');
-            document.getElementById('finalSubmitBtn').classList.add('hidden');
+            // document.getElementById('finalSubmitBtn').classList.add('hidden');
         } else {
              document.getElementById('backToAssignBtn').classList.remove('hidden');
-             document.getElementById('finalSubmitBtn').classList.remove('hidden');
+             // document.getElementById('finalSubmitBtn').classList.remove('hidden');
         }
     }
 
