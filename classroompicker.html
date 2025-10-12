@@ -146,11 +146,12 @@
                 errorP.textContent = "Error: This assignment could not be found.";
                 return;
             }
-            assignmentData = { id: doc.id, ...doc.data() };
-            if (assignmentData.checkerFunctions) {
-                checkerFunctionStrings = assignmentData.checkerFunctions;
-            }
-            slideStates = new Array(assignmentData.slideIds.length).fill(null);
+         assignmentData = { id: doc.id, ...doc.data() };
+document.title = assignmentData.name + " - IterātED";
+if (assignmentData.checkerFunctions) {
+    checkerFunctionStrings = assignmentData.checkerFunctions;
+}
+slideStates = new Array(assignmentData.slideIds.length).fill(null);
             auth.onAuthStateChanged(user => {
                 if (user) {
                     const profile = { name: user.displayName, email: user.email };
