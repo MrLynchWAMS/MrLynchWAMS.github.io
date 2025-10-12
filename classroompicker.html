@@ -102,7 +102,7 @@
                 </div>
                 <div id="perQuestionScores" class="space-y-3"></div>
                 <div class="mt-8 flex gap-4">
-                    <button onclick="hideSummary()" class="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 rounded-lg transition-colors">&larr; Back to Assignment</button>
+                    <button id="backToAssignmentBtn" onclick="hideSummary()" class="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 rounded-lg transition-colors">&larr; Back to Assignment</button>
                     <button id="submitButton" onclick="handleSubmitAssignment()" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition-colors">Submit Assignment</button>
                 </div>
                 <div class="mt-4 text-center">
@@ -112,6 +112,17 @@
         </div>
     </div>
     
+    <!-- Confirmation Modal -->
+    <div id="confirmationModal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50">
+        <div class="bg-gray-800 rounded-lg shadow-xl p-6 max-w-sm mx-auto">
+            <p id="confirmationMessage" class="text-white text-lg mb-4"></p>
+            <div class="flex justify-end gap-4">
+                <button onclick="handleConfirmCancel()" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg">Cancel</button>
+                <button onclick="handleConfirmOk()" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg">Confirm</button>
+            </div>
+        </div>
+    </div>
+
     <div id="toast-wrapper-top-left" class="toast-wrapper top-left space-y-3"></div>
     <div id="toast-wrapper-top-center" class="toast-wrapper top-center space-y-3"></div>
     <div id="toast-wrapper-top-right" class="toast-wrapper top-right space-y-3"></div>
@@ -140,6 +151,7 @@
     let slideStates = [];
     let assignmentId;
     let isSubmitted = false;
+    let confirmCallback = null;
 
     window.onload = async function() {
         const urlParams = new URLSearchParams(window.location.search);
@@ -157,11 +169,11 @@
                 return;
             }
          assignmentData = { id: doc.id, ...doc.data() };
-document.title = assignmentData.name + " - IterātED";
-if (assignmentData.checkerFunctions) {
-    checkerFunctionStrings = assignmentData.checkerFunctions;
-}
-slideStates = new Array(assignmentData.slideIds.length).fill(null);
+        document.title = assignmentData.name + " - IterātED";
+        if (assignmentData.checkerFunctions) {
+            checkerFunctionStrings = assignmentData.checkerFunctions;
+        }
+        slideStates = new Array(assignmentData.slideIds.length).fill(null);
             auth.onAuthStateChanged(user => {
                 if (user) {
                     const profile = { name: user.displayName, email: user.email };
@@ -228,9 +240,17 @@ slideStates = new Array(assignmentData.slideIds.length).fill(null);
         loader.classList.remove('hidden');
         loader.querySelector('h1').textContent = `Loading your work, ${userProfile.name.split(' ')[0]}...`;
         await fetchStudentSubmissions();
-        loader.classList.add('hidden');
-        document.getElementById('mainContainer').classList.remove('hidden');
-        updateSlideDisplay();
+        
+        // **FIX:** Check if assignment should be hidden on load
+        const postRule = assignmentData.postSubmissionRule || 'open';
+        if (isSubmitted && postRule === 'hide') {
+            loader.classList.add('hidden');
+            showSummary(); // Directly show summary if submitted and hidden
+        } else {
+            loader.classList.add('hidden');
+            document.getElementById('mainContainer').classList.remove('hidden');
+            updateSlideDisplay();
+        }
     }
 
     async function fetchStudentSubmissions() {
@@ -303,11 +323,9 @@ slideStates = new Array(assignmentData.slideIds.length).fill(null);
         const slideLoader = document.getElementById('slide-loader');
         const errorState = document.getElementById('slide-error-state');
         
-        // Check if assignment should be locked based on submission status and post-submission rule
         const postRule = assignmentData.postSubmissionRule || 'open';
         const shouldLock = isSubmitted && (postRule === 'lock' || postRule === 'hide');
         
-        // Update jump dropdown
         const slideJumper = document.getElementById('slideJumper');
         if (slideJumper && slideJumper.children.length === 0) {
             for (let i = 0; i < assignmentData.slideIds.length; i++) {
@@ -316,7 +334,6 @@ slideStates = new Array(assignmentData.slideIds.length).fill(null);
                 option.textContent = `Question ${i + 1}`;
                 slideJumper.appendChild(option);
             }
-            // Add Summary option
             const summaryOption = document.createElement('option');
             summaryOption.value = 'summary';
             summaryOption.textContent = 'Summary';
@@ -325,7 +342,7 @@ slideStates = new Array(assignmentData.slideIds.length).fill(null);
         if (slideJumper) {
             slideJumper.value = currentSlideIndex;
         }
-        // Reset view
+
         slideLoader.classList.remove('hidden');
         slideLoader.innerHTML = `<p>Loading Slide...</p>`;
         slideImageElement.classList.add('hidden');
@@ -339,7 +356,7 @@ slideStates = new Array(assignmentData.slideIds.length).fill(null);
         const inputBox = document.getElementById('inputbox');
         const resultElement = document.getElementById('result');
         const checkButton = document.getElementById('btn');
-        // Apply lock if submitted and rule requires it
+
         if (shouldLock) {
             inputBox.disabled = true;
             inputBox.classList.add('opacity-50', 'cursor-not-allowed');
@@ -396,7 +413,7 @@ slideStates = new Array(assignmentData.slideIds.length).fill(null);
     }
 
     function handleSignOut() {
-        auth.signOut().then(() => {
+        auth. signOut().then(() => {
             window.location.reload();
         });
     }
@@ -426,13 +443,22 @@ slideStates = new Array(assignmentData.slideIds.length).fill(null);
         document.getElementById('mainContainer').classList.add('hidden');
         document.getElementById('summaryContainer').classList.remove('hidden');
         
-        // Update submit button text based on submission status
         const submitButton = document.getElementById('submitButton');
+        const backButton = document.getElementById('backToAssignmentBtn');
+        
         if (isSubmitted) {
             submitButton.textContent = 'Already Submitted';
             submitButton.disabled = true;
             submitButton.classList.remove('bg-green-600', 'hover:bg-green-700');
             submitButton.classList.add('bg-gray-500', 'cursor-not-allowed');
+
+            const postRule = assignmentData.postSubmissionRule || 'open';
+            if (postRule === 'hide') {
+                backButton.textContent = 'Assignment Hidden';
+                backButton.disabled = true;
+                backButton.classList.add('opacity-50', 'cursor-not-allowed');
+            }
+
         } else {
             submitButton.textContent = 'Submit Assignment';
             submitButton.disabled = false;
@@ -466,28 +492,28 @@ slideStates = new Array(assignmentData.slideIds.length).fill(null);
         document.getElementById('mainContainer').classList.remove('hidden');
     }
 
-function jumpToSlide(index) {
-    saveCurrentState();
-    currentSlideIndex = index;
-    const summaryContainer = document.getElementById('summaryContainer');
-    if (!summaryContainer.classList.contains('hidden')) {
-        hideSummary();
-    }
-    updateSlideDisplay();
-}
-
-function jumpToSlideFromDropdown() {
-    saveCurrentState();
-    const slideJumper = document.getElementById('slideJumper');
-    const selectedValue = slideJumper.value;
-    
-    if (selectedValue === 'summary') {
-        showSummary();
-    } else {
-        currentSlideIndex = parseInt(selectedValue, 10);
+    function jumpToSlide(index) {
+        saveCurrentState();
+        currentSlideIndex = index;
+        const summaryContainer = document.getElementById('summaryContainer');
+        if (!summaryContainer.classList.contains('hidden')) {
+            hideSummary();
+        }
         updateSlideDisplay();
     }
-}
+
+    function jumpToSlideFromDropdown() {
+        saveCurrentState();
+        const slideJumper = document.getElementById('slideJumper');
+        const selectedValue = slideJumper.value;
+        
+        if (selectedValue === 'summary') {
+            showSummary();
+        } else {
+            currentSlideIndex = parseInt(selectedValue, 10);
+            updateSlideDisplay();
+        }
+    }
 
     async function myfunction() {
         if (isSubmitted && (assignmentData.postSubmissionRule === 'lock' || assignmentData.postSubmissionRule === 'hide')) {
@@ -614,6 +640,25 @@ function jumpToSlideFromDropdown() {
         showToast("No checking logic for this slide.");
         return 0;
     }
+
+    function showConfirmationModal(message, onConfirm) {
+        document.getElementById('confirmationMessage').textContent = message;
+        confirmCallback = onConfirm;
+        document.getElementById('confirmationModal').classList.remove('hidden');
+    }
+
+    function handleConfirmCancel() {
+        document.getElementById('confirmationModal').classList.add('hidden');
+        confirmCallback = null;
+    }
+
+    function handleConfirmOk() {
+        if (typeof confirmCallback === 'function') {
+            confirmCallback();
+        }
+        document.getElementById('confirmationModal').classList.add('hidden');
+        confirmCallback = null;
+    }
     
     async function handleSubmitAssignment() {
         if (isSubmitted) {
@@ -622,52 +667,44 @@ function jumpToSlideFromDropdown() {
         }
     
         const confirmMessage = "Are you sure you want to submit this assignment? This action cannot be undone.";
-        if (!confirm(confirmMessage)) {
-            return;
-        }
-    
-        try {
+        
+        showConfirmationModal(confirmMessage, async () => {
             const submitButton = document.getElementById('submitButton');
-            submitButton.disabled = true;
-            submitButton.textContent = 'Submitting...';
-    
-            // Write submission status to Firebase
-            await db.collection("submissionStatus").add({
-                studentEmail: userProfile.email,
-                studentName: userProfile.name,
-                assignmentId: assignmentData.id,
-                status: 'submitted',
-                timestamp: firebase.firestore.FieldValue.serverTimestamp()
-            });
-    
-            isSubmitted = true;
-    
-            // Update button appearance
-            submitButton.textContent = 'Already Submitted';
-            submitButton.classList.remove('bg-green-600', 'hover:bg-green-700');
-            submitButton.classList.add('bg-gray-500', 'cursor-not-allowed');
-    
-            showToast("Assignment submitted successfully!", {color: 'green', duration: 5000});
-    
-            // Apply post-submission rules
-            const postRule = assignmentData.postSubmissionRule || 'open';
-            if (postRule === 'hide') {
-                showToast("Assignment is now hidden. You will be signed out in 3 seconds.", {color: 'blue', duration: 3000});
-                setTimeout(() => {
-                    handleSignOut();
-                }, 3000);
-            } else if (postRule === 'lock') {
-                showToast("Assignment is now locked. You can review but not edit your answers.", {color: 'blue', duration: 5000});
-            } else {
-                showToast("You can still review and edit your answers.", {color: 'blue', duration: 5000});
+            try {
+                submitButton.disabled = true;
+                submitButton.textContent = 'Submitting...';
+        
+                await db.collection("submissionStatus").add({
+                    studentEmail: userProfile.email,
+                    studentName: userProfile.name,
+                    assignmentId: assignmentData.id,
+                    status: 'submitted',
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                });
+        
+                isSubmitted = true;
+                showToast("Assignment submitted successfully!", {color: 'green', duration: 5000});
+        
+                const postRule = assignmentData.postSubmissionRule || 'open';
+                
+                // **FIX:** On submit, show summary for 'hide' rule
+                if (postRule === 'hide') {
+                    showToast("Assignment is now hidden.", {color: 'blue', duration: 3000});
+                    showSummary(); // This will hide main container and show summary
+                } else if (postRule === 'lock') {
+                    showToast("Assignment is now locked. You can review but not edit.", {color: 'blue', duration: 5000});
+                    showSummary(); // Still show summary, but it will be reviewable
+                } else {
+                     showSummary(); // Show summary for 'open' rule as well
+                }
+
+            } catch (error) {
+                console.error("Error submitting assignment:", error);
+                showToast("Failed to submit assignment. Please try again.", {color: 'red'});
+                submitButton.disabled = false;
+                submitButton.textContent = 'Submit Assignment';
             }
-        } catch (error) {
-            console.error("Error submitting assignment:", error);
-            showToast("Failed to submit assignment. Please try again.", {color: 'red'});
-            const submitButton = document.getElementById('submitButton');
-            submitButton.disabled = false;
-            submitButton.textContent = 'Submit Assignment';
-        }
+        });
     }
 </script>
 </body>
