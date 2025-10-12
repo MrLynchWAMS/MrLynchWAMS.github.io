@@ -291,20 +291,24 @@ slideStates = new Array(assignmentData.slideIds.length).fill(null);
     const slideLoader = document.getElementById('slide-loader');
     const errorState = document.getElementById('slide-error-state');
     
-    // Update jump dropdown
-    const slideJumper = document.getElementById('slideJumper');
-    if (slideJumper && slideJumper.children.length === 0) {
-        for (let i = 0; i < assignmentData.slideIds.length; i++) {
-            const option = document.createElement('option');
-            option.value = i;
-            option.textContent = `Question ${i + 1}`;
-            slideJumper.appendChild(option);
-        }
+// Update jump dropdown
+const slideJumper = document.getElementById('slideJumper');
+if (slideJumper && slideJumper.children.length === 0) {
+    for (let i = 0; i < assignmentData.slideIds.length; i++) {
+        const option = document.createElement('option');
+        option.value = i;
+        option.textContent = `Question ${i + 1}`;
+        slideJumper.appendChild(option);
     }
-    if (slideJumper) {
-        slideJumper.value = currentSlideIndex;
-    }
-    
+    // Add Summary option
+    const summaryOption = document.createElement('option');
+    summaryOption.value = 'summary';
+    summaryOption.textContent = 'Summary';
+    slideJumper.appendChild(summaryOption);
+}
+if (slideJumper) {
+    slideJumper.value = currentSlideIndex;
+}
     // Reset view
     slideLoader.classList.remove('hidden');
     slideLoader.innerHTML = `<p>Loading Slide...</p>`;
