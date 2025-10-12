@@ -434,8 +434,14 @@ function jumpToSlide(index) {
 function jumpToSlideFromDropdown() {
     saveCurrentState();
     const slideJumper = document.getElementById('slideJumper');
-    currentSlideIndex = parseInt(slideJumper.value, 10);
-    updateSlideDisplay();
+    const selectedValue = slideJumper.value;
+    
+    if (selectedValue === 'summary') {
+        showSummary();
+    } else {
+        currentSlideIndex = parseInt(selectedValue, 10);
+        updateSlideDisplay();
+    }
 }
 
     async function myfunction() {
