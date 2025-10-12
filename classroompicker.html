@@ -72,11 +72,18 @@
                             </button>
                         </div>
                     </div>
-                    <div class="slide-nav flex justify-center items-center mt-4 gap-4">
-                        <button onclick="prevSlide()" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg">Previous</button>
-                        <span id="slide-counter" class="text-lg"></span>
-                        <button id="nextButton" onclick="nextSlide()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Next</button>
-                    </div>
+                <div class="slide-nav flex flex-col sm:flex-row justify-center items-center mt-4 gap-4">
+    <div class="flex items-center gap-4">
+        <button onclick="prevSlide()" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg">Previous</button>
+        <span id="slide-counter" class="text-lg"></span>
+        <button id="nextButton" onclick="nextSlide()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Next</button>
+    </div>
+    <div class="flex items-center gap-2">
+        <label for="slideJumper" class="text-sm font-semibold text-gray-400">Jump to:</label>
+        <select id="slideJumper" onchange="jumpToSlideFromDropdown()" class="bg-gray-700 border border-gray-600 rounded-md p-2 text-white text-sm">
+        </select>
+    </div>
+</div>
                 </div>
                 <div class="interactive-column bg-gray-800 p-4 rounded-lg flex flex-col">
                     <p id="prompt" class="font-semibold mb-2">Enter your answer for the current slide:</p>
@@ -276,19 +283,33 @@ slideStates = new Array(assignmentData.slideIds.length).fill(null);
             });
     }
     
-    function updateSlideDisplay(retryCount = 0) {
-        const MAX_RETRIES = 2;
-        const slideId = assignmentData.slideIds[currentSlideIndex];
-        const slideImageElement = document.getElementById('slide-image');
-        const slideCounterElement = document.getElementById('slide-counter');
-        const slideLoader = document.getElementById('slide-loader');
-        const errorState = document.getElementById('slide-error-state');
-        
-        // Reset view
-        slideLoader.classList.remove('hidden');
-        slideLoader.innerHTML = `<p>Loading Slide...</p>`;
-        slideImageElement.classList.add('hidden');
-        errorState.classList.add('hidden');
+   function updateSlideDisplay(retryCount = 0) {
+    const MAX_RETRIES = 2;
+    const slideId = assignmentData.slideIds[currentSlideIndex];
+    const slideImageElement = document.getElementById('slide-image');
+    const slideCounterElement = document.getElementById('slide-counter');
+    const slideLoader = document.getElementById('slide-loader');
+    const errorState = document.getElementById('slide-error-state');
+    
+    // Update jump dropdown
+    const slideJumper = document.getElementById('slideJumper');
+    if (slideJumper && slideJumper.children.length === 0) {
+        for (let i = 0; i < assignmentData.slideIds.length; i++) {
+            const option = document.createElement('option');
+            option.value = i;
+            option.textContent = `Question ${i + 1}`;
+            slideJumper.appendChild(option);
+        }
+    }
+    if (slideJumper) {
+        slideJumper.value = currentSlideIndex;
+    }
+    
+    // Reset view
+    slideLoader.classList.remove('hidden');
+    slideLoader.innerHTML = `<p>Loading Slide...</p>`;
+    slideImageElement.classList.add('hidden');
+    errorState.classList.add('hidden');
         
         const imageUrl = `https://docs.google.com/presentation/d/${assignmentData.presentationId}/export/png?id=${assignmentData.presentationId}&pageid=${slideId}&time=${new Date().getTime()}`;
         
@@ -396,11 +417,12 @@ slideStates = new Array(assignmentData.slideIds.length).fill(null);
         document.getElementById('mainContainer').classList.remove('hidden');
     }
 
-    function jumpToSlide(index) {
-        currentSlideIndex = index;
-        hideSummary();
-        updateSlideDisplay();
-    }
+function jumpToSlideFromDropdown() {
+    saveCurrentState();
+    const slideJumper = document.getElementById('slideJumper');
+    currentSlideIndex = parseInt(slideJumper.value, 10);
+    updateSlideDisplay();
+}
 
     async function myfunction() {
         var studentAnswer = document.getElementById("inputbox").value;
