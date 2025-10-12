@@ -417,6 +417,16 @@ slideStates = new Array(assignmentData.slideIds.length).fill(null);
         document.getElementById('mainContainer').classList.remove('hidden');
     }
 
+function jumpToSlide(index) {
+    saveCurrentState();
+    currentSlideIndex = index;
+    const summaryContainer = document.getElementById('summaryContainer');
+    if (!summaryContainer.classList.contains('hidden')) {
+        hideSummary();
+    }
+    updateSlideDisplay();
+}
+
 function jumpToSlideFromDropdown() {
     saveCurrentState();
     const slideJumper = document.getElementById('slideJumper');
