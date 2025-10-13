@@ -67,6 +67,7 @@
                         <label class="flex items-center"><input type="checkbox" id="blackoutMode" onchange="toggleDisplayOptions()" class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"> <span class="ml-2">Blackout Bars</span></label>
                     </div>
                     <button id="exportButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Export to CSV</button>
+                    <button id="regradeAllButton" onclick="regradeAllSubmissions()" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg">Regrade All</button>
                 </div>
             </div>
 
@@ -176,7 +177,7 @@
 
         const submissionsByStudent = {};
         submissionSnapshot.forEach(doc => {
-            const data = doc.data();
+            const data = { id: doc.id, ...doc.data() };
             if (!submissionsByStudent[data.studentEmail]) submissionsByStudent[data.studentEmail] = [];
             submissionsByStudent[data.studentEmail].push(data);
         });
@@ -348,17 +349,11 @@
                 
                 if (blackoutMode) {
                     if (latestSubmission) {
-                        // Attempted in blackout: a solid, dark black bar. Clickable to see answer.
-                        tableHtml += `<td class="px-2 py-4 whitespace-nowrap cursor-pointer" onclick="showSubmissions('${student.email}', ${i})">
-                            <div class="w-full bg-black rounded-full h-6"></div>
-                        </td>`;
+                        tableHtml += `<td class="px-2 py-4 whitespace-nowrap cursor-pointer" onclick="showSubmissions('${student.email}', ${i})"><div class="w-full bg-black rounded-full h-6"></div></td>`;
                     } else {
-                        // Unattempted in blackout: a lighter, clearly distinct dashed outline.
-                        tableHtml += `<td class="px-2 py-4">
-                            <div class="h-6 rounded-full border-2 border-dashed border-gray-400"></div>
-                        </td>`;
+                        tableHtml += `<td class="px-2 py-4"><div class="h-6 rounded-full border-2 border-dashed border-gray-400"></div></td>`;
                     }
-                } else { // Normal Mode (not blackout)
+                } else {
                     if (latestSubmission) {
                         const score = latestSubmission.score;
                         const color = score >= 90 ? 'bg-green-500' : score >= 70 ? 'bg-yellow-500' : 'bg-red-500';
@@ -375,6 +370,140 @@
         });
         studentList.innerHTML = tableHtml;
     }
+    
+    // --- Grading and Submission Update Functions ---
+
+    function gradeAnswer(studentAnswer, correctAnswer) {
+        if (!studentAnswer || !correctAnswer) return 0;
+        const sAnswer = studentAnswer.trim().toLowerCase();
+        const cAnswer = correctAnswer.trim().toLowerCase();
+        return sAnswer.includes(cAnswer) ? 100 : 0;
+    }
+
+    async function regradeAllSubmissions() {
+        if (!confirm("Are you sure you want to regrade ALL submissions for this assignment? This cannot be undone.")) return;
+        
+        const regradeBtn = document.getElementById('regradeAllButton');
+        regradeBtn.disabled = true;
+        regradeBtn.textContent = 'Regrading...';
+        showToast("Starting to regrade all submissions...", { color: 'blue' });
+
+        try {
+            const submissionsSnapshot = await db.collection("submissions").where("assignmentId", "==", assignmentId).get();
+            if (submissionsSnapshot.empty) {
+                showToast("No submissions found to regrade.", { color: 'default' });
+                return;
+            }
+
+            const batch = db.batch();
+            let count = 0;
+            submissionsSnapshot.forEach(doc => {
+                const submission = doc.data();
+                const correctAnswer = (assignmentData.answers && assignmentData.answers[submission.slideIndex]) ? assignmentData.answers[submission.slideIndex] : null;
+                if (correctAnswer) {
+                    const newScore = gradeAnswer(submission.answer, correctAnswer);
+                    const submissionRef = db.collection("submissions").doc(doc.id);
+                    batch.update(submissionRef, { score: newScore });
+                    count++;
+                }
+            });
+
+            await batch.commit();
+            showToast(`Successfully regraded ${count} submissions! Refreshing data...`, { color: 'green' });
+        } catch (error) {
+            console.error("Error during regrade all:", error);
+            showToast("An error occurred during regrading.", { color: 'red' });
+        } finally {
+            regradeBtn.disabled = false;
+            regradeBtn.textContent = 'Regrade All';
+            await fetchStudentData();
+            calculateAllClassAverages();
+            populateClassLinks();
+            displayStudentData();
+        }
+    }
+
+    async function regradeQuestion(slideIndex) {
+        if (!confirm(`Are you sure you want to regrade all submissions for Question ${slideIndex + 1}? This cannot be undone.`)) return;
+        
+        showToast(`Regrading Question ${slideIndex + 1}...`, { color: 'blue' });
+        const correctAnswer = (assignmentData.answers && assignmentData.answers[slideIndex]) ? assignmentData.answers[slideIndex] : null;
+
+        if (!correctAnswer) {
+            showToast(`No correct answer found for Question ${slideIndex + 1}. Cannot regrade.`, { color: 'red' });
+            return;
+        }
+
+        try {
+            const submissionsSnapshot = await db.collection("submissions").where("assignmentId", "==", assignmentId).where("slideIndex", "==", slideIndex).get();
+            if (submissionsSnapshot.empty) {
+                showToast("No submissions found for this question.", { color: 'default' });
+                return;
+            }
+
+            const batch = db.batch();
+            submissionsSnapshot.forEach(doc => {
+                const newScore = gradeAnswer(doc.data().answer, correctAnswer);
+                const submissionRef = db.collection("submissions").doc(doc.id);
+                batch.update(submissionRef, { score: newScore });
+            });
+
+            await batch.commit();
+            showToast(`Successfully regraded Question ${slideIndex + 1}! Refreshing data...`, { color: 'green' });
+        } catch (error) {
+            console.error(`Error regrading question ${slideIndex + 1}:`, error);
+            showToast("An error occurred during regrading.", { color: 'red' });
+        } finally {
+            await fetchStudentData();
+            calculateAllClassAverages();
+            populateClassLinks();
+            displayStudentData();
+        }
+    }
+    
+    async function saveAnswer(submissionId) {
+        const textarea = document.getElementById(`answer-${submissionId}`);
+        const newAnswer = textarea.value;
+        try {
+            await db.collection("submissions").doc(submissionId).update({ answer: newAnswer });
+            showToast("Answer updated successfully!", { color: 'green' });
+            // Optionally regrade after saving
+            const subDoc = await db.collection("submissions").doc(submissionId).get();
+            const submission = subDoc.data();
+            const correctAnswer = (assignmentData.answers && assignmentData.answers[submission.slideIndex]) ? assignmentData.answers[submission.slideIndex] : null;
+            if(correctAnswer) {
+                const newScore = gradeAnswer(newAnswer, correctAnswer);
+                await db.collection("submissions").doc(submissionId).update({ score: newScore });
+                showToast("Answer saved and regraded.", { color: 'blue' });
+            }
+        } catch (error) {
+            console.error("Error saving answer:", error);
+            showToast("Failed to save answer.", { color: 'red' });
+        } finally {
+            await fetchStudentData();
+            displayStudentData();
+        }
+    }
+
+    async function setScore(submissionId) {
+        const input = document.getElementById(`score-${submissionId}`);
+        const newScore = parseInt(input.value, 10);
+        if (isNaN(newScore) || newScore < 0 || newScore > 100) {
+            showToast("Please enter a valid score between 0 and 100.", { color: 'red' });
+            return;
+        }
+        try {
+            await db.collection("submissions").doc(submissionId).update({ score: newScore });
+            showToast("Score updated successfully!", { color: 'green' });
+        } catch (error) {
+            console.error("Error setting score:", error);
+            showToast("Failed to set score.", { color: 'red' });
+        } finally {
+            await fetchStudentData();
+            displayStudentData();
+        }
+    }
+
 
     async function toggleSubmissionStatus(studentEmail, isChecked) {
         const student = allStudentData.find(s => s.email === studentEmail);
@@ -422,7 +551,7 @@
         const studentIndex = sortedStudents.findIndex(s => s.email === studentEmail);
         const displayName = hideNames && studentIndex > -1 ? `Student ${studentIndex + 1}` : student.name;
         
-        document.getElementById('modalTitle').textContent = `Submissions for ${displayName}${specificSlide !== null ? ` - Q${specificSlide + 1}` : ''}`;
+        document.getElementById('modalTitle').innerHTML = `Submissions for ${displayName}${specificSlide !== null ? ` - Q${specificSlide + 1}` : ''}`;
         
         let submissionsToShow = (specificSlide !== null ? student.submissions.filter(s => s.slideIndex === specificSlide) : student.submissions)
             .sort((a, b) => (a.slideIndex - b.slideIndex) || ((b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0)));
@@ -443,7 +572,7 @@
     function showQuestionSubmissions(slideIndex) {
         currentModalView = { type: 'question', slide: slideIndex };
         document.getElementById('showAllAttemptsToggle').checked = showAllAttempts;
-        document.getElementById('modalTitle').textContent = `All Submissions for Question ${slideIndex + 1}`;
+        document.getElementById('modalTitle').innerHTML = `All Submissions for Question ${slideIndex + 1} <button onclick="regradeQuestion(${slideIndex})" class="ml-4 text-sm bg-purple-600 hover:bg-purple-700 text-white font-bold py-1 px-3 rounded-lg">Regrade Question</button>`;
         
         const studentsForModal = getCurrentlySortedStudents();
         
@@ -475,14 +604,22 @@
         if (submissions.length > 0) {
             submissions.forEach(sub => {
                 const displayName = nameMap && hideNames ? nameMap.get(sub.studentEmail) : sub.studentName;
-                const headerText = nameMap ? `${displayName} &rarr; Score: ${sub.score}` : `Question ${sub.slideIndex + 1} &rarr; Score: ${sub.score}`;
+                const headerText = nameMap ? `${displayName}` : `Question ${sub.slideIndex + 1}`;
                 const date = sub.timestamp ? new Date(sub.timestamp.seconds * 1000).toLocaleString() : 'N/A';
                 contentHtml += `<div class="bg-gray-700 p-4 rounded-lg">
                     <div class="flex justify-between items-center mb-2">
                         <p class="font-bold text-lg">${headerText}</p>
                         <p class="text-sm text-gray-400">${date}</p>
                     </div>
-                    <p class="whitespace-pre-wrap font-mono bg-gray-900 p-3 rounded">${sub.answer}</p>
+                    <textarea id="answer-${sub.id}" class="w-full bg-gray-900 p-3 rounded font-mono text-white border border-gray-600">${sub.answer}</textarea>
+                    <div class="flex items-center justify-end gap-4 mt-2">
+                        <button onclick="saveAnswer('${sub.id}')" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded-lg text-sm">Save Answer</button>
+                        <div class="flex items-center gap-2">
+                            <label for="score-${sub.id}" class="text-sm">Score:</label>
+                            <input type="number" id="score-${sub.id}" value="${sub.score}" min="0" max="100" class="w-20 bg-gray-900 border border-gray-600 rounded p-1 text-center">
+                            <button onclick="setScore('${sub.id}')" class="bg-green-600 hover:bg-green-700 text-white font-bold py-1 px-3 rounded-lg text-sm">Set Score</button>
+                        </div>
+                    </div>
                 </div>`;
             });
         } else { contentHtml += '<p>No submissions found.</p>'; }
