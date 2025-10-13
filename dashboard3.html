@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teacher Dashboard</title>
+    <!-- Using a simple emoji as a favicon for demonstration -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📊</text></svg>">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Firebase libraries for database and authentication -->
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
+    <style>
+        /* Custom scrollbar for modal content */
+        .modal-content::-webkit-scrollbar { width: 8px; }
+        .modal-content::-webkit-scrollbar-track { background: #374151; }
+        .modal-content::-webkit-scrollbar-thumb { background: #9ca3af; border-radius: 4px; }
+        .modal-content::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+        /* Style for the grid to prevent text selection and ensure proper layout */
+        .grid-container {
+            display: grid;
+            user-select: none;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 font-sans">
+    <div class="container mx-auto p-4 sm:p-6 lg:p-8">
+        <!-- Header Section -->
+        <div class="flex flex-wrap justify-between items-center mb-6 gap-4">
+            <div>
+                <a href="index.html" class="text-blue-600 hover:underline mb-2 inline-block">&larr; All Assignments</a>
+                <h1 id="assignmentName" class="text-3xl font-bold text-gray-900">Teacher Dashboard</h1>
+            </div>
+            <div id="user-info" class="text-right"></div>
+        </div>
+
+        <!-- Controls and Filters Section -->
+        <div class="bg-white p-4 rounded-lg shadow-md mb-6">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div>
+                    <label for="classFilter" class="block text-sm font-medium text-gray-700">Filter by Class:</label>
+                    <select id="classFilter" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"></select>
+                </div>
+                <div>
+                    <label for="sortOrder" class="block text-sm font-medium text-gray-700">Sort by:</label>
+                    <select id="sortOrder" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                        <option value="lastName">Last Name</option>
+                        <option value="firstName">First Name</option>
+                        <option value="completion">Completion %</option>
+                    </select>
+                </div>
+                <div class="col-span-1 sm:col-span-2 lg:col-span-2 flex items-end justify-start sm:justify-end space-x-4">
+                     <div class="flex items-center space-x-2 pt-4">
+                        <input type="checkbox" id="showScores" onchange="renderDashboard()" class="form-checkbox h-5 w-5 text-blue-600 rounded focus:ring-blue-500">
+                        <label for="showScores" class="text-sm font-medium text-gray-700">Show Scores</label>
+                    </div>
+                     <div class="flex items-center space-x-2 pt-4">
+                        <input type="checkbox" id="showAllAttempts" onchange="renderDashboard()" class="form-checkbox h-5 w-5 text-blue-600 rounded focus:ring-blue-500">
+                        <label for="showAllAttempts" class="text-sm font-medium text-gray-700">Show All Attempts</label>
+                    </div>
+                    <div class="flex items-center space-x-2 pt-4">
+                        <input type="checkbox" id="blackoutBars" onchange="renderDashboard()" class="form-checkbox h-5 w-5 text-blue-600 rounded focus:ring-blue-500">
+                        <label for="blackoutBars" class="text-sm font-medium text-gray-700">Blackout Bars</label>
+                    </div>
+                    <button id="exportButton" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm transition-colors">Export CSV</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Dashboard Grid -->
+        <div id="dashboard" class="overflow-x-auto bg-white rounded-lg shadow">
+            <div id="loading" class="p-8 text-center text-gray-500">Loading student data...</div>
+        </div>
+    </div>
+
+    <!-- Modal for viewing/grading a specific submission -->
+    <div id="submissionModal" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center hidden z-50">
+        <div class="bg-gray-900 text-white rounded-lg shadow-xl w-11/12 max-w-4xl max-h-[90vh] flex flex-col">
+            <div class="flex justify-between items-center p-4 border-b border-gray-700">
+                <h2 class="text-xl font-bold" id="modalTitle">Student Submission</h2>
+                <button id="closeModal" class="text-gray-400 hover:text-white">&times;</button>
+            </div>
+            <div id="modalBody" class="p-6 overflow-y-auto modal-content">
+                <!-- Submission content will be injected here -->
+            </div>
+        </div>
+    </div>
+
+<script>
+    // --- Firebase Configuration ---
+    // IMPORTANT: Replace with your actual Firebase project configuration.
+    const firebaseConfig = {
+        apiKey: "YOUR_API_KEY",
+        authDomain: "YOUR_AUTH_DOMAIN",
+        projectId: "YOUR_PROJECT_ID",
+        storageBucket: "YOUR_STORAGE_BUCKET",
+        messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+        appId: "YOUR_APP_ID"
+    };
+
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    const auth = firebase.auth();
+
+    // Global state variables
+    let students = [];
+    let submissions = [];
+    let assignmentData = {};
+    let activeClass = 'All';
+    let assignmentId;
+
+    // --- Authentication ---
+    auth.onAuthStateChanged(user => {
+        if (user) {
+            document.getElementById('user-info').textContent = `Logged in as ${user.email}`;
+            assignmentId = new URLSearchParams(window.location.search).get('assignmentId');
+            if (assignmentId) {
+                document.getElementById('assignmentName').textContent = "Loading assignment...";
+                fetchData();
+            } else {
+                document.getElementById('dashboard').innerHTML = '<p class="text-red-500 p-4">No assignment ID provided in the URL.</p>';
+            }
+        } else {
+            // Handle logged out state, maybe redirect to a login page
+            window.location.href = 'index.html'; 
+        }
+    });
+
+    // --- Data Fetching ---
+    async function fetchData() {
+        await fetchAssignmentDetails();
+        await fetchStudentsAndSubmissions();
+    }
+
+    async function fetchAssignmentDetails() {
+        try {
+            const doc = await db.collection('assignments').doc(assignmentId).get();
+            if (doc.exists) {
+                assignmentData = doc.data();
+                document.getElementById('assignmentName').textContent = assignmentData.name || 'Teacher Dashboard';
+            } else {
+                console.error("Assignment not found!");
+                document.getElementById('assignmentName').textContent = "Assignment Not Found";
+            }
+        } catch (error) {
+            console.error("Error fetching assignment details:", error);
+        }
+    }
+    
+    async function fetchStudentsAndSubmissions() {
+        document.getElementById('loading').style.display = 'block';
+        try {
+            // Fetch students
+            const studentsSnapshot = await db.collection('users').where('role', '==', 'student').get();
+            students = studentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+            // Fetch submissions for the current assignment
+            const submissionsSnapshot = await db.collection('assignments').doc(assignmentId).collection('submissions').get();
+            submissions = submissionsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+            // Populate class filter dropdown
+            const classes = [...new Set(students.map(s => s.class).filter(Boolean))].sort();
+            const classFilter = document.getElementById('classFilter');
+            classFilter.innerHTML = '<option value="All">All Classes</option>' + classes.map(c => `<option value="${c}">${c}</option>`).join('');
+            
+            renderDashboard();
+
+        } catch (error) {
+            console.error("Error fetching data:", error);
+            document.getElementById('dashboard').innerHTML = '<p class="text-red-500 p-4">Error loading data. Check console for details.</p>';
+        } finally {
+            document.getElementById('loading').style.display = 'none';
+        }
+    }
+
+    // --- Rendering ---
+    function renderDashboard() {
+        const dashboard = document.getElementById('dashboard');
+        const sortOrder = document.getElementById('sortOrder').value;
+        const blackoutBars = document.getElementById('blackoutBars').checked;
+        const showAllAttempts = document.getElementById('showAllAttempts').checked;
+        const showScores = document.getElementById('showScores').checked;
+
+        // Filter students by class
+        let filteredStudents = activeClass === 'All' ? students : students.filter(s => s.class === activeClass);
+
+        const numQuestions = assignmentData.numSlides || 0;
+
+        // Process student data for display
+        const processedStudents = filteredStudents.map(student => {
+            const studentSubmissions = submissions.filter(s => s.studentEmail === student.email);
+            const attemptedQuestions = new Set(studentSubmissions.map(s => s.slideIndex)).size;
+            const completion = numQuestions > 0 ? (attemptedQuestions / numQuestions) * 100 : 0;
+            return { ...student, completion, submissions: studentSubmissions };
+        });
+
+        // Sort students
+        processedStudents.sort((a, b) => {
+            if (sortOrder === 'lastName') return a.lastName.localeCompare(b.lastName);
+            if (sortOrder === 'firstName') return a.firstName.localeCompare(b.firstName);
+            if (sortOrder === 'completion') return b.completion - a.completion;
+            return 0;
+        });
+        
+        // Build the grid HTML
+        const gridCols = `grid-template-columns: 200px 100px repeat(${numQuestions}, 1fr);`;
+        let tableHTML = `<div class="grid-container p-4" style="${gridCols}">`;
+
+        // Header row
+        tableHTML += '<div class="font-bold p-2 border-b border-gray-200">Student Name</div>';
+        tableHTML += '<div class="font-bold p-2 border-b border-gray-200 text-center">Completion</div>';
+        for (let i = 0; i < numQuestions; i++) {
+            tableHTML += `<div class="font-bold p-2 border-b border-gray-200 text-center">${i + 1}</div>`;
+        }
+
+        // Student rows
+        processedStudents.forEach(student => {
+            tableHTML += `<div class="p-2 border-b border-gray-200 truncate" title="${student.firstName} ${student.lastName}">${student.lastName}, ${student.firstName}</div>`;
+            tableHTML += `<div class="p-2 border-b border-gray-200 text-center">${student.completion.toFixed(0)}%</div>`;
+
+            for (let i = 0; i < numQuestions; i++) {
+                const submissionsForSlide = student.submissions
+                    .filter(s => s.slideIndex === i)
+                    .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+
+                const latestSubmission = submissionsForSlide[0];
+                const score = latestSubmission ? latestSubmission.score : null;
+                const allScores = submissionsForSlide.map(s => s.score).reverse();
+
+                let bgColor = 'bg-gray-200'; // Default for not attempted
+                let width = '100%';
+                if (score !== null) {
+                    const normalizedScore = Math.max(0, Math.min(100, score));
+                    width = `${normalizedScore}%`;
+                    if (normalizedScore >= 90) bgColor = 'bg-green-500';
+                    else if (normalizedScore >= 80) bgColor = 'bg-yellow-400';
+                    else if (normalizedScore >= 70) bgColor = 'bg-orange-500';
+                    else bgColor = 'bg-red-500';
+                }
+                
+                if (blackoutBars && score !== null) {
+                    bgColor = 'bg-gray-700';
+                    width = '100%';
+                }
+                
+                const scoreText = showAllAttempts ? allScores.join(', ') : (latestSubmission ? latestSubmission.score : '');
+                
+                let scoreDisplay = '';
+                if (showScores && scoreText) {
+                     scoreDisplay = `<div class="absolute inset-0 flex items-center justify-center text-xs font-bold text-white" style="text-shadow: 1px 1px 2px black;">${scoreText}</div>`;
+                }
+
+                tableHTML += `
+                    <div class="p-0.5 border-b border-gray-200">
+                        <div class="relative h-6 bg-gray-200 rounded overflow-hidden cursor-pointer hover:opacity-80" onclick="openModal('${student.email}', ${i})">
+                            <div class="h-full ${bgColor}" style="width: ${width};"></div>
+                            ${scoreDisplay}
+                        </div>
+                    </div>
+                `;
+            }
+        });
+
+        tableHTML += '</div>';
+        dashboard.innerHTML = tableHTML;
+    }
+
+    // --- Modal Logic ---
+    function openModal(studentEmail, slideIndex) {
+        const student = students.find(s => s.email === studentEmail);
+        if (!student) return;
+
+        const modal = document.getElementById('submissionModal');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalBody = document.getElementById('modalBody');
+
+        modalTitle.textContent = `Submission: ${student.firstName} ${student.lastName} - Question ${slideIndex + 1}`;
+        
+        const studentSubmissions = submissions
+            .filter(s => s.studentEmail === studentEmail && s.slideIndex === slideIndex)
+            .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+
+        let bodyHTML = '<p class="text-gray-400 mb-4">No submission found for this question.</p>';
+
+        if (studentSubmissions.length > 0) {
+            bodyHTML = '<div>';
+            studentSubmissions.forEach((sub, index) => {
+                const date = sub.timestamp ? new Date(sub.timestamp.seconds * 1000).toLocaleString() : 'No date';
+                bodyHTML += `
+                    <div class="bg-gray-800 p-4 rounded-lg mb-4">
+                        <h4 class="font-bold text-lg">Attempt ${studentSubmissions.length - index}</h4>
+                        <p class="text-sm text-gray-400 mb-2">${date}</p>
+                        <p>Score: <span class="font-semibold text-lg">${sub.score}</span></p>
+                        ${sub.content ? `<div class="mt-2 pt-2 border-t border-gray-700 prose prose-invert max-w-none">${sub.content}</div>` : ''}
+                    </div>
+                `;
+            });
+            bodyHTML += '</div>';
+        }
+
+        bodyHTML += `
+            <div class="mt-6 pt-4 border-t border-gray-700">
+                <h3 class="text-lg font-semibold mb-2">Grade / Regrade</h3>
+                <div class="flex items-center space-x-2">
+                    <input type="number" id="gradeInput" min="0" max="100" class="bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white w-24" placeholder="Score">
+                    <button onclick="submitGrade('${studentEmail}', ${slideIndex}, document.getElementById('gradeInput').value)" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md">Submit</button>
+                </div>
+            </div>
+        `;
+        
+        modalBody.innerHTML = bodyHTML;
+        modal.classList.remove('hidden');
+    }
+
+    function closeModal() {
+        document.getElementById('submissionModal').classList.add('hidden');
+    }
+
+    // --- Submission/Grading Logic ---
+    async function submitGrade(studentEmail, slideIndex, newScore) {
+        if (newScore === null || newScore.trim() === '') return;
+        const score = parseInt(newScore, 10);
+        if (isNaN(score) || score < 0 || score > 100) {
+            alert("Please enter a valid score between 0 and 100.");
+            return;
+        }
+
+        const submissionCollection = db.collection('assignments').doc(assignmentId).collection('submissions');
+        
+        // Check for existing submissions for this student and slide
+        const querySnapshot = await submissionCollection
+            .where('studentEmail', '==', studentEmail)
+            .where('slideIndex', '==', slideIndex)
+            .get();
+
+        if (!querySnapshot.empty) {
+            // If submissions exist, update the most recent one.
+            // This logic assumes we update the latest, but Firestore doesn't guarantee order without an orderBy clause.
+            // For simplicity, we just update the first one found, but a more robust solution might sort by timestamp client-side.
+            // However, since we are sorting to display, this is a reasonable approach for regrading.
+            const docId = querySnapshot.docs[0].id; // Let's just update the first one we find.
+            await submissionCollection.doc(docId).update({
+                score: score,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            });
+             console.log("Submission updated.");
+        } else {
+            // If no submission exists, create a new one.
+            await submissionCollection.add({
+                studentEmail: studentEmail,
+                slideIndex: slideIndex,
+                score: score,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            });
+             console.log("New submission created.");
+        }
+        
+        closeModal();
+        await fetchStudentsAndSubmissions(); // Refresh all data to reflect the change
+    }
+
+    // --- CSV Export ---
+    function exportToCSV() {
+        const numQuestions = assignmentData.numSlides || 0;
+        let csvContent = "data:text/csv;charset=utf-8,";
+        
+        // Header Row
+        const headers = ["Email", "Last Name", "First Name", "Last, First", "Class", "Average Score", "Completion %", ...Array.from({ length: numQuestions }, (_, i) => `Q${i + 1}`)];
+        csvContent += headers.join(",") + "\r\n";
+
+        const studentsToExport = activeClass === 'All' ? students : students.filter(s => s.class === activeClass);
+
+        studentsToExport.forEach(student => {
+            const lastName = student.lastName || "";
+            const firstName = student.firstName || "";
+            const lastFirst = `"${lastName}, ${firstName}"`;
+            let totalScore = 0;
+            let attemptedQuestions = 0;
+            const questionScores = [];
+            
+            for (let i = 0; i < numQuestions; i++) {
+                const studentSubmissions = submissions.filter(s => s.studentEmail === student.email && s.slideIndex === i);
+                const latestSubmission = studentSubmissions.sort((a,b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
+                if (latestSubmission) {
+                    questionScores.push(latestSubmission.score);
+                    totalScore += latestSubmission.score;
+                    attemptedQuestions++;
+                } else {
+                    questionScores.push("");
+                }
+            }
+            const averageScore = attemptedQuestions > 0 ? (totalScore / attemptedQuestions).toFixed(2) : "";
+            const completionPercentage = numQuestions > 0 ? ((attemptedQuestions / numQuestions) * 100).toFixed(2) : "0.00";
+            let row = [student.email, `"${lastName}"`, `"${firstName}"`, lastFirst, student.class, averageScore, completionPercentage, ...questionScores].join(',');
+            csvContent += row + "\r\n";
+        });
+        
+        const blob = new Blob([csvContent.substring(24)], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        const safeAssignmentName = (assignmentData.name || 'assignment').replace(/[^a-z0-9]/gi, '_');
+        const safeViewName = activeClass.replace(/\s+/g, '_');
+        link.setAttribute("download", `submissions_${safeAssignmentName}_${safeViewName}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+    
+    // --- Event Listeners ---
+    document.getElementById('classFilter').addEventListener('change', (e) => {
+        activeClass = e.target.value;
+        renderDashboard();
+    });
+    document.getElementById('sortOrder').addEventListener('change', renderDashboard);
+    document.getElementById('closeModal').addEventListener('click', closeModal);
+    document.getElementById('exportButton').onclick = exportToCSV;
+
+</script>
+</body>
+</html>
