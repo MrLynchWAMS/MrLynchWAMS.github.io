@@ -119,7 +119,7 @@
 
     let assignmentData = null;
     let allStudentData = [];
-    let activeClass = 'All';
+    let activeClass = null; // Will be set on load
     let assignmentId;
     let classAverages = {};
     
@@ -165,6 +165,12 @@
             document.title = assignmentData.name + " - Dashboard";
             document.getElementById('dashboardTitle').textContent = `Dashboard for: ${assignmentData.name}`;
             await fetchStudentData();
+
+            // Set default class to the first available class, otherwise 'All'
+            const assignedClasses = assignmentData.assignedClasses || [];
+            const classesInAssignment = [...new Set(allStudentData.filter(s => assignedClasses.includes(String(s.class))).map(s => String(s.class)))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+            activeClass = classesInAssignment.length > 0 ? classesInAssignment[0] : 'All';
+
             calculateAllClassAverages();
             populateClassLinks();
             displayStudentData();
@@ -382,11 +388,53 @@
     
     // --- Grading and Submission Update Functions ---
 
-    function gradeAnswer(studentAnswer, correctAnswer) {
-        if (!studentAnswer || !correctAnswer) return 0;
-        const sAnswer = studentAnswer.trim().toLowerCase();
-        const cAnswer = correctAnswer.trim().toLowerCase();
-        return sAnswer.includes(cAnswer) ? 100 : 0;
+    function gradeAnswer(studentAnswer, correctAnswers) {
+        if (!studentAnswer || !correctAnswers || correctAnswers.length === 0) return 0;
+        let score = 0;
+        let maxScore = 0;
+
+        correctAnswers.forEach(rule => {
+            let ruleScore = 0;
+            const sAnswer = String(studentAnswer).trim().toLowerCase();
+            const cAnswer = String(rule.answer).trim().toLowerCase();
+            const points = parseInt(rule.points) || 0;
+            maxScore += points;
+
+            let isMatch = false;
+            switch (rule.type) {
+                case 'contains':
+                    isMatch = sAnswer.includes(cAnswer);
+                    break;
+                case 'exact':
+                    isMatch = sAnswer === cAnswer;
+                    break;
+                case 'regex':
+                    try {
+                        const regex = new RegExp(rule.answer, 'i');
+                        isMatch = regex.test(String(studentAnswer).trim());
+                    } catch (e) {
+                        console.error("Invalid regex:", rule.answer);
+                        isMatch = false;
+                    }
+                    break;
+                case 'range':
+                    const parts = rule.answer.split('-').map(Number);
+                    const studentNum = parseFloat(studentAnswer);
+                    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(studentNum)) {
+                        isMatch = studentNum >= parts[0] && studentNum <= parts[1];
+                    }
+                    break;
+                default:
+                    isMatch = false;
+            }
+
+            if (isMatch) {
+                ruleScore = points;
+            }
+            score += ruleScore;
+        });
+
+        return maxScore > 0 ? Math.round((score / maxScore) * 100) : score;
     }
 
     async function regradeAllSubmissions() {
@@ -408,9 +456,9 @@
             let count = 0;
             submissionsSnapshot.forEach(doc => {
                 const submission = doc.data();
-                const correctAnswer = (assignmentData.answerKey && assignmentData.answerKey[submission.slideIndex]) ? assignmentData.answerKey[submission.slideIndex] : null;
-                if (correctAnswer) {
-                    const newScore = gradeAnswer(submission.answer, correctAnswer);
+                const correctAnswerRules = (assignmentData.answers && assignmentData.answers[submission.slideIndex]) ? assignmentData.answers[submission.slideIndex] : null;
+                if (correctAnswerRules) {
+                    const newScore = gradeAnswer(submission.answer, correctAnswerRules);
                     const submissionRef = db.collection("submissions").doc(doc.id);
                     batch.update(submissionRef, { score: newScore });
                     count++;
@@ -434,9 +482,9 @@
 
     async function regradeQuestion(slideIndex) {
         showToast(`Regrading Question ${slideIndex + 1}...`, { color: 'blue' });
-        const correctAnswer = (assignmentData.answerKey && assignmentData.answerKey[slideIndex]) ? assignmentData.answerKey[slideIndex] : null;
+        const correctAnswerRules = (assignmentData.answers && assignmentData.answers[slideIndex]) ? assignmentData.answers[slideIndex] : null;
 
-        if (!correctAnswer) {
+        if (!correctAnswerRules) {
             showToast(`No correct answer found for Question ${slideIndex + 1}. Cannot regrade.`, { color: 'red' });
             return;
         }
@@ -451,7 +499,7 @@
             const batch = db.batch();
             let count = 0;
             submissionsSnapshot.forEach(doc => {
-                const newScore = gradeAnswer(doc.data().answer, correctAnswer);
+                const newScore = gradeAnswer(doc.data().answer, correctAnswerRules);
                 const submissionRef = db.collection("submissions").doc(doc.id);
                 batch.update(submissionRef, { score: newScore });
                 count++;
@@ -481,14 +529,14 @@
                 return;
             }
             const submission = submissionDoc.data();
-            const correctAnswer = (assignmentData.answerKey && assignmentData.answerKey[submission.slideIndex]) ? assignmentData.answerKey[submission.slideIndex] : null;
+            const correctAnswerRules = (assignmentData.answers && assignmentData.answers[submission.slideIndex]) ? assignmentData.answers[submission.slideIndex] : null;
             
-            if (!correctAnswer) {
+            if (!correctAnswerRules) {
                 showToast(`No correct answer set for Question ${submission.slideIndex + 1}.`, { color: 'red' });
                 return;
             }
 
-            const newScore = gradeAnswer(submission.answer, correctAnswer);
+            const newScore = gradeAnswer(submission.answer, correctAnswerRules);
             await db.collection("submissions").doc(submissionId).update({ score: newScore });
 
             const student = allStudentData.find(s => s.email === submission.studentEmail);
@@ -530,9 +578,9 @@
                 if (subToUpdate) subToUpdate.answer = newAnswer;
             }
 
-            const correctAnswer = (assignmentData.answerKey && assignmentData.answerKey[submissionData.slideIndex]) ? assignmentData.answerKey[submissionData.slideIndex] : null;
-            if(correctAnswer) {
-                const newScore = gradeAnswer(newAnswer, correctAnswer);
+            const correctAnswerRules = (assignmentData.answers && assignmentData.answers[submissionData.slideIndex]) ? assignmentData.answers[submissionData.slideIndex] : null;
+            if(correctAnswerRules) {
+                const newScore = gradeAnswer(newAnswer, correctAnswerRules);
                 await db.collection("submissions").doc(submissionId).update({ score: newScore });
                 
                 if (student) {
