@@ -131,9 +131,8 @@
     }
 
     async function fetchStudentData() {
-        const assignedClasses = assignmentData.assignedClasses || [];
-        if (assignedClasses.length === 0) return;
-        const studentQuery = db.collection("students").where("class", "in", assignedClasses);
+        // **FIX:** Fetch ALL students to show all classes, not just those assigned.
+        const studentQuery = db.collection("students"); 
         const submissionQuery = db.collection("submissions").where("assignmentId", "==", assignmentId);
         const statusQuery = db.collection("submissionStatus").where("assignmentId", "==", assignmentId).where("status", "==", "submitted");
         
@@ -223,31 +222,47 @@
     }
 
     async function toggleSubmissionStatus(studentEmail, isChecked) {
-        const checkbox = document.querySelector(`input[data-student-email="${studentEmail}"]`);
-        if (isChecked) {
-            showToast("Cannot submit for a student from the dashboard.", { color: 'red' });
-            if (checkbox) checkbox.checked = false;
+        const student = studentData.find(s => s.email === studentEmail);
+        if (!student) {
+            showToast("Could not find student data.", { color: 'red' });
             return;
         }
 
         try {
-            const statusQuery = db.collection("submissionStatus")
-                .where("studentEmail", "==", studentEmail)
-                .where("assignmentId", "==", assignmentId);
-            const statusSnapshot = await statusQuery.get();
-            if (!statusSnapshot.empty) {
-                const docId = statusSnapshot.docs[0].id;
-                await db.collection("submissionStatus").doc(docId).delete();
-                showToast(`Un-submitted for ${studentEmail}.`, { color: 'green' });
-                const student = studentData.find(s => s.email === studentEmail);
-                if (student) student.isSubmitted = false;
+            if (isChecked) {
+                // Logic to SUBMIT for the student
+                await db.collection("submissionStatus").add({
+                    studentEmail: student.email,
+                    studentName: student.name,
+                    assignmentId: assignmentId,
+                    status: 'submitted',
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                student.isSubmitted = true;
+                showToast(`Submitted for ${student.name}.`, { color: 'green' });
             } else {
-                showToast(`No submission record found for ${studentEmail}.`, { color: 'blue' });
+                // Logic to UN-SUBMIT for the student
+                const statusQuery = db.collection("submissionStatus")
+                    .where("studentEmail", "==", studentEmail)
+                    .where("assignmentId", "==", assignmentId);
+                const statusSnapshot = await statusQuery.get();
+                if (!statusSnapshot.empty) {
+                    const docId = statusSnapshot.docs[0].id;
+                    await db.collection("submissionStatus").doc(docId).delete();
+                    student.isSubmitted = false;
+                    showToast(`Un-submitted for ${student.name}.`, { color: 'green' });
+                } else {
+                    showToast(`No submission record found to remove for ${student.name}.`, { color: 'blue' });
+                }
             }
         } catch (error) {
-            console.error("Error un-submitting student:", error);
-            showToast("Failed to un-submit. See console for details.", { color: 'red' });
-            if (checkbox) checkbox.checked = true;
+            console.error("Error updating submission status:", error);
+            showToast("Operation failed. See console for details.", { color: 'red' });
+            // Revert local state on error
+            student.isSubmitted = !isChecked; 
+        } finally {
+            // **FIX:** Refresh the table to show the change
+            displayStudentData();
         }
     }
 
@@ -317,7 +332,7 @@
         const numQuestions = assignmentData.slideIds.length;
         let headers = ["Email", "Last Name", "First Name", "Last, First", "Class", "Average Score", "Completion %"];
         for (let i = 1; i <= numQuestions; i++) { headers.push(`Q${i} Score`); }
-        csvContent += headers.join(',') + "\\r\\n";
+        csvContent += headers.join(',') + "\r\n";
 
         const studentsToExport = (activeClass === 'All' ? studentData : studentData.filter(s => s.class === activeClass))
             .sort((a, b) => a.name.localeCompare(b.name));
@@ -343,22 +358,22 @@
                 student.email, `"${lastName}"`, `"${firstName}"`, lastFirst, student.class,
                 averageScore, completionPercentage, ...scores
             ].join(',');
-            csvContent += row + "\\r\\n";
+            csvContent += row + "\r\n";
         });
-        const blob = new Blob([csvContent.substring(24)], { type: 'text/csv;charset=utf-8;' });
+
+        // Use encodeURIComponent to handle special characters correctly in the CSV content
+        var encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
-        const url = URL.createObjectURL(blob);
-        link.setAttribute("href", url);
+        link.setAttribute("href", encodedUri);
         const safeAssignmentName = assignmentData.name.replace(/[^a-z0-9]/gi, '_');
         const safeViewName = activeClass.replace(/\s+/g, '_');
         link.setAttribute("download", `submissions_${safeAssignmentName}_${safeViewName}.csv`);
-        link.style.visibility = 'hidden';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        URL.revokeObjectURL(url);
     }
     document.getElementById('exportButton').onclick = exportToCSV;
 </script>
 </body>
 </html>
+
