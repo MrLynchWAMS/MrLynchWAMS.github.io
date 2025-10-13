@@ -23,7 +23,7 @@
         @keyframes fade-out-down { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(20px); } }
         .animate-fade-in-up { animation: fade-in-up 0.5s ease-out forwards; }
         .animate-fade-out-down { animation: fade-out-down 0.5s ease-in forwards; }
-        .blackout { color: #2d3748 !important; background-color: #2d3748 !important; border-radius: 4px; user-select: none; }
+        .blackout { color: #4a5568 !important; background-color: #4a5568 !important; border-radius: 4px; user-select: none; }
     </style>
 </head>
 <body class="bg-gray-900 text-white font-sans">
@@ -46,27 +46,30 @@
                     <button onclick="handleSignOut()" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Sign Out</button>
                 </div>
             </div>
-            <div class="mb-4 flex flex-wrap items-center gap-x-6 gap-y-4">
-                <div class="flex items-center gap-2">
-                    <label for="classFilter" class="font-semibold">Class:</label>
-                    <select id="classFilter" onchange="filterByClass(this.value)" class="bg-gray-700 border border-gray-600 rounded-md p-2 text-white"></select>
+
+            <div class="mb-4 p-4 bg-gray-800 rounded-lg">
+                <div class="flex items-center gap-x-6 gap-y-4 mb-4">
+                    <div id="classLinksContainer" class="flex flex-wrap items-start gap-x-6 gap-y-2"></div>
                 </div>
-                <div class="flex items-center gap-2">
-                    <label for="sortFilter" class="font-semibold">Sort by:</label>
-                    <select id="sortFilter" onchange="changeSort(this.value)" class="bg-gray-700 border border-gray-600 rounded-md p-2 text-white">
-                        <option value="lastName">Last Name</option>
-                        <option value="firstName">First Name</option>
-                        <option value="random-static">Random (Static)</option>
-                        <option value="random-live">Random (Live)</option>
-                    </select>
+                <div class="border-t border-gray-700 pt-4 flex flex-wrap items-center gap-x-6 gap-y-4">
+                    <div class="flex items-center gap-2">
+                        <label for="sortFilter" class="font-semibold">Sort by:</label>
+                        <select id="sortFilter" onchange="changeSort(this.value)" class="bg-gray-700 border border-gray-600 rounded-md p-2 text-white">
+                            <option value="lastName">Last Name</option>
+                            <option value="firstName">First Name</option>
+                            <option value="random-static">Random (Static)</option>
+                            <option value="random-live">Random (Live)</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <label class="flex items-center"><input type="checkbox" id="hideNames" onchange="toggleDisplayOptions()" class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"> <span class="ml-2">Hide Names</span></label>
+                        <label class="flex items-center"><input type="checkbox" id="showScores" checked onchange="toggleDisplayOptions()" class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"> <span class="ml-2">Show Scores</span></label>
+                        <label class="flex items-center"><input type="checkbox" id="blackoutMode" onchange="toggleDisplayOptions()" class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"> <span class="ml-2">Blackout Bars</span></label>
+                    </div>
+                    <button id="exportButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Export to CSV</button>
                 </div>
-                <div class="flex items-center gap-4">
-                    <label class="flex items-center"><input type="checkbox" id="hideNames" onchange="toggleDisplayOptions()" class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"> <span class="ml-2">Hide Names</span></label>
-                    <label class="flex items-center"><input type="checkbox" id="showScores" checked onchange="toggleDisplayOptions()" class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"> <span class="ml-2">Show Scores</span></label>
-                    <label class="flex items-center"><input type="checkbox" id="blackoutMode" onchange="toggleDisplayOptions()" class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"> <span class="ml-2">Blackout Bars</span></label>
-                </div>
-                <button id="exportButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Export to CSV</button>
             </div>
+
             <div class="overflow-x-auto bg-gray-800 rounded-lg shadow">
                 <table class="min-w-full divide-y divide-gray-700">
                     <thead id="tableHeader" class="bg-gray-700"></thead>
@@ -109,6 +112,7 @@
     let allStudentData = [];
     let activeClass = 'All';
     let assignmentId;
+    let classAverages = {};
     
     // Display & Sort State
     let hideNames = false;
@@ -152,12 +156,12 @@
             document.title = assignmentData.name + " - Dashboard";
             document.getElementById('dashboardTitle').textContent = `Dashboard for: ${assignmentData.name}`;
             await fetchStudentData();
-            populateClassFilter();
+            calculateAllClassAverages();
+            populateClassLinks();
             displayStudentData();
             document.getElementById('pageLoader').classList.add('hidden');
             document.getElementById('mainContainer').classList.remove('hidden');
-        } catch (error)
-        {
+        } catch (error) {
             console.error("Error loading dashboard:", error);
             document.getElementById('loadingError').textContent = "An error occurred while loading the dashboard.";
         }
@@ -186,29 +190,87 @@
         }));
     }
 
-    function populateClassFilter() {
-        const classFilter = document.getElementById('classFilter');
-        classFilter.innerHTML = '<option value="All">All Classes</option>';
+    function calculateAllClassAverages() {
+        const averages = {};
         const assignedClasses = assignmentData.assignedClasses || [];
-        const classesInAssignment = [...new Set(allStudentData
-            .filter(s => assignedClasses.includes(String(s.class)))
-            .map(s => String(s.class))
-        )].sort((a,b) => a.localeCompare(b, undefined, {numeric: true}));
-        classesInAssignment.forEach(c => { classFilter.innerHTML += `<option value="${c}">${c}</option>`; });
+        const studentsInAssignment = allStudentData.filter(s => assignedClasses.includes(String(s.class)));
+        const numQuestions = assignmentData.slideIds.length;
+
+        const classes = [...new Set(studentsInAssignment.map(s => String(s.class)))];
+        classes.forEach(c => {
+            const studentsInClass = studentsInAssignment.filter(s => String(s.class) === c);
+            let totalScore = 0;
+            let attemptedQuestions = 0;
+            studentsInClass.forEach(student => {
+                for (let i = 0; i < numQuestions; i++) {
+                    const latestSubmission = student.submissions.filter(sub => sub.slideIndex === i).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
+                    if (latestSubmission) {
+                        totalScore += latestSubmission.score;
+                        attemptedQuestions++;
+                    }
+                }
+            });
+            averages[c] = attemptedQuestions > 0 ? (totalScore / attemptedQuestions).toFixed(0) : '-';
+        });
+
+        let allTotalScore = 0;
+        let allAttemptedQuestions = 0;
+        studentsInAssignment.forEach(student => {
+             for (let i = 0; i < numQuestions; i++) {
+                const latestSubmission = student.submissions.filter(sub => sub.slideIndex === i).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
+                if (latestSubmission) {
+                    allTotalScore += latestSubmission.score;
+                    allAttemptedQuestions++;
+                }
+            }
+        });
+        averages['All'] = allAttemptedQuestions > 0 ? (allTotalScore / allAttemptedQuestions).toFixed(0) : '-';
+        classAverages = averages;
+    }
+
+    function populateClassLinks() {
+        const linksContainer = document.getElementById('classLinksContainer');
+        linksContainer.innerHTML = '';
+        const assignedClasses = assignmentData.assignedClasses || [];
+        const classesInAssignment = [...new Set(allStudentData.filter(s => assignedClasses.includes(String(s.class))).map(s => String(s.class)))].sort((a,b) => a.localeCompare(b, undefined, {numeric: true}));
+        
+        classesInAssignment.forEach(c => {
+            const isActive = activeClass === c;
+            const activeClasses = isActive ? 'bg-yellow-600 text-white' : 'bg-gray-700 hover:bg-gray-600';
+            const avgScore = classAverages[c] || '-';
+            linksContainer.innerHTML += `
+                <div class="text-center">
+                    <button data-class-name="${c}" onclick="filterByClass('${c}')" class="class-link font-bold py-2 px-4 rounded-lg ${activeClasses}">${c}</button>
+                    <p class="class-avg text-xs mt-1 text-cyan-400 ${!showScores ? 'hidden' : ''}">Avg: ${avgScore}</p>
+                </div>`;
+        });
+
+        const isAllActive = activeClass === 'All';
+        const allActiveClasses = isAllActive ? 'bg-yellow-600 text-white' : 'bg-gray-700 hover:bg-gray-600';
+        const allAvgScore = classAverages['All'] || '-';
+        linksContainer.innerHTML += `
+            <div class="text-center">
+                <button data-class-name="All" onclick="filterByClass('All')" class="class-link font-bold py-2 px-4 rounded-lg ${allActiveClasses}">All Classes</button>
+                <p class="class-avg text-xs mt-1 text-cyan-400 ${!showScores ? 'hidden' : ''}">Avg: ${allAvgScore}</p>
+            </div>`;
     }
 
     function filterByClass(className) {
         activeClass = className;
+        document.querySelectorAll('.class-link').forEach(btn => {
+            btn.classList.toggle('bg-yellow-600', btn.dataset.className === activeClass);
+            btn.classList.toggle('text-white', btn.dataset.className === activeClass);
+            btn.classList.toggle('bg-gray-700', btn.dataset.className !== activeClass);
+            btn.classList.toggle('hover:bg-gray-600', btn.dataset.className !== activeClass);
+        });
         changeSort(sortMode); 
     }
     
     function changeSort(newMode) {
         sortMode = newMode;
         if (sortMode === 'random-static') {
-            const assignedClasses = assignmentData.assignedClasses || [];
-            const studentsInAssignment = allStudentData.filter(s => assignedClasses.includes(String(s.class)));
-            const filteredStudents = (activeClass === 'All' ? studentsInAssignment : studentsInAssignment.filter(s => String(s.class) === String(activeClass)));
-            staticRandomOrder = [...filteredStudents].sort(() => Math.random() - 0.5);
+            const studentsInView = getCurrentlySortedStudents(false); // get without sorting
+            staticRandomOrder = [...studentsInView].sort(() => Math.random() - 0.5);
         }
         displayStudentData();
     }
@@ -217,13 +279,15 @@
         hideNames = document.getElementById('hideNames').checked;
         showScores = document.getElementById('showScores').checked;
         blackoutMode = document.getElementById('blackoutMode').checked;
+        document.querySelectorAll('.class-avg').forEach(p => p.classList.toggle('hidden', !showScores));
         displayStudentData();
     }
 
-    function getCurrentlySortedStudents() {
+    function getCurrentlySortedStudents(applySort = true) {
         const assignedClasses = assignmentData.assignedClasses || [];
         const studentsInAssignment = allStudentData.filter(s => assignedClasses.includes(String(s.class)));
         const filteredStudents = (activeClass === 'All' ? studentsInAssignment : studentsInAssignment.filter(s => String(s.class) === String(activeClass)));
+        if (!applySort) return filteredStudents;
 
         let sortedStudents = [...filteredStudents];
         switch (sortMode) {
@@ -243,17 +307,10 @@
         const studentList = document.getElementById('studentData');
         const numQuestions = assignmentData.slideIds.length;
         const sortedStudents = getCurrentlySortedStudents();
-        const isAllClassesView = activeClass === 'All';
 
         let headerHtml = `<tr>
-            <th class="px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Student Name</th>`;
-        if (isAllClassesView) {
-            headerHtml += `<th class="px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Class</th>`;
-        }
-        headerHtml += `<th class="px-2 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Submitted</th>`;
-        if (showScores) {
-            headerHtml += `<th class="px-2 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider">Avg Score</th>`;
-        }
+            <th class="px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Student Name</th>
+            <th class="px-2 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider">Submitted</th>`;
         for (let i = 1; i <= numQuestions; i++) {
             headerHtml += `<th class="px-2 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer hover:text-yellow-400" onclick="showQuestionSubmissions(${i - 1})">Q${i}</th>`;
         }
@@ -261,8 +318,7 @@
         
         let classAverageRowHtml = '';
         if (showScores) {
-            const classAvgColspan = isAllClassesView ? '2' : '1';
-            classAverageRowHtml = `<tr><td class="text-xs font-semibold text-cyan-400 px-3" colspan="${classAvgColspan}">Class Average:</td><td class="px-2"></td><td class="px-2"></td>`;
+            classAverageRowHtml = `<tr><td class="text-xs font-semibold text-cyan-400 px-3">Class Average:</td><td class="px-2"></td>`;
             for (let i = 0; i < numQuestions; i++) {
                 const scores = sortedStudents.map(s => s.submissions.filter(sub => sub.slideIndex === i).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0]).filter(Boolean).map(sub => sub.score);
                 const avg = scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(0) : '-';
@@ -275,22 +331,18 @@
         let tableHtml = '';
         sortedStudents.forEach((student, index) => {
             const displayName = hideNames ? `Student ${index + 1}` : student.name;
-            const nameBlackout = blackoutMode && hideNames ? 'blackout' : '';
-            
             const latestScores = Array.from({ length: numQuestions }, (_, i) => student.submissions.filter(s => s.slideIndex === i).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0]).filter(Boolean).map(s => s.score);
             const studentAvg = latestScores.length > 0 ? (latestScores.reduce((a, b) => a + b, 0) / latestScores.length).toFixed(0) : '-';
 
-            tableHtml += `<tr class="hover:bg-gray-700">
-                <td class="px-3 py-4 whitespace-nowrap text-sm font-medium text-white cursor-pointer hover:text-yellow-400 ${nameBlackout}" onclick="showStudentSubmissions('${student.email}')">${displayName}</td>`;
-            if (isAllClassesView) {
-                tableHtml += `<td class="px-3 py-4 whitespace-nowrap text-sm text-gray-300 ${nameBlackout}">${student.class}</td>`;
-            }
-            tableHtml += `<td class="px-2 py-4 whitespace-nowrap text-center"><input type="checkbox" onchange="toggleSubmissionStatus('${student.email}', this.checked)" ${student.isSubmitted ? 'checked' : ''} class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500 cursor-pointer"></td>`;
-            
+            let avgScoreDisplay = '';
             if (showScores) {
-                tableHtml += `<td class="px-2 py-4 whitespace-nowrap text-sm text-center text-white font-bold ${blackoutMode ? 'blackout' : ''}">${studentAvg}</td>`;
+                avgScoreDisplay = `<span class="text-xs text-gray-400 ml-2 font-mono ${blackoutMode ? 'blackout' : ''}">(${studentAvg})</span>`;
             }
 
+            tableHtml += `<tr class="hover:bg-gray-700">
+                <td class="px-3 py-4 whitespace-nowrap text-sm font-medium text-white cursor-pointer hover:text-yellow-400" onclick="showStudentSubmissions('${student.email}')">${displayName}${avgScoreDisplay}</td>
+                <td class="px-2 py-4 whitespace-nowrap text-center"><input type="checkbox" onchange="toggleSubmissionStatus('${student.email}', this.checked)" ${student.isSubmitted ? 'checked' : ''} class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500 cursor-pointer"></td>`;
+            
             for (let i = 0; i < numQuestions; i++) {
                 const latestSubmission = student.submissions.filter(s => s.slideIndex === i).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
                 if (latestSubmission) {
@@ -301,7 +353,11 @@
                             <div class="${color} h-5 rounded-full text-center text-white text-xs flex items-center justify-center ${blackoutMode ? 'blackout' : ''}" style="width: ${score}%">${score}</div>
                         </div></td>`;
                 } else {
-                    tableHtml += `<td class="px-2 py-4"><div class="bg-gray-700 h-5 rounded-full flex items-center justify-center text-gray-500 text-xs">-</div></td>`;
+                    if (blackoutMode) {
+                        tableHtml += `<td class="px-2 py-4"><div class="h-5 rounded-full border-2 border-dashed border-gray-600"></div></td>`;
+                    } else {
+                        tableHtml += `<td class="px-2 py-4"><div class="bg-gray-700 h-5 rounded-full flex items-center justify-center text-gray-500 text-xs">-</div></td>`;
+                    }
                 }
             }
             tableHtml += `</tr>`;
