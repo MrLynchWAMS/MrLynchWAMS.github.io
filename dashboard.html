@@ -153,7 +153,8 @@
             displayStudentData();
             document.getElementById('pageLoader').classList.add('hidden');
             document.getElementById('mainContainer').classList.remove('hidden');
-        } catch (error) {
+        } catch (error)
+        {
             console.error("Error loading dashboard:", error);
             document.getElementById('loadingError').textContent = "An error occurred while loading the dashboard.";
         }
@@ -195,7 +196,7 @@
 
     function filterByClass(className) {
         activeClass = className;
-        changeSort(sortMode); // Re-sort/re-shuffle if necessary when class changes
+        changeSort(sortMode); 
     }
     
     function changeSort(newMode) {
@@ -216,11 +217,7 @@
         displayStudentData();
     }
 
-    function displayStudentData() {
-        const tableHeader = document.getElementById('tableHeader');
-        const studentList = document.getElementById('studentData');
-        const numQuestions = assignmentData.slideIds.length;
-
+    function getCurrentlySortedStudents() {
         const assignedClasses = assignmentData.assignedClasses || [];
         const studentsInAssignment = allStudentData.filter(s => assignedClasses.includes(String(s.class)));
         const filteredStudents = (activeClass === 'All' ? studentsInAssignment : studentsInAssignment.filter(s => String(s.class) === String(activeClass)));
@@ -235,6 +232,14 @@
                 sortedStudents = staticRandomOrder.filter(s => currentEmails.has(s.email));
                 break;
         }
+        return sortedStudents;
+    }
+
+    function displayStudentData() {
+        const tableHeader = document.getElementById('tableHeader');
+        const studentList = document.getElementById('studentData');
+        const numQuestions = assignmentData.slideIds.length;
+        const sortedStudents = getCurrentlySortedStudents();
 
         let headerHtml = `<tr>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Student Name</th>
@@ -330,8 +335,12 @@
         document.getElementById('showAllAttemptsToggle').checked = showAllAttempts;
         const student = allStudentData.find(s => s.email === studentEmail);
         if (!student) return;
+
+        const sortedStudents = getCurrentlySortedStudents();
+        const studentIndex = sortedStudents.findIndex(s => s.email === studentEmail);
+        const displayName = hideNames && studentIndex > -1 ? `Student ${studentIndex + 1}` : student.name;
         
-        document.getElementById('modalTitle').textContent = `Submissions for ${student.name}${specificSlide !== null ? ` - Q${specificSlide + 1}` : ''}`;
+        document.getElementById('modalTitle').textContent = `Submissions for ${displayName}${specificSlide !== null ? ` - Q${specificSlide + 1}` : ''}`;
         
         let submissionsToShow = (specificSlide !== null ? student.submissions.filter(s => s.slideIndex === specificSlide) : student.submissions)
             .sort((a, b) => (a.slideIndex - b.slideIndex) || ((b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0)));
@@ -354,16 +363,16 @@
         document.getElementById('showAllAttemptsToggle').checked = showAllAttempts;
         document.getElementById('modalTitle').textContent = `All Submissions for Question ${slideIndex + 1}`;
         
-        const assignedClasses = assignmentData.assignedClasses || [];
-        const studentsInAssignment = allStudentData.filter(s => assignedClasses.includes(String(s.class)));
+        const studentsForModal = getCurrentlySortedStudents();
         
         const anonymousNameMap = new Map();
-        let anonymousCounter = 1;
-
-        const allSubmissions = studentsInAssignment.flatMap(student => {
-            if (hideNames && !anonymousNameMap.has(student.email)) anonymousNameMap.set(student.email, `Student ${anonymousCounter++}`);
-            return student.submissions.filter(s => s.slideIndex === slideIndex).map(s => ({ ...s, studentName: student.name, studentEmail: student.email }));
+        studentsForModal.forEach((student, index) => {
+            if (hideNames) anonymousNameMap.set(student.email, `Student ${index + 1}`);
         });
+
+        const allSubmissions = studentsForModal.flatMap(student => 
+            student.submissions.filter(s => s.slideIndex === slideIndex).map(s => ({ ...s, studentName: student.name, studentEmail: student.email }))
+        );
 
         let submissionsToDisplay;
         if (showAllAttempts) {
@@ -384,7 +393,7 @@
         if (submissions.length > 0) {
             submissions.forEach(sub => {
                 const displayName = nameMap && hideNames ? nameMap.get(sub.studentEmail) : sub.studentName;
-                const headerText = displayName ? `${displayName} &rarr; Score: ${sub.score}` : `Q${sub.slideIndex + 1} &rarr; Score: ${sub.score}`;
+                const headerText = nameMap ? `${displayName} &rarr; Score: ${sub.score}` : `Question ${sub.slideIndex + 1} &rarr; Score: ${sub.score}`;
                 const date = sub.timestamp ? new Date(sub.timestamp.seconds * 1000).toLocaleString() : 'N/A';
                 contentHtml += `<div class="bg-gray-700 p-4 rounded-lg">
                     <div class="flex justify-between items-center mb-2">
@@ -420,18 +429,13 @@
     }
     
     function exportToCSV() {
-        // This function remains largely the same, but will now use the sorted student list
-        // and include the student average score.
         let csvContent = "";
         const numQuestions = assignmentData.slideIds.length;
         let headers = ["Email", "Last Name", "First Name", "Last, First", "Class", "Average Score", "Completion %"];
         for (let i = 1; i <= numQuestions; i++) { headers.push(`Q${i} Score`); }
         csvContent += headers.join(',') + "\r\n";
         
-        const assignedClasses = assignmentData.assignedClasses || [];
-        const studentsInAssignment = allStudentData.filter(s => assignedClasses.includes(String(s.class)));
-        const studentsToExport = (activeClass === 'All' ? studentsInAssignment : studentsInAssignment.filter(s => String(s.class) === String(activeClass)))
-            .sort((a, b) => (a.name.split(' ').pop() || '').localeCompare(b.name.split(' ').pop() || ''));
+        const studentsToExport = getCurrentlySortedStudents();
 
         studentsToExport.forEach(student => {
             const nameParts = student.name.split(' ');
