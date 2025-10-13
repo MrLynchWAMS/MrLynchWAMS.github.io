@@ -48,10 +48,14 @@
             </div>
 
             <div class="mb-4 p-4 bg-gray-800 rounded-lg">
-                <div class="flex items-center gap-x-6 gap-y-4 mb-4">
-                    <div id="classLinksContainer" class="flex flex-wrap items-start gap-x-6 gap-y-2"></div>
-                </div>
-                <div class="border-t border-gray-700 pt-4 flex flex-wrap items-center gap-x-6 gap-y-4">
+                <div class="flex flex-wrap items-center gap-x-6 gap-y-4">
+                    <div class="flex items-center gap-3">
+                        <span class="font-semibold">Class:</span>
+                        <div id="classLinksContainer" class="flex flex-wrap items-center gap-x-4 gap-y-2">
+                            <!-- JS Populated -->
+                        </div>
+                    </div>
+                    <div class="h-6 border-l border-gray-600 hidden md:block"></div>
                     <div class="flex items-center gap-2">
                         <label for="sortFilter" class="font-semibold">Sort by:</label>
                         <select id="sortFilter" onchange="changeSort(this.value)" class="bg-gray-700 border border-gray-600 rounded-md p-2 text-white">
@@ -61,13 +65,17 @@
                             <option value="random-live">Random (Live)</option>
                         </select>
                     </div>
+                    <div class="h-6 border-l border-gray-600 hidden md:block"></div>
                     <div class="flex items-center gap-4">
                         <label class="flex items-center"><input type="checkbox" id="hideNames" onchange="toggleDisplayOptions()" class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"> <span class="ml-2">Hide Names</span></label>
                         <label class="flex items-center"><input type="checkbox" id="showScores" checked onchange="toggleDisplayOptions()" class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"> <span class="ml-2">Show Scores</span></label>
                         <label class="flex items-center"><input type="checkbox" id="blackoutMode" onchange="toggleDisplayOptions()" class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"> <span class="ml-2">Blackout Bars</span></label>
                     </div>
-                    <button id="exportButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Export to CSV</button>
-                    <button id="regradeAllButton" onclick="regradeAllSubmissions()" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg">Regrade All</button>
+                    <div class="h-6 border-l border-gray-600 hidden md:block"></div>
+                    <div class="flex items-center gap-4">
+                        <button id="exportButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Export to CSV</button>
+                        <button id="regradeAllButton" onclick="regradeAllSubmissions()" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg">Regrade All</button>
+                    </div>
                 </div>
             </div>
 
@@ -233,38 +241,38 @@
         const linksContainer = document.getElementById('classLinksContainer');
         linksContainer.innerHTML = '';
         const assignedClasses = assignmentData.assignedClasses || [];
-        const classesInAssignment = [...new Set(allStudentData.filter(s => assignedClasses.includes(String(s.class))).map(s => String(s.class)))].sort((a,b) => a.localeCompare(b, undefined, {numeric: true}));
-        
+        const classesInAssignment = [...new Set(allStudentData.filter(s => assignedClasses.includes(String(s.class))).map(s => String(s.class)))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
         classesInAssignment.forEach(c => {
             const isActive = activeClass === c;
-            const activeClasses = isActive ? 'bg-yellow-600 text-white' : 'bg-gray-700 hover:bg-gray-600';
-            const avgScore = classAverages[c] || '-';
-            linksContainer.innerHTML += `
-                <div class="text-center">
-                    <button data-class-name="${c}" onclick="filterByClass('${c}')" class="class-link font-bold py-2 px-4 rounded-lg ${activeClasses}">${c}</button>
-                    <p class="class-avg text-xs mt-1 text-cyan-400 ${!showScores ? 'hidden' : ''}">Avg: ${avgScore}</p>
-                </div>`;
+            const activeClasses = isActive ? 'text-yellow-400 font-bold underline' : 'text-gray-300 hover:text-white';
+            linksContainer.innerHTML += `<a href="#" data-class-name="${c}" onclick="event.preventDefault(); filterByClass('${c}')" class="class-link text-sm ${activeClasses}">${c}</a>`;
         });
 
         const isAllActive = activeClass === 'All';
-        const allActiveClasses = isAllActive ? 'bg-yellow-600 text-white' : 'bg-gray-700 hover:bg-gray-600';
-        const allAvgScore = classAverages['All'] || '-';
-        linksContainer.innerHTML += `
-            <div class="text-center">
-                <button data-class-name="All" onclick="filterByClass('All')" class="class-link font-bold py-2 px-4 rounded-lg ${allActiveClasses}">All Classes</button>
-                <p class="class-avg text-xs mt-1 text-cyan-400 ${!showScores ? 'hidden' : ''}">Avg: ${allAvgScore}</p>
-            </div>`;
+        const allActiveClasses = isAllActive ? 'text-yellow-400 font-bold underline' : 'text-gray-300 hover:text-white';
+        linksContainer.innerHTML += `<a href="#" data-class-name="All" onclick="event.preventDefault(); filterByClass('All')" class="class-link text-sm ${allActiveClasses}">All Classes</a>`;
+
+        const activeAvg = classAverages[activeClass] || '-';
+        linksContainer.innerHTML += `<span id="activeClassAvg" class="class-avg text-xs ml-2 text-cyan-400 ${!showScores ? 'hidden' : ''}">(Avg: ${activeAvg})</span>`;
     }
 
     function filterByClass(className) {
         activeClass = className;
-        document.querySelectorAll('.class-link').forEach(btn => {
-            btn.classList.toggle('bg-yellow-600', btn.dataset.className === activeClass);
-            btn.classList.toggle('text-white', btn.dataset.className === activeClass);
-            btn.classList.toggle('bg-gray-700', btn.dataset.className !== activeClass);
-            btn.classList.toggle('hover:bg-gray-600', btn.dataset.className !== activeClass);
+        document.querySelectorAll('.class-link').forEach(link => {
+            const isActive = link.dataset.className === activeClass;
+            link.classList.toggle('text-yellow-400', isActive);
+            link.classList.toggle('font-bold', isActive);
+            link.classList.toggle('underline', isActive);
+            link.classList.toggle('text-gray-300', !isActive);
+            link.classList.toggle('hover:text-white', !isActive);
         });
-        changeSort(sortMode); 
+        const avgEl = document.getElementById('activeClassAvg');
+        if (avgEl) {
+            const activeAvg = classAverages[activeClass] || '-';
+            avgEl.textContent = `(Avg: ${activeAvg})`;
+        }
+        changeSort(sortMode);
     }
     
     function changeSort(newMode) {
@@ -280,7 +288,8 @@
         hideNames = document.getElementById('hideNames').checked;
         showScores = document.getElementById('showScores').checked;
         blackoutMode = document.getElementById('blackoutMode').checked;
-        document.querySelectorAll('.class-avg').forEach(p => p.classList.toggle('hidden', !showScores));
+        const avgEl = document.getElementById('activeClassAvg');
+        if (avgEl) avgEl.classList.toggle('hidden', !showScores);
         displayStudentData();
     }
 
@@ -399,7 +408,7 @@
             let count = 0;
             submissionsSnapshot.forEach(doc => {
                 const submission = doc.data();
-                const correctAnswer = (assignmentData.answers && assignmentData.answers[submission.slideIndex]) ? assignmentData.answers[submission.slideIndex] : null;
+                const correctAnswer = (assignmentData.answerKey && assignmentData.answerKey[submission.slideIndex]) ? assignmentData.answerKey[submission.slideIndex] : null;
                 if (correctAnswer) {
                     const newScore = gradeAnswer(submission.answer, correctAnswer);
                     const submissionRef = db.collection("submissions").doc(doc.id);
@@ -425,7 +434,7 @@
 
     async function regradeQuestion(slideIndex) {
         showToast(`Regrading Question ${slideIndex + 1}...`, { color: 'blue' });
-        const correctAnswer = (assignmentData.answers && assignmentData.answers[slideIndex]) ? assignmentData.answers[slideIndex] : null;
+        const correctAnswer = (assignmentData.answerKey && assignmentData.answerKey[slideIndex]) ? assignmentData.answerKey[slideIndex] : null;
 
         if (!correctAnswer) {
             showToast(`No correct answer found for Question ${slideIndex + 1}. Cannot regrade.`, { color: 'red' });
@@ -472,7 +481,7 @@
                 return;
             }
             const submission = submissionDoc.data();
-            const correctAnswer = (assignmentData.answers && assignmentData.answers[submission.slideIndex]) ? assignmentData.answers[submission.slideIndex] : null;
+            const correctAnswer = (assignmentData.answerKey && assignmentData.answerKey[submission.slideIndex]) ? assignmentData.answerKey[submission.slideIndex] : null;
             
             if (!correctAnswer) {
                 showToast(`No correct answer set for Question ${submission.slideIndex + 1}.`, { color: 'red' });
@@ -521,7 +530,7 @@
                 if (subToUpdate) subToUpdate.answer = newAnswer;
             }
 
-            const correctAnswer = (assignmentData.answers && assignmentData.answers[submissionData.slideIndex]) ? assignmentData.answers[submissionData.slideIndex] : null;
+            const correctAnswer = (assignmentData.answerKey && assignmentData.answerKey[submissionData.slideIndex]) ? assignmentData.answerKey[submissionData.slideIndex] : null;
             if(correctAnswer) {
                 const newScore = gradeAnswer(newAnswer, correctAnswer);
                 await db.collection("submissions").doc(submissionId).update({ score: newScore });
