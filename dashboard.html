@@ -23,6 +23,7 @@
         @keyframes fade-out-down { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(20px); } }
         .animate-fade-in-up { animation: fade-in-up 0.5s ease-out forwards; }
         .animate-fade-out-down { animation: fade-out-down 0.5s ease-in forwards; }
+        .blackout { color: #2d3748 !important; background-color: #2d3748 !important; border-radius: 4px; }
     </style>
 </head>
 <body class="bg-gray-900 text-white font-sans">
@@ -32,7 +33,7 @@
             <p id="loadingError" class="text-red-500 mt-4"></p>
         </div>
         <div id="loginContainer" class="hidden max-w-md mx-auto mt-20 bg-gray-800 p-8 rounded-lg shadow-xl">
-            <h1 id="assignmentNameLogin" class="text-3xl font-bold text-yellow-400 mb-6 text-center">Teacher Dashboard</h1>
+            <h1 class="text-3xl font-bold text-yellow-400 mb-6 text-center">Teacher Dashboard</h1>
             <div id="g_id_onload" data-client_id="1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com" data-callback="handleCredentialResponse"></div>
             <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_black" data-text="signin_with" data-shape="rectangular" data-logo_alignment="left"></div>
             <p id="loginError" class="text-red-500 mt-4 text-center"></p>
@@ -42,9 +43,16 @@
                 <h1 id="dashboardTitle" class="text-3xl font-bold text-yellow-400"></h1>
                 <button onclick="handleSignOut()" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Sign Out</button>
             </div>
-            <div class="mb-4 flex items-center gap-4">
-                <label for="classFilter" class="font-semibold">Class:</label>
-                <select id="classFilter" onchange="filterByClass(this.value)" class="bg-gray-700 border border-gray-600 rounded-md p-2 text-white"></select>
+            <div class="mb-4 flex flex-wrap items-center gap-4">
+                <div class="flex items-center gap-2">
+                    <label for="classFilter" class="font-semibold">Class:</label>
+                    <select id="classFilter" onchange="filterByClass(this.value)" class="bg-gray-700 border border-gray-600 rounded-md p-2 text-white"></select>
+                </div>
+                <div class="flex items-center gap-4">
+                    <label class="flex items-center"><input type="checkbox" id="hideNames" onchange="toggleDisplayOptions()" class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"> <span class="ml-2">Hide Names</span></label>
+                    <label class="flex items-center"><input type="checkbox" id="showScores" checked onchange="toggleDisplayOptions()" class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"> <span class="ml-2">Show Scores</span></label>
+                    <label class="flex items-center"><input type="checkbox" id="blackoutMode" onchange="toggleDisplayOptions()" class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"> <span class="ml-2">Blackout Mode</span></label>
+                </div>
                 <button id="exportButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Export to CSV</button>
             </div>
             <div class="overflow-x-auto bg-gray-800 rounded-lg shadow">
@@ -82,9 +90,13 @@
     const auth = firebase.auth();
 
     let assignmentData = null;
-    let studentData = [];
+    let allStudentData = [];
     let activeClass = 'All';
     let assignmentId;
+    let hideNames = false;
+    let showScores = true;
+    let blackoutMode = false;
+
 
     window.onload = function() {
         const urlParams = new URLSearchParams(window.location.search);
@@ -131,8 +143,7 @@
     }
 
     async function fetchStudentData() {
-        // **FIX:** Fetch ALL students to show all classes, not just those assigned.
-        const studentQuery = db.collection("students"); 
+        const studentQuery = db.collection("students");
         const submissionQuery = db.collection("submissions").where("assignmentId", "==", assignmentId);
         const statusQuery = db.collection("submissionStatus").where("assignmentId", "==", assignmentId).where("status", "==", "submitted");
         
@@ -148,11 +159,9 @@
         });
         
         const submittedEmails = new Set();
-        statusSnapshot.forEach(doc => {
-            submittedEmails.add(doc.data().studentEmail);
-        });
+        statusSnapshot.forEach(doc => { submittedEmails.add(doc.data().studentEmail); });
 
-        studentData = studentSnapshot.docs.map(doc => {
+        allStudentData = studentSnapshot.docs.map(doc => {
             const s = doc.data();
             return {
                 ...s,
@@ -165,8 +174,13 @@
     function populateClassFilter() {
         const classFilter = document.getElementById('classFilter');
         classFilter.innerHTML = '<option value="All">All Classes</option>';
-        const classes = [...new Set(studentData.map(s => s.class))].sort();
-        classes.forEach(c => {
+        const assignedClasses = assignmentData.assignedClasses || [];
+        const classesInAssignment = [...new Set(allStudentData
+            .filter(s => assignedClasses.includes(String(s.class)))
+            .map(s => String(s.class))
+        )].sort();
+
+        classesInAssignment.forEach(c => {
             classFilter.innerHTML += `<option value="${c}">${c}</option>`;
         });
     }
@@ -175,43 +189,53 @@
         activeClass = className;
         displayStudentData();
     }
+    
+    function toggleDisplayOptions() {
+        hideNames = document.getElementById('hideNames').checked;
+        showScores = document.getElementById('showScores').checked;
+        blackoutMode = document.getElementById('blackoutMode').checked;
+        displayStudentData();
+    }
 
     function displayStudentData() {
         const tableHeader = document.getElementById('tableHeader');
         const studentList = document.getElementById('studentData');
         const numQuestions = assignmentData.slideIds.length;
         
-        let headerHtml = '<tr><th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Student Name</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Class</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Submitted</th>';
+        let headerHtml = `<tr><th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Student Name</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Class</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Submitted</th>`;
         for (let i = 1; i <= numQuestions; i++) {
-            headerHtml += `<th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Q${i}</th>`;
+            headerHtml += `<th class="px-6 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer hover:text-yellow-400" onclick="showQuestionSubmissions(${i - 1})">Q${i}</th>`;
         }
         headerHtml += '</tr>';
         tableHeader.innerHTML = headerHtml;
 
-        let tableHtml = '';
-        const filteredStudents = (activeClass === 'All' ? studentData : studentData.filter(s => s.class === activeClass))
+        const assignedClasses = assignmentData.assignedClasses || [];
+        const studentsInAssignment = allStudentData.filter(s => assignedClasses.includes(String(s.class)));
+
+        const filteredStudents = (activeClass === 'All' ? studentsInAssignment : studentsInAssignment.filter(s => String(s.class) === String(activeClass)))
             .sort((a, b) => a.name.localeCompare(b.name));
         
-        filteredStudents.forEach(student => {
-            const isSubmitted = student.isSubmitted || false;
+        let tableHtml = '';
+        filteredStudents.forEach((student, index) => {
+            const displayName = hideNames ? `Student ${index + 1}` : student.name;
+            const blackoutClass = blackoutMode ? 'blackout' : '';
+            
             tableHtml += `<tr class="hover:bg-gray-700">`;
-            tableHtml += `<td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">${student.name}</td>`;
-            tableHtml += `<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-300">${student.class}</td>`;
-            tableHtml += `<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                            <input type="checkbox" 
-                                   data-student-email="${student.email}" 
-                                   onchange="toggleSubmissionStatus('${student.email}', this.checked)" 
-                                   ${isSubmitted ? 'checked' : ''}
-                                   class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500 cursor-pointer">
-                         </td>`;
+            tableHtml += `<td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-white cursor-pointer hover:text-yellow-400 ${blackoutClass}" onclick="showStudentSubmissions('${student.email}')">${displayName}</td>`;
+            tableHtml += `<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-300 ${blackoutClass}">${student.class}</td>`;
+            tableHtml += `<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-300"><input type="checkbox" data-student-email="${student.email}" onchange="toggleSubmissionStatus('${student.email}', this.checked)" ${student.isSubmitted ? 'checked' : ''} class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500 cursor-pointer"></td>`;
+            
             for (let i = 0; i < numQuestions; i++) {
-                const latestSubmission = student.submissions
-                    .filter(s => s.slideIndex === i)
-                    .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
+                const latestSubmission = student.submissions.filter(s => s.slideIndex === i).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
                 
-                if (latestSubmission) {
-                    const color = latestSubmission.score >= 90 ? 'text-green-400' : 'text-yellow-400';
-                    tableHtml += `<td class="px-6 py-4 whitespace-nowrap text-sm ${color} font-semibold cursor-pointer" onclick="showSubmissions('${student.email}', ${i})">${latestSubmission.score}</td>`;
+                if (latestSubmission && showScores) {
+                    const score = latestSubmission.score;
+                    const color = score >= 90 ? 'bg-green-500' : score >= 70 ? 'bg-yellow-500' : 'bg-red-500';
+                    tableHtml += `<td class="px-6 py-4 whitespace-nowrap text-sm font-semibold cursor-pointer" onclick="showSubmissions('${student.email}', ${i})">
+                                    <div class="w-full bg-gray-600 rounded-full h-5 relative">
+                                        <div class="${color} h-5 rounded-full text-center text-white text-xs flex items-center justify-center ${blackoutClass}" style="width: ${score}%">${score}</div>
+                                    </div>
+                                  </td>`;
                 } else {
                     tableHtml += `<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">-</td>`;
                 }
@@ -222,66 +246,93 @@
     }
 
     async function toggleSubmissionStatus(studentEmail, isChecked) {
-        const student = studentData.find(s => s.email === studentEmail);
-        if (!student) {
-            showToast("Could not find student data.", { color: 'red' });
-            return;
-        }
-
+        const student = allStudentData.find(s => s.email === studentEmail);
+        if (!student) { showToast("Could not find student data.", { color: 'red' }); return; }
         try {
             if (isChecked) {
-                // Logic to SUBMIT for the student
-                await db.collection("submissionStatus").add({
-                    studentEmail: student.email,
-                    studentName: student.name,
-                    assignmentId: assignmentId,
-                    status: 'submitted',
-                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
-                });
+                await db.collection("submissionStatus").add({ studentEmail: student.email, studentName: student.name, assignmentId: assignmentId, status: 'submitted', timestamp: firebase.firestore.FieldValue.serverTimestamp() });
                 student.isSubmitted = true;
                 showToast(`Submitted for ${student.name}.`, { color: 'green' });
             } else {
-                // Logic to UN-SUBMIT for the student
-                const statusQuery = db.collection("submissionStatus")
-                    .where("studentEmail", "==", studentEmail)
-                    .where("assignmentId", "==", assignmentId);
+                const statusQuery = db.collection("submissionStatus").where("studentEmail", "==", studentEmail).where("assignmentId", "==", assignmentId);
                 const statusSnapshot = await statusQuery.get();
                 if (!statusSnapshot.empty) {
-                    const docId = statusSnapshot.docs[0].id;
-                    await db.collection("submissionStatus").doc(docId).delete();
+                    await db.collection("submissionStatus").doc(statusSnapshot.docs[0].id).delete();
                     student.isSubmitted = false;
                     showToast(`Un-submitted for ${student.name}.`, { color: 'green' });
                 } else {
-                    showToast(`No submission record found to remove for ${student.name}.`, { color: 'blue' });
+                    showToast(`No submission record found for ${student.name}.`, { color: 'blue' });
                 }
             }
         } catch (error) {
             console.error("Error updating submission status:", error);
             showToast("Operation failed. See console for details.", { color: 'red' });
-            // Revert local state on error
             student.isSubmitted = !isChecked; 
         } finally {
-            // **FIX:** Refresh the table to show the change
             displayStudentData();
         }
     }
+    
+    function showSubmissions(studentEmail, slideIndex) { /* Kept for individual score clicks */
+        showStudentSubmissions(studentEmail, slideIndex);
+    }
 
-    function showSubmissions(studentEmail, slideIndex) {
-        const student = studentData.find(s => s.email === studentEmail);
+    function showStudentSubmissions(studentEmail, specificSlide = null) {
+        const student = allStudentData.find(s => s.email === studentEmail);
         if (!student) return;
-        const submissionsForSlide = student.submissions
-            .filter(s => s.slideIndex === slideIndex)
-            .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
         
-        document.getElementById('modalTitle').textContent = `Submissions for ${student.name} - Question ${slideIndex + 1}`;
+        let title = `Submissions for ${student.name}`;
+        if (specificSlide !== null) { title += ` - Question ${specificSlide + 1}`; }
+        document.getElementById('modalTitle').textContent = title;
+
         const modalContent = document.getElementById('modalContent');
         let contentHtml = '<div class="space-y-4">';
-        if (submissionsForSlide.length > 0) {
-            submissionsForSlide.forEach(sub => {
+        
+        const submissionsToShow = specificSlide !== null 
+            ? student.submissions.filter(s => s.slideIndex === specificSlide)
+            : student.submissions;
+            
+        submissionsToShow.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+
+        if (submissionsToShow.length > 0) {
+            submissionsToShow.forEach(sub => {
                 const date = sub.timestamp ? new Date(sub.timestamp.seconds * 1000).toLocaleString() : 'N/A';
                 contentHtml += `<div class="bg-gray-700 p-4 rounded-lg">
                                   <div class="flex justify-between items-center mb-2">
-                                    <p class="font-bold text-lg">Score: ${sub.score}</p>
+                                    <p class="font-bold text-lg">Question ${sub.slideIndex + 1} &rarr; Score: ${sub.score}</p>
+                                    <p class="text-sm text-gray-400">${date}</p>
+                                  </div>
+                                  <p class="whitespace-pre-wrap font-mono bg-gray-900 p-3 rounded">${sub.answer}</p>
+                                </div>`;
+            });
+        } else {
+            contentHtml += '<p>No submissions found.</p>';
+        }
+        contentHtml += '</div>';
+        modalContent.innerHTML = contentHtml;
+        document.getElementById('submissionModal').classList.remove('hidden');
+    }
+
+    function showQuestionSubmissions(slideIndex) {
+        document.getElementById('modalTitle').textContent = `All Submissions for Question ${slideIndex + 1}`;
+        const modalContent = document.getElementById('modalContent');
+        let contentHtml = '<div class="space-y-4">';
+        
+        const assignedClasses = assignmentData.assignedClasses || [];
+        const studentsInAssignment = allStudentData.filter(s => assignedClasses.includes(String(s.class)));
+        
+        const submissionsForQuestion = studentsInAssignment.flatMap(student => 
+            student.submissions
+                .filter(s => s.slideIndex === slideIndex)
+                .map(s => ({ ...s, studentName: student.name })) // Add student name to submission
+        ).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+
+        if (submissionsForQuestion.length > 0) {
+            submissionsForQuestion.forEach(sub => {
+                 const date = sub.timestamp ? new Date(sub.timestamp.seconds * 1000).toLocaleString() : 'N/A';
+                 contentHtml += `<div class="bg-gray-700 p-4 rounded-lg">
+                                  <div class="flex justify-between items-center mb-2">
+                                    <p class="font-bold text-lg">${sub.studentName} &rarr; Score: ${sub.score}</p>
                                     <p class="text-sm text-gray-400">${date}</p>
                                   </div>
                                   <p class="whitespace-pre-wrap font-mono bg-gray-900 p-3 rounded">${sub.answer}</p>
@@ -328,13 +379,16 @@
     }
     
     function exportToCSV() {
-        let csvContent = "data:text/csv;charset=utf-8,";
+        let csvContent = "";
         const numQuestions = assignmentData.slideIds.length;
         let headers = ["Email", "Last Name", "First Name", "Last, First", "Class", "Average Score", "Completion %"];
         for (let i = 1; i <= numQuestions; i++) { headers.push(`Q${i} Score`); }
         csvContent += headers.join(',') + "\r\n";
+        
+        const assignedClasses = assignmentData.assignedClasses || [];
+        const studentsInAssignment = allStudentData.filter(s => assignedClasses.includes(String(s.class)));
 
-        const studentsToExport = (activeClass === 'All' ? studentData : studentData.filter(s => s.class === activeClass))
+        const studentsToExport = (activeClass === 'All' ? studentsInAssignment : studentsInAssignment.filter(s => String(s.class) === String(activeClass)))
             .sort((a, b) => a.name.localeCompare(b.name));
 
         studentsToExport.forEach(student => {
@@ -360,11 +414,11 @@
             ].join(',');
             csvContent += row + "\r\n";
         });
-
-        // Use encodeURIComponent to handle special characters correctly in the CSV content
-        var encodedUri = encodeURI(csvContent);
+        
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement("a");
-        link.setAttribute("href", encodedUri);
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
         const safeAssignmentName = assignmentData.name.replace(/[^a-z0-9]/gi, '_');
         const safeViewName = activeClass.replace(/\s+/g, '_');
         link.setAttribute("download", `submissions_${safeAssignmentName}_${safeViewName}.csv`);
