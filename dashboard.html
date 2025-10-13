@@ -345,16 +345,27 @@
             
             for (let i = 0; i < numQuestions; i++) {
                 const latestSubmission = student.submissions.filter(s => s.slideIndex === i).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
-                if (latestSubmission) {
-                    const score = latestSubmission.score;
-                    const color = score >= 90 ? 'bg-green-500' : score >= 70 ? 'bg-yellow-500' : 'bg-red-500';
-                    tableHtml += `<td class="px-2 py-4 whitespace-nowrap text-sm font-semibold cursor-pointer" onclick="showSubmissions('${student.email}', ${i})">
-                        <div class="w-full bg-gray-600 rounded-full h-6 relative">
-                            <div class="${color} h-6 rounded-full text-center text-white text-xs flex items-center justify-center ${blackoutMode ? 'blackout' : ''}" style="width: ${score}%">${score}</div>
-                        </div></td>`;
-                } else {
-                    if (blackoutMode) {
-                        tableHtml += `<td class="px-2 py-4"><div class="h-6 rounded-full border-2 border-dashed border-gray-500"></div></td>`;
+                
+                if (blackoutMode) {
+                    if (latestSubmission) {
+                        // Attempted in blackout: a solid, dark black bar. Clickable to see answer.
+                        tableHtml += `<td class="px-2 py-4 whitespace-nowrap cursor-pointer" onclick="showSubmissions('${student.email}', ${i})">
+                            <div class="w-full bg-black rounded-full h-6"></div>
+                        </td>`;
+                    } else {
+                        // Unattempted in blackout: a lighter, clearly distinct dashed outline.
+                        tableHtml += `<td class="px-2 py-4">
+                            <div class="h-6 rounded-full border-2 border-dashed border-gray-400"></div>
+                        </td>`;
+                    }
+                } else { // Normal Mode (not blackout)
+                    if (latestSubmission) {
+                        const score = latestSubmission.score;
+                        const color = score >= 90 ? 'bg-green-500' : score >= 70 ? 'bg-yellow-500' : 'bg-red-500';
+                        tableHtml += `<td class="px-2 py-4 whitespace-nowrap text-sm font-semibold cursor-pointer" onclick="showSubmissions('${student.email}', ${i})">
+                            <div class="w-full bg-gray-600 rounded-full h-6 relative">
+                                <div class="${color} h-6 rounded-full text-center text-white text-xs flex items-center justify-center" style="width: ${score}%">${score}</div>
+                            </div></td>`;
                     } else {
                         tableHtml += `<td class="px-2 py-4"><div class="bg-gray-700 h-6 rounded-full flex items-center justify-center text-gray-500 text-xs">-</div></td>`;
                     }
