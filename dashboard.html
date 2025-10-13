@@ -424,8 +424,6 @@
     }
 
     async function regradeQuestion(slideIndex) {
-        if (!confirm(`Are you sure you want to regrade all submissions for Question ${slideIndex + 1}? This cannot be undone.`)) return;
-        
         showToast(`Regrading Question ${slideIndex + 1}...`, { color: 'blue' });
         const correctAnswer = (assignmentData.answers && assignmentData.answers[slideIndex]) ? assignmentData.answers[slideIndex] : null;
 
@@ -442,14 +440,16 @@
             }
 
             const batch = db.batch();
+            let count = 0;
             submissionsSnapshot.forEach(doc => {
                 const newScore = gradeAnswer(doc.data().answer, correctAnswer);
                 const submissionRef = db.collection("submissions").doc(doc.id);
                 batch.update(submissionRef, { score: newScore });
+                count++;
             });
 
             await batch.commit();
-            showToast(`Successfully regraded Question ${slideIndex + 1}! Refreshing data...`, { color: 'green' });
+            showToast(`Successfully regraded ${count} submission(s) for Q${slideIndex+1}!`, { color: 'green' });
         } catch (error) {
             console.error(`Error regrading question ${slideIndex + 1}:`, error);
             showToast("An error occurred during regrading.", { color: 'red' });
@@ -461,49 +461,127 @@
         }
     }
     
-    async function saveAnswer(submissionId) {
+    async function regradeSingleSubmission(submissionId, event) {
+        const button = event.target;
+        button.disabled = true;
+        showToast("Regrading submission...", { color: 'blue' });
+        try {
+            const submissionDoc = await db.collection("submissions").doc(submissionId).get();
+            if (!submissionDoc.exists) {
+                showToast("Submission not found.", { color: 'red' });
+                return;
+            }
+            const submission = submissionDoc.data();
+            const correctAnswer = (assignmentData.answers && assignmentData.answers[submission.slideIndex]) ? assignmentData.answers[submission.slideIndex] : null;
+            
+            if (!correctAnswer) {
+                showToast(`No correct answer set for Question ${submission.slideIndex + 1}.`, { color: 'red' });
+                return;
+            }
+
+            const newScore = gradeAnswer(submission.answer, correctAnswer);
+            await db.collection("submissions").doc(submissionId).update({ score: newScore });
+
+            const student = allStudentData.find(s => s.email === submission.studentEmail);
+            if (student) {
+                const subToUpdate = student.submissions.find(s => s.id === submissionId);
+                if (subToUpdate) subToUpdate.score = newScore;
+            }
+            
+            calculateAllClassAverages();
+            populateClassLinks();
+            displayStudentData();
+
+            const scoreInput = document.getElementById(`score-${submissionId}`);
+            if (scoreInput) scoreInput.value = newScore;
+            
+            showToast("Submission regraded successfully!", { color: 'green' });
+        } catch (error) {
+            console.error("Error regrading single submission:", error);
+            showToast("Failed to regrade submission.", { color: 'red' });
+        } finally {
+            button.disabled = false;
+        }
+    }
+
+    async function saveAnswer(submissionId, event) {
         const textarea = document.getElementById(`answer-${submissionId}`);
         const newAnswer = textarea.value;
+        const button = event.target;
+        button.disabled = true;
+
         try {
             await db.collection("submissions").doc(submissionId).update({ answer: newAnswer });
-            showToast("Answer updated successfully!", { color: 'green' });
-            // Optionally regrade after saving
+            
             const subDoc = await db.collection("submissions").doc(submissionId).get();
-            const submission = subDoc.data();
-            const correctAnswer = (assignmentData.answers && assignmentData.answers[submission.slideIndex]) ? assignmentData.answers[submission.slideIndex] : null;
+            const submissionData = subDoc.data();
+            const student = allStudentData.find(s => s.email === submissionData.studentEmail);
+            if (student) {
+                const subToUpdate = student.submissions.find(s => s.id === submissionId);
+                if (subToUpdate) subToUpdate.answer = newAnswer;
+            }
+
+            const correctAnswer = (assignmentData.answers && assignmentData.answers[submissionData.slideIndex]) ? assignmentData.answers[submissionData.slideIndex] : null;
             if(correctAnswer) {
                 const newScore = gradeAnswer(newAnswer, correctAnswer);
                 await db.collection("submissions").doc(submissionId).update({ score: newScore });
+                
+                if (student) {
+                    const subToUpdate = student.submissions.find(s => s.id === submissionId);
+                    if (subToUpdate) subToUpdate.score = newScore;
+                }
+                const scoreInput = document.getElementById(`score-${submissionId}`);
+                if (scoreInput) scoreInput.value = newScore;
                 showToast("Answer saved and regraded.", { color: 'blue' });
+            } else {
+                showToast("Answer updated successfully!", { color: 'green' });
             }
+
+            calculateAllClassAverages();
+            populateClassLinks();
+            displayStudentData();
+
         } catch (error) {
             console.error("Error saving answer:", error);
             showToast("Failed to save answer.", { color: 'red' });
         } finally {
-            await fetchStudentData();
-            displayStudentData();
+            button.disabled = false;
         }
     }
 
-    async function setScore(submissionId) {
+    async function setScore(submissionId, event) {
         const input = document.getElementById(`score-${submissionId}`);
         const newScore = parseInt(input.value, 10);
         if (isNaN(newScore) || newScore < 0 || newScore > 100) {
             showToast("Please enter a valid score between 0 and 100.", { color: 'red' });
             return;
         }
+        const button = event.target;
+        button.disabled = true;
+        
         try {
             await db.collection("submissions").doc(submissionId).update({ score: newScore });
+            
+            const subDoc = await db.collection("submissions").doc(submissionId).get();
+            const submissionData = subDoc.data();
+            const student = allStudentData.find(s => s.email === submissionData.studentEmail);
+            if (student) {
+                const subToUpdate = student.submissions.find(s => s.id === submissionId);
+                if (subToUpdate) subToUpdate.score = newScore;
+            }
+            
+            calculateAllClassAverages();
+            populateClassLinks();
+            displayStudentData();
+
             showToast("Score updated successfully!", { color: 'green' });
         } catch (error) {
             console.error("Error setting score:", error);
             showToast("Failed to set score.", { color: 'red' });
         } finally {
-            await fetchStudentData();
-            displayStudentData();
+            button.disabled = false;
         }
     }
-
 
     async function toggleSubmissionStatus(studentEmail, isChecked) {
         const student = allStudentData.find(s => s.email === studentEmail);
@@ -613,11 +691,12 @@
                     </div>
                     <textarea id="answer-${sub.id}" class="w-full bg-gray-900 p-3 rounded font-mono text-white border border-gray-600">${sub.answer}</textarea>
                     <div class="flex items-center justify-end gap-4 mt-2">
-                        <button onclick="saveAnswer('${sub.id}')" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded-lg text-sm">Save Answer</button>
+                        <button onclick="saveAnswer('${sub.id}', event)" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded-lg text-sm">Save Answer</button>
                         <div class="flex items-center gap-2">
                             <label for="score-${sub.id}" class="text-sm">Score:</label>
                             <input type="number" id="score-${sub.id}" value="${sub.score}" min="0" max="100" class="w-20 bg-gray-900 border border-gray-600 rounded p-1 text-center">
-                            <button onclick="setScore('${sub.id}')" class="bg-green-600 hover:bg-green-700 text-white font-bold py-1 px-3 rounded-lg text-sm">Set Score</button>
+                            <button onclick="setScore('${sub.id}', event)" class="bg-green-600 hover:bg-green-700 text-white font-bold py-1 px-3 rounded-lg text-sm">Set Score</button>
+                            <button onclick="regradeSingleSubmission('${sub.id}', event)" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-1 px-3 rounded-lg text-sm">Regrade</button>
                         </div>
                     </div>
                 </div>`;
