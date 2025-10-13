@@ -217,9 +217,10 @@
             
             setupLiveStudentData(); // <-- Live updates!
 
+            // Patch: default to first class, not "All"
             const assignedClasses = assignmentData.assignedClasses || [];
             const classesInAssignment = [...new Set(allStudentData.filter(s => assignedClasses.includes(String(s.class))).map(s => String(s.class)))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-            activeClass = classesInAssignment.length > 0 ? classesInAssignment[0] : 'All';
+            activeClass = classesInAssignment[0] || ''; // <-- always first class if present
 
             document.getElementById('pageLoader').classList.add('hidden');
             document.getElementById('mainContainer').classList.remove('hidden');
