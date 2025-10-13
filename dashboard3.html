@@ -7,6 +7,7 @@
     <!-- Using a simple emoji as a favicon for demonstration -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📊</text></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <!-- Firebase libraries for database and authentication -->
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore-compat.js"></script>
@@ -25,7 +26,18 @@
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800 font-sans">
-    <div class="container mx-auto p-4 sm:p-6 lg:p-8">
+    
+    <!-- Login Container -->
+    <div id="login-container" class="min-h-screen flex items-center justify-center">
+        <div class="text-center p-8 bg-white rounded-lg shadow-md">
+            <h1 class="text-2xl font-bold mb-4">Teacher Dashboard</h1>
+            <p class="mb-6 text-gray-600">Please sign in to continue.</p>
+            <div id="gsi-button"></div>
+        </div>
+    </div>
+
+    <!-- Main Dashboard Content (hidden by default) -->
+    <div id="dashboard-container" class="container mx-auto p-4 sm:p-6 lg:p-8 hidden">
         <!-- Header Section -->
         <div class="flex flex-wrap justify-between items-center mb-6 gap-4">
             <div>
@@ -50,16 +62,16 @@
                         <option value="completion">Completion %</option>
                     </select>
                 </div>
-                <div class="col-span-1 sm:col-span-2 lg:col-span-2 flex items-end justify-start sm:justify-end space-x-4">
-                     <div class="flex items-center space-x-2 pt-4">
+                <div class="col-span-1 sm:col-span-2 lg:col-span-2 flex items-end justify-start sm:justify-end flex-wrap gap-x-4 gap-y-2">
+                     <div class="flex items-center space-x-2">
                         <input type="checkbox" id="showScores" onchange="renderDashboard()" class="form-checkbox h-5 w-5 text-blue-600 rounded focus:ring-blue-500">
                         <label for="showScores" class="text-sm font-medium text-gray-700">Show Scores</label>
                     </div>
-                     <div class="flex items-center space-x-2 pt-4">
+                     <div class="flex items-center space-x-2">
                         <input type="checkbox" id="showAllAttempts" onchange="renderDashboard()" class="form-checkbox h-5 w-5 text-blue-600 rounded focus:ring-blue-500">
                         <label for="showAllAttempts" class="text-sm font-medium text-gray-700">Show All Attempts</label>
                     </div>
-                    <div class="flex items-center space-x-2 pt-4">
+                    <div class="flex items-center space-x-2">
                         <input type="checkbox" id="blackoutBars" onchange="renderDashboard()" class="form-checkbox h-5 w-5 text-blue-600 rounded focus:ring-blue-500">
                         <label for="blackoutBars" class="text-sm font-medium text-gray-700">Blackout Bars</label>
                     </div>
@@ -79,7 +91,7 @@
         <div class="bg-gray-900 text-white rounded-lg shadow-xl w-11/12 max-w-4xl max-h-[90vh] flex flex-col">
             <div class="flex justify-between items-center p-4 border-b border-gray-700">
                 <h2 class="text-xl font-bold" id="modalTitle">Student Submission</h2>
-                <button id="closeModal" class="text-gray-400 hover:text-white">&times;</button>
+                <button id="closeModal" class="text-gray-400 hover:text-white" onclick="closeModal()">&times;</button>
             </div>
             <div id="modalBody" class="p-6 overflow-y-auto modal-content">
                 <!-- Submission content will be injected here -->
@@ -98,11 +110,19 @@
         messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
         appId: "YOUR_APP_ID"
     };
+    
+    // --- Google Client ID ---
+    // IMPORTANT: Replace with your actual Google Client ID.
+    const GOOGLE_CLIENT_ID = "YOUR_GOOGLE_CLIENT_ID";
 
     // Initialize Firebase
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
     const auth = firebase.auth();
+
+    // DOM Elements
+    const loginContainer = document.getElementById('login-container');
+    const dashboardContainer = document.getElementById('dashboard-container');
 
     // Global state variables
     let students = [];
@@ -110,23 +130,65 @@
     let assignmentData = {};
     let activeClass = 'All';
     let assignmentId;
+    
+    // --- Authentication Flow ---
+    
+    // This function is called by the Google Sign-In library
+    function handleCredentialResponse(response) {
+        const idToken = response.credential;
+        const credential = firebase.auth.GoogleAuthProvider.credential(idToken);
+        auth.signInWithCredential(credential).catch((error) => {
+            console.error("Firebase sign-in error", error);
+            alert("Error signing in. Please check the console.");
+        });
+    }
+    
+    // Set up the Google button when the window loads
+    window.onload = function () {
+        google.accounts.id.initialize({
+            client_id: GOOGLE_CLIENT_ID,
+            callback: handleCredentialResponse
+        });
+        google.accounts.id.renderButton(
+            document.getElementById("gsi-button"),
+            { theme: "outline", size: "large", type: "standard" } 
+        );
+    };
 
-    // --- Authentication ---
-    auth.onAuthStateChanged(user => {
+    // Listen for changes in authentication state
+    auth.onAuthStateChanged(async user => {
         if (user) {
-            document.getElementById('user-info').textContent = `Logged in as ${user.email}`;
-            assignmentId = new URLSearchParams(window.location.search).get('assignmentId');
-            if (assignmentId) {
-                document.getElementById('assignmentName').textContent = "Loading assignment...";
-                fetchData();
+            // User is signed in. Now, check if they are a teacher.
+            const userDocRef = db.collection('users').doc(user.uid);
+            const userDoc = await userDocRef.get();
+
+            if (userDoc.exists && userDoc.data().role === 'teacher') {
+                // User is a teacher, show the dashboard
+                loginContainer.classList.add('hidden');
+                dashboardContainer.classList.remove('hidden');
+                
+                document.getElementById('user-info').textContent = `Logged in as ${user.email}`;
+                assignmentId = new URLSearchParams(window.location.search).get('assignmentId');
+                if (assignmentId) {
+                    document.getElementById('assignmentName').textContent = "Loading assignment...";
+                    fetchData();
+                } else {
+                    document.getElementById('dashboard').innerHTML = '<p class="text-red-500 p-4">Error: No assignment ID provided in the URL.</p>';
+                }
             } else {
-                document.getElementById('dashboard').innerHTML = '<p class="text-red-500 p-4">No assignment ID provided in the URL.</p>';
+                // User is not a teacher, sign them out and redirect
+                console.log("Access denied. User is not a teacher. Signing out.");
+                await auth.signOut();
+                // Redirecting happens in the 'else' block below
             }
         } else {
-            // Handle logged out state, maybe redirect to a login page
-            window.location.href = 'index.html'; 
+            // No user is signed in, show the login screen
+            loginContainer.classList.remove('hidden');
+            dashboardContainer.classList.add('hidden');
+            console.log("No user signed in. Please sign in to continue.");
         }
     });
+
 
     // --- Data Fetching ---
     async function fetchData() {
@@ -152,15 +214,12 @@
     async function fetchStudentsAndSubmissions() {
         document.getElementById('loading').style.display = 'block';
         try {
-            // Fetch students
             const studentsSnapshot = await db.collection('users').where('role', '==', 'student').get();
             students = studentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-            // Fetch submissions for the current assignment
             const submissionsSnapshot = await db.collection('assignments').doc(assignmentId).collection('submissions').get();
             submissions = submissionsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-            // Populate class filter dropdown
+            
             const classes = [...new Set(students.map(s => s.class).filter(Boolean))].sort();
             const classFilter = document.getElementById('classFilter');
             classFilter.innerHTML = '<option value="All">All Classes</option>' + classes.map(c => `<option value="${c}">${c}</option>`).join('');
@@ -183,12 +242,9 @@
         const showAllAttempts = document.getElementById('showAllAttempts').checked;
         const showScores = document.getElementById('showScores').checked;
 
-        // Filter students by class
         let filteredStudents = activeClass === 'All' ? students : students.filter(s => s.class === activeClass);
-
         const numQuestions = assignmentData.numSlides || 0;
 
-        // Process student data for display
         const processedStudents = filteredStudents.map(student => {
             const studentSubmissions = submissions.filter(s => s.studentEmail === student.email);
             const attemptedQuestions = new Set(studentSubmissions.map(s => s.slideIndex)).size;
@@ -196,7 +252,6 @@
             return { ...student, completion, submissions: studentSubmissions };
         });
 
-        // Sort students
         processedStudents.sort((a, b) => {
             if (sortOrder === 'lastName') return a.lastName.localeCompare(b.lastName);
             if (sortOrder === 'firstName') return a.firstName.localeCompare(b.firstName);
@@ -204,18 +259,15 @@
             return 0;
         });
         
-        // Build the grid HTML
         const gridCols = `grid-template-columns: 200px 100px repeat(${numQuestions}, 1fr);`;
         let tableHTML = `<div class="grid-container p-4" style="${gridCols}">`;
 
-        // Header row
         tableHTML += '<div class="font-bold p-2 border-b border-gray-200">Student Name</div>';
         tableHTML += '<div class="font-bold p-2 border-b border-gray-200 text-center">Completion</div>';
         for (let i = 0; i < numQuestions; i++) {
             tableHTML += `<div class="font-bold p-2 border-b border-gray-200 text-center">${i + 1}</div>`;
         }
 
-        // Student rows
         processedStudents.forEach(student => {
             tableHTML += `<div class="p-2 border-b border-gray-200 truncate" title="${student.firstName} ${student.lastName}">${student.lastName}, ${student.firstName}</div>`;
             tableHTML += `<div class="p-2 border-b border-gray-200 text-center">${student.completion.toFixed(0)}%</div>`;
@@ -229,7 +281,7 @@
                 const score = latestSubmission ? latestSubmission.score : null;
                 const allScores = submissionsForSlide.map(s => s.score).reverse();
 
-                let bgColor = 'bg-gray-200'; // Default for not attempted
+                let bgColor = 'bg-gray-200'; 
                 let width = '100%';
                 if (score !== null) {
                     const normalizedScore = Math.max(0, Math.min(100, score));
@@ -329,30 +381,27 @@
 
         const submissionCollection = db.collection('assignments').doc(assignmentId).collection('submissions');
         
-        // Check for existing submissions for this student and slide
         const querySnapshot = await submissionCollection
             .where('studentEmail', '==', studentEmail)
             .where('slideIndex', '==', slideIndex)
+            .orderBy('timestamp', 'desc')
+            .limit(1)
             .get();
 
         if (!querySnapshot.empty) {
-            // If submissions exist, update the most recent one.
-            // This logic assumes we update the latest, but Firestore doesn't guarantee order without an orderBy clause.
-            // For simplicity, we just update the first one found, but a more robust solution might sort by timestamp client-side.
-            // However, since we are sorting to display, this is a reasonable approach for regrading.
-            const docId = querySnapshot.docs[0].id; // Let's just update the first one we find.
+            const docId = querySnapshot.docs[0].id;
             await submissionCollection.doc(docId).update({
                 score: score,
                 timestamp: firebase.firestore.FieldValue.serverTimestamp()
             });
              console.log("Submission updated.");
         } else {
-            // If no submission exists, create a new one.
             await submissionCollection.add({
                 studentEmail: studentEmail,
                 slideIndex: slideIndex,
                 score: score,
-                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                content: "Manual Grade by Teacher"
             });
              console.log("New submission created.");
         }
@@ -364,9 +413,8 @@
     // --- CSV Export ---
     function exportToCSV() {
         const numQuestions = assignmentData.numSlides || 0;
-        let csvContent = "data:text/csv;charset=utf-8,";
+        let csvContent = "";
         
-        // Header Row
         const headers = ["Email", "Last Name", "First Name", "Last, First", "Class", "Average Score", "Completion %", ...Array.from({ length: numQuestions }, (_, i) => `Q${i + 1}`)];
         csvContent += headers.join(",") + "\r\n";
 
@@ -381,8 +429,9 @@
             const questionScores = [];
             
             for (let i = 0; i < numQuestions; i++) {
-                const studentSubmissions = submissions.filter(s => s.studentEmail === student.email && s.slideIndex === i);
-                const latestSubmission = studentSubmissions.sort((a,b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
+                const latestSubmission = submissions
+                    .filter(s => s.studentEmail === student.email && s.slideIndex === i)
+                    .sort((a,b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
                 if (latestSubmission) {
                     questionScores.push(latestSubmission.score);
                     totalScore += latestSubmission.score;
@@ -393,11 +442,11 @@
             }
             const averageScore = attemptedQuestions > 0 ? (totalScore / attemptedQuestions).toFixed(2) : "";
             const completionPercentage = numQuestions > 0 ? ((attemptedQuestions / numQuestions) * 100).toFixed(2) : "0.00";
-            let row = [student.email, `"${lastName}"`, `"${firstName}"`, lastFirst, student.class, averageScore, completionPercentage, ...questionScores].join(',');
+            let row = [student.email, `"${lastName}"`, `"${firstName}"`, lastFirst, student.class || "", averageScore, completionPercentage, ...questionScores].join(',');
             csvContent += row + "\r\n";
         });
         
-        const blob = new Blob([csvContent.substring(24)], { type: 'text/csv;charset=utf-8;' });
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement("a");
         const url = URL.createObjectURL(blob);
         link.setAttribute("href", url);
@@ -415,9 +464,9 @@
         renderDashboard();
     });
     document.getElementById('sortOrder').addEventListener('change', renderDashboard);
-    document.getElementById('closeModal').addEventListener('click', closeModal);
     document.getElementById('exportButton').onclick = exportToCSV;
 
 </script>
 </body>
 </html>
+
