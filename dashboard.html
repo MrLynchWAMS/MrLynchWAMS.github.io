@@ -41,7 +41,10 @@
         <div id="mainContainer" class="hidden">
             <div class="flex justify-between items-center mb-6">
                 <h1 id="dashboardTitle" class="text-3xl font-bold text-yellow-400"></h1>
-                <button onclick="handleSignOut()" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Sign Out</button>
+                <div class="flex items-center gap-4">
+                    <a href="https://custom.scienceclass.rocks/assignments.html" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg">All Assignments</a>
+                    <button onclick="handleSignOut()" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Sign Out</button>
+                </div>
             </div>
             <div class="mb-4 flex flex-wrap items-center gap-x-6 gap-y-4">
                 <div class="flex items-center gap-2">
@@ -60,7 +63,7 @@
                 <div class="flex items-center gap-4">
                     <label class="flex items-center"><input type="checkbox" id="hideNames" onchange="toggleDisplayOptions()" class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"> <span class="ml-2">Hide Names</span></label>
                     <label class="flex items-center"><input type="checkbox" id="showScores" checked onchange="toggleDisplayOptions()" class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"> <span class="ml-2">Show Scores</span></label>
-                    <label class="flex items-center"><input type="checkbox" id="blackoutMode" onchange="toggleDisplayOptions()" class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"> <span class="ml-2">Blackout Mode</span></label>
+                    <label class="flex items-center"><input type="checkbox" id="blackoutMode" onchange="toggleDisplayOptions()" class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"> <span class="ml-2">Blackout Bars</span></label>
                 </div>
                 <button id="exportButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Export to CSV</button>
             </div>
@@ -240,22 +243,30 @@
         const studentList = document.getElementById('studentData');
         const numQuestions = assignmentData.slideIds.length;
         const sortedStudents = getCurrentlySortedStudents();
+        const isAllClassesView = activeClass === 'All';
 
         let headerHtml = `<tr>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Student Name</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Class</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Submitted</th>`;
-        if (showScores) headerHtml += `<th class="px-6 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider">Avg Score</th>`;
-        for (let i = 1; i <= numQuestions; i++) headerHtml += `<th class="px-6 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer hover:text-yellow-400" onclick="showQuestionSubmissions(${i - 1})">Q${i}</th>`;
+            <th class="px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Student Name</th>`;
+        if (isAllClassesView) {
+            headerHtml += `<th class="px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Class</th>`;
+        }
+        headerHtml += `<th class="px-2 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Submitted</th>`;
+        if (showScores) {
+            headerHtml += `<th class="px-2 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider">Avg Score</th>`;
+        }
+        for (let i = 1; i <= numQuestions; i++) {
+            headerHtml += `<th class="px-2 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer hover:text-yellow-400" onclick="showQuestionSubmissions(${i - 1})">Q${i}</th>`;
+        }
         headerHtml += '</tr>';
         
         let classAverageRowHtml = '';
         if (showScores) {
-            classAverageRowHtml = '<tr><td class="text-xs font-semibold text-cyan-400 px-6" colspan="3">Class Average:</td><td></td>';
+            const classAvgColspan = isAllClassesView ? '2' : '1';
+            classAverageRowHtml = `<tr><td class="text-xs font-semibold text-cyan-400 px-3" colspan="${classAvgColspan}">Class Average:</td><td class="px-2"></td><td class="px-2"></td>`;
             for (let i = 0; i < numQuestions; i++) {
                 const scores = sortedStudents.map(s => s.submissions.filter(sub => sub.slideIndex === i).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0]).filter(Boolean).map(sub => sub.score);
                 const avg = scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(0) : '-';
-                classAverageRowHtml += `<td class="px-6 py-1 text-center text-xs font-semibold text-cyan-400">${avg}</td>`;
+                classAverageRowHtml += `<td class="px-2 py-1 text-center text-xs font-semibold text-cyan-400">${avg}</td>`;
             }
             classAverageRowHtml += '</tr>';
         }
@@ -270,23 +281,27 @@
             const studentAvg = latestScores.length > 0 ? (latestScores.reduce((a, b) => a + b, 0) / latestScores.length).toFixed(0) : '-';
 
             tableHtml += `<tr class="hover:bg-gray-700">
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-white cursor-pointer hover:text-yellow-400 ${nameBlackout}" onclick="showStudentSubmissions('${student.email}')">${displayName}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-300 ${nameBlackout}">${student.class}</td>
-                <td class="px-6 py-4 whitespace-nowrap"><input type="checkbox" onchange="toggleSubmissionStatus('${student.email}', this.checked)" ${student.isSubmitted ? 'checked' : ''} class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500 cursor-pointer"></td>`;
+                <td class="px-3 py-4 whitespace-nowrap text-sm font-medium text-white cursor-pointer hover:text-yellow-400 ${nameBlackout}" onclick="showStudentSubmissions('${student.email}')">${displayName}</td>`;
+            if (isAllClassesView) {
+                tableHtml += `<td class="px-3 py-4 whitespace-nowrap text-sm text-gray-300 ${nameBlackout}">${student.class}</td>`;
+            }
+            tableHtml += `<td class="px-2 py-4 whitespace-nowrap text-center"><input type="checkbox" onchange="toggleSubmissionStatus('${student.email}', this.checked)" ${student.isSubmitted ? 'checked' : ''} class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500 cursor-pointer"></td>`;
             
-            if (showScores) tableHtml += `<td class="px-6 py-4 whitespace-nowrap text-sm text-center text-white font-bold ${blackoutMode ? 'blackout' : ''}">${studentAvg}</td>`;
+            if (showScores) {
+                tableHtml += `<td class="px-2 py-4 whitespace-nowrap text-sm text-center text-white font-bold ${blackoutMode ? 'blackout' : ''}">${studentAvg}</td>`;
+            }
 
             for (let i = 0; i < numQuestions; i++) {
                 const latestSubmission = student.submissions.filter(s => s.slideIndex === i).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
                 if (latestSubmission) {
                     const score = latestSubmission.score;
                     const color = score >= 90 ? 'bg-green-500' : score >= 70 ? 'bg-yellow-500' : 'bg-red-500';
-                    tableHtml += `<td class="px-6 py-4 whitespace-nowrap text-sm font-semibold cursor-pointer" onclick="showSubmissions('${student.email}', ${i})">
+                    tableHtml += `<td class="px-2 py-4 whitespace-nowrap text-sm font-semibold cursor-pointer" onclick="showSubmissions('${student.email}', ${i})">
                         <div class="w-full bg-gray-600 rounded-full h-5 relative">
                             <div class="${color} h-5 rounded-full text-center text-white text-xs flex items-center justify-center ${blackoutMode ? 'blackout' : ''}" style="width: ${score}%">${score}</div>
                         </div></td>`;
                 } else {
-                    tableHtml += `<td class="px-6 py-4">-</td>`;
+                    tableHtml += `<td class="px-2 py-4"><div class="bg-gray-700 h-5 rounded-full flex items-center justify-center text-gray-500 text-xs">-</div></td>`;
                 }
             }
             tableHtml += `</tr>`;
