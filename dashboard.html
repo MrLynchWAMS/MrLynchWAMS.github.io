@@ -67,9 +67,9 @@
                     </div>
                     <div class="h-6 border-l border-gray-600 hidden md:block"></div>
                     <div class="flex items-center gap-4">
-                        <label class="flex items-center"><input type="checkbox" id="hideNames" onchange="toggleDisplayOptions()" class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"> <span class="ml-2">Hide Names</span></label>
-                        <label class="flex items-center"><input type="checkbox" id="showScores" onchange="toggleDisplayOptions()" class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"> <span class="ml-2">Show Scores</span></label>
-                        <label class="flex items-center"><input type="checkbox" id="blackoutMode" onchange="toggleDisplayOptions()" class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"> <span class="ml-2">Blackout Bars</span></label>
+                        <label class="flex items-center"><input type="checkbox" id="hideNames" onchange="toggleDisplayOptions()" class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"><span class="ml-2">Hide Names</span></label>
+                        <label class="flex items-center"><input type="checkbox" id="showScores" onchange="toggleDisplayOptions()" class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"><span class="ml-2">Show Scores</span></label>
+                        <label class="flex items-center"><input type="checkbox" id="blackoutMode" onchange="toggleDisplayOptions()" class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"><span class="ml-2">Blackout Mode</span></label>
                     </div>
                     <div class="h-6 border-l border-gray-600 hidden md:block"></div>
                     <div class="flex items-center gap-4">
@@ -132,6 +132,11 @@
     let showAllAttempts = localStorage.getItem('dashboardShowAllAttempts') === 'true';
     let currentModalView = null;
 
+    // --- Firestore live listener handles ---
+    let unsubscribeStudents = null;
+    let unsubscribeSubmissions = null;
+    let unsubscribeStatus = null;
+
     window.onload = function() {
         const urlParams = new URLSearchParams(window.location.search);
         assignmentId = urlParams.get('assignmentId');
@@ -154,6 +159,51 @@
         });
     };
 
+    // --- SETUP LIVE LISTENERS ---
+    function setupLiveStudentData() {
+        // Unsubscribe previous listeners (if any)
+        if (unsubscribeStudents) unsubscribeStudents();
+        if (unsubscribeSubmissions) unsubscribeSubmissions();
+        if (unsubscribeStatus) unsubscribeStatus();
+
+        unsubscribeStudents = db.collection("students").onSnapshot(studentSnapshot => {
+            unsubscribeSubmissions = db.collection("submissions")
+                .where("assignmentId", "==", assignmentId)
+                .onSnapshot(submissionSnapshot => {
+                    unsubscribeStatus = db.collection("submissionStatus")
+                        .where("assignmentId", "==", assignmentId)
+                        .where("status", "==", "submitted")
+                        .onSnapshot(statusSnapshot => {
+                            // Process snapshots and update allStudentData
+                            const submissionsByStudent = {};
+                            submissionSnapshot.forEach(doc => {
+                                const data = { id: doc.id, ...doc.data() };
+                                if (!submissionsByStudent[data.studentEmail]) submissionsByStudent[data.studentEmail] = [];
+                                submissionsByStudent[data.studentEmail].push(data);
+                            });
+                            const submittedEmails = new Set(statusSnapshot.docs.map(doc => doc.data().studentEmail));
+                            allStudentData = studentSnapshot.docs.map(doc => ({
+                                ...doc.data(),
+                                submissions: submissionsByStudent[doc.data().email] || [],
+                                isSubmitted: submittedEmails.has(doc.data().email)
+                            }));
+                            calculateAllClassAverages();
+                            populateClassLinks();
+                            displayStudentData();
+                        });
+                });
+        });
+    }
+
+    // --- CLEANUP LISTENERS ---
+    function cleanupListeners() {
+        if (unsubscribeStudents) unsubscribeStudents();
+        if (unsubscribeSubmissions) unsubscribeSubmissions();
+        if (unsubscribeStatus) unsubscribeStatus();
+    }
+    window.addEventListener("beforeunload", cleanupListeners);
+
+    // --- DASHBOARD LOAD ---
     async function loadDashboard() {
         try {
             const doc = await db.collection("assignments").doc(assignmentId).get();
@@ -164,15 +214,13 @@
             assignmentData = { id: doc.id, ...doc.data() };
             document.title = assignmentData.name + " - Dashboard";
             document.getElementById('dashboardTitle').textContent = `Dashboard for: ${assignmentData.name}`;
-            await fetchStudentData();
+            
+            setupLiveStudentData(); // <-- Live updates!
 
             const assignedClasses = assignmentData.assignedClasses || [];
             const classesInAssignment = [...new Set(allStudentData.filter(s => assignedClasses.includes(String(s.class))).map(s => String(s.class)))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
             activeClass = classesInAssignment.length > 0 ? classesInAssignment[0] : 'All';
 
-            calculateAllClassAverages();
-            populateClassLinks();
-            displayStudentData();
             document.getElementById('pageLoader').classList.add('hidden');
             document.getElementById('mainContainer').classList.remove('hidden');
         } catch (error) {
@@ -181,27 +229,10 @@
         }
     }
 
-    async function fetchStudentData() {
-        const [studentSnapshot, submissionSnapshot, statusSnapshot] = await Promise.all([
-            db.collection("students").get(),
-            db.collection("submissions").where("assignmentId", "==", assignmentId).get(),
-            db.collection("submissionStatus").where("assignmentId", "==", assignmentId).where("status", "==", "submitted").get()
-        ]);
-
-        const submissionsByStudent = {};
-        submissionSnapshot.forEach(doc => {
-            const data = { id: doc.id, ...doc.data() };
-            if (!submissionsByStudent[data.studentEmail]) submissionsByStudent[data.studentEmail] = [];
-            submissionsByStudent[data.studentEmail].push(data);
-        });
-        
-        const submittedEmails = new Set(statusSnapshot.docs.map(doc => doc.data().studentEmail));
-
-        allStudentData = studentSnapshot.docs.map(doc => ({
-            ...doc.data(),
-            submissions: submissionsByStudent[doc.data().email] || [],
-            isSubmitted: submittedEmails.has(doc.data().email)
-        }));
+    // --- Handle Sign Out with Cleanup ---
+    function handleSignOut() { 
+        cleanupListeners();
+        auth.signOut().then(() => window.location.reload()); 
     }
 
     function calculateAllClassAverages() {
@@ -346,7 +377,7 @@
         let tableHtml = '';
         sortedStudents.forEach((student, index) => {
             const displayName = hideNames ? `Student ${index + 1}` : student.name;
-            const latestScores = Array.from({ length: numQuestions }, (_, i) => student.submissions.filter(s => s.slideIndex === i).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0]).filter(Boolean).map(s => s.score);
+            const latestScores = Array.from({ length: numQuestions }, (_, i) => student.submissions.filter(s => s.slideIndex === i).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0]?.score || 0);
             const studentAvg = latestScores.length > 0 ? (latestScores.reduce((a, b) => a + b, 0) / latestScores.length).toFixed(0) : '-';
 
             let avgScoreDisplay = '';
@@ -356,7 +387,8 @@
 
             tableHtml += `<tr class="hover:bg-gray-700">
                 <td class="px-3 py-4 whitespace-nowrap text-sm font-medium text-white cursor-pointer hover:text-yellow-400 truncate" onclick="showStudentSubmissions('${student.email}')">${displayName}${avgScoreDisplay}</td>
-                <td class="px-2 py-4 whitespace-nowrap text-center"><input type="checkbox" onchange="toggleSubmissionStatus('${student.email}', this.checked)" ${student.isSubmitted ? 'checked' : ''} class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500 cursor-pointer"></td>`;
+                <td class="px-2 py-4 whitespace-nowrap text-center"><input type="checkbox" onchange="toggleSubmissionStatus('${student.email}', this.checked)" ${student.isSubmitted ? 'checked' : ''} class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"></td>
+            `;
             
             for (let i = 0; i < numQuestions; i++) {
                 const latestSubmission = student.submissions.filter(s => s.slideIndex === i).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
@@ -454,10 +486,7 @@
         } finally {
             regradeBtn.disabled = false;
             regradeBtn.textContent = 'Regrade All';
-            await fetchStudentData();
-            calculateAllClassAverages();
-            populateClassLinks();
-            displayStudentData();
+            // No need to refetch, listeners will update view
         }
     }
 
@@ -491,10 +520,7 @@
             console.error(`Error regrading question ${slideIndex + 1}:`, error);
             showToast("An error occurred during regrading.", { color: 'red' });
         } finally {
-            await fetchStudentData();
-            calculateAllClassAverages();
-            populateClassLinks();
-            displayStudentData();
+            // No need to refetch, listeners will update view
         }
     }
     
@@ -693,7 +719,7 @@
     function showQuestionSubmissions(slideIndex) {
         currentModalView = { type: 'question', slide: slideIndex };
         document.getElementById('showAllAttemptsToggle').checked = showAllAttempts;
-        document.getElementById('modalTitle').innerHTML = `All Submissions for Question ${slideIndex + 1} <button onclick="regradeQuestion(${slideIndex})" class="ml-4 text-sm bg-purple-600 hover:bg-purple-700 text-white font-bold py-1 px-3 rounded-lg">Regrade Question</button>`;
+        document.getElementById('modalTitle').innerHTML = `All Submissions for Question ${slideIndex + 1} <button onclick="regradeQuestion(${slideIndex})" class="ml-4 text-sm bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded-lg">Regrade</button>`;
         
         const studentsForModal = getCurrentlySortedStudents();
         
@@ -762,10 +788,6 @@
             .catch(err => console.error("Sign-in failed:", err)); 
     }
     
-    function handleSignOut() { 
-        auth.signOut().then(() => window.location.reload()); 
-    }
-
     function showToast(message, options = {}) {
         const { color = 'default', duration = 5000 } = options;
         const wrapper = document.getElementById('toast-wrapper-top-right');
