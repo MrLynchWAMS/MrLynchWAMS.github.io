@@ -4,434 +4,804 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Teacher Dashboard</title>
-    <!-- Using a simple emoji as a favicon for demonstration -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📊</text></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <!-- Firebase libraries for database and authentication -->
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
     <style>
-        /* Custom scrollbar for modal content */
         .modal-content::-webkit-scrollbar { width: 8px; }
         .modal-content::-webkit-scrollbar-track { background: #374151; }
         .modal-content::-webkit-scrollbar-thumb { background: #9ca3af; border-radius: 4px; }
         .modal-content::-webkit-scrollbar-thumb:hover { background: #6b7280; }
-        /* Style for the grid to prevent text selection and ensure proper layout */
-        .grid-container {
-            display: grid;
-            user-select: none;
-        }
+        .hidden { display: none; }
+        .toast-wrapper { position: fixed; z-index: 100; padding: 1rem; width: 100%; max-width: 24rem; pointer-events: none; }
+        .toast-wrapper > div { pointer-events: auto; }
+        .top-right { top: 0; right: 0; }
+        @keyframes fade-in-up { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fade-out-down { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(20px); } }
+        .animate-fade-in-up { animation: fade-in-up 0.5s ease-out forwards; }
+        .animate-fade-out-down { animation: fade-out-down 0.5s ease-in forwards; }
+        .blackout { color: #4a5568 !important; background-color: #4a5568 !important; border-radius: 4px; user-select: none; }
     </style>
 </head>
-<body class="bg-gray-100 text-gray-800 font-sans">
-    
-    <!-- Login Container -->
-    <div id="login-container" class="min-h-screen flex items-center justify-center">
-        <div class="text-center p-8 bg-white rounded-lg shadow-md">
-            <h1 class="text-2xl font-bold mb-4">Teacher Dashboard</h1>
-            <p class="mb-6 text-gray-600">Please sign in to continue.</p>
-            <div id="gsi-button"></div>
+<body class="bg-gray-900 text-white font-sans">
+    <div class="container mx-auto p-4">
+        <div id="pageLoader" class="text-center mt-20">
+            <h1 class="text-3xl font-bold text-yellow-400">Loading Dashboard...</h1>
+            <p id="loadingError" class="text-red-500 mt-4"></p>
         </div>
-    </div>
-
-    <!-- Main Dashboard Content (hidden by default) -->
-    <div id="dashboard-container" class="container mx-auto p-4 sm:p-6 lg:p-8 hidden">
-        <!-- Header Section -->
-        <div class="flex flex-wrap justify-between items-center mb-6 gap-4">
-            <div>
-                <a href="index.html" class="text-blue-600 hover:underline mb-2 inline-block">&larr; All Assignments</a>
-                <h1 id="assignmentName" class="text-3xl font-bold text-gray-900">Teacher Dashboard</h1>
-            </div>
-            <div id="user-info" class="text-right"></div>
+        <div id="loginContainer" class="hidden max-w-md mx-auto mt-20 bg-gray-800 p-8 rounded-lg shadow-xl">
+            <h1 class="text-3xl font-bold text-yellow-400 mb-6 text-center">Teacher Dashboard</h1>
+            <div id="g_id_onload" data-client_id="1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com" data-callback="handleCredentialResponse"></div>
+            <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_black" data-text="signin_with" data-shape="rectangular" data-logo_alignment="left"></div>
+            <p id="loginError" class="text-red-500 mt-4 text-center"></p>
         </div>
-
-        <!-- Controls and Filters Section -->
-        <div class="bg-white p-4 rounded-lg shadow-md mb-6">
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div>
-                    <label for="classFilter" class="block text-sm font-medium text-gray-700">Filter by Class:</label>
-                    <select id="classFilter" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"></select>
-                </div>
-                <div>
-                    <label for="sortOrder" class="block text-sm font-medium text-gray-700">Sort by:</label>
-                    <select id="sortOrder" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
-                        <option value="lastName">Last Name</option>
-                        <option value="firstName">First Name</option>
-                        <option value="completion">Completion %</option>
-                    </select>
-                </div>
-                <div class="col-span-1 sm:col-span-2 lg:col-span-2 flex items-end justify-start sm:justify-end flex-wrap gap-x-4 gap-y-2">
-                     <div class="flex items-center space-x-2">
-                        <input type="checkbox" id="showScores" onchange="renderDashboard()" class="form-checkbox h-5 w-5 text-blue-600 rounded focus:ring-blue-500">
-                        <label for="showScores" class="text-sm font-medium text-gray-700">Show Scores</label>
-                    </div>
-                     <div class="flex items-center space-x-2">
-                        <input type="checkbox" id="showAllAttempts" onchange="renderDashboard()" class="form-checkbox h-5 w-5 text-blue-600 rounded focus:ring-blue-500">
-                        <label for="showAllAttempts" class="text-sm font-medium text-gray-700">Show All Attempts</label>
-                    </div>
-                    <div class="flex items-center space-x-2">
-                        <input type="checkbox" id="blackoutBars" onchange="renderDashboard()" class="form-checkbox h-5 w-5 text-blue-600 rounded focus:ring-blue-500">
-                        <label for="blackoutBars" class="text-sm font-medium text-gray-700">Blackout Bars</label>
-                    </div>
-                    <button id="exportButton" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm transition-colors">Export CSV</button>
+        <div id="mainContainer" class="hidden">
+            <div class="flex justify-between items-center mb-6">
+                <h1 id="dashboardTitle" class="text-3xl font-bold text-yellow-400"></h1>
+                <div class="flex items-center gap-4">
+                    <a href="./assignments.html" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg">&larr; All Assignments</a>
+                    <button onclick="handleSignOut()" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Sign Out</button>
                 </div>
             </div>
-        </div>
 
-        <!-- Main Dashboard Grid -->
-        <div id="dashboard" class="overflow-x-auto bg-white rounded-lg shadow">
-            <div id="loading" class="p-8 text-center text-gray-500">Loading student data...</div>
-        </div>
-    </div>
-
-    <!-- Modal for viewing/grading a specific submission -->
-    <div id="submissionModal" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center hidden z-50">
-        <div class="bg-gray-900 text-white rounded-lg shadow-xl w-11/12 max-w-4xl max-h-[90vh] flex flex-col">
-            <div class="flex justify-between items-center p-4 border-b border-gray-700">
-                <h2 class="text-xl font-bold" id="modalTitle">Student Submission</h2>
-                <button id="closeModal" class="text-gray-400 hover:text-white" onclick="closeModal()">&times;</button>
+            <div class="mb-4 p-4 bg-gray-800 rounded-lg">
+                <div class="flex flex-wrap items-center gap-x-6 gap-y-4">
+                    <div class="flex items-center gap-3">
+                        <span class="font-semibold">Class:</span>
+                        <div id="classLinksContainer" class="flex flex-wrap items-center gap-x-4 gap-y-2">
+                            <!-- JS Populated -->
+                        </div>
+                    </div>
+                    <div class="h-6 border-l border-gray-600 hidden md:block"></div>
+                    <div class="flex items-center gap-2">
+                        <label for="sortFilter" class="font-semibold">Sort by:</label>
+                        <select id="sortFilter" onchange="changeSort(this.value)" class="bg-gray-700 border border-gray-600 rounded-md p-2 text-white">
+                            <option value="lastName">Last Name</option>
+                            <option value="firstName">First Name</option>
+                            <option value="random-static">Random (Static)</option>
+                            <option value="random-live">Random (Live)</option>
+                        </select>
+                    </div>
+                    <div class="h-6 border-l border-gray-600 hidden md:block"></div>
+                    <div class="flex items-center gap-4">
+                        <label class="flex items-center"><input type="checkbox" id="hideNames" onchange="toggleDisplayOptions()" class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"> <span class="ml-2">Hide Names</span></label>
+                        <label class="flex items-center"><input type="checkbox" id="showScores" onchange="toggleDisplayOptions()" class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"> <span class="ml-2">Show Scores</span></label>
+                        <label class="flex items-center"><input type="checkbox" id="blackoutMode" onchange="toggleDisplayOptions()" class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"> <span class="ml-2">Blackout Bars</span></label>
+                    </div>
+                    <div class="h-6 border-l border-gray-600 hidden md:block"></div>
+                    <div class="flex items-center gap-4">
+                        <button id="exportButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Export to CSV</button>
+                        <button id="regradeAllButton" onclick="regradeAllSubmissions()" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg">Regrade All</button>
+                    </div>
+                </div>
             </div>
-            <div id="modalBody" class="p-6 overflow-y-auto modal-content">
-                <!-- Submission content will be injected here -->
+
+            <div class="overflow-x-auto bg-gray-800 rounded-lg shadow">
+                <table class="min-w-full divide-y divide-gray-700 table-fixed">
+                    <thead id="tableHeader" class="bg-gray-700"></thead>
+                    <tbody id="studentData" class="divide-y divide-gray-600"></tbody>
+                </table>
             </div>
         </div>
     </div>
-
+    <div id="submissionModal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50">
+        <div class="bg-gray-800 rounded-lg shadow-xl p-6 max-w-4xl w-full">
+            <div class="flex justify-between items-start mb-2">
+                <h2 id="modalTitle" class="text-2xl font-bold text-yellow-400"></h2>
+                <button onclick="closeModal()" class="text-gray-400 hover:text-white text-3xl leading-none">&times;</button>
+            </div>
+             <div class="flex justify-end items-center mb-2">
+                <label class="flex items-center text-sm">
+                    <input type="checkbox" id="showAllAttemptsToggle" onchange="toggleShowAllAttempts(this.checked)" class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500">
+                    <span class="ml-2">Show All Attempts</span>
+                </label>
+            </div>
+            <div id="modalContent" class="modal-content max-h-[70vh] overflow-y-auto pr-4"></div>
+        </div>
+    </div>
+    <div id="toast-wrapper-top-right" class="toast-wrapper top-right space-y-3"></div>
 <script>
-    // --- Firebase Configuration ---
-    // IMPORTANT: Replace with your actual Firebase project configuration.
+    const TEACHER_EMAILS = ["klynch@mtps.us", "mstuart@mtps.us", "cfiori@mtps.us", "mlock@mtps.us", "cheine@mtps.us"];
     const firebaseConfig = {
-        apiKey: "YOUR_API_KEY",
-        authDomain: "YOUR_AUTH_DOMAIN",
-        projectId: "YOUR_PROJECT_ID",
-        storageBucket: "YOUR_STORAGE_BUCKET",
-        messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-        appId: "YOUR_APP_ID"
+      apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
+      authDomain: "mrlynch-slides-app.firebaseapp.com",
+      projectId: "mrlynch-slides-app",
+      storageBucket: "mrlynch-slides-app.appspot.com",
+      messagingSenderId: "223179627035",
+      appId: "1:223179627035:web:ff0f538f3029d829c3f6be"
     };
-    
-    // --- Google Client ID ---
-    // IMPORTANT: Replace with your actual Google Client ID.
-    const GOOGLE_CLIENT_ID = "YOUR_GOOGLE_CLIENT_ID";
-
-    // Initialize Firebase
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
     const auth = firebase.auth();
 
-    // DOM Elements
-    const loginContainer = document.getElementById('login-container');
-    const dashboardContainer = document.getElementById('dashboard-container');
-
-    // Global state variables
-    let students = [];
-    let submissions = [];
-    let assignmentData = {};
-    let activeClass = 'All';
+    let assignmentData = null;
+    let allStudentData = [];
+    let activeClass = null;
     let assignmentId;
+    let classAverages = {};
     
-    // --- Authentication Flow ---
-    
-    // This function is called by the Google Sign-In library
-    function handleCredentialResponse(response) {
-        const idToken = response.credential;
-        const credential = firebase.auth.GoogleAuthProvider.credential(idToken);
-        auth.signInWithCredential(credential).catch((error) => {
-            console.error("Firebase sign-in error", error);
-            alert("Error signing in. Please check the console.");
-        });
-    }
-    
-    // Set up the Google button when the window loads
-    window.onload = function () {
-        google.accounts.id.initialize({
-            client_id: GOOGLE_CLIENT_ID,
-            callback: handleCredentialResponse
-        });
-        google.accounts.id.renderButton(
-            document.getElementById("gsi-button"),
-            { theme: "outline", size: "large", type: "standard" } 
-        );
-    };
+    // Display & Sort State
+    let hideNames = false;
+    let showScores = false;
+    let blackoutMode = false;
+    let sortMode = 'lastName';
+    let staticRandomOrder = [];
+    let showAllAttempts = localStorage.getItem('dashboardShowAllAttempts') === 'true';
+    let currentModalView = null;
 
-    // Listen for changes in authentication state
-    auth.onAuthStateChanged(async user => {
-        if (user) {
-            // User is signed in. Now, check if they are a teacher.
-            const userDocRef = db.collection('users').doc(user.uid);
-            const userDoc = await userDocRef.get();
-
-            if (userDoc.exists && userDoc.data().role === 'teacher') {
-                // User is a teacher, show the dashboard
-                loginContainer.classList.add('hidden');
-                dashboardContainer.classList.remove('hidden');
-                
-                document.getElementById('user-info').textContent = `Logged in as ${user.email}`;
-                assignmentId = new URLSearchParams(window.location.search).get('assignmentId');
-                if (assignmentId) {
-                    document.getElementById('assignmentName').textContent = "Loading assignment...";
-                    fetchData();
-                } else {
-                    document.getElementById('dashboard').innerHTML = '<p class="text-red-500 p-4">Error: No assignment ID provided in the URL.</p>';
-                }
-            } else {
-                // User is not a teacher, sign them out and redirect
-                console.log("Access denied. User is not a teacher. Signing out.");
-                await auth.signOut();
-                // Redirecting happens in the 'else' block below
-            }
-        } else {
-            // No user is signed in, show the login screen
-            loginContainer.classList.remove('hidden');
-            dashboardContainer.classList.add('hidden');
-            console.log("No user signed in. Please sign in to continue.");
-        }
-    });
-
-
-    // --- Data Fetching ---
-    async function fetchData() {
-        await fetchAssignmentDetails();
-        await fetchStudentsAndSubmissions();
-    }
-
-    async function fetchAssignmentDetails() {
-        try {
-            const doc = await db.collection('assignments').doc(assignmentId).get();
-            if (doc.exists) {
-                assignmentData = doc.data();
-                document.getElementById('assignmentName').textContent = assignmentData.name || 'Teacher Dashboard';
-            } else {
-                console.error("Assignment not found!");
-                document.getElementById('assignmentName').textContent = "Assignment Not Found";
-            }
-        } catch (error) {
-            console.error("Error fetching assignment details:", error);
-        }
-    }
-    
-    async function fetchStudentsAndSubmissions() {
-        document.getElementById('loading').style.display = 'block';
-        try {
-            const studentsSnapshot = await db.collection('users').where('role', '==', 'student').get();
-            students = studentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-            const submissionsSnapshot = await db.collection('assignments').doc(assignmentId).collection('submissions').get();
-            submissions = submissionsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            
-            const classes = [...new Set(students.map(s => s.class).filter(Boolean))].sort();
-            const classFilter = document.getElementById('classFilter');
-            classFilter.innerHTML = '<option value="All">All Classes</option>' + classes.map(c => `<option value="${c}">${c}</option>`).join('');
-            
-            renderDashboard();
-
-        } catch (error) {
-            console.error("Error fetching data:", error);
-            document.getElementById('dashboard').innerHTML = '<p class="text-red-500 p-4">Error loading data. Check console for details.</p>';
-        } finally {
-            document.getElementById('loading').style.display = 'none';
-        }
-    }
-
-    // --- Rendering ---
-    function renderDashboard() {
-        const dashboard = document.getElementById('dashboard');
-        const sortOrder = document.getElementById('sortOrder').value;
-        const blackoutBars = document.getElementById('blackoutBars').checked;
-        const showAllAttempts = document.getElementById('showAllAttempts').checked;
-        const showScores = document.getElementById('showScores').checked;
-
-        let filteredStudents = activeClass === 'All' ? students : students.filter(s => s.class === activeClass);
-        const numQuestions = assignmentData.numSlides || 0;
-
-        const processedStudents = filteredStudents.map(student => {
-            const studentSubmissions = submissions.filter(s => s.studentEmail === student.email);
-            const attemptedQuestions = new Set(studentSubmissions.map(s => s.slideIndex)).size;
-            const completion = numQuestions > 0 ? (attemptedQuestions / numQuestions) * 100 : 0;
-            return { ...student, completion, submissions: studentSubmissions };
-        });
-
-        processedStudents.sort((a, b) => {
-            if (sortOrder === 'lastName') return a.lastName.localeCompare(b.lastName);
-            if (sortOrder === 'firstName') return a.firstName.localeCompare(b.firstName);
-            if (sortOrder === 'completion') return b.completion - a.completion;
-            return 0;
-        });
-        
-        const gridCols = `grid-template-columns: 200px 100px repeat(${numQuestions}, 1fr);`;
-        let tableHTML = `<div class="grid-container p-4" style="${gridCols}">`;
-
-        tableHTML += '<div class="font-bold p-2 border-b border-gray-200">Student Name</div>';
-        tableHTML += '<div class="font-bold p-2 border-b border-gray-200 text-center">Completion</div>';
-        for (let i = 0; i < numQuestions; i++) {
-            tableHTML += `<div class="font-bold p-2 border-b border-gray-200 text-center">${i + 1}</div>`;
-        }
-
-        processedStudents.forEach(student => {
-            tableHTML += `<div class="p-2 border-b border-gray-200 truncate" title="${student.firstName} ${student.lastName}">${student.lastName}, ${student.firstName}</div>`;
-            tableHTML += `<div class="p-2 border-b border-gray-200 text-center">${student.completion.toFixed(0)}%</div>`;
-
-            for (let i = 0; i < numQuestions; i++) {
-                const submissionsForSlide = student.submissions
-                    .filter(s => s.slideIndex === i)
-                    .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
-
-                const latestSubmission = submissionsForSlide[0];
-                const score = latestSubmission ? latestSubmission.score : null;
-                const allScores = submissionsForSlide.map(s => s.score).reverse();
-
-                let bgColor = 'bg-gray-200'; 
-                let width = '100%';
-                if (score !== null) {
-                    const normalizedScore = Math.max(0, Math.min(100, score));
-                    width = `${normalizedScore}%`;
-                    if (normalizedScore >= 90) bgColor = 'bg-green-500';
-                    else if (normalizedScore >= 80) bgColor = 'bg-yellow-400';
-                    else if (normalizedScore >= 70) bgColor = 'bg-orange-500';
-                    else bgColor = 'bg-red-500';
-                }
-                
-                if (blackoutBars && score !== null) {
-                    bgColor = 'bg-gray-700';
-                    width = '100%';
-                }
-                
-                const scoreText = showAllAttempts ? allScores.join(', ') : (latestSubmission ? latestSubmission.score : '');
-                
-                let scoreDisplay = '';
-                if (showScores && scoreText) {
-                     scoreDisplay = `<div class="absolute inset-0 flex items-center justify-center text-xs font-bold text-white" style="text-shadow: 1px 1px 2px black;">${scoreText}</div>`;
-                }
-
-                tableHTML += `
-                    <div class="p-0.5 border-b border-gray-200">
-                        <div class="relative h-6 bg-gray-200 rounded overflow-hidden cursor-pointer hover:opacity-80" onclick="openModal('${student.email}', ${i})">
-                            <div class="h-full ${bgColor}" style="width: ${width};"></div>
-                            ${scoreDisplay}
-                        </div>
-                    </div>
-                `;
-            }
-        });
-
-        tableHTML += '</div>';
-        dashboard.innerHTML = tableHTML;
-    }
-
-    // --- Modal Logic ---
-    function openModal(studentEmail, slideIndex) {
-        const student = students.find(s => s.email === studentEmail);
-        if (!student) return;
-
-        const modal = document.getElementById('submissionModal');
-        const modalTitle = document.getElementById('modalTitle');
-        const modalBody = document.getElementById('modalBody');
-
-        modalTitle.textContent = `Submission: ${student.firstName} ${student.lastName} - Question ${slideIndex + 1}`;
-        
-        const studentSubmissions = submissions
-            .filter(s => s.studentEmail === studentEmail && s.slideIndex === slideIndex)
-            .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
-
-        let bodyHTML = '<p class="text-gray-400 mb-4">No submission found for this question.</p>';
-
-        if (studentSubmissions.length > 0) {
-            bodyHTML = '<div>';
-            studentSubmissions.forEach((sub, index) => {
-                const date = sub.timestamp ? new Date(sub.timestamp.seconds * 1000).toLocaleString() : 'No date';
-                bodyHTML += `
-                    <div class="bg-gray-800 p-4 rounded-lg mb-4">
-                        <h4 class="font-bold text-lg">Attempt ${studentSubmissions.length - index}</h4>
-                        <p class="text-sm text-gray-400 mb-2">${date}</p>
-                        <p>Score: <span class="font-semibold text-lg">${sub.score}</span></p>
-                        ${sub.content ? `<div class="mt-2 pt-2 border-t border-gray-700 prose prose-invert max-w-none">${sub.content}</div>` : ''}
-                    </div>
-                `;
-            });
-            bodyHTML += '</div>';
-        }
-
-        bodyHTML += `
-            <div class="mt-6 pt-4 border-t border-gray-700">
-                <h3 class="text-lg font-semibold mb-2">Grade / Regrade</h3>
-                <div class="flex items-center space-x-2">
-                    <input type="number" id="gradeInput" min="0" max="100" class="bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white w-24" placeholder="Score">
-                    <button onclick="submitGrade('${studentEmail}', ${slideIndex}, document.getElementById('gradeInput').value)" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md">Submit</button>
-                </div>
-            </div>
-        `;
-        
-        modalBody.innerHTML = bodyHTML;
-        modal.classList.remove('hidden');
-    }
-
-    function closeModal() {
-        document.getElementById('submissionModal').classList.add('hidden');
-    }
-
-    // --- Submission/Grading Logic ---
-    async function submitGrade(studentEmail, slideIndex, newScore) {
-        if (newScore === null || newScore.trim() === '') return;
-        const score = parseInt(newScore, 10);
-        if (isNaN(score) || score < 0 || score > 100) {
-            alert("Please enter a valid score between 0 and 100.");
+    window.onload = function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        assignmentId = urlParams.get('assignmentId');
+        if (!assignmentId) {
+            document.getElementById('loadingError').textContent = "Error: No assignment ID provided in the URL.";
             return;
         }
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                if (TEACHER_EMAILS.includes(user.email)) { loadDashboard(); } 
+                else {
+                    document.getElementById('pageLoader').classList.add('hidden');
+                    document.getElementById('loadingError').textContent = "Access Denied: You are not authorized to view this page.";
+                    auth.signOut();
+                }
+            } else {
+                document.getElementById('pageLoader').classList.add('hidden');
+                document.getElementById('loginContainer').classList.remove('hidden');
+            }
+        });
+    };
 
-        const submissionCollection = db.collection('assignments').doc(assignmentId).collection('submissions');
-        
-        const querySnapshot = await submissionCollection
-            .where('studentEmail', '==', studentEmail)
-            .where('slideIndex', '==', slideIndex)
-            .orderBy('timestamp', 'desc')
-            .limit(1)
-            .get();
+    async function loadDashboard() {
+        try {
+            const doc = await db.collection("assignments").doc(assignmentId).get();
+            if (!doc.exists) {
+                document.getElementById('loadingError').textContent = "Error: This assignment could not be found.";
+                return;
+            }
+            assignmentData = { id: doc.id, ...doc.data() };
+            document.title = assignmentData.name + " - Dashboard";
+            document.getElementById('dashboardTitle').textContent = `Dashboard for: ${assignmentData.name}`;
+            await fetchStudentData();
 
-        if (!querySnapshot.empty) {
-            const docId = querySnapshot.docs[0].id;
-            await submissionCollection.doc(docId).update({
-                score: score,
-                timestamp: firebase.firestore.FieldValue.serverTimestamp()
-            });
-             console.log("Submission updated.");
-        } else {
-            await submissionCollection.add({
-                studentEmail: studentEmail,
-                slideIndex: slideIndex,
-                score: score,
-                timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-                content: "Manual Grade by Teacher"
-            });
-             console.log("New submission created.");
+            const assignedClasses = assignmentData.assignedClasses || [];
+            const classesInAssignment = [...new Set(allStudentData.filter(s => assignedClasses.includes(String(s.class))).map(s => String(s.class)))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+            activeClass = classesInAssignment.length > 0 ? classesInAssignment[0] : 'All';
+
+            calculateAllClassAverages();
+            populateClassLinks();
+            displayStudentData();
+            document.getElementById('pageLoader').classList.add('hidden');
+            document.getElementById('mainContainer').classList.remove('hidden');
+        } catch (error) {
+            console.error("Error loading dashboard:", error);
+            document.getElementById('loadingError').textContent = "An error occurred while loading the dashboard.";
         }
-        
-        closeModal();
-        await fetchStudentsAndSubmissions(); // Refresh all data to reflect the change
     }
 
-    // --- CSV Export ---
-    function exportToCSV() {
-        const numQuestions = assignmentData.numSlides || 0;
-        let csvContent = "";
+    async function fetchStudentData() {
+        const [studentSnapshot, submissionSnapshot, statusSnapshot] = await Promise.all([
+            db.collection("students").get(),
+            db.collection("submissions").where("assignmentId", "==", assignmentId).get(),
+            db.collection("submissionStatus").where("assignmentId", "==", assignmentId).where("status", "==", "submitted").get()
+        ]);
+
+        const submissionsByStudent = {};
+        submissionSnapshot.forEach(doc => {
+            const data = { id: doc.id, ...doc.data() };
+            if (!submissionsByStudent[data.studentEmail]) submissionsByStudent[data.studentEmail] = [];
+            submissionsByStudent[data.studentEmail].push(data);
+        });
         
-        const headers = ["Email", "Last Name", "First Name", "Last, First", "Class", "Average Score", "Completion %", ...Array.from({ length: numQuestions }, (_, i) => `Q${i + 1}`)];
-        csvContent += headers.join(",") + "\r\n";
+        const submittedEmails = new Set(statusSnapshot.docs.map(doc => doc.data().studentEmail));
 
-        const studentsToExport = activeClass === 'All' ? students : students.filter(s => s.class === activeClass);
+        allStudentData = studentSnapshot.docs.map(doc => ({
+            ...doc.data(),
+            submissions: submissionsByStudent[doc.data().email] || [],
+            isSubmitted: submittedEmails.has(doc.data().email)
+        }));
+    }
 
-        studentsToExport.forEach(student => {
-            const lastName = student.lastName || "";
-            const firstName = student.firstName || "";
-            const lastFirst = `"${lastName}, ${firstName}"`;
+    function calculateAllClassAverages() {
+        const averages = {};
+        const assignedClasses = assignmentData.assignedClasses || [];
+        const studentsInAssignment = allStudentData.filter(s => assignedClasses.includes(String(s.class)));
+        const numQuestions = assignmentData.slideIds.length;
+
+        const classes = [...new Set(studentsInAssignment.map(s => String(s.class)))];
+        classes.forEach(c => {
+            const studentsInClass = studentsInAssignment.filter(s => String(s.class) === c);
             let totalScore = 0;
             let attemptedQuestions = 0;
-            const questionScores = [];
+            studentsInClass.forEach(student => {
+                for (let i = 0; i < numQuestions; i++) {
+                    const latestSubmission = student.submissions.filter(sub => sub.slideIndex === i).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
+                    if (latestSubmission) {
+                        totalScore += latestSubmission.score;
+                        attemptedQuestions++;
+                    }
+                }
+            });
+            averages[c] = attemptedQuestions > 0 ? (totalScore / attemptedQuestions).toFixed(0) : '-';
+        });
+
+        let allTotalScore = 0;
+        let allAttemptedQuestions = 0;
+        studentsInAssignment.forEach(student => {
+             for (let i = 0; i < numQuestions; i++) {
+                const latestSubmission = student.submissions.filter(sub => sub.slideIndex === i).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
+                if (latestSubmission) {
+                    allTotalScore += latestSubmission.score;
+                    allAttemptedQuestions++;
+                }
+            }
+        });
+        averages['All'] = allAttemptedQuestions > 0 ? (allTotalScore / allAttemptedQuestions).toFixed(0) : '-';
+        classAverages = averages;
+    }
+
+    function populateClassLinks() {
+        const linksContainer = document.getElementById('classLinksContainer');
+        linksContainer.innerHTML = '';
+        const assignedClasses = assignmentData.assignedClasses || [];
+        const classesInAssignment = [...new Set(allStudentData.filter(s => assignedClasses.includes(String(s.class))).map(s => String(s.class)))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
+        classesInAssignment.forEach(c => {
+            const isActive = activeClass === c;
+            const activeClasses = isActive ? 'text-yellow-400 font-bold underline' : 'text-gray-300 hover:text-white';
+            linksContainer.innerHTML += `<a href="#" data-class-name="${c}" onclick="event.preventDefault(); filterByClass('${c}')" class="class-link text-sm ${activeClasses}">${c}</a>`;
+        });
+
+        const isAllActive = activeClass === 'All';
+        const allActiveClasses = isAllActive ? 'text-yellow-400 font-bold underline' : 'text-gray-300 hover:text-white';
+        linksContainer.innerHTML += `<a href="#" data-class-name="All" onclick="event.preventDefault(); filterByClass('All')" class="class-link text-sm ${allActiveClasses}">All Classes</a>`;
+
+        const activeAvg = classAverages[activeClass] || '-';
+        linksContainer.innerHTML += `<span id="activeClassAvg" class="class-avg text-xs ml-2 text-cyan-400 ${!showScores ? 'hidden' : ''}">(Avg: ${activeAvg})</span>`;
+    }
+
+    function filterByClass(className) {
+        activeClass = className;
+        document.querySelectorAll('.class-link').forEach(link => {
+            const isActive = link.dataset.className === activeClass;
+            link.classList.toggle('text-yellow-400', isActive);
+            link.classList.toggle('font-bold', isActive);
+            link.classList.toggle('underline', isActive);
+            link.classList.toggle('text-gray-300', !isActive);
+            link.classList.toggle('hover:text-white', !isActive);
+        });
+        const avgEl = document.getElementById('activeClassAvg');
+        if (avgEl) {
+            const activeAvg = classAverages[activeClass] || '-';
+            avgEl.textContent = `(Avg: ${activeAvg})`;
+        }
+        changeSort(sortMode);
+    }
+    
+    function changeSort(newMode) {
+        sortMode = newMode;
+        if (sortMode === 'random-static') {
+            const studentsInView = getCurrentlySortedStudents(false);
+            staticRandomOrder = [...studentsInView].sort(() => Math.random() - 0.5);
+        }
+        displayStudentData();
+    }
+
+    function toggleDisplayOptions() {
+        hideNames = document.getElementById('hideNames').checked;
+        showScores = document.getElementById('showScores').checked;
+        blackoutMode = document.getElementById('blackoutMode').checked;
+        const avgEl = document.getElementById('activeClassAvg');
+        if (avgEl) avgEl.classList.toggle('hidden', !showScores);
+        displayStudentData();
+    }
+
+    function getCurrentlySortedStudents(applySort = true) {
+        const assignedClasses = assignmentData.assignedClasses || [];
+        const studentsInAssignment = allStudentData.filter(s => assignedClasses.includes(String(s.class)));
+        const filteredStudents = (activeClass === 'All' ? studentsInAssignment : studentsInAssignment.filter(s => String(s.class) === String(activeClass)));
+        if (!applySort) return filteredStudents;
+
+        let sortedStudents = [...filteredStudents];
+        switch (sortMode) {
+            case 'firstName': sortedStudents.sort((a, b) => a.name.localeCompare(b.name)); break;
+            case 'lastName': sortedStudents.sort((a, b) => (a.name.split(' ').pop() || '').localeCompare(b.name.split(' ').pop() || '')); break;
+            case 'random-live': sortedStudents.sort(() => Math.random() - 0.5); break;
+            case 'random-static':
+                const currentEmails = new Set(filteredStudents.map(s => s.email));
+                sortedStudents = staticRandomOrder.filter(s => currentEmails.has(s.email));
+                break;
+        }
+        return sortedStudents;
+    }
+
+    function displayStudentData() {
+        const tableHeader = document.getElementById('tableHeader');
+        const studentList = document.getElementById('studentData');
+        const numQuestions = assignmentData.slideIds.length;
+        const sortedStudents = getCurrentlySortedStudents();
+
+        let headerHtml = `<tr>
+            <th class="px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-64">Student Name</th>
+            <th class="px-2 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider w-20">Submitted</th>`;
+        for (let i = 1; i <= numQuestions; i++) {
+            headerHtml += `<th class="px-2 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer hover:text-yellow-400" onclick="showQuestionSubmissions(${i - 1})">Q${i}</th>`;
+        }
+        headerHtml += '</tr>';
+        
+        let classAverageRowHtml = '';
+        if (showScores) {
+            classAverageRowHtml = `<tr><td class="text-xs font-semibold text-cyan-400 px-3">Class Average:</td><td class="px-2"></td>`;
+            for (let i = 0; i < numQuestions; i++) {
+                const scores = sortedStudents.map(s => s.submissions.filter(sub => sub.slideIndex === i).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0]).filter(Boolean).map(sub => sub.score);
+                const avg = scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(0) : '-';
+                classAverageRowHtml += `<td class="px-2 py-1 text-center text-xs font-semibold text-cyan-400">${avg}</td>`;
+            }
+            classAverageRowHtml += '</tr>';
+        }
+        tableHeader.innerHTML = headerHtml + classAverageRowHtml;
+
+        let tableHtml = '';
+        sortedStudents.forEach((student, index) => {
+            const displayName = hideNames ? `Student ${index + 1}` : student.name;
+            const latestScores = Array.from({ length: numQuestions }, (_, i) => student.submissions.filter(s => s.slideIndex === i).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0]).filter(Boolean).map(s => s.score);
+            const studentAvg = latestScores.length > 0 ? (latestScores.reduce((a, b) => a + b, 0) / latestScores.length).toFixed(0) : '-';
+
+            let avgScoreDisplay = '';
+            if (showScores) {
+                avgScoreDisplay = `<span class="text-xs text-gray-400 ml-2 font-mono ${blackoutMode ? 'blackout' : ''}">(${studentAvg})</span>`;
+            }
+
+            tableHtml += `<tr class="hover:bg-gray-700">
+                <td class="px-3 py-4 whitespace-nowrap text-sm font-medium text-white cursor-pointer hover:text-yellow-400 truncate" onclick="showStudentSubmissions('${student.email}')">${displayName}${avgScoreDisplay}</td>
+                <td class="px-2 py-4 whitespace-nowrap text-center"><input type="checkbox" onchange="toggleSubmissionStatus('${student.email}', this.checked)" ${student.isSubmitted ? 'checked' : ''} class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500 cursor-pointer"></td>`;
             
             for (let i = 0; i < numQuestions; i++) {
-                const latestSubmission = submissions
-                    .filter(s => s.studentEmail === student.email && s.slideIndex === i)
-                    .sort((a,b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
+                const latestSubmission = student.submissions.filter(s => s.slideIndex === i).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
+                
+                if (blackoutMode) {
+                    if (latestSubmission) {
+                        tableHtml += `<td class="px-2 py-4 whitespace-nowrap cursor-pointer" onclick="showSubmissions('${student.email}', ${i})"><div class="w-full bg-black rounded-full h-6"></div></td>`;
+                    } else {
+                        tableHtml += `<td class="px-2 py-4"><div class="h-6 rounded-full border-2 border-dashed border-gray-400"></div></td>`;
+                    }
+                } else {
+                    if (latestSubmission) {
+                        const score = latestSubmission.score;
+                        const color = score >= 90 ? 'bg-green-500' : score >= 70 ? 'bg-yellow-500' : 'bg-red-500';
+                        const scoreDisplay = showScores ? score : '';
+                        tableHtml += `<td class="px-2 py-4 whitespace-nowrap text-sm font-semibold cursor-pointer" onclick="showSubmissions('${student.email}', ${i})">
+                            <div class="w-full bg-gray-600 rounded-full h-6 relative">
+                                <div class="${color} h-6 rounded-full text-center text-white text-xs flex items-center justify-center" style="width: ${score}%">${scoreDisplay}</div>
+                            </div></td>`;
+                    } else {
+                        tableHtml += `<td class="px-2 py-4"><div class="bg-gray-700 h-6 rounded-full flex items-center justify-center text-gray-500 text-xs">-</div></td>`;
+                    }
+                }
+            }
+            tableHtml += `</tr>`;
+        });
+        studentList.innerHTML = tableHtml;
+    }
+    
+    // --- Grading Functions (from Version 1) ---
+    
+    function executeChecker(submission) {
+        const slideIndex = submission.slideIndex;
+        const funcString = assignmentData.checkerFunctions?.[`calc${slideIndex + 1}`];
+        if (funcString) {
+            try {
+                const funcNameMatch = funcString.match(/function\s+([a-zA-Z0-9_]+)\s*\(/);
+                if (!funcNameMatch || !funcNameMatch[1]) { 
+                    throw new Error("Could not find a valid function definition in the checker code."); 
+                }
+                const funcNameToRun = funcNameMatch[1];
+                const runner = new Function('studentAnswer', 'userProfile', `
+                    const showToast = () => {}; 
+                    const window = { open: () => {} }; 
+                    const alert = () => {}; 
+                    const confirm = () => {};
+                    ${funcString}
+                    if (typeof ${funcNameToRun} === 'function') {
+                        return ${funcNameToRun}(studentAnswer, showToast, userProfile);
+                    } else {
+                        throw new Error("The function '${funcNameToRun}' could not be executed.");
+                    }
+                `);
+                const userProfile = { name: submission.studentName, email: submission.studentEmail };
+                return runner(submission.answer, userProfile);
+            } catch (e) {
+                console.error(`Error executing checker function for submission ${submission.id}:`, e);
+                showToast(`Error in checker for Q${slideIndex + 1}: ${e.message}`, { color: 'red' });
+                return 0;
+            }
+        }
+        return 0;
+    }
+
+    async function regradeAllSubmissions() {
+        if (!confirm("Are you sure you want to regrade ALL submissions for this assignment? This cannot be undone.")) return;
+        
+        const regradeBtn = document.getElementById('regradeAllButton');
+        regradeBtn.disabled = true;
+        regradeBtn.textContent = 'Regrading...';
+        showToast("Starting to regrade all submissions...", { color: 'blue' });
+
+        try {
+            const submissionsSnapshot = await db.collection("submissions").where("assignmentId", "==", assignmentId).get();
+            if (submissionsSnapshot.empty) {
+                showToast("No submissions found to regrade.", { color: 'default' });
+                return;
+            }
+
+            const batch = db.batch();
+            let count = 0;
+            submissionsSnapshot.forEach(doc => {
+                const submission = { id: doc.id, ...doc.data() };
+                const newScore = executeChecker(submission);
+                const submissionRef = db.collection("submissions").doc(doc.id);
+                batch.update(submissionRef, { score: newScore, isManualGrade: false });
+                count++;
+            });
+
+            await batch.commit();
+            showToast(`Successfully regraded ${count} submissions! Refreshing data...`, { color: 'green' });
+        } catch (error) {
+            console.error("Error during regrade all:", error);
+            showToast("An error occurred during regrading.", { color: 'red' });
+        } finally {
+            regradeBtn.disabled = false;
+            regradeBtn.textContent = 'Regrade All';
+            await fetchStudentData();
+            calculateAllClassAverages();
+            populateClassLinks();
+            displayStudentData();
+        }
+    }
+
+    async function regradeQuestion(slideIndex) {
+        showToast(`Regrading Question ${slideIndex + 1}...`, { color: 'blue' });
+        
+        try {
+            const submissionsSnapshot = await db.collection("submissions")
+                .where("assignmentId", "==", assignmentId)
+                .where("slideIndex", "==", slideIndex)
+                .get();
+            
+            if (submissionsSnapshot.empty) {
+                showToast("No submissions found for this question.", { color: 'default' });
+                return;
+            }
+
+            const batch = db.batch();
+            let count = 0;
+            submissionsSnapshot.forEach(doc => {
+                const submission = { id: doc.id, ...doc.data() };
+                const newScore = executeChecker(submission);
+                const submissionRef = db.collection("submissions").doc(doc.id);
+                batch.update(submissionRef, { score: newScore, isManualGrade: false });
+                count++;
+            });
+
+            await batch.commit();
+            showToast(`Successfully regraded ${count} submission(s) for Q${slideIndex+1}!`, { color: 'green' });
+        } catch (error) {
+            console.error(`Error regrading question ${slideIndex + 1}:`, error);
+            showToast("An error occurred during regrading.", { color: 'red' });
+        } finally {
+            await fetchStudentData();
+            calculateAllClassAverages();
+            populateClassLinks();
+            displayStudentData();
+        }
+    }
+    
+    async function regradeSingleSubmission(submissionId, event) {
+        const button = event.target;
+        button.disabled = true;
+        showToast("Regrading submission...", { color: 'blue' });
+        try {
+            const submissionDoc = await db.collection("submissions").doc(submissionId).get();
+            if (!submissionDoc.exists) {
+                showToast("Submission not found.", { color: 'red' });
+                return;
+            }
+            const submission = { id: submissionDoc.id, ...submissionDoc.data() };
+            const newScore = executeChecker(submission);
+            await db.collection("submissions").doc(submissionId).update({ 
+                score: newScore, 
+                isManualGrade: false 
+            });
+
+            const student = allStudentData.find(s => s.email === submission.studentEmail);
+            if (student) {
+                const subToUpdate = student.submissions.find(s => s.id === submissionId);
+                if (subToUpdate) subToUpdate.score = newScore;
+            }
+            
+            calculateAllClassAverages();
+            populateClassLinks();
+            displayStudentData();
+
+            const scoreInput = document.getElementById(`score-${submissionId}`);
+            if (scoreInput) scoreInput.value = newScore;
+            
+            showToast("Submission regraded successfully!", { color: 'green' });
+        } catch (error) {
+            console.error("Error regrading single submission:", error);
+            showToast("Failed to regrade submission.", { color: 'red' });
+        } finally {
+            button.disabled = false;
+        }
+    }
+
+    async function saveAnswer(submissionId, event) {
+        const textarea = document.getElementById(`answer-${submissionId}`);
+        const newAnswer = textarea.value;
+        const button = event.target;
+        button.disabled = true;
+
+        try {
+            await db.collection("submissions").doc(submissionId).update({ answer: newAnswer });
+            
+            const subDoc = await db.collection("submissions").doc(submissionId).get();
+            const submissionData = subDoc.data();
+            const student = allStudentData.find(s => s.email === submissionData.studentEmail);
+            if (student) {
+                const subToUpdate = student.submissions.find(s => s.id === submissionId);
+                if (subToUpdate) subToUpdate.answer = newAnswer;
+            }
+
+            const newScore = executeChecker({ id: submissionId, ...submissionData, answer: newAnswer });
+            await db.collection("submissions").doc(submissionId).update({ 
+                score: newScore, 
+                isManualGrade: false 
+            });
+            
+            if (student) {
+                const subToUpdate = student.submissions.find(s => s.id === submissionId);
+                if (subToUpdate) subToUpdate.score = newScore;
+            }
+            const scoreInput = document.getElementById(`score-${submissionId}`);
+            if (scoreInput) scoreInput.value = newScore;
+            showToast("Answer saved and regraded.", { color: 'blue' });
+
+            calculateAllClassAverages();
+            populateClassLinks();
+            displayStudentData();
+
+        } catch (error) {
+            console.error("Error saving answer:", error);
+            showToast("Failed to save answer.", { color: 'red' });
+        } finally {
+            button.disabled = false;
+        }
+    }
+
+    async function setScore(submissionId, event) {
+        const input = document.getElementById(`score-${submissionId}`);
+        const newScore = parseInt(input.value, 10);
+        if (isNaN(newScore) || newScore < 0 || newScore > 100) {
+            showToast("Please enter a valid score between 0 and 100.", { color: 'red' });
+            return;
+        }
+        const button = event.target;
+        button.disabled = true;
+        
+        try {
+            await db.collection("submissions").doc(submissionId).update({ 
+                score: newScore,
+                isManualGrade: true 
+            });
+            
+            const subDoc = await db.collection("submissions").doc(submissionId).get();
+            const submissionData = subDoc.data();
+            const student = allStudentData.find(s => s.email === submissionData.studentEmail);
+            if (student) {
+                const subToUpdate = student.submissions.find(s => s.id === submissionId);
+                if (subToUpdate) subToUpdate.score = newScore;
+            }
+            
+            calculateAllClassAverages();
+            populateClassLinks();
+            displayStudentData();
+
+            showToast("Score updated successfully!", { color: 'green' });
+        } catch (error) {
+            console.error("Error setting score:", error);
+            showToast("Failed to set score.", { color: 'red' });
+        } finally {
+            button.disabled = false;
+        }
+    }
+
+    async function toggleSubmissionStatus(studentEmail, isChecked) {
+        const student = allStudentData.find(s => s.email === studentEmail);
+        if (!student) { showToast("Could not find student data.", { color: 'red' }); return; }
+        try {
+            if (isChecked) {
+                await db.collection("submissionStatus").add({ 
+                    studentEmail: student.email, 
+                    studentName: student.name, 
+                    assignmentId: assignmentId, 
+                    status: 'submitted', 
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp() 
+                });
+                student.isSubmitted = true;
+                showToast(`Submitted for ${student.name}.`, { color: 'green' });
+            } else {
+                const statusSnapshot = await db.collection("submissionStatus")
+                    .where("studentEmail", "==", studentEmail)
+                    .where("assignmentId", "==", assignmentId)
+                    .get();
+                if (!statusSnapshot.empty) {
+                    await db.collection("submissionStatus").doc(statusSnapshot.docs[0].id).delete();
+                    student.isSubmitted = false;
+                    showToast(`Un-submitted for ${student.name}.`, { color: 'green' });
+                }
+            }
+        } catch (error) {
+            console.error("Error updating submission status:", error);
+            showToast("Operation failed.", { color: 'red' });
+            student.isSubmitted = !isChecked; 
+        } finally {
+            displayStudentData();
+        }
+    }
+    
+    function showSubmissions(studentEmail, slideIndex) { showStudentSubmissions(studentEmail, slideIndex); }
+
+    function toggleShowAllAttempts(isChecked) {
+        showAllAttempts = isChecked;
+        localStorage.setItem('dashboardShowAllAttempts', isChecked);
+        if (currentModalView) {
+            if (currentModalView.type === 'student') showStudentSubmissions(currentModalView.email, currentModalView.slide);
+            else if (currentModalView.type === 'question') showQuestionSubmissions(currentModalView.slide);
+        }
+    }
+
+    function showStudentSubmissions(studentEmail, specificSlide = null) {
+        currentModalView = { type: 'student', email: studentEmail, slide: specificSlide };
+        document.getElementById('showAllAttemptsToggle').checked = showAllAttempts;
+        const student = allStudentData.find(s => s.email === studentEmail);
+        if (!student) return;
+
+        const sortedStudents = getCurrentlySortedStudents();
+        const studentIndex = sortedStudents.findIndex(s => s.email === studentEmail);
+        const displayName = hideNames && studentIndex > -1 ? `Student ${studentIndex + 1}` : student.name;
+        
+        document.getElementById('modalTitle').innerHTML = `Submissions for ${displayName}${specificSlide !== null ? ` - Q${specificSlide + 1}` : ''}`;
+        
+        let submissionsToShow = (specificSlide !== null ? student.submissions.filter(s => s.slideIndex === specificSlide) : student.submissions)
+            .sort((a, b) => (a.slideIndex - b.slideIndex) || ((b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0)));
+
+        let submissionsToDisplay;
+        if (showAllAttempts) {
+            submissionsToDisplay = submissionsToShow;
+        } else {
+            const latestBySlide = {};
+            submissionsToShow.forEach(sub => { if (!latestBySlide[sub.slideIndex]) latestBySlide[sub.slideIndex] = sub; });
+            submissionsToDisplay = Object.values(latestBySlide);
+        }
+        
+        renderModalContent(submissionsToDisplay);
+        document.getElementById('submissionModal').classList.remove('hidden');
+    }
+
+    function showQuestionSubmissions(slideIndex) {
+        currentModalView = { type: 'question', slide: slideIndex };
+        document.getElementById('showAllAttemptsToggle').checked = showAllAttempts;
+        document.getElementById('modalTitle').innerHTML = `All Submissions for Question ${slideIndex + 1} <button onclick="regradeQuestion(${slideIndex})" class="ml-4 text-sm bg-purple-600 hover:bg-purple-700 text-white font-bold py-1 px-3 rounded-lg">Regrade Question</button>`;
+        
+        const studentsForModal = getCurrentlySortedStudents();
+        
+        const anonymousNameMap = new Map();
+        studentsForModal.forEach((student, index) => {
+            if (hideNames) anonymousNameMap.set(student.email, `Student ${index + 1}`);
+        });
+
+        const allSubmissions = studentsForModal.flatMap(student => 
+            student.submissions.filter(s => s.slideIndex === slideIndex).map(s => ({ ...s, studentName: student.name, studentEmail: student.email }))
+        );
+
+        let submissionsToDisplay;
+        if (showAllAttempts) {
+            submissionsToDisplay = allSubmissions.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+        } else {
+            const latestByStudent = {};
+            allSubmissions.forEach(sub => { 
+                if (!latestByStudent[sub.studentEmail] || (sub.timestamp?.seconds || 0) > (latestByStudent[sub.studentEmail].timestamp?.seconds || 0)) 
+                    latestByStudent[sub.studentEmail] = sub; 
+            });
+            submissionsToDisplay = Object.values(latestByStudent).sort((a, b) => a.studentName.localeCompare(b.studentName));
+        }
+
+        renderModalContent(submissionsToDisplay, anonymousNameMap);
+        document.getElementById('submissionModal').classList.remove('hidden');
+    }
+    
+    function renderModalContent(submissions, nameMap = null) {
+        const modalContent = document.getElementById('modalContent');
+        let contentHtml = '<div class="space-y-4">';
+        if (submissions.length > 0) {
+            submissions.forEach(sub => {
+                const displayName = nameMap && hideNames ? nameMap.get(sub.studentEmail) : sub.studentName;
+                const headerText = nameMap ? `${displayName}` : `Question ${sub.slideIndex + 1}`;
+                const date = sub.timestamp ? new Date(sub.timestamp.seconds * 1000).toLocaleString() : 'N/A';
+                contentHtml += `<div class="bg-gray-700 p-4 rounded-lg">
+                    <div class="flex justify-between items-center mb-2">
+                        <p class="font-bold text-lg">${headerText}</p>
+                        <p class="text-sm text-gray-400">${date}</p>
+                    </div>
+                    <textarea id="answer-${sub.id}" class="w-full bg-gray-900 p-3 rounded font-mono text-white border border-gray-600">${sub.answer}</textarea>
+                    <div class="flex items-center justify-end gap-4 mt-2">
+                        <button onclick="saveAnswer('${sub.id}', event)" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded-lg text-sm">Save Answer</button>
+                        <div class="flex items-center gap-2">
+                            <label for="score-${sub.id}" class="text-sm">Score:</label>
+                            <input type="number" id="score-${sub.id}" value="${sub.score}" min="0" max="100" class="w-20 bg-gray-900 border border-gray-600 rounded p-1 text-center">
+                            <button onclick="setScore('${sub.id}', event)" class="bg-green-600 hover:bg-green-700 text-white font-bold py-1 px-3 rounded-lg text-sm">Set Score</button>
+                            <button onclick="regradeSingleSubmission('${sub.id}', event)" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-1 px-3 rounded-lg text-sm">Regrade</button>
+                        </div>
+                    </div>
+                </div>`;
+            });
+        } else { contentHtml += '<p>No submissions found.</p>'; }
+        contentHtml += '</div>';
+        modalContent.innerHTML = contentHtml;
+    }
+
+    function closeModal() { 
+        document.getElementById('submissionModal').classList.add('hidden'); 
+        currentModalView = null; 
+    }
+    
+    function handleCredentialResponse(response) { 
+        auth.signInWithCredential(firebase.auth.GoogleAuthProvider.credential(response.credential))
+            .catch(err => console.error("Sign-in failed:", err)); 
+    }
+    
+    function handleSignOut() { 
+        auth.signOut().then(() => window.location.reload()); 
+    }
+
+    function showToast(message, options = {}) {
+        const { color = 'default', duration = 5000 } = options;
+        const wrapper = document.getElementById('toast-wrapper-top-right');
+        const toast = document.createElement('div');
+        toast.className = 'flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm w-full animate-fade-in-up';
+        const colors = { default: 'bg-gray-700', green: 'bg-green-600', red: 'bg-red-600', blue: 'bg-blue-600' };
+        toast.classList.add(colors[color] || colors['default']);
+        toast.innerHTML = `<span>${message}</span><button onclick="this.parentElement.remove()" class="ml-4 text-2xl font-bold">&times;</button>`;
+        wrapper.appendChild(toast);
+        setTimeout(() => {
+            toast.classList.remove('animate-fade-in-up');
+            toast.classList.add('animate-fade-out-down');
+            toast.addEventListener('animationend', () => toast.remove());
+        }, duration);
+    }
+    
+    function exportToCSV() {
+        let csvContent = "";
+        const numQuestions = assignmentData.slideIds.length;
+        let headers = ["Email", "Last Name", "First Name", "Last, First", "Class", "Average Score", "Completion %"];
+        for (let i = 1; i <= numQuestions; i++) { headers.push(`Q${i} Score`); }
+        csvContent += headers.join(',') + "\r\n";
+        
+        const studentsToExport = getCurrentlySortedStudents();
+
+        studentsToExport.forEach(student => {
+            const nameParts = student.name.split(' ');
+            const lastName = nameParts.pop() || "";
+            const firstName = nameParts.join(' ') || "";
+            const lastFirst = `"${lastName}, ${firstName}"`;
+            
+            let questionScores = [];
+            let totalScore = 0;
+            let attemptedQuestions = 0;
+            for (let i = 0; i < numQuestions; i++) {
+                const latestSubmission = student.submissions.filter(s => s.slideIndex === i).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
                 if (latestSubmission) {
                     questionScores.push(latestSubmission.score);
                     totalScore += latestSubmission.score;
@@ -442,7 +812,7 @@
             }
             const averageScore = attemptedQuestions > 0 ? (totalScore / attemptedQuestions).toFixed(2) : "";
             const completionPercentage = numQuestions > 0 ? ((attemptedQuestions / numQuestions) * 100).toFixed(2) : "0.00";
-            let row = [student.email, `"${lastName}"`, `"${firstName}"`, lastFirst, student.class || "", averageScore, completionPercentage, ...questionScores].join(',');
+            let row = [student.email, `"${lastName}"`, `"${firstName}"`, lastFirst, student.class, averageScore, completionPercentage, ...questionScores].join(',');
             csvContent += row + "\r\n";
         });
         
@@ -450,23 +820,15 @@
         const link = document.createElement("a");
         const url = URL.createObjectURL(blob);
         link.setAttribute("href", url);
-        const safeAssignmentName = (assignmentData.name || 'assignment').replace(/[^a-z0-9]/gi, '_');
+        const safeAssignmentName = assignmentData.name.replace(/[^a-z0-9]/gi, '_');
         const safeViewName = activeClass.replace(/\s+/g, '_');
         link.setAttribute("download", `submissions_${safeAssignmentName}_${safeViewName}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        URL.revokeObjectURL(url);
     }
-    
-    // --- Event Listeners ---
-    document.getElementById('classFilter').addEventListener('change', (e) => {
-        activeClass = e.target.value;
-        renderDashboard();
-    });
-    document.getElementById('sortOrder').addEventListener('change', renderDashboard);
     document.getElementById('exportButton').onclick = exportToCSV;
-
 </script>
 </body>
 </html>
-
