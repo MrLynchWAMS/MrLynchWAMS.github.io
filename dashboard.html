@@ -122,6 +122,7 @@
     let activeClass = null;
     let assignmentId;
     let classAverages = {};
+    let initialized = false; // <---- PATCH for default class selection
     
     // Display & Sort State
     let hideNames = false;
@@ -187,6 +188,15 @@
                                 submissions: submissionsByStudent[doc.data().email] || [],
                                 isSubmitted: submittedEmails.has(doc.data().email)
                             }));
+
+                            // PATCH: Set activeClass to first class after data loads, only once
+                            const assignedClasses = assignmentData.assignedClasses || [];
+                            const classesInAssignment = [...new Set(allStudentData.filter(s => assignedClasses.includes(String(s.class))).map(s => String(s.class)))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+                            if (!initialized && classesInAssignment.length > 0) {
+                                activeClass = classesInAssignment[0];
+                                initialized = true;
+                            }
+
                             calculateAllClassAverages();
                             populateClassLinks();
                             displayStudentData();
@@ -216,11 +226,7 @@
             document.getElementById('dashboardTitle').textContent = `Dashboard for: ${assignmentData.name}`;
             
             setupLiveStudentData(); // <-- Live updates!
-
-            // Patch: default to first class, not "All"
-            const assignedClasses = assignmentData.assignedClasses || [];
-            const classesInAssignment = [...new Set(allStudentData.filter(s => assignedClasses.includes(String(s.class))).map(s => String(s.class)))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-            activeClass = classesInAssignment[0] || ''; // <-- always first class if present
+            // No activeClass set here: handled in snapshot listener above
 
             document.getElementById('pageLoader').classList.add('hidden');
             document.getElementById('mainContainer').classList.remove('hidden');
@@ -263,7 +269,7 @@
         let allAttemptedQuestions = 0;
         studentsInAssignment.forEach(student => {
              for (let i = 0; i < numQuestions; i++) {
-                const latestSubmission = student.submissions.filter(sub => sub.slideIndex === i).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
+                const latestSubmission = student.submissions.filter(s => s.slideIndex === i).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
                 if (latestSubmission) {
                     allTotalScore += latestSubmission.score;
                     allAttemptedQuestions++;
