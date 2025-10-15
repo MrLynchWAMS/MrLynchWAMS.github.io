@@ -60,9 +60,7 @@
       </div>
       <div id="deadline-content" class="collapsible-content px-6 pb-6">
         <p class="text-gray-400 mb-4">Set the official start time for each class period. Per-question deadlines are calculated in minutes after this time.</p>
-        <div id="class-start-times" class="flex flex-wrap gap-4">
-          <!-- Time inputs will be added here -->
-        </div>
+        <div id="class-start-times" class="flex flex-wrap gap-4"></div>
         <div class="mt-4 border-t border-gray-700 pt-4 flex justify-end">
           <button onclick="saveTeacherDefaults()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">Save These Times as My Defaults</button>
         </div>
@@ -253,10 +251,8 @@ function renderEditor() {
         </div>
       </div>
     `;
-    // Checker widget integration
     const checkerTemplate = document.getElementById('checkerTemplate');
     const checkerUI = checkerTemplate.content.cloneNode(true);
-    // Initialize checker widget
     CheckerWidget(checkerUI, checkerFunctions[`calc${qNum}`] || "");
     editorBox.querySelector(`#checker-container-${qNum}`).appendChild(checkerUI);
     container.appendChild(editorBox);
@@ -266,9 +262,7 @@ function renderEditor() {
   });
 }
 
-// CheckerWidget function optimized for all the requested functionality
 function CheckerWidget(container, initialCode = "") {
-  // State
   let mode = initialCode ? "advanced" : "simple";
   let simpleDisabled = !!initialCode;
   let code = initialCode || getDefaultCheckerCode();
@@ -284,7 +278,9 @@ function CheckerWidget(container, initialCode = "") {
   const simpleDisabledNotice = container.querySelector('.simple-disabled-notice');
   const deleteAdvBtn = container.querySelector('.delete-advanced-btn');
 
-  // Initial load logic
+  container.getCode = () => (mode === "simple" ? generateCodeFromUI(container) : advTextarea.value);
+  container.getMode = () => mode;
+
   if (mode === "advanced") {
     showAdvancedMode();
     advTextarea.value = code;
@@ -299,7 +295,6 @@ function CheckerWidget(container, initialCode = "") {
     simpleDisabledNotice.classList.add('hidden');
   }
 
-  // Mode toggling
   simpleBtn.onclick = () => {
     if (simpleDisabled) {
       simpleDisabledNotice.classList.remove('hidden');
@@ -308,15 +303,17 @@ function CheckerWidget(container, initialCode = "") {
     mode = "simple";
     showSimpleMode();
     simpleDisabledNotice.classList.add('hidden');
+    advTextarea.value = generateCodeFromUI(container);
+    livePreview.textContent = advTextarea.value;
   };
   advBtn.onclick = () => {
     mode = "advanced";
     showAdvancedMode();
     simpleDisabledNotice.classList.remove('hidden');
     ruleGroupsContainer.innerHTML = "";
+    advTextarea.value = generateCodeFromUI(container);
   };
 
-  // Delete advanced code
   deleteAdvBtn.onclick = () => {
     if (confirm("Delete advanced code and switch to Simple Mode? This cannot be undone.")) {
       advTextarea.value = "";
@@ -325,19 +322,16 @@ function CheckerWidget(container, initialCode = "") {
       simpleDisabled = false;
       showSimpleMode();
       simpleDisabledNotice.classList.add('hidden');
-      if (ruleGroupsContainer.children.length === 0) {
-        ruleGroupsContainer.appendChild(createRuleGroupElement(1));
-      }
+      ruleGroupsContainer.innerHTML = "";
+      ruleGroupsContainer.appendChild(createRuleGroupElement(1));
       updateCodeFromSimple();
     }
   };
 
-  // Advanced editor change
   advTextarea.oninput = () => {
     code = advTextarea.value;
   };
 
-  // Simple Mode: add rule group, add/remove condition, update code
   container.querySelector('.add-rule-group-btn').onclick = () => {
     ruleGroupsContainer.appendChild(createRuleGroupElement(ruleGroupsContainer.children.length + 1));
     updateCodeFromSimple();
@@ -359,7 +353,6 @@ function CheckerWidget(container, initialCode = "") {
   ruleGroupsContainer.addEventListener('change', updateCodeFromSimple);
   ruleGroupsContainer.addEventListener('keyup', updateCodeFromSimple);
 
-  // Helpers
   function showSimpleMode() {
     simpleUI.classList.remove('hidden');
     advUI.classList.add('hidden');
@@ -367,8 +360,8 @@ function CheckerWidget(container, initialCode = "") {
     simpleBtn.classList.remove('bg-transparent', 'text-gray-300');
     advBtn.classList.add('bg-transparent', 'text-gray-300');
     advBtn.classList.remove('bg-indigo-600', 'text-white');
-    livePreview.textContent = code;
-    advTextarea.value = code;
+    livePreview.textContent = generateCodeFromUI(container);
+    advTextarea.value = generateCodeFromUI(container);
   }
   function showAdvancedMode() {
     simpleUI.classList.add('hidden');
@@ -377,22 +370,14 @@ function CheckerWidget(container, initialCode = "") {
     simpleBtn.classList.remove('bg-indigo-600', 'text-white');
     advBtn.classList.add('bg-indigo-600', 'text-white');
     advBtn.classList.remove('bg-transparent', 'text-gray-300');
-    advTextarea.value = code;
-    simpleDisabledNotice.classList.remove('hidden');
   }
-
   function updateCodeFromSimple() {
     code = generateCodeFromUI(container);
     livePreview.textContent = code;
     advTextarea.value = code;
   }
-
-  // Expose for save
-  container.getCode = () => code;
-  container.getMode = () => mode;
 }
 
-// --- Rule builder logic ---
 function createRuleGroupElement(number) {
   const div = document.createElement('div');
   div.className = 'rule-group bg-gray-800 p-3 rounded-lg border border-gray-600 space-y-3';
@@ -500,7 +485,7 @@ function generateCodeFromUI(container) {
 
   ruleGroups.forEach((group, index) => {
     const points = Number(group.querySelector('.rule-points').value) || 0;
-    const groupConnector = group.querySelector('.group-connector').value; // '&&' or '||'
+    const groupConnector = group.querySelector('.group-connector').value;
     let groupConditions = [];
     group.querySelectorAll('.condition-row').forEach(cond => {
       const type = cond.querySelector('.cond-type').value;
@@ -538,7 +523,6 @@ function generateCodeFromUI(container) {
   return code;
 }
 
-// --- Utility functions ---
 function loadImageWithRetries(imgElement, srcUrl, maxRetries = 2) {
   let attempt = 0;
   function tryLoad() {
@@ -570,12 +554,9 @@ async function saveAssignment() {
     });
     assignmentData.slideIds.forEach((id, index) => {
       const qNum = index + 1;
-      const checkerContainer = document.getElementById(`checker-container-${qNum}`).firstChild;
-      let checkerCode = "";
-      if (checkerContainer) {
-        // Use code from current mode
-        checkerCode = checkerContainer.getCode();
-      }
+      const checkerContainer = document.getElementById(`checker-container-${qNum}`);
+      const checkerUI = checkerContainer.firstChild;
+      let checkerCode = checkerUI.getCode();
       checkerFunctions[`calc${qNum}`] = checkerCode;
       deadlinePolicy[`q${qNum}`] = {
         deadlineMinutes: parseInt(document.getElementById(`deadline-minutes-${index}`).value, 10) || 0,
