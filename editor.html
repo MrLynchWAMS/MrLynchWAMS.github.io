@@ -19,41 +19,6 @@
         .animate-fade-in-right { animation: fade-in-right 0.5s ease-out forwards; }
         .animate-fade-out-right { animation: fade-out-right 0.5s ease-out forwards; }
         #toast-wrapper { position: fixed; top: 1rem; right: 1rem; z-index: 50; display: flex; flex-direction: column; gap: 0.5rem; }
-        .help-icon {
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 1.25rem;
-            height: 1.25rem;
-            border-radius: 9999px;
-            background-color: #4b5563;
-            color: #ffffff;
-            font-weight: bold;
-            margin-left: 0.5rem;
-            font-size: 0.8rem;
-            transition: background-color 0.2s;
-        }
-        .help-icon:hover { background-color: #6b7280; }
-        .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: rgba(0, 0, 0, 0.5);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 100;
-        }
-        .modal-box {
-            background: #1f2937;
-            padding: 1.5rem;
-            border-radius: 0.5rem;
-            max-width: 500px;
-            width: 90%;
-        }
     </style>
 </head>
 <body class="bg-gray-800 text-gray-200 font-sans">
@@ -82,6 +47,17 @@
                         <option value="lock">Lock answers, allow review</option>
                         <option value="hide">Hide assignment, show summary only</option>
                     </select>
+                </div>
+                <div>
+                    <label for="slideId" class="block text-sm font-medium text-gray-400">Google Slide ID (Optional)</label>
+                    <input type="text" id="slideId" class="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-white" placeholder="Enter Google Slide presentation ID">
+                </div>
+                <div id="class-times-container">
+                    <label class="block text-sm font-medium text-gray-400">Class Start Times</label>
+                    <div id="classTimesList" class="mt-1 space-y-2">
+                        <!-- Class times will be added here -->
+                    </div>
+                    <button id="addClassTimeBtn" class="mt-2 text-sm text-blue-400 hover:text-blue-300">+ Add Time</button>
                 </div>
             </div>
         </div>
@@ -131,6 +107,10 @@
                            <!-- Rule groups will be dynamically added here -->
                        </div>
                        <button class="add-rule-group-btn mt-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm">+ Add Rule Group</button>
+                       <div class="mt-4">
+                            <label class="block text-xs font-medium text-gray-500">Live Code Preview (read-only)</label>
+                            <pre class="bg-gray-900 text-white p-2 rounded-md text-xs overflow-x-auto h-32"><code class="live-code-preview"></code></pre>
+                        </div>
                     </div>
 
                     <!-- Advanced Mode UI (the original textarea) -->
@@ -163,6 +143,9 @@
     // --- DOM Elements ---
     const assignmentNameEl = document.getElementById('assignmentName');
     const postSubmissionRuleEl = document.getElementById('postSubmissionRule');
+    const slideIdEl = document.getElementById('slideId');
+    const classTimesList = document.getElementById('classTimesList');
+    const addClassTimeBtn = document.getElementById('addClassTimeBtn');
     const questionsContainer = document.getElementById('questionsContainer');
     const questionTemplate = document.getElementById('questionTemplate');
     const addQuestionBtn = document.getElementById('addQuestionBtn');
@@ -178,13 +161,15 @@
             assignmentId = urlParams.get('id');
             if (assignmentId) {
                 loadAssignment(assignmentId);
+            } else {
+                addQuestion(1);
             }
         } else {
             window.location.href = 'assignments.html';
         }
     });
 
-    // --- Core Logic: Load, Save, Add/Delete Questions ---
+    // --- Core Logic: Load, Save, Add/Delete Questions & Class Times ---
 
     async function loadAssignment(id) {
         try {
@@ -193,13 +178,20 @@
                 const data = doc.data();
                 assignmentNameEl.value = data.name || '';
                 postSubmissionRuleEl.value = data.postSubmissionRule || 'open';
+                slideIdEl.value = data.slideId || '';
+                
+                classTimesList.innerHTML = '';
+                if(data.classTimes) {
+                    data.classTimes.forEach(time => addClassTime(time));
+                }
+
                 questionsContainer.innerHTML = '';
                 if (data.questions && data.questions.length > 0) {
                     data.questions.forEach((q, index) => {
                         addQuestion(index + 1, q);
                     });
                 } else {
-                    addQuestion(1); // Add one empty question if assignment is new
+                    addQuestion(1);
                 }
             } else {
                  showToast("Assignment not found.", {color: 'red'});
@@ -209,6 +201,22 @@
             console.error("Error loading assignment:", error);
             showToast("Failed to load assignment.", {color: 'red'});
         }
+    }
+    
+    function addClassTime(time = null) {
+        const div = document.createElement('div');
+        div.className = 'flex items-center space-x-2';
+        const input = document.createElement('input');
+        input.type = 'datetime-local';
+        input.className = 'class-time-input bg-gray-700 border border-gray-600 rounded-md shadow-sm py-1 px-2 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-white';
+        if(time) input.value = time;
+        const removeBtn = document.createElement('button');
+        removeBtn.textContent = 'Remove';
+        removeBtn.className = 'text-red-400 hover:text-red-300 text-sm';
+        removeBtn.onclick = () => div.remove();
+        div.appendChild(input);
+        div.appendChild(removeBtn);
+        classTimesList.appendChild(div);
     }
 
     function addQuestion(number, data = null) {
@@ -227,6 +235,9 @@
             code.value = data.code || getDefaultAnswerCheckerCode();
         } else {
             code.value = getDefaultAnswerCheckerCode();
+            const container = questionCard.querySelector('.rule-groups-container');
+            container.appendChild(createRuleGroupElement(1));
+            generateCodeFromUI(questionCard);
         }
         
         questionsContainer.appendChild(clone);
@@ -259,9 +270,13 @@
             });
         });
 
+        const classTimes = Array.from(document.querySelectorAll('.class-time-input')).map(input => input.value).filter(Boolean);
+
         const assignmentData = {
             name: assignmentNameEl.value.trim(),
             postSubmissionRule: postSubmissionRuleEl.value,
+            slideId: slideIdEl.value.trim(),
+            classTimes: classTimes,
             questions: questions,
             owner: currentUser.uid,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -290,14 +305,14 @@
     }
 
     function getDefaultAnswerCheckerCode() {
-        return `// Auto-generated by Simple Editor
+        return `// Auto-generated by Simple Editor. Switch to Advanced Mode to edit directly.
 function checkAnswer(studentAnswer) {
     let score = 0;
     const maxScore = 100;
     const answer = typeof studentAnswer === 'string' ? studentAnswer.toLowerCase() : studentAnswer;
 
     // From Rule Group 1
-    if (false) { // Replace this with real conditions
+    if (false) { // Add conditions in Simple Mode
         score += 100;
     }
 
@@ -320,10 +335,10 @@ function checkAnswer(studentAnswer) {
     });
 
     saveAssignmentBtn.addEventListener('click', saveAssignment);
+    addClassTimeBtn.addEventListener('click', () => addClassTime());
     
     // --- New Simple Rule Builder Logic ---
 
-    // Use event delegation for dynamically added elements
     questionsContainer.addEventListener('click', (e) => {
         const questionCard = e.target.closest('.question-card');
         if (!questionCard) return;
@@ -354,21 +369,18 @@ function checkAnswer(studentAnswer) {
             }
         }
         
-        // Add Rule Group
         if(e.target.classList.contains('add-rule-group-btn')) {
             const container = questionCard.querySelector('.rule-groups-container');
             container.appendChild(createRuleGroupElement(container.children.length + 1));
             generateCodeFromUI(questionCard);
         }
         
-        // Add Condition
         if(e.target.classList.contains('add-condition-btn')) {
             const conditionsContainer = e.target.previousElementSibling;
             conditionsContainer.appendChild(createConditionElement());
             generateCodeFromUI(questionCard);
         }
         
-        // Delete Group or Condition
         if(e.target.classList.contains('delete-btn')) {
             e.target.parentElement.remove();
             generateCodeFromUI(questionCard);
@@ -409,7 +421,7 @@ function checkAnswer(studentAnswer) {
             </div>
             <div class="flex items-center space-x-2">
                 <label class="text-sm">Conditions in this group require:</label>
-                <select class="group-connector bg-gray-700 border border-gray-600 rounded-md p-1">
+                <select class="group-connector bg-gray-700 border border-gray-600 rounded-md p-1 text-sm">
                     <option value="&&">All to be true (AND)</option>
                     <option value="||">Any to be true (OR)</option>
                 </select>
@@ -439,117 +451,79 @@ function checkAnswer(studentAnswer) {
                 <input type="text" class="cond-value w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="keyword(s), comma-separated">
                 <div class="text-options hidden text-xs mt-1">
                     <label>Require: </label>
-                    <select class="text-bool bg-gray-700 border border-gray-600 rounded-md p-0.5">
+                    <select class="text-bool bg-gray-700 border border-gray-600 rounded-md p-0.5 text-sm">
                         <option value="||">Any (OR)</option>
                         <option value="&&">All (AND)</option>
                     </select>
                 </div>
             </div>
-            <button class="delete-btn text-red-400 hover:text-red-300 font-bold">&times;</button>
+            <button class="delete-btn text-red-400 hover:text-red-300 font-bold text-xl leading-none">&times;</button>
         `;
-        // Add event listener for dynamic operator changes
         div.querySelector('.cond-type').addEventListener('change', e => {
             const operatorSelect = div.querySelector('.cond-operator');
             const valueWrapper = div.querySelector('.cond-value-wrapper');
-            const textOptions = div.querySelector('.text-options');
-            if(e.target.value === 'number') {
-                operatorSelect.innerHTML = `
-                    <option value="==">is equal to</option>
-                    <option value="!=">is not equal to</option>
-                    <option value=">">is greater than</option>
-                    <option value="<">is less than</option>
-                `;
+            const type = e.target.value;
+            if(type === 'number') {
+                operatorSelect.innerHTML = `<option value="==">is equal to</option><option value="!=">is not equal to</option><option value=">">is greater than</option><option value="<">is less than</option>`;
                 valueWrapper.innerHTML = `<input type="number" class="cond-value w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="a number">`;
-                 textOptions.classList.add('hidden');
             } else { // text
-                 operatorSelect.innerHTML = `
-                    <option value="contains">contains</option>
-                    <option value="not_contains">does not contain</option>
-                    <option value="equals_str">is exactly</option>
-                `;
-                 valueWrapper.innerHTML = `
-                    <input type="text" class="cond-value w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="keyword(s), comma-separated">
-                    <div class="text-options hidden text-xs mt-1">
-                        <label>Require: </label>
-                        <select class="text-bool bg-gray-700 border border-gray-600 rounded-md p-0.5">
-                            <option value="||">Any (OR)</option>
-                            <option value="&&">All (AND)</option>
-                        </select>
-                    </div>`;
+                 operatorSelect.innerHTML = `<option value="contains">contains</option><option value="not_contains">does not contain</option><option value="equals_str">is exactly</option>`;
+                 valueWrapper.innerHTML = `<input type="text" class="cond-value w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="keyword(s), comma-separated"><div class="text-options hidden text-xs mt-1"><label>Require: </label><select class="text-bool bg-gray-700 border border-gray-600 rounded-md p-0.5 text-sm"><option value="||">Any (OR)</option><option value="&&">All (AND)</option></select></div>`;
             }
         });
-
-        // Event listener for showing multi-keyword options
         div.addEventListener('keyup', e => {
             if (e.target.classList.contains('cond-value')) {
                 const operator = div.querySelector('.cond-operator').value;
                 const textOptions = div.querySelector('.text-options');
+                if (!textOptions) return;
                 if (operator === 'contains' || operator === 'not_contains') {
-                    if (e.target.value.includes(',')) {
-                        textOptions.classList.remove('hidden');
-                    } else {
-                        textOptions.classList.add('hidden');
-                    }
+                    if (e.target.value.includes(',')) textOptions.classList.remove('hidden');
+                    else textOptions.classList.add('hidden');
+                } else {
+                    textOptions.classList.add('hidden');
                 }
             }
         });
-
         return div;
     }
 
     function generateCodeFromUI(questionCard) {
         const ruleGroups = questionCard.querySelectorAll('.rule-group');
-        let code = `// Auto-generated by Simple Editor\n`;
+        let code = `// Auto-generated by Simple Editor. Switch to Advanced Mode to edit directly.\n`;
         code += `function checkAnswer(studentAnswer) {\n`;
         code += `    let score = 0;\n`;
-        
         let totalMaxScore = 0;
-        ruleGroups.forEach(group => {
-            totalMaxScore += Number(group.querySelector('.rule-points').value) || 0;
-        });
-        
+        ruleGroups.forEach(group => { totalMaxScore += Number(group.querySelector('.rule-points').value) || 0; });
         code += `    const maxScore = ${totalMaxScore || 100};\n`;
         code += `    const answer = typeof studentAnswer === 'string' ? studentAnswer.toLowerCase() : studentAnswer;\n\n`;
         
         ruleGroups.forEach((group, index) => {
             const points = Number(group.querySelector('.rule-points').value) || 0;
             const groupConnector = group.querySelector('.group-connector').value; // '&&' or '||'
-            const conditions = group.querySelectorAll('.condition-row');
-            
             let groupConditions = [];
-            
-            conditions.forEach(cond => {
+            group.querySelectorAll('.condition-row').forEach(cond => {
                 const type = cond.querySelector('.cond-type').value;
                 const op = cond.querySelector('.cond-operator').value;
-                const valEl = cond.querySelector('.cond-value');
-                const val = valEl.value.trim();
-
+                const val = cond.querySelector('.cond-value').value.trim();
                 if (!val) return;
-
                 if (type === 'text') {
-                    let textCondition;
                     const keywords = val.split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
                     if (keywords.length > 1 && (op === 'contains' || op === 'not_contains')) {
-                         const textBool = cond.querySelector('.text-bool').value; // '&&' or '||'
+                         const textBool = cond.querySelector('.text-bool').value;
                          const keywordConditions = keywords.map(k => `${op === 'not_contains' ? '!' : ''}answer.includes("${k.replace(/"/g, '\\"')}")`);
-                         textCondition = `(${keywordConditions.join(` ${textBool} `)})`;
-                    } else {
-                        const keyword = keywords[0] || '';
-                        if (op === 'contains') textCondition = `answer.includes("${keyword.replace(/"/g, '\\"')}")`;
-                        else if (op === 'not_contains') textCondition = `!answer.includes("${keyword.replace(/"/g, '\\"')}")`;
-                        else if (op === 'equals_str') textCondition = `answer === "${keyword.replace(/"/g, '\\"')}"`;
+                         groupConditions.push(`(${keywordConditions.join(` ${textBool} `)})`);
+                    } else if (keywords.length > 0) {
+                        const keyword = keywords[0];
+                        if (op === 'contains') groupConditions.push(`answer.includes("${keyword.replace(/"/g, '\\"')}")`);
+                        else if (op === 'not_contains') groupConditions.push(`!answer.includes("${keyword.replace(/"/g, '\\"')}")`);
+                        else if (op === 'equals_str') groupConditions.push(`answer === "${keyword.replace(/"/g, '\\"')}"`);
                     }
-                     if (textCondition) groupConditions.push(textCondition);
-                } else if (type === 'number') {
-                    const numVal = parseFloat(val);
-                    if (!isNaN(numVal)) {
-                        groupConditions.push(`Number(answer) ${op} ${numVal}`);
-                    }
+                } else if (type === 'number' && !isNaN(parseFloat(val))) {
+                    groupConditions.push(`Number(answer) ${op} ${parseFloat(val)}`);
                 }
             });
-
-            const ifStatement = index === 0 ? 'if' : 'else if';
             if (groupConditions.length > 0) {
+                const ifStatement = index === 0 ? 'if' : 'else if';
                 code += `    // From Rule Group ${index + 1}\n`;
                 code += `    ${ifStatement} (${groupConditions.join(` ${groupConnector} `)}) {\n`;
                 code += `        score += ${points};\n`;
@@ -562,8 +536,9 @@ function checkAnswer(studentAnswer) {
         code += `}`;
         
         questionCard.querySelector('.answerCheckingCode').value = code;
+        const previewEl = questionCard.querySelector('.live-code-preview');
+        if (previewEl) previewEl.textContent = code;
     }
-
 
     // --- Utility: Toast Notifications ---
     function showToast(message, options = {}) {
@@ -597,3 +572,4 @@ function checkAnswer(studentAnswer) {
 </script>
 </body>
 </html>
+
