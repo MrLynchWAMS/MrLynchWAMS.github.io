@@ -1,419 +1,479 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Assignment Editor</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👩‍🚀</text></svg>">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <script src="https://apis.google.com/js/api.js" async defer></script>
-    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
-    <style>
-        .hidden { display: none; }
-        textarea { font-family: monospace; resize: vertical; }
-        @keyframes fade-in-right { from { opacity: 0; transform: translateX(100%); } to { opacity: 1; transform: translateX(0); } }
-        @keyframes fade-out-right { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(100%); } }
-        .animate-fade-in-right { animation: fade-in-right 0.5s ease-out forwards; }
-        .animate-fade-out-right { animation: fade-out-right 0.5s ease-in forwards; }
-        .collapsible-content { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; }
-        #toast-wrapper { position: fixed; top: 1rem; right: 1rem; z-index: 50; display: flex; flex-direction: column; gap: 0.5rem; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Assignment Editor</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👩‍🚀</text></svg>">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="https://apis.google.com/js/api.js" async defer></script>
+  <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
+  <style>
+    .hidden { display: none; }
+    textarea { font-family: monospace; resize: vertical; }
+    @keyframes fade-in-right { from { opacity: 0; transform: translateX(100%); } to { opacity: 1; transform: translateX(0); } }
+    @keyframes fade-out-right { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(100%); } }
+    .animate-fade-in-right { animation: fade-in-right 0.5s ease-out forwards; }
+    .animate-fade-out-right { animation: fade-out-right 0.5s ease-in forwards; }
+    .collapsible-content { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; }
+    #toast-wrapper { position: fixed; top: 1rem; right: 1rem; z-index: 50; display: flex; flex-direction: column; gap: 0.5rem; }
+    .simple-disabled-notice { background: #fee2e2; color: #991b1b; padding: 0.5rem; border-radius: 0.375rem; margin-top: 0.5rem; }
+  </style>
 </head>
 <body class="bg-gray-900 text-white font-sans">
 
-    <div id="page-loader" class="flex flex-col items-center justify-center h-screen">
-        <h1 class="text-4xl font-bold text-yellow-400 mb-4">Assignment Editor</h1>
-        <p id="loading-text" class="text-lg text-gray-300">Initializing...</p>
-        <div id="signInButtonContainer" class="hidden mt-8">
-             <div id="g_id_onload" data-client_id="1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com" data-callback="handleCredentialResponse"></div>
-             <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_black" data-text="signin_with" data-shape="rectangular" data-logo_alignment="left"></div>
-        </div>
-        <p id="auth-error" class="text-red-500 mt-4"></p>
+  <div id="page-loader" class="flex flex-col items-center justify-center h-screen">
+    <h1 class="text-4xl font-bold text-yellow-400 mb-4">Assignment Editor</h1>
+    <p id="loading-text" class="text-lg text-gray-300">Initializing...</p>
+    <div id="signInButtonContainer" class="hidden mt-8">
+      <div id="g_id_onload" data-client_id="1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com" data-callback="handleCredentialResponse"></div>
+      <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_black" data-text="signin_with" data-shape="rectangular" data-logo_alignment="left"></div>
+    </div>
+    <p id="auth-error" class="text-red-500 mt-4"></p>
+  </div>
+
+  <div id="editorContent" class="hidden container mx-auto p-4 md:p-8">
+    <div class="flex justify-between items-center mb-6 flex-wrap gap-4">
+      <h1 id="assignmentTitle" class="text-3xl font-bold text-yellow-400"></h1>
+      <div>
+        <a href="./assignments.html" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg">&larr; Back to Assignments</a>
+        <button onclick="saveAssignment()" id="saveBtn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg">Save Assignment</button>
+        <button id="signOutButton" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Sign Out</button>
+      </div>
     </div>
 
-    <div id="editorContent" class="hidden container mx-auto p-4 md:p-8">
-        <div class="flex justify-between items-center mb-6 flex-wrap gap-4">
-            <h1 id="assignmentTitle" class="text-3xl font-bold text-yellow-400"></h1>
-            <div>
-                <a href="./assignments.html" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg">&larr; Back to Assignments</a>
-                <button onclick="saveAssignment()" id="saveBtn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg">Save Assignment</button>
-                <button id="signOutButton" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Sign Out</button>
-            </div>
-        </div>
-
-        <div class="bg-gray-800 p-4 rounded-lg mb-6">
-            <h2 class="text-xl font-semibold mb-2">Student Link</h2>
-            <div class="flex gap-2">
-                <input id="shareLink" type="text" readonly class="w-full p-2 bg-gray-700 border border-gray-600 rounded">
-                <button onclick="copyShareLink()" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-3 rounded-lg">Copy</button>
-            </div>
-        </div>
-        
-        <div id="deadline-section" class="bg-gray-800 rounded-lg mb-8 overflow-hidden">
-            <div id="deadline-header" class="flex justify-between items-center p-6 cursor-pointer" onclick="toggleDeadlineSection()">
-                 <h2 class="text-2xl font-bold text-yellow-400">Class Start Times & Deadlines</h2>
-                 <span id="deadline-chevron" class="text-2xl transform transition-transform">▶</span>
-            </div>
-            <div id="deadline-content" class="collapsible-content px-6 pb-6">
-                <p class="text-gray-400 mb-4">Set the official start time for each class period. Per-question deadlines are calculated in minutes after this time.</p>
-                <div id="class-start-times" class="flex flex-wrap gap-4">
-                    <!-- Time inputs will be added here -->
-                </div>
-                <div class="mt-4 border-t border-gray-700 pt-4 flex justify-end">
-                    <button onclick="saveTeacherDefaults()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">Save These Times as My Defaults</button>
-                </div>
-            </div>
-        </div>
-        
-        <div class="bg-gray-800 p-6 rounded-lg mb-8">
-            <label for="postSubmissionRule" class="block text-2xl font-bold text-yellow-400 mb-2">Post-Submission Policy</label>
-            <p class="text-gray-400 mb-4">Choose what happens after a student officially submits this assignment.</p>
-            <select id="postSubmissionRule" class="w-full md:w-1/2 p-2 bg-gray-700 rounded border border-gray-600">
-                <option value="open">Remain Open (Students can review and resubmit)</option>
-                <option value="lock">Lock (Students can review but not edit)</option>
-                <option value="hide">Lock & Hide (Students cannot see answers or scores)</option>
-            </select>
-        </div>
-
-        <div id="slidesContainer" class="space-y-8"></div>
+    <div class="bg-gray-800 p-4 rounded-lg mb-6">
+      <h2 class="text-xl font-semibold mb-2">Student Link</h2>
+      <div class="flex gap-2">
+        <input id="shareLink" type="text" readonly class="w-full p-2 bg-gray-700 border border-gray-600 rounded">
+        <button onclick="copyShareLink()" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-3 rounded-lg">Copy</button>
+      </div>
     </div>
-    
-    <!-- Simple/Advanced Checker Template -->
-    <template id="checkerTemplate">
-        <div>
-            <div class="flex items-center justify-between">
-                <label class="block font-semibold mb-2">Checker Function</label>
-                <div class="flex items-center space-x-1 p-1 bg-gray-700 rounded-lg">
-                    <button class="mode-toggle-btn simple-mode-btn bg-indigo-600 text-white rounded-md px-3 py-1 text-sm font-semibold">Simple</button>
-                    <button class="mode-toggle-btn advanced-mode-btn bg-transparent text-gray-300 rounded-md px-3 py-1 text-sm font-semibold">Advanced</button>
-                </div>
-            </div>
-            <!-- Simple Mode UI -->
-            <div class="simple-mode-ui mt-2 p-3 bg-gray-700/50 border border-gray-600 rounded-lg space-y-4">
-                <div class="rule-groups-container space-y-4">
-                    <!-- Rule groups will be dynamically added here -->
-                </div>
-                <button class="add-rule-group-btn mt-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm">+ Add Rule Group</button>
-                <div class="mt-4">
-                    <label class="block text-xs font-medium text-gray-500">Live Code Preview (read-only)</label>
-                    <pre class="bg-gray-900 text-white p-2 rounded-md text-xs overflow-x-auto h-32"><code class="live-code-preview"></code></pre>
-                </div>
-            </div>
-            <!-- Advanced Mode UI -->
-            <div class="advanced-mode-ui hidden">
-                <textarea class="checker-textarea w-full h-64 p-2 bg-gray-700 rounded" placeholder="// Write your checker function here"></textarea>
-            </div>
-        </div>
-    </template>
 
-    <div id="toast-wrapper" class="fixed top-4 right-4 z-[100] space-y-3 w-full max-w-sm"></div>
+    <div id="deadline-section" class="bg-gray-800 rounded-lg mb-8 overflow-hidden">
+      <div id="deadline-header" class="flex justify-between items-center p-6 cursor-pointer" onclick="toggleDeadlineSection()">
+        <h2 class="text-2xl font-bold text-yellow-400">Class Start Times & Deadlines</h2>
+        <span id="deadline-chevron" class="text-2xl transform transition-transform">▶</span>
+      </div>
+      <div id="deadline-content" class="collapsible-content px-6 pb-6">
+        <p class="text-gray-400 mb-4">Set the official start time for each class period. Per-question deadlines are calculated in minutes after this time.</p>
+        <div id="class-start-times" class="flex flex-wrap gap-4">
+          <!-- Time inputs will be added here -->
+        </div>
+        <div class="mt-4 border-t border-gray-700 pt-4 flex justify-end">
+          <button onclick="saveTeacherDefaults()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">Save These Times as My Defaults</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-gray-800 p-6 rounded-lg mb-8">
+      <label for="postSubmissionRule" class="block text-2xl font-bold text-yellow-400 mb-2">Post-Submission Policy</label>
+      <p class="text-gray-400 mb-4">Choose what happens after a student officially submits this assignment.</p>
+      <select id="postSubmissionRule" class="w-full md:w-1/2 p-2 bg-gray-700 rounded border border-gray-600">
+        <option value="open">Remain Open (Students can review and resubmit)</option>
+        <option value="lock">Lock (Students can review but not edit)</option>
+        <option value="hide">Lock & Hide (Students cannot see answers or scores)</option>
+      </select>
+    </div>
+
+    <div id="slidesContainer" class="space-y-8"></div>
+  </div>
+
+  <!-- Checker Function Template (Simple/Advanced) -->
+  <template id="checkerTemplate">
+    <div class="checker-widget">
+      <div class="flex items-center justify-between mb-2">
+        <label class="block font-semibold">Checker Function</label>
+        <div class="flex items-center space-x-1 p-1 bg-gray-700 rounded-lg">
+          <button class="mode-toggle-btn simple-mode-btn bg-indigo-600 text-white rounded-md px-3 py-1 text-sm font-semibold">Simple</button>
+          <button class="mode-toggle-btn advanced-mode-btn bg-transparent text-gray-300 rounded-md px-3 py-1 text-sm font-semibold">Advanced</button>
+        </div>
+      </div>
+      <div class="simple-mode-ui mt-2 p-3 bg-gray-700/50 border border-gray-600 rounded-lg space-y-4">
+        <div class="rule-groups-container space-y-4"></div>
+        <button class="add-rule-group-btn mt-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm">+ Add Rule Group</button>
+        <div class="mt-4">
+          <label class="block text-xs font-medium text-gray-500">Live Code Preview (read-only)</label>
+          <pre class="bg-gray-900 text-white p-2 rounded-md text-xs overflow-x-auto h-32"><code class="live-code-preview"></code></pre>
+        </div>
+      </div>
+      <div class="advanced-mode-ui hidden">
+        <textarea class="checker-textarea w-full h-64 p-2 bg-gray-700 rounded" placeholder="// Write your checker function here"></textarea>
+        <div class="flex justify-end mt-2">
+          <button class="delete-advanced-btn bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-3 rounded-md text-sm">Delete Advanced Code</button>
+        </div>
+      </div>
+      <div class="simple-disabled-notice hidden">
+        <b>Advanced code exists.</b> Delete advanced code to use Simple Mode.
+      </div>
+    </div>
+  </template>
+
+  <div id="toast-wrapper"></div>
 
 <script>
-    // --- Firebase & Auth ---
-    const TEACHER_EMAILS = ["klynch@mtps.us", "mstuart@mtps.us", "cfiori@mtps.us", "mlock@mtps.us", "cheine@mtps.us"];
-    const CLIENT_ID = "1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com";
-    const SCOPES = "https://www.googleapis.com/auth/presentations.readonly";
-    const firebaseConfig = {
-      apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
-      authDomain: "mrlynch-slides-app.firebaseapp.com",
-      projectId: "mrlynch-slides-app",
-      storageBucket: "mrlynch-slides-app.appspot.com",
-      messagingSenderId: "223179627035",
-      appId: "1:223179627035:web:ff0f538f3029d829c3f6be"
-    };
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
-    const auth = firebase.auth();
+const TEACHER_EMAILS = ["klynch@mtps.us", "mstuart@mtps.us", "cfiori@mtps.us", "mlock@mtps.us", "cheine@mtps.us"];
+const CLIENT_ID = "1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com";
+const SCOPES = "https://www.googleapis.com/auth/presentations.readonly";
+const firebaseConfig = {
+  apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
+  authDomain: "mrlynch-slides-app.firebaseapp.com",
+  projectId: "mrlynch-slides-app",
+  storageBucket: "mrlynch-slides-app.appspot.com",
+  messagingSenderId: "223179627035",
+  appId: "1:223179627035:web:ff0f538f3029d829c3f6be"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const auth = firebase.auth();
 
-    let assignmentId = null;
-    let assignmentData = null;
-    let tokenClient;
-    let allClassNames = [];
-    let teacherDefaults = {};
+let assignmentId = null;
+let assignmentData = null;
+let tokenClient;
+let allClassNames = [];
+let teacherDefaults = {};
 
-    // --- Authentication ---
-    auth.onAuthStateChanged(user => {
-        if (user && TEACHER_EMAILS.map(e => e.toLowerCase()).includes(user.email.toLowerCase())) {
-            authorizeGapi();
-        } else {
-            document.getElementById('loading-text').textContent = "Please sign in to continue.";
+auth.onAuthStateChanged(user => {
+  if (user && TEACHER_EMAILS.map(e => e.toLowerCase()).includes(user.email.toLowerCase())) {
+    authorizeGapi();
+  } else {
+    document.getElementById('loading-text').textContent = "Please sign in to continue.";
+    document.getElementById('signInButtonContainer').classList.remove('hidden');
+  }
+});
+
+function handleCredentialResponse(response) {
+  const credential = firebase.auth.GoogleAuthProvider.credential(response.credential);
+  auth.signInWithCredential(credential).catch(error => {
+    console.error("Firebase sign-in error", error);
+    document.getElementById('auth-error').innerText = "Firebase sign-in failed. Please try again.";
+  });
+}
+
+function authorizeGapi() {
+  gapi.load('client', () => {
+    gapi.client.load('https://slides.googleapis.com/$discovery/rest?version=v1').then(() => {
+      tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: CLIENT_ID,
+        scope: SCOPES,
+        callback: (tokenResponse) => {
+          if (tokenResponse && tokenResponse.access_token) {
+            gapi.client.setToken(tokenResponse);
+            loadAssignment();
+          } else {
+            document.getElementById('loading-text').textContent = "Could not get Google API authorization. Please try re-signing in.";
             document.getElementById('signInButtonContainer').classList.remove('hidden');
-        }
+          }
+        },
+      });
+      tokenClient.requestAccessToken({prompt: ''});
     });
+  });
+}
 
-    function handleCredentialResponse(response) {
-        const credential = firebase.auth.GoogleAuthProvider.credential(response.credential);
-        auth.signInWithCredential(credential).catch(error => {
-            console.error("Firebase sign-in error", error);
-            document.getElementById('auth-error').innerText = "Firebase sign-in failed. Please try again.";
-        });
+window.onload = function() {
+  const urlParams = new URLSearchParams(window.location.search);
+  assignmentId = urlParams.get('id');
+  if (!assignmentId) {
+    document.getElementById('loading-text').textContent = "Error: No assignment ID provided in the URL.";
+    document.getElementById('signInButtonContainer').classList.add('hidden');
+  }
+};
+
+async function loadAssignment() {
+  if (!assignmentId) return;
+  const loadingText = document.getElementById('loading-text');
+  try {
+    loadingText.textContent = "Loading assignment data...";
+    const teacherDefaultsDoc = await db.collection("teachers").doc(auth.currentUser.email).get();
+    if(teacherDefaultsDoc.exists) { teacherDefaults = teacherDefaultsDoc.data(); }
+    const assignmentDoc = await db.collection("assignments").doc(assignmentId).get();
+    if (!assignmentDoc.exists) { loadingText.textContent = "Error: Assignment not found."; return; }
+    assignmentData = { id: assignmentDoc.id, ...assignmentDoc.data() };
+    const studentSnapshot = await db.collection("students").get();
+    const students = studentSnapshot.docs.map(doc => doc.data());
+    allClassNames = [...new Set(students.map(s => String(s.class)))].sort();
+    loadingText.textContent = "Fetching slide information from Google...";
+    const response = await gapi.client.slides.presentations.get({ presentationId: assignmentData.presentationId });
+    const slides = response.result.slides;
+    if (!slides || slides.length === 0) { loadingText.textContent = "Error: No slides found in the presentation."; return; }
+    assignmentData.slideIds = slides.map(slide => slide.objectId);
+    document.getElementById('page-loader').classList.add('hidden');
+    document.getElementById('editorContent').classList.remove('hidden');
+    document.getElementById('assignmentTitle').textContent = `Editing: ${assignmentData.name}`;
+    document.getElementById('shareLink').value = `https://custom.scienceclass.rocks/classroompicker.html?assignmentId=${assignmentId}`;
+    document.getElementById('postSubmissionRule').value = assignmentData.postSubmissionRule || 'open';
+    renderDeadlineUI();
+    renderEditor();
+  } catch (error) {
+    console.error("Error loading assignment or slides:", error);
+    const errorMessage = error.result?.error?.message || "An unknown error occurred.";
+    loadingText.textContent = `Error: ${errorMessage}. Please ensure Slides API is enabled and the presentation is shared with you.`;
+  }
+}
+
+function renderDeadlineUI() {
+  const container = document.getElementById('class-start-times');
+  container.innerHTML = '';
+  const assignmentStartTimes = assignmentData.deadlinePolicy?.classStartTimes;
+  const defaultStartTimes = teacherDefaults.classStartTimes;
+  const hardcodedDefaults = { '1': '08:01', '2': '08:50', '5': '11:17', '7': '12:55', '8': '13:44' };
+  allClassNames.forEach(className => {
+    const value = assignmentStartTimes?.[className] || defaultStartTimes?.[className] || hardcodedDefaults[className] || '00:00';
+    container.innerHTML += `<div><label for="start-time-${className}" class="block text-sm font-semibold">${className}</label><input type="time" id="start-time-${className}" value="${value}" class="p-2 bg-gray-700 rounded border border-gray-600 w-32"></div>`;
+  });
+}
+
+function renderEditor() {
+  const container = document.getElementById('slidesContainer');
+  container.innerHTML = '';
+  let slideIds = assignmentData.slideIds || [];
+  let checkerFunctions = assignmentData.checkerFunctions || {};
+  let deadlinePolicy = assignmentData.deadlinePolicy || {};
+  slideIds.forEach((slideId, index) => {
+    const qNum = index + 1;
+    const slidePolicy = deadlinePolicy[`q${qNum}`] || {};
+    const editorBox = document.createElement('div');
+    editorBox.className = "slide-editor-box grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-800 p-4 rounded-lg";
+    editorBox.innerHTML = `
+      <div>
+        <h3 class="text-xl font-semibold mb-2">Slide ${qNum}</h3>
+        <img id="img-${slideId}" src="" class="w-full rounded border border-gray-700">
+      </div>
+      <div id="checker-container-${qNum}"></div>
+      <div class="mt-4 border-t border-gray-700 pt-4">
+        <h4 class="font-semibold mb-2">Deadline & Late Policy</h4>
+        <div class="grid grid-cols-3 gap-2 text-sm">
+          <div><label>Deadline (mins)</label><input type="number" id="deadline-minutes-${index}" value="${slidePolicy.deadlineMinutes || 0}" class="w-full mt-1 p-2 bg-gray-700 rounded border-gray-600"></div>
+          <div><label>Penalty Type</label><select id="penalty-type-${index}" class="w-full mt-1 p-2 bg-gray-700 rounded border-gray-600"><option value="none" ${!slidePolicy.penaltyType || slidePolicy.penaltyType === 'none' ? 'selected' : ''}>None</option><option value="fixed" ${slidePolicy.penaltyType === 'fixed' ? 'selected' : ''}>Fixed</option><option value="percent" ${slidePolicy.penaltyType === 'percent' ? 'selected' : ''}>Percent</option></select></div>
+          <div><label>Penalty Value</label><input type="number" id="penalty-value-${index}" value="${slidePolicy.penaltyValue || 0}" class="w-full mt-1 p-2 bg-gray-700 rounded border-gray-600"></div>
+        </div>
+      </div>
+    `;
+    // Checker widget integration
+    const checkerTemplate = document.getElementById('checkerTemplate');
+    const checkerUI = checkerTemplate.content.cloneNode(true);
+    // Initialize checker widget
+    CheckerWidget(checkerUI, checkerFunctions[`calc${qNum}`] || "");
+    editorBox.querySelector(`#checker-container-${qNum}`).appendChild(checkerUI);
+    container.appendChild(editorBox);
+    const imgElement = document.getElementById(`img-${slideId}`);
+    const imageUrl = `https://docs.google.com/presentation/d/${assignmentData.presentationId}/export/png?id=${assignmentData.presentationId}&pageid=${slideId}`;
+    loadImageWithRetries(imgElement, imageUrl);
+  });
+}
+
+// CheckerWidget function optimized for all the requested functionality
+function CheckerWidget(container, initialCode = "") {
+  // State
+  let mode = initialCode ? "advanced" : "simple";
+  let simpleDisabled = !!initialCode;
+  let code = initialCode || getDefaultCheckerCode();
+
+  // Elements
+  const simpleBtn = container.querySelector('.simple-mode-btn');
+  const advBtn = container.querySelector('.advanced-mode-btn');
+  const simpleUI = container.querySelector('.simple-mode-ui');
+  const advUI = container.querySelector('.advanced-mode-ui');
+  const ruleGroupsContainer = container.querySelector('.rule-groups-container');
+  const livePreview = container.querySelector('.live-code-preview');
+  const advTextarea = container.querySelector('.checker-textarea');
+  const simpleDisabledNotice = container.querySelector('.simple-disabled-notice');
+  const deleteAdvBtn = container.querySelector('.delete-advanced-btn');
+
+  // Initial load logic
+  if (mode === "advanced") {
+    showAdvancedMode();
+    advTextarea.value = code;
+    ruleGroupsContainer.innerHTML = "";
+  } else {
+    showSimpleMode();
+    livePreview.textContent = code;
+    advTextarea.value = code;
+    if (ruleGroupsContainer.children.length === 0) {
+      ruleGroupsContainer.appendChild(createRuleGroupElement(1));
     }
+    simpleDisabledNotice.classList.add('hidden');
+  }
 
-    function authorizeGapi() {
-        gapi.load('client', () => {
-            gapi.client.load('https://slides.googleapis.com/$discovery/rest?version=v1').then(() => {
-                tokenClient = google.accounts.oauth2.initTokenClient({
-                    client_id: CLIENT_ID,
-                    scope: SCOPES,
-                    callback: (tokenResponse) => {
-                        if (tokenResponse && tokenResponse.access_token) {
-                            gapi.client.setToken(tokenResponse);
-                            loadAssignment();
-                        } else {
-                            document.getElementById('loading-text').textContent = "Could not get Google API authorization. Please try re-signing in.";
-                            document.getElementById('signInButtonContainer').classList.remove('hidden');
-                        }
-                    },
-                });
-                tokenClient.requestAccessToken({prompt: ''}); 
-            });
-        });
+  // Mode toggling
+  simpleBtn.onclick = () => {
+    if (simpleDisabled) {
+      simpleDisabledNotice.classList.remove('hidden');
+      return;
     }
+    mode = "simple";
+    showSimpleMode();
+    simpleDisabledNotice.classList.add('hidden');
+  };
+  advBtn.onclick = () => {
+    mode = "advanced";
+    showAdvancedMode();
+    simpleDisabledNotice.classList.remove('hidden');
+    ruleGroupsContainer.innerHTML = "";
+  };
 
-    window.onload = function() {
-        const urlParams = new URLSearchParams(window.location.search);
-        assignmentId = urlParams.get('id');
-        if (!assignmentId) {
-            document.getElementById('loading-text').textContent = "Error: No assignment ID provided in the URL.";
-            document.getElementById('signInButtonContainer').classList.add('hidden');
-        }
-    };
-
-    async function loadAssignment() {
-        if (!assignmentId) return;
-        const loadingText = document.getElementById('loading-text');
-        try {
-            loadingText.textContent = "Loading assignment data...";
-            const teacherDefaultsDoc = await db.collection("teachers").doc(auth.currentUser.email).get();
-            if(teacherDefaultsDoc.exists) { teacherDefaults = teacherDefaultsDoc.data(); }
-            const assignmentDoc = await db.collection("assignments").doc(assignmentId).get();
-            if (!assignmentDoc.exists) { loadingText.textContent = "Error: Assignment not found."; return; }
-            assignmentData = { id: assignmentDoc.id, ...assignmentDoc.data() };
-            const studentSnapshot = await db.collection("students").get();
-            const students = studentSnapshot.docs.map(doc => doc.data());
-            allClassNames = [...new Set(students.map(s => String(s.class)))].sort();
-            loadingText.textContent = "Fetching slide information from Google...";
-            const response = await gapi.client.slides.presentations.get({ presentationId: assignmentData.presentationId });
-            const slides = response.result.slides;
-            if (!slides || slides.length === 0) { loadingText.textContent = "Error: No slides found in the presentation."; return; }
-            assignmentData.slideIds = slides.map(slide => slide.objectId);
-            document.getElementById('page-loader').classList.add('hidden');
-            document.getElementById('editorContent').classList.remove('hidden');
-            document.getElementById('assignmentTitle').textContent = `Editing: ${assignmentData.name}`;
-            document.getElementById('shareLink').value = `https://custom.scienceclass.rocks/classroompicker.html?assignmentId=${assignmentId}`;
-            document.getElementById('postSubmissionRule').value = assignmentData.postSubmissionRule || 'open';
-            renderDeadlineUI();
-            renderEditor();
-        } catch (error) {
-            console.error("Error loading assignment or slides:", error);
-            const errorMessage = error.result?.error?.message || "An unknown error occurred.";
-            loadingText.textContent = `Error: ${errorMessage}. Please ensure Slides API is enabled and the presentation is shared with you.`;
-        }
+  // Delete advanced code
+  deleteAdvBtn.onclick = () => {
+    if (confirm("Delete advanced code and switch to Simple Mode? This cannot be undone.")) {
+      advTextarea.value = "";
+      code = getDefaultCheckerCode();
+      mode = "simple";
+      simpleDisabled = false;
+      showSimpleMode();
+      simpleDisabledNotice.classList.add('hidden');
+      if (ruleGroupsContainer.children.length === 0) {
+        ruleGroupsContainer.appendChild(createRuleGroupElement(1));
+      }
+      updateCodeFromSimple();
     }
+  };
 
-    function renderDeadlineUI() {
-        const container = document.getElementById('class-start-times');
-        container.innerHTML = '';
-        const assignmentStartTimes = assignmentData.deadlinePolicy?.classStartTimes;
-        const defaultStartTimes = teacherDefaults.classStartTimes;
-        const hardcodedDefaults = { '1': '08:01', '2': '08:50', '5': '11:17', '7': '12:55', '8': '13:44' };
-        allClassNames.forEach(className => {
-            const value = assignmentStartTimes?.[className] || defaultStartTimes?.[className] || hardcodedDefaults[className] || '00:00';
-            container.innerHTML += `<div><label for="start-time-${className}" class="block text-sm font-semibold">${className}</label><input type="time" id="start-time-${className}" value="${value}" class="p-2 bg-gray-700 rounded border border-gray-600 w-32"></div>`;
-        });
+  // Advanced editor change
+  advTextarea.oninput = () => {
+    code = advTextarea.value;
+  };
+
+  // Simple Mode: add rule group, add/remove condition, update code
+  container.querySelector('.add-rule-group-btn').onclick = () => {
+    ruleGroupsContainer.appendChild(createRuleGroupElement(ruleGroupsContainer.children.length + 1));
+    updateCodeFromSimple();
+  };
+  ruleGroupsContainer.addEventListener('click', e => {
+    if(e.target.classList.contains('add-condition-btn')) {
+      e.target.previousElementSibling.appendChild(createConditionElement());
+      updateCodeFromSimple();
     }
-
-    // ---- Begin Integration of Simple/Advanced Mode Checker ----
-    function renderEditor() {
-        const container = document.getElementById('slidesContainer');
-        container.innerHTML = '';
-        let slideIds = assignmentData.slideIds || [];
-        let checkerFunctions = assignmentData.checkerFunctions || {};
-        let deadlinePolicy = assignmentData.deadlinePolicy || {};
-        slideIds.forEach((slideId, index) => {
-            const qNum = index + 1;
-            const slidePolicy = deadlinePolicy[`q${qNum}`] || {};
-            const editorBox = document.createElement('div');
-            editorBox.className = "slide-editor-box grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-800 p-4 rounded-lg";
-
-            // Checker Function UI
-            const checkerTemplate = document.getElementById('checkerTemplate');
-            const checkerUI = checkerTemplate.content.cloneNode(true);
-            // Set textarea value from assignment
-            let checkerCode = checkerFunctions[`calc${qNum}`] || getDefaultCheckerCode();
-            checkerUI.querySelector('.checker-textarea').value = checkerCode;
-            // Set up Simple Mode initial rule group
-            const ruleGroupsContainer = checkerUI.querySelector('.rule-groups-container');
-            if (ruleGroupsContainer.children.length === 0) {
-                ruleGroupsContainer.appendChild(createRuleGroupElement(1));
-            }
-            // Live code preview
-            generateCodeFromUI(checkerUI, checkerCode);
-
-            // Set up the checker tab logic
-            checkerUI.querySelectorAll('.mode-toggle-btn').forEach(btn => btn.addEventListener('click', e => {
-                const isSimple = e.target.classList.contains('simple-mode-btn');
-                const simpleBtn = checkerUI.querySelector('.simple-mode-btn');
-                const advBtn = checkerUI.querySelector('.advanced-mode-btn');
-                const simpleUI = checkerUI.querySelector('.simple-mode-ui');
-                const advUI = checkerUI.querySelector('.advanced-mode-ui');
-                if (isSimple) {
-                    simpleBtn.classList.add('bg-indigo-600', 'text-white');
-                    simpleBtn.classList.remove('bg-transparent', 'text-gray-300');
-                    advBtn.classList.add('bg-transparent', 'text-gray-300');
-                    advBtn.classList.remove('bg-indigo-600', 'text-white');
-                    simpleUI.classList.remove('hidden');
-                    advUI.classList.add('hidden');
-                } else {
-                    advBtn.classList.add('bg-indigo-600', 'text-white');
-                    advBtn.classList.remove('bg-transparent', 'text-gray-300');
-                    simpleBtn.classList.add('bg-transparent', 'text-gray-300');
-                    simpleBtn.classList.remove('bg-indigo-600', 'text-white');
-                    advUI.classList.remove('hidden');
-                    simpleUI.classList.add('hidden');
-                }
-            }));
-
-            // Add event listeners for rule builder (Simple Mode)
-            checkerUI.querySelector('.add-rule-group-btn').addEventListener('click', () => {
-                ruleGroupsContainer.appendChild(createRuleGroupElement(ruleGroupsContainer.children.length + 1));
-                generateCodeFromUI(checkerUI);
-            });
-            checkerUI.addEventListener('click', e => {
-                // Add condition
-                if(e.target.classList.contains('add-condition-btn')) {
-                    const conditionsContainer = e.target.previousElementSibling;
-                    conditionsContainer.appendChild(createConditionElement());
-                    generateCodeFromUI(checkerUI);
-                }
-                // Delete condition
-                if(e.target.classList.contains('delete-btn')) {
-                    e.target.parentElement.remove();
-                    generateCodeFromUI(checkerUI);
-                }
-                // Delete rule group
-                if (e.target.classList.contains('delete-group-btn')) {
-                    e.target.closest('.rule-group').remove();
-                    generateCodeFromUI(checkerUI);
-                }
-            });
-            checkerUI.addEventListener('change', (e) => {
-                if (e.target.closest('.simple-mode-ui')) generateCodeFromUI(checkerUI);
-            });
-            checkerUI.addEventListener('keyup', (e) => {
-                if (e.target.closest('.simple-mode-ui')) generateCodeFromUI(checkerUI);
-            });
-
-            editorBox.innerHTML = `
-                <div>
-                    <h3 class="text-xl font-semibold mb-2">Slide ${qNum}</h3>
-                    <img id="img-${slideId}" src="" class="w-full rounded border border-gray-700">
-                </div>
-                <div id="checker-container-${qNum}"></div>
-                <div class="mt-4 border-t border-gray-700 pt-4">
-                    <h4 class="font-semibold mb-2">Deadline & Late Policy</h4>
-                    <div class="grid grid-cols-3 gap-2 text-sm">
-                        <div><label>Deadline (mins)</label><input type="number" id="deadline-minutes-${index}" value="${slidePolicy.deadlineMinutes || 0}" class="w-full mt-1 p-2 bg-gray-700 rounded border-gray-600"></div>
-                        <div><label>Penalty Type</label><select id="penalty-type-${index}" class="w-full mt-1 p-2 bg-gray-700 rounded border-gray-600"><option value="none" ${!slidePolicy.penaltyType || slidePolicy.penaltyType === 'none' ? 'selected' : ''}>None</option><option value="fixed" ${slidePolicy.penaltyType === 'fixed' ? 'selected' : ''}>Fixed</option><option value="percent" ${slidePolicy.penaltyType === 'percent' ? 'selected' : ''}>Percent</option></select></div>
-                        <div><label>Penalty Value</label><input type="number" id="penalty-value-${index}" value="${slidePolicy.penaltyValue || 0}" class="w-full mt-1 p-2 bg-gray-700 rounded border-gray-600"></div>
-                    </div>
-                </div>
-            `;
-            editorBox.querySelector(`#checker-container-${qNum}`).appendChild(checkerUI);
-
-            container.appendChild(editorBox);
-            const imgElement = document.getElementById(`img-${slideId}`);
-            const imageUrl = `https://docs.google.com/presentation/d/${assignmentData.presentationId}/export/png?id=${assignmentData.presentationId}&pageid=${slideId}`;
-            loadImageWithRetries(imgElement, imageUrl);
-        });
+    if(e.target.classList.contains('delete-btn')) {
+      e.target.parentElement.remove();
+      updateCodeFromSimple();
     }
-
-    function createRuleGroupElement(number) {
-        const div = document.createElement('div');
-        div.className = 'rule-group bg-gray-800 p-3 rounded-lg border border-gray-600 space-y-3';
-        div.innerHTML = `
-            <div class="flex justify-between items-center">
-                <h4 class="font-semibold text-white">Rule Group ${number}</h4>
-                <button class="delete-group-btn text-red-400 hover:text-red-300 font-bold text-sm">Remove Group</button>
-            </div>
-            <div class="flex items-center space-x-2">
-                <label class="text-sm">If conditions are met, award</label>
-                <input type="number" class="rule-points w-20 bg-gray-700 border border-gray-600 rounded-md p-1 text-center" value="100">
-                <label class="text-sm">points.</label>
-            </div>
-            <div class="flex items-center space-x-2">
-                <label class="text-sm">Conditions in this group require:</label>
-                <select class="group-connector bg-gray-700 border border-gray-600 rounded-md p-1 text-sm">
-                    <option value="&&">All to be true (AND)</option>
-                    <option value="||">Any to be true (OR)</option>
-                </select>
-            </div>
-            <div class="conditions-container space-y-2">
-                ${createConditionElement().outerHTML}
-            </div>
-            <button class="add-condition-btn text-sm text-blue-400 hover:text-blue-300">+ Add Condition</button>
-        `;
-        return div;
+    if (e.target.classList.contains('delete-group-btn')) {
+      e.target.closest('.rule-group').remove();
+      updateCodeFromSimple();
     }
+  });
+  ruleGroupsContainer.addEventListener('change', updateCodeFromSimple);
+  ruleGroupsContainer.addEventListener('keyup', updateCodeFromSimple);
 
-    function createConditionElement() {
-        const div = document.createElement('div');
-        div.className = 'condition-row flex items-center space-x-2 bg-gray-900/50 p-2 rounded-md';
-        div.innerHTML = `
-            <select class="cond-type bg-gray-700 border border-gray-600 rounded-md p-1 text-sm">
-                <option value="text">Text</option>
-                <option value="number">Number</option>
-            </select>
-            <select class="cond-operator bg-gray-700 border border-gray-600 rounded-md p-1 text-sm">
-                <option value="contains">contains</option>
-                <option value="not_contains">does not contain</option>
-                <option value="equals_str">is exactly</option>
-            </select>
-            <div class="cond-value-wrapper flex-grow">
-                <input type="text" class="cond-value w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="keyword(s), comma-separated">
-                <div class="text-options hidden text-xs mt-1">
-                    <label>Require: </label>
-                    <select class="text-bool bg-gray-700 border border-gray-600 rounded-md p-0.5 text-sm">
-                        <option value="||">Any (OR)</option>
-                        <option value="&&">All (AND)</option>
-                    </select>
-                </div>
-            </div>
-            <button class="delete-btn text-red-400 hover:text-red-300 font-bold text-xl leading-none">&times;</button>
-        `;
-        div.querySelector('.cond-type').addEventListener('change', e => {
-            const operatorSelect = div.querySelector('.cond-operator');
-            const valueWrapper = div.querySelector('.cond-value-wrapper');
-            const type = e.target.value;
-            if(type === 'number') {
-                operatorSelect.innerHTML = `<option value="==">is equal to</option><option value="!=">is not equal to</option><option value=">">is greater than</option><option value="<">is less than</option>`;
-                valueWrapper.innerHTML = `<input type="number" class="cond-value w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="a number">`;
-            } else { // text
-                 operatorSelect.innerHTML = `<option value="contains">contains</option><option value="not_contains">does not contain</option><option value="equals_str">is exactly</option>`;
-                 valueWrapper.innerHTML = `<input type="text" class="cond-value w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="keyword(s), comma-separated"><div class="text-options hidden text-xs mt-1"><label>Require: </label><select class="text-bool bg-gray-700 border border-gray-600 rounded-md p-0.5 text-sm"><option value="||">Any (OR)</option><option value="&&">All (AND)</option></select></div>`;
-            }
-        });
-        div.addEventListener('keyup', e => {
-            if (e.target.classList.contains('cond-value')) {
-                const operator = div.querySelector('.cond-operator').value;
-                const textOptions = div.querySelector('.text-options');
-                if (!textOptions) return;
-                if (operator === 'contains' || operator === 'not_contains') {
-                    if (e.target.value.includes(',')) textOptions.classList.remove('hidden');
-                    else textOptions.classList.add('hidden');
-                } else {
-                    textOptions.classList.add('hidden');
-                }
-            }
-        });
-        return div;
+  // Helpers
+  function showSimpleMode() {
+    simpleUI.classList.remove('hidden');
+    advUI.classList.add('hidden');
+    simpleBtn.classList.add('bg-indigo-600', 'text-white');
+    simpleBtn.classList.remove('bg-transparent', 'text-gray-300');
+    advBtn.classList.add('bg-transparent', 'text-gray-300');
+    advBtn.classList.remove('bg-indigo-600', 'text-white');
+    livePreview.textContent = code;
+    advTextarea.value = code;
+  }
+  function showAdvancedMode() {
+    simpleUI.classList.add('hidden');
+    advUI.classList.remove('hidden');
+    simpleBtn.classList.add('bg-transparent', 'text-gray-300');
+    simpleBtn.classList.remove('bg-indigo-600', 'text-white');
+    advBtn.classList.add('bg-indigo-600', 'text-white');
+    advBtn.classList.remove('bg-transparent', 'text-gray-300');
+    advTextarea.value = code;
+    simpleDisabledNotice.classList.remove('hidden');
+  }
+
+  function updateCodeFromSimple() {
+    code = generateCodeFromUI(container);
+    livePreview.textContent = code;
+    advTextarea.value = code;
+  }
+
+  // Expose for save
+  container.getCode = () => code;
+  container.getMode = () => mode;
+}
+
+// --- Rule builder logic ---
+function createRuleGroupElement(number) {
+  const div = document.createElement('div');
+  div.className = 'rule-group bg-gray-800 p-3 rounded-lg border border-gray-600 space-y-3';
+  div.innerHTML = `
+    <div class="flex justify-between items-center">
+      <h4 class="font-semibold text-white">Rule Group ${number}</h4>
+      <button class="delete-group-btn text-red-400 hover:text-red-300 font-bold text-sm">Remove Group</button>
+    </div>
+    <div class="flex items-center space-x-2">
+      <label class="text-sm">If conditions are met, award</label>
+      <input type="number" class="rule-points w-20 bg-gray-700 border border-gray-600 rounded-md p-1 text-center" value="100">
+      <label class="text-sm">points.</label>
+    </div>
+    <div class="flex items-center space-x-2">
+      <label class="text-sm">Conditions in this group require:</label>
+      <select class="group-connector bg-gray-700 border border-gray-600 rounded-md p-1 text-sm">
+        <option value="&&">All to be true (AND)</option>
+        <option value="||">Any to be true (OR)</option>
+      </select>
+    </div>
+    <div class="conditions-container space-y-2">
+      ${createConditionElement().outerHTML}
+    </div>
+    <button class="add-condition-btn text-sm text-blue-400 hover:text-blue-300">+ Add Condition</button>
+  `;
+  return div;
+}
+function createConditionElement() {
+  const div = document.createElement('div');
+  div.className = 'condition-row flex items-center space-x-2 bg-gray-900/50 p-2 rounded-md';
+  div.innerHTML = `
+    <select class="cond-type bg-gray-700 border border-gray-600 rounded-md p-1 text-sm">
+      <option value="text">Text</option>
+      <option value="number">Number</option>
+    </select>
+    <select class="cond-operator bg-gray-700 border border-gray-600 rounded-md p-1 text-sm">
+      <option value="contains">contains</option>
+      <option value="not_contains">does not contain</option>
+      <option value="equals_str">is exactly</option>
+    </select>
+    <div class="cond-value-wrapper flex-grow">
+      <input type="text" class="cond-value w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="keyword(s), comma-separated">
+      <div class="text-options hidden text-xs mt-1">
+        <label>Require: </label>
+        <select class="text-bool bg-gray-700 border border-gray-600 rounded-md p-0.5 text-sm">
+          <option value="||">Any (OR)</option>
+          <option value="&&">All (AND)</option>
+        </select>
+      </div>
+    </div>
+    <button class="delete-btn text-red-400 hover:text-red-300 font-bold text-xl leading-none">&times;</button>
+  `;
+  div.querySelector('.cond-type').addEventListener('change', e => {
+    const operatorSelect = div.querySelector('.cond-operator');
+    const valueWrapper = div.querySelector('.cond-value-wrapper');
+    const type = e.target.value;
+    if(type === 'number') {
+      operatorSelect.innerHTML = `<option value="==">is equal to</option><option value="!=">is not equal to</option><option value=">">is greater than</option><option value="<">is less than</option>`;
+      valueWrapper.innerHTML = `<input type="number" class="cond-value w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="a number">`;
+    } else {
+      operatorSelect.innerHTML = `<option value="contains">contains</option><option value="not_contains">does not contain</option><option value="equals_str">is exactly</option>`;
+      valueWrapper.innerHTML = `<input type="text" class="cond-value w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="keyword(s), comma-separated"><div class="text-options hidden text-xs mt-1"><label>Require: </label><select class="text-bool bg-gray-700 border border-gray-600 rounded-md p-0.5 text-sm"><option value="||">Any (OR)</option><option value="&&">All (AND)</option></select></div>`;
     }
-
-    function getDefaultCheckerCode() {
-        return `// Auto-generated by Simple Editor. Switch to Advanced Mode to edit directly.
+  });
+  div.addEventListener('keyup', e => {
+    if (e.target.classList.contains('cond-value')) {
+      const operator = div.querySelector('.cond-operator').value;
+      const textOptions = div.querySelector('.text-options');
+      if (!textOptions) return;
+      if (operator === 'contains' || operator === 'not_contains') {
+        if (e.target.value.includes(',')) textOptions.classList.remove('hidden');
+        else textOptions.classList.add('hidden');
+      } else {
+        textOptions.classList.add('hidden');
+      }
+    }
+  });
+  return div;
+}
+function getDefaultCheckerCode() {
+  return `// Auto-generated by Simple Editor. Switch to Advanced Mode to edit directly.
 function checkAnswer(studentAnswer) {
     let score = 0;
     const maxScore = 100;
@@ -427,195 +487,184 @@ function checkAnswer(studentAnswer) {
     // Return final score, ensuring it doesn't exceed maxScore.
     return { score: Math.min(score, maxScore), maxScore: maxScore };
 }`;
-    }
+}
+function generateCodeFromUI(container) {
+  const ruleGroups = container.querySelectorAll('.rule-group');
+  let code = `// Auto-generated by Simple Editor. Switch to Advanced Mode to edit directly.\n`;
+  code += `function checkAnswer(studentAnswer) {\n`;
+  code += `    let score = 0;\n`;
+  let totalMaxScore = 0;
+  ruleGroups.forEach(group => { totalMaxScore += Number(group.querySelector('.rule-points').value) || 0; });
+  code += `    const maxScore = ${totalMaxScore || 100};\n`;
+  code += `    const answer = typeof studentAnswer === 'string' ? studentAnswer.toLowerCase() : studentAnswer;\n\n`;
 
-    function generateCodeFromUI(checkerUI, initialCode = null) {
-        const ruleGroups = checkerUI.querySelectorAll('.rule-group');
-        let code = `// Auto-generated by Simple Editor. Switch to Advanced Mode to edit directly.\n`;
-        code += `function checkAnswer(studentAnswer) {\n`;
-        code += `    let score = 0;\n`;
-        let totalMaxScore = 0;
-        ruleGroups.forEach(group => { totalMaxScore += Number(group.querySelector('.rule-points').value) || 0; });
-        code += `    const maxScore = ${totalMaxScore || 100};\n`;
-        code += `    const answer = typeof studentAnswer === 'string' ? studentAnswer.toLowerCase() : studentAnswer;\n\n`;
-        
-        ruleGroups.forEach((group, index) => {
-            const points = Number(group.querySelector('.rule-points').value) || 0;
-            const groupConnector = group.querySelector('.group-connector').value; // '&&' or '||'
-            let groupConditions = [];
-            group.querySelectorAll('.condition-row').forEach(cond => {
-                const type = cond.querySelector('.cond-type').value;
-                const op = cond.querySelector('.cond-operator').value;
-                const val = cond.querySelector('.cond-value').value.trim();
-                if (!val) return;
-                if (type === 'text') {
-                    const keywords = val.split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
-                    if (keywords.length > 1 && (op === 'contains' || op === 'not_contains')) {
-                         const textBool = cond.querySelector('.text-bool').value;
-                         const keywordConditions = keywords.map(k => `${op === 'not_contains' ? '!' : ''}answer.includes("${k.replace(/"/g, '\\"')}")`);
-                         groupConditions.push(`(${keywordConditions.join(` ${textBool} `)})`);
-                    } else if (keywords.length > 0) {
-                        const keyword = keywords[0];
-                        if (op === 'contains') groupConditions.push(`answer.includes("${keyword.replace(/"/g, '\\"')}")`);
-                        else if (op === 'not_contains') groupConditions.push(`!answer.includes("${keyword.replace(/"/g, '\\"')}")`);
-                        else if (op === 'equals_str') groupConditions.push(`answer === "${keyword.replace(/"/g, '\\"')}"`);
-                    }
-                } else if (type === 'number' && !isNaN(parseFloat(val))) {
-                    groupConditions.push(`Number(answer) ${op} ${parseFloat(val)}`);
-                }
-            });
-            if (groupConditions.length > 0) {
-                const ifStatement = index === 0 ? 'if' : 'else if';
-                code += `    // From Rule Group ${index + 1}\n`;
-                code += `    ${ifStatement} (${groupConditions.join(` ${groupConnector} `)}) {\n`;
-                code += `        score += ${points};\n`;
-                code += `    }\n\n`;
-            }
-        });
-
-        code += `    // Return final score, ensuring it doesn't exceed maxScore.\n`;
-        code += `    return { score: Math.min(score, maxScore), maxScore: maxScore };\n`;
-        code += `}`;
-        // Set values
-        checkerUI.querySelector('.checker-textarea').value = code;
-        const previewEl = checkerUI.querySelector('.live-code-preview');
-        if (previewEl) previewEl.textContent = code;
-    }
-    // ---- End Integration ----
-
-    function loadImageWithRetries(imgElement, srcUrl, maxRetries = 2) {
-        let attempt = 0;
-        function tryLoad() {
-            const urlWithCacheBust = `${srcUrl}&time=${new Date().getTime()}`;
-            imgElement.src = urlWithCacheBust;
-            imgElement.onerror = () => {
-                attempt++;
-                if (attempt < maxRetries) {
-                    setTimeout(tryLoad, 1000);
-                } else {
-                    console.error(`Could not load image after ${maxRetries} attempts: ${srcUrl}`);
-                    imgElement.alt = "Image failed to load";
-                    imgElement.src = 'https://placehold.co/400x300/374151/9ca3af?text=Image+Load+Failed';
-                }
-            };
+  ruleGroups.forEach((group, index) => {
+    const points = Number(group.querySelector('.rule-points').value) || 0;
+    const groupConnector = group.querySelector('.group-connector').value; // '&&' or '||'
+    let groupConditions = [];
+    group.querySelectorAll('.condition-row').forEach(cond => {
+      const type = cond.querySelector('.cond-type').value;
+      const op = cond.querySelector('.cond-operator').value;
+      const val = cond.querySelector('.cond-value').value.trim();
+      if (!val) return;
+      if (type === 'text') {
+        const keywords = val.split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
+        if (keywords.length > 1 && (op === 'contains' || op === 'not_contains')) {
+          const textBool = cond.querySelector('.text-bool').value;
+          const keywordConditions = keywords.map(k => `${op === 'not_contains' ? '!' : ''}answer.includes("${k.replace(/"/g, '\\"')}")`);
+          groupConditions.push(`(${keywordConditions.join(` ${textBool} `)})`);
+        } else if (keywords.length > 0) {
+          const keyword = keywords[0];
+          if (op === 'contains') groupConditions.push(`answer.includes("${keyword.replace(/"/g, '\\"')}")`);
+          else if (op === 'not_contains') groupConditions.push(`!answer.includes("${keyword.replace(/"/g, '\\"')}")`);
+          else if (op === 'equals_str') groupConditions.push(`answer === "${keyword.replace(/"/g, '\\"')}"`);
         }
-        tryLoad();
+      } else if (type === 'number' && !isNaN(parseFloat(val))) {
+        groupConditions.push(`Number(answer) ${op} ${parseFloat(val)}`);
+      }
+    });
+    if (groupConditions.length > 0) {
+      const ifStatement = index === 0 ? 'if' : 'else if';
+      code += `    // From Rule Group ${index + 1}\n`;
+      code += `    ${ifStatement} (${groupConditions.join(` ${groupConnector} `)}) {\n`;
+      code += `        score += ${points};\n`;
+      code += `    }\n\n`;
     }
+  });
 
-    async function saveAssignment() {
-        const saveBtn = document.getElementById('saveBtn');
-        try {
-            saveBtn.textContent = "Saving...";
-            const checkerFunctions = {};
-            const deadlinePolicy = { classStartTimes: {} };
-            allClassNames.forEach(className => {
-                const timeValue = document.getElementById(`start-time-${className}`).value;
-                if(timeValue) { deadlinePolicy.classStartTimes[String(className)] = timeValue; }
-            });
-            assignmentData.slideIds.forEach((id, index) => {
-                const qNum = index + 1;
-                // Use advanced mode textarea value on save (can add logic to choose simple/advanced mode if desired)
-                const checkerContainer = document.getElementById(`checker-container-${qNum}`);
-                let checkerCode = "";
-                if (checkerContainer) {
-                    const advMode = checkerContainer.querySelector('.advanced-mode-ui');
-                    if (!advMode.classList.contains('hidden')) {
-                        checkerCode = checkerContainer.querySelector('.checker-textarea').value;
-                    } else {
-                        // Simple mode code (live preview)
-                        checkerCode = checkerContainer.querySelector('.live-code-preview').textContent;
-                    }
-                }
-                checkerFunctions[`calc${qNum}`] = checkerCode;
-                deadlinePolicy[`q${qNum}`] = {
-                    deadlineMinutes: parseInt(document.getElementById(`deadline-minutes-${index}`).value, 10) || 0,
-                    penaltyType: document.getElementById(`penalty-type-${index}`).value,
-                    penaltyValue: parseInt(document.getElementById(`penalty-value-${index}`).value, 10) || 0,
-                };
-            });
-            const postSubmissionRule = document.getElementById('postSubmissionRule').value;
-            await db.collection("assignments").doc(assignmentId).update({
-                slideIds: assignmentData.slideIds,
-                checkerFunctions: checkerFunctions,
-                deadlinePolicy: deadlinePolicy,
-                postSubmissionRule: postSubmissionRule
-            });
-            showToast("Assignment saved successfully!", { color: 'green' });
-        } catch (error) {
-            console.error("Error saving assignment:", error);
-            showToast("Error saving. See console for details.", { color: 'red' });
-        } finally {
-            saveBtn.textContent = "Save Assignment";
-        }
-    }
+  code += `    // Return final score, ensuring it doesn't exceed maxScore.\n`;
+  code += `    return { score: Math.min(score, maxScore), maxScore: maxScore };\n`;
+  code += `}`;
+  return code;
+}
 
-    async function saveTeacherDefaults() {
-        const newDefaults = { classStartTimes: {} };
-        allClassNames.forEach(className => {
-            const timeValue = document.getElementById(`start-time-${className}`).value;
-            if(timeValue) {
-                newDefaults.classStartTimes[String(className)] = timeValue;
-            }
-        });
-        try {
-            await db.collection("teachers").doc(auth.currentUser.email).set(newDefaults, { merge: true });
-            showToast("Default start times saved!", { color: 'green' });
-            teacherDefaults.classStartTimes = newDefaults.classStartTimes;
-        } catch (error) {
-            console.error("Error saving defaults:", error);
-            showToast("Could not save defaults.", { color: 'red' });
-        }
-    }
-
-    function toggleDeadlineSection() {
-        const content = document.getElementById('deadline-content');
-        const chevron = document.getElementById('deadline-chevron');
-        if (content.style.maxHeight && content.style.maxHeight !== '0px') {
-            content.style.maxHeight = '0px';
-            chevron.style.transform = 'rotate(0deg)';
-        } else {
-            content.style.maxHeight = content.scrollHeight + "px";
-            chevron.style.transform = 'rotate(90deg)';
-        }
-    }
-
-    function copyShareLink() {
-        const linkInput = document.getElementById('shareLink');
-        linkInput.select();
-        document.execCommand('copy');
-        showToast("Link copied to clipboard!", { color: 'blue' });
-    }
-
-    function showToast(message, options = {}) {
-        const { color = 'default', duration = 3000 } = options;
-        const wrapper = document.getElementById('toast-wrapper');
-        if (!wrapper) return;
-        const toast = document.createElement('div');
-        toast.className = 'flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm animate-fade-in-right';
-        const colors = { default: 'bg-gray-700', green: 'bg-green-600', red: 'bg-red-600', blue: 'bg-blue-600' };
-        toast.classList.add(colors[color] || colors['default']);
-        const messageSpan = document.createElement('span');
-        messageSpan.textContent = message;
-        toast.appendChild(messageSpan);
-        const closeButton = document.createElement('button');
-        closeButton.innerHTML = '&times;';
-        closeButton.className = 'ml-4 text-2xl font-bold leading-none hover:text-gray-300 focus:outline-none';
-        let timeoutId = null;
-        const dismiss = () => {
-            if (timeoutId) clearTimeout(timeoutId);
-            toast.classList.remove('animate-fade-in-right');
-            toast.classList.add('animate-fade-out-right');
-            toast.addEventListener('animationend', () => toast.remove());
-        };
-        closeButton.onclick = dismiss;
-        toast.appendChild(closeButton);
-        wrapper.appendChild(toast);
-        timeoutId = setTimeout(dismiss, duration);
-    }
-    document.getElementById('signOutButton').onclick = () => {
-        auth.signOut();
+// --- Utility functions ---
+function loadImageWithRetries(imgElement, srcUrl, maxRetries = 2) {
+  let attempt = 0;
+  function tryLoad() {
+    const urlWithCacheBust = `${srcUrl}&time=${new Date().getTime()}`;
+    imgElement.src = urlWithCacheBust;
+    imgElement.onerror = () => {
+      attempt++;
+      if (attempt < maxRetries) {
+        setTimeout(tryLoad, 1000);
+      } else {
+        console.error(`Could not load image after ${maxRetries} attempts: ${srcUrl}`);
+        imgElement.alt = "Image failed to load";
+        imgElement.src = 'https://placehold.co/400x300/374151/9ca3af?text=Image+Load+Failed';
+      }
     };
+  }
+  tryLoad();
+}
 
+async function saveAssignment() {
+  const saveBtn = document.getElementById('saveBtn');
+  try {
+    saveBtn.textContent = "Saving...";
+    const checkerFunctions = {};
+    const deadlinePolicy = { classStartTimes: {} };
+    allClassNames.forEach(className => {
+      const timeValue = document.getElementById(`start-time-${className}`).value;
+      if(timeValue) { deadlinePolicy.classStartTimes[String(className)] = timeValue; }
+    });
+    assignmentData.slideIds.forEach((id, index) => {
+      const qNum = index + 1;
+      const checkerContainer = document.getElementById(`checker-container-${qNum}`).firstChild;
+      let checkerCode = "";
+      if (checkerContainer) {
+        // Use code from current mode
+        checkerCode = checkerContainer.getCode();
+      }
+      checkerFunctions[`calc${qNum}`] = checkerCode;
+      deadlinePolicy[`q${qNum}`] = {
+        deadlineMinutes: parseInt(document.getElementById(`deadline-minutes-${index}`).value, 10) || 0,
+        penaltyType: document.getElementById(`penalty-type-${index}`).value,
+        penaltyValue: parseInt(document.getElementById(`penalty-value-${index}`).value, 10) || 0,
+      };
+    });
+    const postSubmissionRule = document.getElementById('postSubmissionRule').value;
+    await db.collection("assignments").doc(assignmentId).update({
+      slideIds: assignmentData.slideIds,
+      checkerFunctions: checkerFunctions,
+      deadlinePolicy: deadlinePolicy,
+      postSubmissionRule: postSubmissionRule
+    });
+    showToast("Assignment saved successfully!", { color: 'green' });
+  } catch (error) {
+    console.error("Error saving assignment:", error);
+    showToast("Error saving. See console for details.", { color: 'red' });
+  } finally {
+    saveBtn.textContent = "Save Assignment";
+  }
+}
+
+async function saveTeacherDefaults() {
+  const newDefaults = { classStartTimes: {} };
+  allClassNames.forEach(className => {
+    const timeValue = document.getElementById(`start-time-${className}`).value;
+    if(timeValue) {
+      newDefaults.classStartTimes[String(className)] = timeValue;
+    }
+  });
+  try {
+    await db.collection("teachers").doc(auth.currentUser.email).set(newDefaults, { merge: true });
+    showToast("Default start times saved!", { color: 'green' });
+    teacherDefaults.classStartTimes = newDefaults.classStartTimes;
+  } catch (error) {
+    console.error("Error saving defaults:", error);
+    showToast("Could not save defaults.", { color: 'red' });
+  }
+}
+
+function toggleDeadlineSection() {
+  const content = document.getElementById('deadline-content');
+  const chevron = document.getElementById('deadline-chevron');
+  if (content.style.maxHeight && content.style.maxHeight !== '0px') {
+    content.style.maxHeight = '0px';
+    chevron.style.transform = 'rotate(0deg)';
+  } else {
+    content.style.maxHeight = content.scrollHeight + "px";
+    chevron.style.transform = 'rotate(90deg)';
+  }
+}
+
+function copyShareLink() {
+  const linkInput = document.getElementById('shareLink');
+  linkInput.select();
+  document.execCommand('copy');
+  showToast("Link copied to clipboard!", { color: 'blue' });
+}
+
+function showToast(message, options = {}) {
+  const { color = 'default', duration = 3000 } = options;
+  const wrapper = document.getElementById('toast-wrapper');
+  if (!wrapper) return;
+  const toast = document.createElement('div');
+  toast.className = 'flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm animate-fade-in-right';
+  const colors = { default: 'bg-gray-700', green: 'bg-green-600', red: 'bg-red-600', blue: 'bg-blue-600' };
+  toast.classList.add(colors[color] || colors['default']);
+  const messageSpan = document.createElement('span');
+  messageSpan.textContent = message;
+  toast.appendChild(messageSpan);
+  const closeButton = document.createElement('button');
+  closeButton.innerHTML = '&times;';
+  closeButton.className = 'ml-4 text-2xl font-bold leading-none hover:text-gray-300 focus:outline-none';
+  let timeoutId = null;
+  const dismiss = () => {
+    if (timeoutId) clearTimeout(timeoutId);
+    toast.classList.remove('animate-fade-in-right');
+    toast.classList.add('animate-fade-out-right');
+    toast.addEventListener('animationend', () => toast.remove());
+  };
+  closeButton.onclick = dismiss;
+  toast.appendChild(closeButton);
+  wrapper.appendChild(toast);
+  timeoutId = setTimeout(dismiss, duration);
+}
+document.getElementById('signOutButton').onclick = () => {
+  auth.signOut();
+};
 </script>
 </body>
 </html>
