@@ -126,9 +126,7 @@
       </div>
     </div>
   </template>
-
   <div id="toast-wrapper"></div>
-
 <script>
 const TEACHER_EMAILS = ["klynch@mtps.us", "mstuart@mtps.us", "cfiori@mtps.us", "mlock@mtps.us", "cheine@mtps.us"];
 const CLIENT_ID = "1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com";
@@ -485,7 +483,7 @@ function generateCodeFromUI(container) {
       code += `    }\n`;
     }
   });
-  code += `    return { score: Math.min(score, maxScore), maxScore: maxScore };\n`;
+  code += `    return score;\n`;
   code += `}`;
   return code;
 }
@@ -574,10 +572,9 @@ function getDefaultCheckerCode() {
     let score = 0;
     const maxScore = 100;
     const answer = typeof studentAnswer === 'string' ? studentAnswer.toLowerCase() : studentAnswer;
-    return { score: Math.min(score, maxScore), maxScore: maxScore };
+    return score;
 }`;
 }
-
 function loadImageWithRetries(imgElement, srcUrl, maxRetries = 2) {
   let attempt = 0;
   function tryLoad() {
@@ -596,7 +593,6 @@ function loadImageWithRetries(imgElement, srcUrl, maxRetries = 2) {
   }
   tryLoad();
 }
-
 async function saveAssignment() {
   const saveBtn = document.getElementById('saveBtn');
   try {
@@ -651,7 +647,6 @@ async function saveTeacherDefaults() {
     showToast("Could not save defaults.", { color: 'red' });
   }
 }
-
 function toggleDeadlineSection() {
   const content = document.getElementById('deadline-content');
   const chevron = document.getElementById('deadline-chevron');
@@ -663,14 +658,12 @@ function toggleDeadlineSection() {
     chevron.style.transform = 'rotate(90deg)';
   }
 }
-
 function copyShareLink() {
   const linkInput = document.getElementById('shareLink');
   linkInput.select();
   document.execCommand('copy');
   showToast("Link copied to clipboard!", { color: 'blue' });
 }
-
 function showToast(message, options = {}) {
   const { color = 'default', duration = 3000 } = options;
   const wrapper = document.getElementById('toast-wrapper');
