@@ -17,422 +17,319 @@
         @keyframes fade-in-right { from { opacity: 0; transform: translateX(100%); } to { opacity: 1; transform: translateX(0); } }
         @keyframes fade-out-right { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(100%); } }
         .animate-fade-in-right { animation: fade-in-right 0.5s ease-out forwards; }
-        .animate-fade-out-right { animation: fade-out-right 0.5s ease-out forwards; }
+        .animate-fade-out-right { animation: fade-out-right 0.5s ease-in forwards; }
+        .collapsible-content { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; }
         #toast-wrapper { position: fixed; top: 1rem; right: 1rem; z-index: 50; display: flex; flex-direction: column; gap: 0.5rem; }
     </style>
 </head>
-<body class="bg-gray-800 text-gray-200 font-sans">
-    <div id="loading-overlay" class="fixed inset-0 bg-gray-800 flex items-center justify-center z-50">
-        <p class="text-white text-xl animate-pulse">Authenticating...</p>
+<body class="bg-gray-900 text-white font-sans">
+
+    <div id="page-loader" class="flex flex-col items-center justify-center h-screen">
+        <h1 class="text-4xl font-bold text-yellow-400 mb-4">Assignment Editor</h1>
+        <p id="loading-text" class="text-lg text-gray-300">Initializing...</p>
+        <div id="signInButtonContainer" class="hidden mt-8">
+             <div id="g_id_onload" data-client_id="1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com" data-callback="handleCredentialResponse"></div>
+             <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_black" data-text="signin_with" data-shape="rectangular" data-logo_alignment="left"></div>
+        </div>
+        <p id="auth-error" class="text-red-500 mt-4"></p>
     </div>
 
-    <div id="app-container" class="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 hidden">
-        <!-- Header -->
-        <header class="flex justify-between items-center mb-6">
-            <h1 class="text-3xl font-bold text-white">Assignment Editor</h1>
+    <div id="editorContent" class="hidden container mx-auto p-4 md:p-8">
+        <div class="flex justify-between items-center mb-6 flex-wrap gap-4">
+            <h1 id="assignmentTitle" class="text-3xl font-bold text-yellow-400"></h1>
             <div>
-                <a href="assignments.html" class="text-blue-400 hover:text-blue-300 mr-4">Back to Assignments</a>
+                <a href="./assignments.html" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg">&larr; Back to Assignments</a>
+                <button onclick="saveAssignment()" id="saveBtn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg">Save Assignment</button>
                 <button id="signOutButton" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Sign Out</button>
-            </div>
-        </header>
-
-        <!-- Assignment Metadata -->
-        <div class="bg-gray-900 p-6 rounded-lg shadow-lg mb-6">
-            <h2 class="text-xl font-semibold mb-4 border-b border-gray-700 pb-2">Assignment Details</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                    <label for="assignmentName" class="block text-sm font-medium text-gray-400">Assignment Name</label>
-                    <input type="text" id="assignmentName" class="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-white">
-                </div>
-                <div>
-                    <label for="postSubmissionRule" class="block text-sm font-medium text-gray-400">After Submission</label>
-                    <select id="postSubmissionRule" class="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-white">
-                        <option value="open">Allow changes and re-checking</option>
-                        <option value="lock">Lock answers, allow review</option>
-                        <option value="hide">Hide assignment, show summary only</option>
-                    </select>
-                </div>
-                <div>
-                    <label for="slideId" class="block text-sm font-medium text-gray-400">Google Slide ID (Optional)</label>
-                    <input type="text" id="slideId" class="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-white" placeholder="Enter Google Slide presentation ID">
-                </div>
-                <div id="class-times-container">
-                    <label class="block text-sm font-medium text-gray-400">Class Start Times</label>
-                    <div id="classTimesList" class="mt-1 space-y-2">
-                        <!-- Class times will be added here -->
-                    </div>
-                    <button id="addClassTimeBtn" class="mt-2 text-sm text-blue-400 hover:text-blue-300">+ Add Time</button>
-                </div>
             </div>
         </div>
 
-        <!-- Questions Editor -->
-        <div class="bg-gray-900 p-6 rounded-lg shadow-lg">
-            <div class="flex justify-between items-center mb-4 border-b border-gray-700 pb-2">
-                 <h2 class="text-xl font-semibold">Questions</h2>
-                 <button id="addQuestionBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">Add Question</button>
-            </div>
-            <div id="questionsContainer" class="space-y-4">
-                <!-- Questions will be dynamically added here -->
+        <div class="bg-gray-800 p-4 rounded-lg mb-6">
+            <h2 class="text-xl font-semibold mb-2">Student Link</h2>
+            <div class="flex gap-2">
+                <input id="shareLink" type="text" readonly class="w-full p-2 bg-gray-700 border border-gray-600 rounded">
+                <button onclick="copyShareLink()" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-3 rounded-lg">Copy</button>
             </div>
         </div>
         
-        <footer class="mt-8 flex justify-end">
-            <button id="saveAssignmentBtn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-lg text-lg">Save Assignment</button>
-        </footer>
-    </div>
-
-    <!-- Question Template -->
-    <template id="questionTemplate">
-        <div class="question-card bg-gray-800 p-4 border border-gray-700 rounded-lg">
-            <div class="flex justify-between items-center mb-3">
-                <span class="question-title font-bold text-lg">Question</span>
-                <button class="deleteQuestionBtn bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-3 rounded-md">Delete</button>
+        <div id="deadline-section" class="bg-gray-800 rounded-lg mb-8 overflow-hidden">
+            <div id="deadline-header" class="flex justify-between items-center p-6 cursor-pointer" onclick="toggleDeadlineSection()">
+                 <h2 class="text-2xl font-bold text-yellow-400">Class Start Times & Deadlines</h2>
+                 <span id="deadline-chevron" class="text-2xl transform transition-transform">▶</span>
             </div>
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-400">Question Prompt (supports HTML)</label>
-                    <textarea class="questionPrompt w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm p-2 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-white" rows="3"></textarea>
+            <div id="deadline-content" class="collapsible-content px-6 pb-6">
+                <p class="text-gray-400 mb-4">Set the official start time for each class period. Per-question deadlines are calculated in minutes after this time.</p>
+                <div id="class-start-times" class="flex flex-wrap gap-4">
+                    <!-- Time inputs will be added here -->
                 </div>
-                
-                <!-- Answer Checking UI -->
-                <div>
-                    <div class="flex items-center justify-between">
-                        <label class="block text-sm font-medium text-gray-400">Answer Checking Code</label>
-                        <div class="flex items-center space-x-1 p-1 bg-gray-700 rounded-lg">
-                            <button class="mode-toggle-btn simple-mode-btn bg-indigo-600 text-white rounded-md px-3 py-1 text-sm font-semibold">Simple</button>
-                            <button class="mode-toggle-btn advanced-mode-btn bg-transparent text-gray-300 rounded-md px-3 py-1 text-sm font-semibold">Advanced</button>
-                        </div>
-                    </div>
-
-                    <!-- Simple Mode UI -->
-                    <div class="simple-mode-ui mt-2 p-3 bg-gray-700/50 border border-gray-600 rounded-lg space-y-4">
-                       <div class="rule-groups-container space-y-4">
-                           <!-- Rule groups will be dynamically added here -->
-                       </div>
-                       <button class="add-rule-group-btn mt-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm">+ Add Rule Group</button>
-                       <div class="mt-4">
-                            <label class="block text-xs font-medium text-gray-500">Live Code Preview (read-only)</label>
-                            <pre class="bg-gray-900 text-white p-2 rounded-md text-xs overflow-x-auto h-32"><code class="live-code-preview"></code></pre>
-                        </div>
-                    </div>
-
-                    <!-- Advanced Mode UI (the original textarea) -->
-                    <div class="advanced-mode-ui hidden">
-                        <textarea class="answerCheckingCode w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm p-2 mt-1 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-white" rows="8"></textarea>
-                    </div>
+                <div class="mt-4 border-t border-gray-700 pt-4 flex justify-end">
+                    <button onclick="saveTeacherDefaults()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">Save These Times as My Defaults</button>
                 </div>
+            </div>
+        </div>
+        
+        <div class="bg-gray-800 p-6 rounded-lg mb-8">
+            <label for="postSubmissionRule" class="block text-2xl font-bold text-yellow-400 mb-2">Post-Submission Policy</label>
+            <p class="text-gray-400 mb-4">Choose what happens after a student officially submits this assignment.</p>
+            <select id="postSubmissionRule" class="w-full md:w-1/2 p-2 bg-gray-700 rounded border border-gray-600">
+                <option value="open">Remain Open (Students can review and resubmit)</option>
+                <option value="lock">Lock (Students can review but not edit)</option>
+                <option value="hide">Lock & Hide (Students cannot see answers or scores)</option>
+            </select>
+        </div>
 
+        <div id="slidesContainer" class="space-y-8"></div>
+    </div>
+    
+    <!-- Simple/Advanced Checker Template -->
+    <template id="checkerTemplate">
+        <div>
+            <div class="flex items-center justify-between">
+                <label class="block font-semibold mb-2">Checker Function</label>
+                <div class="flex items-center space-x-1 p-1 bg-gray-700 rounded-lg">
+                    <button class="mode-toggle-btn simple-mode-btn bg-indigo-600 text-white rounded-md px-3 py-1 text-sm font-semibold">Simple</button>
+                    <button class="mode-toggle-btn advanced-mode-btn bg-transparent text-gray-300 rounded-md px-3 py-1 text-sm font-semibold">Advanced</button>
+                </div>
+            </div>
+            <!-- Simple Mode UI -->
+            <div class="simple-mode-ui mt-2 p-3 bg-gray-700/50 border border-gray-600 rounded-lg space-y-4">
+                <div class="rule-groups-container space-y-4">
+                    <!-- Rule groups will be dynamically added here -->
+                </div>
+                <button class="add-rule-group-btn mt-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm">+ Add Rule Group</button>
+                <div class="mt-4">
+                    <label class="block text-xs font-medium text-gray-500">Live Code Preview (read-only)</label>
+                    <pre class="bg-gray-900 text-white p-2 rounded-md text-xs overflow-x-auto h-32"><code class="live-code-preview"></code></pre>
+                </div>
+            </div>
+            <!-- Advanced Mode UI -->
+            <div class="advanced-mode-ui hidden">
+                <textarea class="checker-textarea w-full h-64 p-2 bg-gray-700 rounded" placeholder="// Write your checker function here"></textarea>
             </div>
         </div>
     </template>
-    
-    <div id="toast-wrapper"></div>
-    
-    <script>
-    // --- Firebase and Auth Initialization ---
+
+    <div id="toast-wrapper" class="fixed top-4 right-4 z-[100] space-y-3 w-full max-w-sm"></div>
+
+<script>
+    // --- Firebase & Auth ---
+    const TEACHER_EMAILS = ["klynch@mtps.us", "mstuart@mtps.us", "cfiori@mtps.us", "mlock@mtps.us", "cheine@mtps.us"];
+    const CLIENT_ID = "1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com";
+    const SCOPES = "https://www.googleapis.com/auth/presentations.readonly";
     const firebaseConfig = {
-        apiKey: "AIzaSyXXXXXX",
-        authDomain: "project-id.firebaseapp.com",
-        projectId: "iterated-93338",
-        storageBucket: "project-id.appspot.com",
-        messagingSenderId: "1234567890",
-        appId: "1:1234567890:web:abcdefghijk"
+      apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
+      authDomain: "mrlynch-slides-app.firebaseapp.com",
+      projectId: "mrlynch-slides-app",
+      storageBucket: "mrlynch-slides-app.appspot.com",
+      messagingSenderId: "223179627035",
+      appId: "1:223179627035:web:ff0f538f3029d829c3f6be"
     };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
     const auth = firebase.auth();
-    let currentUser = null;
 
-    // --- DOM Elements ---
-    const loadingOverlay = document.getElementById('loading-overlay');
-    const appContainer = document.getElementById('app-container');
-    const assignmentNameEl = document.getElementById('assignmentName');
-    const postSubmissionRuleEl = document.getElementById('postSubmissionRule');
-    const slideIdEl = document.getElementById('slideId');
-    const classTimesList = document.getElementById('classTimesList');
-    const addClassTimeBtn = document.getElementById('addClassTimeBtn');
-    const questionsContainer = document.getElementById('questionsContainer');
-    const questionTemplate = document.getElementById('questionTemplate');
-    const addQuestionBtn = document.getElementById('addQuestionBtn');
-    const saveAssignmentBtn = document.getElementById('saveAssignmentBtn');
-    
     let assignmentId = null;
+    let assignmentData = null;
+    let tokenClient;
+    let allClassNames = [];
+    let teacherDefaults = {};
 
-    // --- Auth State ---
-    let authReady = false;
-
-    // Safety timeout to prevent getting stuck on the loading screen
-    const authTimeout = setTimeout(() => {
-        if (!authReady) {
-            console.error("Firebase Auth failed to initialize in time.");
-            window.location.href = 'assignments.html';
-        }
-    }, 5000); // 5 seconds is a generous timeout
-
+    // --- Authentication ---
     auth.onAuthStateChanged(user => {
-        authReady = true;
-        clearTimeout(authTimeout); // Authentication check is complete, cancel the safety timeout
-        loadingOverlay.classList.add('hidden');
-
-        if (user) {
-            currentUser = user;
-            appContainer.classList.remove('hidden'); // Show the main application content
-            
-            const urlParams = new URLSearchParams(window.location.search);
-            assignmentId = urlParams.get('id');
-            if (assignmentId) {
-                loadAssignment(assignmentId);
-            } else {
-                addQuestion(1);
-            }
+        if (user && TEACHER_EMAILS.map(e => e.toLowerCase()).includes(user.email.toLowerCase())) {
+            authorizeGapi();
         } else {
-            // If auth check completes and there's no user, then redirect.
-            window.location.href = 'assignments.html';
+            document.getElementById('loading-text').textContent = "Please sign in to continue.";
+            document.getElementById('signInButtonContainer').classList.remove('hidden');
         }
     });
 
-    // --- Core Logic: Load, Save, Add/Delete Questions & Class Times ---
-
-    async function loadAssignment(id) {
-        try {
-            const doc = await db.collection('assignments').doc(id).get();
-            if (doc.exists) {
-                const data = doc.data();
-                assignmentNameEl.value = data.name || '';
-                postSubmissionRuleEl.value = data.postSubmissionRule || 'open';
-                slideIdEl.value = data.slideId || '';
-                
-                classTimesList.innerHTML = '';
-                if(data.classTimes) {
-                    data.classTimes.forEach(time => addClassTime(time));
-                }
-
-                questionsContainer.innerHTML = '';
-                if (data.questions && data.questions.length > 0) {
-                    data.questions.forEach((q, index) => {
-                        addQuestion(index + 1, q);
-                    });
-                } else {
-                    addQuestion(1);
-                }
-            } else {
-                 showToast("Assignment not found.", {color: 'red'});
-                 setTimeout(() => window.location.href = 'assignments.html', 2000);
-            }
-        } catch (error) {
-            console.error("Error loading assignment:", error);
-            showToast("Failed to load assignment.", {color: 'red'});
-        }
-    }
-    
-    function addClassTime(time = null) {
-        const div = document.createElement('div');
-        div.className = 'flex items-center space-x-2';
-        const input = document.createElement('input');
-        input.type = 'datetime-local';
-        input.className = 'class-time-input bg-gray-700 border border-gray-600 rounded-md shadow-sm py-1 px-2 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-white';
-        if(time) input.value = time;
-        const removeBtn = document.createElement('button');
-        removeBtn.textContent = 'Remove';
-        removeBtn.className = 'text-red-400 hover:text-red-300 text-sm';
-        removeBtn.onclick = () => div.remove();
-        div.appendChild(input);
-        div.appendChild(removeBtn);
-        classTimesList.appendChild(div);
-    }
-
-    function addQuestion(number, data = null) {
-        const clone = questionTemplate.content.cloneNode(true);
-        const questionCard = clone.querySelector('.question-card');
-        questionCard.dataset.questionNumber = number;
-
-        const title = questionCard.querySelector('.question-title');
-        title.textContent = `Question ${number}`;
-
-        const prompt = questionCard.querySelector('.questionPrompt');
-        const codeEl = questionCard.querySelector('.answerCheckingCode');
-        
-        if(data) {
-            prompt.value = data.prompt || '';
-            codeEl.value = data.code || getDefaultAnswerCheckerCode();
-        } else {
-            codeEl.value = getDefaultAnswerCheckerCode();
-        }
-        
-        if (!data) {
-            const container = questionCard.querySelector('.rule-groups-container');
-            if (container.children.length === 0) {
-                container.appendChild(createRuleGroupElement(1));
-            }
-        }
-        generateCodeFromUI(questionCard);
-
-        questionsContainer.appendChild(clone);
-        renumberQuestions();
-    }
-    
-    function renumberQuestions() {
-        const questions = questionsContainer.querySelectorAll('.question-card');
-        questions.forEach((q, index) => {
-            const number = index + 1;
-            q.dataset.questionNumber = number;
-            q.querySelector('.question-title').textContent = `Question ${number}`;
+    function handleCredentialResponse(response) {
+        const credential = firebase.auth.GoogleAuthProvider.credential(response.credential);
+        auth.signInWithCredential(credential).catch(error => {
+            console.error("Firebase sign-in error", error);
+            document.getElementById('auth-error').innerText = "Firebase sign-in failed. Please try again.";
         });
     }
 
-    async function saveAssignment() {
-        if (!assignmentNameEl.value.trim()) {
-            showToast("Please enter an assignment name.", {color: 'red'});
-            return;
-        }
-
-        saveAssignmentBtn.disabled = true;
-        saveAssignmentBtn.textContent = 'Saving...';
-
-        const questions = [];
-        document.querySelectorAll('.question-card').forEach(card => {
-            questions.push({
-                prompt: card.querySelector('.questionPrompt').value,
-                code: card.querySelector('.answerCheckingCode').value,
+    function authorizeGapi() {
+        gapi.load('client', () => {
+            gapi.client.load('https://slides.googleapis.com/$discovery/rest?version=v1').then(() => {
+                tokenClient = google.accounts.oauth2.initTokenClient({
+                    client_id: CLIENT_ID,
+                    scope: SCOPES,
+                    callback: (tokenResponse) => {
+                        if (tokenResponse && tokenResponse.access_token) {
+                            gapi.client.setToken(tokenResponse);
+                            loadAssignment();
+                        } else {
+                            document.getElementById('loading-text').textContent = "Could not get Google API authorization. Please try re-signing in.";
+                            document.getElementById('signInButtonContainer').classList.remove('hidden');
+                        }
+                    },
+                });
+                tokenClient.requestAccessToken({prompt: ''}); 
             });
         });
+    }
 
-        const classTimes = Array.from(document.querySelectorAll('.class-time-input')).map(input => input.value).filter(Boolean);
+    window.onload = function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        assignmentId = urlParams.get('id');
+        if (!assignmentId) {
+            document.getElementById('loading-text').textContent = "Error: No assignment ID provided in the URL.";
+            document.getElementById('signInButtonContainer').classList.add('hidden');
+        }
+    };
 
-        const assignmentData = {
-            name: assignmentNameEl.value.trim(),
-            postSubmissionRule: postSubmissionRuleEl.value,
-            slideId: slideIdEl.value.trim(),
-            classTimes: classTimes,
-            questions: questions,
-            owner: currentUser.uid,
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        };
-
+    async function loadAssignment() {
+        if (!assignmentId) return;
+        const loadingText = document.getElementById('loading-text');
         try {
-            if (assignmentId) {
-                await db.collection('assignments').doc(assignmentId).update(assignmentData);
-                 showToast("Assignment updated successfully!", {color: 'green'});
-            } else {
-                const docRef = await db.collection('assignments').add({
-                    ...assignmentData,
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
-                assignmentId = docRef.id;
-                history.pushState(null, '', `?id=${assignmentId}`);
-                showToast("Assignment saved successfully!", {color: 'green'});
-            }
+            loadingText.textContent = "Loading assignment data...";
+            const teacherDefaultsDoc = await db.collection("teachers").doc(auth.currentUser.email).get();
+            if(teacherDefaultsDoc.exists) { teacherDefaults = teacherDefaultsDoc.data(); }
+            const assignmentDoc = await db.collection("assignments").doc(assignmentId).get();
+            if (!assignmentDoc.exists) { loadingText.textContent = "Error: Assignment not found."; return; }
+            assignmentData = { id: assignmentDoc.id, ...assignmentDoc.data() };
+            const studentSnapshot = await db.collection("students").get();
+            const students = studentSnapshot.docs.map(doc => doc.data());
+            allClassNames = [...new Set(students.map(s => String(s.class)))].sort();
+            loadingText.textContent = "Fetching slide information from Google...";
+            const response = await gapi.client.slides.presentations.get({ presentationId: assignmentData.presentationId });
+            const slides = response.result.slides;
+            if (!slides || slides.length === 0) { loadingText.textContent = "Error: No slides found in the presentation."; return; }
+            assignmentData.slideIds = slides.map(slide => slide.objectId);
+            document.getElementById('page-loader').classList.add('hidden');
+            document.getElementById('editorContent').classList.remove('hidden');
+            document.getElementById('assignmentTitle').textContent = `Editing: ${assignmentData.name}`;
+            document.getElementById('shareLink').value = `https://custom.scienceclass.rocks/classroompicker.html?assignmentId=${assignmentId}`;
+            document.getElementById('postSubmissionRule').value = assignmentData.postSubmissionRule || 'open';
+            renderDeadlineUI();
+            renderEditor();
         } catch (error) {
-            console.error("Error saving assignment:", error);
-            showToast("Error saving assignment.", {color: 'red'});
-        } finally {
-            saveAssignmentBtn.disabled = false;
-            saveAssignmentBtn.textContent = 'Save Assignment';
+            console.error("Error loading assignment or slides:", error);
+            const errorMessage = error.result?.error?.message || "An unknown error occurred.";
+            loadingText.textContent = `Error: ${errorMessage}. Please ensure Slides API is enabled and the presentation is shared with you.`;
         }
     }
 
-    function getDefaultAnswerCheckerCode() {
-        return `// Auto-generated by Simple Editor. Switch to Advanced Mode to edit directly.
-function checkAnswer(studentAnswer) {
-    let score = 0;
-    const maxScore = 100;
-    const answer = typeof studentAnswer === 'string' ? studentAnswer.toLowerCase() : studentAnswer;
-
-    // From Rule Group 1
-    if (false) { // Add conditions in Simple Mode
-        score += 100;
+    function renderDeadlineUI() {
+        const container = document.getElementById('class-start-times');
+        container.innerHTML = '';
+        const assignmentStartTimes = assignmentData.deadlinePolicy?.classStartTimes;
+        const defaultStartTimes = teacherDefaults.classStartTimes;
+        const hardcodedDefaults = { '1': '08:01', '2': '08:50', '5': '11:17', '7': '12:55', '8': '13:44' };
+        allClassNames.forEach(className => {
+            const value = assignmentStartTimes?.[className] || defaultStartTimes?.[className] || hardcodedDefaults[className] || '00:00';
+            container.innerHTML += `<div><label for="start-time-${className}" class="block text-sm font-semibold">${className}</label><input type="time" id="start-time-${className}" value="${value}" class="p-2 bg-gray-700 rounded border border-gray-600 w-32"></div>`;
+        });
     }
 
-    // Return final score, ensuring it doesn't exceed maxScore.
-    return { score: Math.min(score, maxScore), maxScore: maxScore };
-}`;
-    }
+    // ---- Begin Integration of Simple/Advanced Mode Checker ----
+    function renderEditor() {
+        const container = document.getElementById('slidesContainer');
+        container.innerHTML = '';
+        let slideIds = assignmentData.slideIds || [];
+        let checkerFunctions = assignmentData.checkerFunctions || {};
+        let deadlinePolicy = assignmentData.deadlinePolicy || {};
+        slideIds.forEach((slideId, index) => {
+            const qNum = index + 1;
+            const slidePolicy = deadlinePolicy[`q${qNum}`] || {};
+            const editorBox = document.createElement('div');
+            editorBox.className = "slide-editor-box grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-800 p-4 rounded-lg";
 
-    // --- Event Listeners ---
-    addQuestionBtn.addEventListener('click', () => {
-        const nextQuestionNumber = questionsContainer.children.length + 1;
-        addQuestion(nextQuestionNumber);
-    });
-
-    questionsContainer.addEventListener('click', e => {
-        if (e.target.classList.contains('deleteQuestionBtn')) {
-            e.target.closest('.question-card').remove();
-            renumberQuestions();
-        }
-    });
-
-    saveAssignmentBtn.addEventListener('click', saveAssignment);
-    addClassTimeBtn.addEventListener('click', () => addClassTime());
-    
-    // --- New Simple Rule Builder Logic ---
-
-    questionsContainer.addEventListener('click', (e) => {
-        const questionCard = e.target.closest('.question-card');
-        if (!questionCard) return;
-
-        // Mode Toggling
-        if (e.target.classList.contains('mode-toggle-btn')) {
-            const isSimple = e.target.classList.contains('simple-mode-btn');
-            
-            const simpleBtn = questionCard.querySelector('.simple-mode-btn');
-            const advBtn = questionCard.querySelector('.advanced-mode-btn');
-            const simpleUI = questionCard.querySelector('.simple-mode-ui');
-            const advUI = questionCard.querySelector('.advanced-mode-ui');
-
-            if (isSimple) {
-                simpleBtn.classList.add('bg-indigo-600', 'text-white');
-                simpleBtn.classList.remove('bg-transparent', 'text-gray-300');
-                advBtn.classList.add('bg-transparent', 'text-gray-300');
-                advBtn.classList.remove('bg-indigo-600', 'text-white');
-                simpleUI.classList.remove('hidden');
-                advUI.classList.add('hidden');
-            } else { // Advanced mode
-                advBtn.classList.add('bg-indigo-600', 'text-white');
-                advBtn.classList.remove('bg-transparent', 'text-gray-300');
-                simpleBtn.classList.add('bg-transparent', 'text-gray-300');
-                simpleBtn.classList.remove('bg-indigo-600', 'text-white');
-                advUI.classList.remove('hidden');
-                simpleUI.classList.add('hidden');
+            // Checker Function UI
+            const checkerTemplate = document.getElementById('checkerTemplate');
+            const checkerUI = checkerTemplate.content.cloneNode(true);
+            // Set textarea value from assignment
+            let checkerCode = checkerFunctions[`calc${qNum}`] || getDefaultCheckerCode();
+            checkerUI.querySelector('.checker-textarea').value = checkerCode;
+            // Set up Simple Mode initial rule group
+            const ruleGroupsContainer = checkerUI.querySelector('.rule-groups-container');
+            if (ruleGroupsContainer.children.length === 0) {
+                ruleGroupsContainer.appendChild(createRuleGroupElement(1));
             }
-        }
-        
-        if(e.target.classList.contains('add-rule-group-btn')) {
-            const container = questionCard.querySelector('.rule-groups-container');
-            container.appendChild(createRuleGroupElement(container.children.length + 1));
-            generateCodeFromUI(questionCard);
-        }
-        
-        if(e.target.classList.contains('add-condition-btn')) {
-            const conditionsContainer = e.target.previousElementSibling;
-            conditionsContainer.appendChild(createConditionElement());
-            generateCodeFromUI(questionCard);
-        }
-        
-        if(e.target.classList.contains('delete-btn')) {
-            e.target.parentElement.remove();
-            generateCodeFromUI(questionCard);
-        }
-        
-        if (e.target.classList.contains('delete-group-btn')) {
-            e.target.closest('.rule-group').remove();
-            generateCodeFromUI(questionCard);
-        }
-    });
+            // Live code preview
+            generateCodeFromUI(checkerUI, checkerCode);
 
-    questionsContainer.addEventListener('change', (e) => {
-        const questionCard = e.target.closest('.question-card');
-        if (questionCard && e.target.closest('.simple-mode-ui')) {
-            generateCodeFromUI(questionCard);
-        }
-    });
-    
-    questionsContainer.addEventListener('keyup', (e) => {
-        const questionCard = e.target.closest('.question-card');
-        if (questionCard && e.target.closest('.simple-mode-ui')) {
-            generateCodeFromUI(questionCard);
-        }
-    });
+            // Set up the checker tab logic
+            checkerUI.querySelectorAll('.mode-toggle-btn').forEach(btn => btn.addEventListener('click', e => {
+                const isSimple = e.target.classList.contains('simple-mode-btn');
+                const simpleBtn = checkerUI.querySelector('.simple-mode-btn');
+                const advBtn = checkerUI.querySelector('.advanced-mode-btn');
+                const simpleUI = checkerUI.querySelector('.simple-mode-ui');
+                const advUI = checkerUI.querySelector('.advanced-mode-ui');
+                if (isSimple) {
+                    simpleBtn.classList.add('bg-indigo-600', 'text-white');
+                    simpleBtn.classList.remove('bg-transparent', 'text-gray-300');
+                    advBtn.classList.add('bg-transparent', 'text-gray-300');
+                    advBtn.classList.remove('bg-indigo-600', 'text-white');
+                    simpleUI.classList.remove('hidden');
+                    advUI.classList.add('hidden');
+                } else {
+                    advBtn.classList.add('bg-indigo-600', 'text-white');
+                    advBtn.classList.remove('bg-transparent', 'text-gray-300');
+                    simpleBtn.classList.add('bg-transparent', 'text-gray-300');
+                    simpleBtn.classList.remove('bg-indigo-600', 'text-white');
+                    advUI.classList.remove('hidden');
+                    simpleUI.classList.add('hidden');
+                }
+            }));
+
+            // Add event listeners for rule builder (Simple Mode)
+            checkerUI.querySelector('.add-rule-group-btn').addEventListener('click', () => {
+                ruleGroupsContainer.appendChild(createRuleGroupElement(ruleGroupsContainer.children.length + 1));
+                generateCodeFromUI(checkerUI);
+            });
+            checkerUI.addEventListener('click', e => {
+                // Add condition
+                if(e.target.classList.contains('add-condition-btn')) {
+                    const conditionsContainer = e.target.previousElementSibling;
+                    conditionsContainer.appendChild(createConditionElement());
+                    generateCodeFromUI(checkerUI);
+                }
+                // Delete condition
+                if(e.target.classList.contains('delete-btn')) {
+                    e.target.parentElement.remove();
+                    generateCodeFromUI(checkerUI);
+                }
+                // Delete rule group
+                if (e.target.classList.contains('delete-group-btn')) {
+                    e.target.closest('.rule-group').remove();
+                    generateCodeFromUI(checkerUI);
+                }
+            });
+            checkerUI.addEventListener('change', (e) => {
+                if (e.target.closest('.simple-mode-ui')) generateCodeFromUI(checkerUI);
+            });
+            checkerUI.addEventListener('keyup', (e) => {
+                if (e.target.closest('.simple-mode-ui')) generateCodeFromUI(checkerUI);
+            });
+
+            editorBox.innerHTML = `
+                <div>
+                    <h3 class="text-xl font-semibold mb-2">Slide ${qNum}</h3>
+                    <img id="img-${slideId}" src="" class="w-full rounded border border-gray-700">
+                </div>
+                <div id="checker-container-${qNum}"></div>
+                <div class="mt-4 border-t border-gray-700 pt-4">
+                    <h4 class="font-semibold mb-2">Deadline & Late Policy</h4>
+                    <div class="grid grid-cols-3 gap-2 text-sm">
+                        <div><label>Deadline (mins)</label><input type="number" id="deadline-minutes-${index}" value="${slidePolicy.deadlineMinutes || 0}" class="w-full mt-1 p-2 bg-gray-700 rounded border-gray-600"></div>
+                        <div><label>Penalty Type</label><select id="penalty-type-${index}" class="w-full mt-1 p-2 bg-gray-700 rounded border-gray-600"><option value="none" ${!slidePolicy.penaltyType || slidePolicy.penaltyType === 'none' ? 'selected' : ''}>None</option><option value="fixed" ${slidePolicy.penaltyType === 'fixed' ? 'selected' : ''}>Fixed</option><option value="percent" ${slidePolicy.penaltyType === 'percent' ? 'selected' : ''}>Percent</option></select></div>
+                        <div><label>Penalty Value</label><input type="number" id="penalty-value-${index}" value="${slidePolicy.penaltyValue || 0}" class="w-full mt-1 p-2 bg-gray-700 rounded border-gray-600"></div>
+                    </div>
+                </div>
+            `;
+            editorBox.querySelector(`#checker-container-${qNum}`).appendChild(checkerUI);
+
+            container.appendChild(editorBox);
+            const imgElement = document.getElementById(`img-${slideId}`);
+            const imageUrl = `https://docs.google.com/presentation/d/${assignmentData.presentationId}/export/png?id=${assignmentData.presentationId}&pageid=${slideId}`;
+            loadImageWithRetries(imgElement, imageUrl);
+        });
+    }
 
     function createRuleGroupElement(number) {
         const div = document.createElement('div');
@@ -515,8 +412,25 @@ function checkAnswer(studentAnswer) {
         return div;
     }
 
-    function generateCodeFromUI(questionCard) {
-        const ruleGroups = questionCard.querySelectorAll('.rule-group');
+    function getDefaultCheckerCode() {
+        return `// Auto-generated by Simple Editor. Switch to Advanced Mode to edit directly.
+function checkAnswer(studentAnswer) {
+    let score = 0;
+    const maxScore = 100;
+    const answer = typeof studentAnswer === 'string' ? studentAnswer.toLowerCase() : studentAnswer;
+
+    // From Rule Group 1
+    if (false) { // Add conditions in Simple Mode
+        score += 100;
+    }
+
+    // Return final score, ensuring it doesn't exceed maxScore.
+    return { score: Math.min(score, maxScore), maxScore: maxScore };
+}`;
+    }
+
+    function generateCodeFromUI(checkerUI, initialCode = null) {
+        const ruleGroups = checkerUI.querySelectorAll('.rule-group');
         let code = `// Auto-generated by Simple Editor. Switch to Advanced Mode to edit directly.\n`;
         code += `function checkAnswer(studentAnswer) {\n`;
         code += `    let score = 0;\n`;
@@ -562,13 +476,116 @@ function checkAnswer(studentAnswer) {
         code += `    // Return final score, ensuring it doesn't exceed maxScore.\n`;
         code += `    return { score: Math.min(score, maxScore), maxScore: maxScore };\n`;
         code += `}`;
-        
-        questionCard.querySelector('.answerCheckingCode').value = code;
-        const previewEl = questionCard.querySelector('.live-code-preview');
+        // Set values
+        checkerUI.querySelector('.checker-textarea').value = code;
+        const previewEl = checkerUI.querySelector('.live-code-preview');
         if (previewEl) previewEl.textContent = code;
     }
+    // ---- End Integration ----
 
-    // --- Utility: Toast Notifications ---
+    function loadImageWithRetries(imgElement, srcUrl, maxRetries = 2) {
+        let attempt = 0;
+        function tryLoad() {
+            const urlWithCacheBust = `${srcUrl}&time=${new Date().getTime()}`;
+            imgElement.src = urlWithCacheBust;
+            imgElement.onerror = () => {
+                attempt++;
+                if (attempt < maxRetries) {
+                    setTimeout(tryLoad, 1000);
+                } else {
+                    console.error(`Could not load image after ${maxRetries} attempts: ${srcUrl}`);
+                    imgElement.alt = "Image failed to load";
+                    imgElement.src = 'https://placehold.co/400x300/374151/9ca3af?text=Image+Load+Failed';
+                }
+            };
+        }
+        tryLoad();
+    }
+
+    async function saveAssignment() {
+        const saveBtn = document.getElementById('saveBtn');
+        try {
+            saveBtn.textContent = "Saving...";
+            const checkerFunctions = {};
+            const deadlinePolicy = { classStartTimes: {} };
+            allClassNames.forEach(className => {
+                const timeValue = document.getElementById(`start-time-${className}`).value;
+                if(timeValue) { deadlinePolicy.classStartTimes[String(className)] = timeValue; }
+            });
+            assignmentData.slideIds.forEach((id, index) => {
+                const qNum = index + 1;
+                // Use advanced mode textarea value on save (can add logic to choose simple/advanced mode if desired)
+                const checkerContainer = document.getElementById(`checker-container-${qNum}`);
+                let checkerCode = "";
+                if (checkerContainer) {
+                    const advMode = checkerContainer.querySelector('.advanced-mode-ui');
+                    if (!advMode.classList.contains('hidden')) {
+                        checkerCode = checkerContainer.querySelector('.checker-textarea').value;
+                    } else {
+                        // Simple mode code (live preview)
+                        checkerCode = checkerContainer.querySelector('.live-code-preview').textContent;
+                    }
+                }
+                checkerFunctions[`calc${qNum}`] = checkerCode;
+                deadlinePolicy[`q${qNum}`] = {
+                    deadlineMinutes: parseInt(document.getElementById(`deadline-minutes-${index}`).value, 10) || 0,
+                    penaltyType: document.getElementById(`penalty-type-${index}`).value,
+                    penaltyValue: parseInt(document.getElementById(`penalty-value-${index}`).value, 10) || 0,
+                };
+            });
+            const postSubmissionRule = document.getElementById('postSubmissionRule').value;
+            await db.collection("assignments").doc(assignmentId).update({
+                slideIds: assignmentData.slideIds,
+                checkerFunctions: checkerFunctions,
+                deadlinePolicy: deadlinePolicy,
+                postSubmissionRule: postSubmissionRule
+            });
+            showToast("Assignment saved successfully!", { color: 'green' });
+        } catch (error) {
+            console.error("Error saving assignment:", error);
+            showToast("Error saving. See console for details.", { color: 'red' });
+        } finally {
+            saveBtn.textContent = "Save Assignment";
+        }
+    }
+
+    async function saveTeacherDefaults() {
+        const newDefaults = { classStartTimes: {} };
+        allClassNames.forEach(className => {
+            const timeValue = document.getElementById(`start-time-${className}`).value;
+            if(timeValue) {
+                newDefaults.classStartTimes[String(className)] = timeValue;
+            }
+        });
+        try {
+            await db.collection("teachers").doc(auth.currentUser.email).set(newDefaults, { merge: true });
+            showToast("Default start times saved!", { color: 'green' });
+            teacherDefaults.classStartTimes = newDefaults.classStartTimes;
+        } catch (error) {
+            console.error("Error saving defaults:", error);
+            showToast("Could not save defaults.", { color: 'red' });
+        }
+    }
+
+    function toggleDeadlineSection() {
+        const content = document.getElementById('deadline-content');
+        const chevron = document.getElementById('deadline-chevron');
+        if (content.style.maxHeight && content.style.maxHeight !== '0px') {
+            content.style.maxHeight = '0px';
+            chevron.style.transform = 'rotate(0deg)';
+        } else {
+            content.style.maxHeight = content.scrollHeight + "px";
+            chevron.style.transform = 'rotate(90deg)';
+        }
+    }
+
+    function copyShareLink() {
+        const linkInput = document.getElementById('shareLink');
+        linkInput.select();
+        document.execCommand('copy');
+        showToast("Link copied to clipboard!", { color: 'blue' });
+    }
+
     function showToast(message, options = {}) {
         const { color = 'default', duration = 3000 } = options;
         const wrapper = document.getElementById('toast-wrapper');
@@ -595,10 +612,10 @@ function checkAnswer(studentAnswer) {
         wrapper.appendChild(toast);
         timeoutId = setTimeout(dismiss, duration);
     }
-    document.getElementById('signOutButton').onclick = () => { auth.signOut(); };
+    document.getElementById('signOutButton').onclick = () => {
+        auth.signOut();
+    };
 
 </script>
 </body>
 </html>
-
-
