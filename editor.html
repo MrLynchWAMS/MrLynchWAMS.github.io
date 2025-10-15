@@ -21,6 +21,24 @@
     .collapsible-content { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; }
     #toast-wrapper { position: fixed; top: 1rem; right: 1rem; z-index: 50; display: flex; flex-direction: column; gap: 0.5rem; }
     .simple-disabled-notice { background: #fee2e2; color: #991b1b; padding: 0.5rem; border-radius: 0.375rem; margin-top: 0.5rem; }
+    .dialog-backdrop {
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(31,41,55,0.85); z-index: 1000;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .dialog-box {
+      background: #1f2937;
+      color: #fff;
+      border-radius: 0.75rem;
+      box-shadow: 0 6px 32px rgba(0,0,0,0.22);
+      padding: 2rem 2rem 1.5rem 2rem;
+      min-width: 320px;
+      max-width: 96vw;
+      z-index: 1001;
+      text-align: center;
+      animation: fade-in-right 0.35s;
+    }
+    .dialog-box h3 { color: #fde68a; }
+    .dialog-box button { margin: 0 0.5rem; }
   </style>
 </head>
 <body class="bg-gray-900 text-white font-sans">
@@ -80,7 +98,6 @@
     <div id="slidesContainer" class="space-y-8"></div>
   </div>
 
-  <!-- Checker Function Template (Simple/Advanced) -->
   <template id="checkerTemplate">
     <div class="checker-widget">
       <div class="flex items-center justify-between mb-2">
@@ -93,7 +110,6 @@
       <div class="simple-mode-ui mt-2 p-3 bg-gray-700/50 border border-gray-600 rounded-lg space-y-4">
         <div class="rule-groups-container space-y-4"></div>
         <button class="add-rule-group-btn mt-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm">+ Add Rule Group</button>
-        <button class="push-to-advanced-btn bg-yellow-500 hover:bg-yellow-600 text-black font-bold py-1 px-3 rounded-md text-sm">Send to Advanced Editor</button>
         <div class="mt-4">
           <label class="block text-xs font-medium text-gray-500">Live Code Preview (read-only)</label>
           <pre class="bg-gray-900 text-white p-2 rounded-md text-xs overflow-x-auto h-32"><code class="live-code-preview"></code></pre>
@@ -222,7 +238,7 @@ function renderDeadlineUI() {
   const hardcodedDefaults = { '1': '08:01', '2': '08:50', '5': '11:17', '7': '12:55', '8': '13:44' };
   allClassNames.forEach(className => {
     const value = assignmentStartTimes?.[className] || defaultStartTimes?.[className] || hardcodedDefaults[className] || '00:00';
-    container.innerHTML += `<div><label for="start-time-${className}" class="block text-sm font-semibold">${className}</label><input type="time" id="start-time-${className}" value="${value}" class="p-2 bg-gray-700 rounded border border-gray-600 w-32"></div>`;
+    container.innerHTML += `<div><label for="start-time-${className}" class="block text-sm font-semibold">${className}</label><input type="time" id="start-time-${className}" value="${value}" class="p-2 bg-gray-700 border border-gray-600 rounded w-24"></div>`;
   });
 }
 
@@ -247,7 +263,7 @@ function renderEditor() {
         <h4 class="font-semibold mb-2">Deadline & Late Policy</h4>
         <div class="grid grid-cols-3 gap-2 text-sm">
           <div><label>Deadline (mins)</label><input type="number" id="deadline-minutes-${index}" value="${slidePolicy.deadlineMinutes || 0}" class="w-full mt-1 p-2 bg-gray-700 rounded border-gray-600"></div>
-          <div><label>Penalty Type</label><select id="penalty-type-${index}" class="w-full mt-1 p-2 bg-gray-700 rounded border-gray-600"><option value="none" ${!slidePolicy.penaltyType || slidePolicy.penaltyType === 'none' ? 'selected' : ''}>None</option><option value="fixed" ${slidePolicy.penaltyType === 'fixed' ? 'selected' : ''}>Fixed</option><option value="percent" ${slidePolicy.penaltyType === 'percent' ? 'selected' : ''}>Percent</option></select></div>
+          <div><label>Penalty Type</label><select id="penalty-type-${index}" class="w-full mt-1 p-2 bg-gray-700 rounded border-gray-600"><option value="none" ${!slidePolicy.penaltyType || slidePolicy.penaltyType === 'none' ? 'selected' : ''}>None</option><option value="percent" ${slidePolicy.penaltyType === 'percent' ? 'selected' : ''}>%</option><option value="points" ${slidePolicy.penaltyType === 'points' ? 'selected' : ''}>Points</option></select></div>
           <div><label>Penalty Value</label><input type="number" id="penalty-value-${index}" value="${slidePolicy.penaltyValue || 0}" class="w-full mt-1 p-2 bg-gray-700 rounded border-gray-600"></div>
         </div>
       </div>
@@ -268,10 +284,10 @@ function CheckerWidget(container, initialCode = "") {
   let mode = initialCode ? "advanced" : "simple";
   let simpleDisabled = !!initialCode;
   let code = initialCode || getDefaultCheckerCode();
+  let advancedEdited = false;
 
   const simpleBtn = container.querySelector('.simple-mode-btn');
   const advBtn = container.querySelector('.advanced-mode-btn');
-  const pushToAdvBtn = container.querySelector('.push-to-advanced-btn');
   const simpleUI = container.querySelector('.simple-mode-ui');
   const advUI = container.querySelector('.advanced-mode-ui');
   const ruleGroupsContainer = container.querySelector('.rule-groups-container');
@@ -283,6 +299,7 @@ function CheckerWidget(container, initialCode = "") {
   container.getCode = () => (mode === "simple" ? generateCodeFromUI(container) : advTextarea.value);
   container.getMode = () => mode;
 
+  // Initial render
   if (mode === "advanced") {
     showAdvancedMode();
     advTextarea.value = code;
@@ -297,6 +314,7 @@ function CheckerWidget(container, initialCode = "") {
     simpleDisabledNotice.classList.add('hidden');
   }
 
+  // Mode toggle logic
   simpleBtn.onclick = () => {
     if (simpleDisabled) {
       simpleDisabledNotice.classList.remove('hidden');
@@ -316,31 +334,34 @@ function CheckerWidget(container, initialCode = "") {
     advTextarea.value = generateCodeFromUI(container);
   };
 
-  pushToAdvBtn.onclick = () => {
-    mode = "advanced";
-    showAdvancedMode();
-    advTextarea.value = generateCodeFromUI(container);
-    simpleDisabled = true;
-    simpleDisabledNotice.classList.remove('hidden');
-    ruleGroupsContainer.innerHTML = "";
-  };
-
-  deleteAdvBtn.onclick = () => {
-    if (confirm("Delete advanced code and switch to Simple Mode? This cannot be undone.")) {
-      advTextarea.value = "";
-      code = getDefaultCheckerCode();
-      mode = "simple";
-      simpleDisabled = false;
-      showSimpleMode();
-      simpleDisabledNotice.classList.add('hidden');
-      ruleGroupsContainer.innerHTML = "";
-      ruleGroupsContainer.appendChild(createRuleGroupElement(1));
-      updateCodeFromSimple();
+  // Advanced editor change disables simple mode
+  advTextarea.oninput = () => {
+    code = advTextarea.value;
+    if (!advancedEdited) {
+      advancedEdited = true;
+      simpleDisabled = true;
+      simpleDisabledNotice.classList.remove('hidden');
     }
   };
 
-  advTextarea.oninput = () => {
-    code = advTextarea.value;
+  // Stylized delete confirmation for advanced code
+  deleteAdvBtn.onclick = () => {
+    showDialog(
+      "Delete advanced code and switch to Simple Mode?",
+      "This will discard your advanced changes and restore the simple editor.",
+      () => {
+        advTextarea.value = "";
+        code = getDefaultCheckerCode();
+        mode = "simple";
+        advancedEdited = false;
+        simpleDisabled = false;
+        showSimpleMode();
+        simpleDisabledNotice.classList.add('hidden');
+        ruleGroupsContainer.innerHTML = "";
+        ruleGroupsContainer.appendChild(createRuleGroupElement(1));
+        updateCodeFromSimple();
+      }
+    );
   };
 
   container.querySelector('.add-rule-group-btn').onclick = () => {
@@ -387,6 +408,86 @@ function CheckerWidget(container, initialCode = "") {
     livePreview.textContent = code;
     advTextarea.value = code;
   }
+}
+
+// Stylized dialog using your toast-wrapper for delete confirmation
+function showDialog(title, message, onConfirm) {
+  const wrapper = document.getElementById('toast-wrapper');
+  const backdrop = document.createElement('div');
+  backdrop.className = 'dialog-backdrop';
+  const dialog = document.createElement('div');
+  dialog.className = 'dialog-box';
+  dialog.innerHTML = `
+    <h3 class="text-xl font-bold mb-2">${title}</h3>
+    <p class="mb-4 text-gray-300">${message}</p>
+    <div class="flex justify-end gap-2">
+      <button class="dialog-confirm bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-4 rounded">Delete</button>
+      <button class="dialog-cancel bg-gray-600 hover:bg-gray-700 text-white font-bold py-1 px-4 rounded">Cancel</button>
+    </div>
+  `;
+  backdrop.appendChild(dialog);
+  wrapper.appendChild(backdrop);
+  dialog.querySelector('.dialog-confirm').onclick = () => {
+    backdrop.remove();
+    onConfirm();
+  };
+  dialog.querySelector('.dialog-cancel').onclick = () => {
+    backdrop.remove();
+  };
+}
+
+// Improved number extraction logic for mixed input
+function generateCodeFromUI(container) {
+  const ruleGroups = container.querySelectorAll('.rule-group');
+  let code = `function checkAnswer(studentAnswer) {\n`;
+  code += `    let score = 0;\n`;
+  let totalMaxScore = 0;
+  ruleGroups.forEach(group => { totalMaxScore += Number(group.querySelector('.rule-points').value) || 0; });
+  code += `    const maxScore = ${totalMaxScore || 100};\n`;
+  code += `    let answer = typeof studentAnswer === 'string' ? studentAnswer.toLowerCase() : studentAnswer;\n`;
+  code += `    let answerNum = (typeof answer === 'string') ? Number(answer.replace(/[^0-9.]/g, '')) : Number(answer);\n`;
+  let hasCondition = false;
+  ruleGroups.forEach((group, index) => {
+    const points = Number(group.querySelector('.rule-points').value) || 0;
+    const groupConnector = group.querySelector('.group-connector').value;
+    let groupConditions = [];
+    group.querySelectorAll('.condition-row').forEach(cond => {
+      const type = cond.querySelector('.cond-type').value;
+      const op = cond.querySelector('.cond-operator').value;
+      const val = cond.querySelector('.cond-value').value.trim();
+      if (!val) return;
+      hasCondition = true;
+      if (type === 'text') {
+        const keywords = val.split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
+        if (keywords.length > 1 && (op === 'contains' || op === 'not_contains')) {
+          const textBool = cond.querySelector('.text-bool').value;
+          const keywordConditions = keywords.map(k => `${op === 'not_contains' ? '!' : ''}answer.includes("${k.replace(/"/g, '\\"')}")`);
+          groupConditions.push(`(${keywordConditions.join(` ${textBool} `)})`);
+        } else if (keywords.length > 0) {
+          const keyword = keywords[0];
+          if (op === 'contains') groupConditions.push(`answer.includes("${keyword.replace(/"/g, '\\"')}")`);
+          else if (op === 'not_contains') groupConditions.push(`!answer.includes("${keyword.replace(/"/g, '\\"')}")`);
+          else if (op === 'equals_str') groupConditions.push(`answer === "${keyword.replace(/"/g, '\\"')}"`);
+        }
+      } else if (type === 'number' && val !== "") {
+        // Use extracted number
+        let numericVal = parseFloat(val);
+        if (op === '==') groupConditions.push(`answerNum == ${numericVal}`);
+        else if (op === '!=') groupConditions.push(`answerNum != ${numericVal}`);
+        else if (op === '>') groupConditions.push(`answerNum > ${numericVal}`);
+        else if (op === '<') groupConditions.push(`answerNum < ${numericVal}`);
+      }
+    });
+    if (groupConditions.length > 0) {
+      const ifStatement = index === 0 ? 'if' : 'else if';
+      code += `    ${ifStatement} (${groupConditions.join(` ${groupConnector} `)}) {\n`;
+      code += `        score += ${points};\n`;
+      code += `    }\n`;
+    }
+  });
+  code += `    return { score: Math.min(score, maxScore), maxScore: maxScore };\n`;
+  code += `}`;
+  return code;
 }
 
 function createRuleGroupElement(number) {
@@ -475,52 +576,6 @@ function getDefaultCheckerCode() {
     const answer = typeof studentAnswer === 'string' ? studentAnswer.toLowerCase() : studentAnswer;
     return { score: Math.min(score, maxScore), maxScore: maxScore };
 }`;
-}
-function generateCodeFromUI(container) {
-  const ruleGroups = container.querySelectorAll('.rule-group');
-  let code = `function checkAnswer(studentAnswer) {\n`;
-  code += `    let score = 0;\n`;
-  let totalMaxScore = 0;
-  ruleGroups.forEach(group => { totalMaxScore += Number(group.querySelector('.rule-points').value) || 0; });
-  code += `    const maxScore = ${totalMaxScore || 100};\n`;
-  code += `    const answer = typeof studentAnswer === 'string' ? studentAnswer.toLowerCase() : studentAnswer;\n`;
-  let hasCondition = false;
-  ruleGroups.forEach((group, index) => {
-    const points = Number(group.querySelector('.rule-points').value) || 0;
-    const groupConnector = group.querySelector('.group-connector').value;
-    let groupConditions = [];
-    group.querySelectorAll('.condition-row').forEach(cond => {
-      const type = cond.querySelector('.cond-type').value;
-      const op = cond.querySelector('.cond-operator').value;
-      const val = cond.querySelector('.cond-value').value.trim();
-      if (!val) return;
-      hasCondition = true;
-      if (type === 'text') {
-        const keywords = val.split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
-        if (keywords.length > 1 && (op === 'contains' || op === 'not_contains')) {
-          const textBool = cond.querySelector('.text-bool').value;
-          const keywordConditions = keywords.map(k => `${op === 'not_contains' ? '!' : ''}answer.includes("${k.replace(/"/g, '\\"')}")`);
-          groupConditions.push(`(${keywordConditions.join(` ${textBool} `)})`);
-        } else if (keywords.length > 0) {
-          const keyword = keywords[0];
-          if (op === 'contains') groupConditions.push(`answer.includes("${keyword.replace(/"/g, '\\"')}")`);
-          else if (op === 'not_contains') groupConditions.push(`!answer.includes("${keyword.replace(/"/g, '\\"')}")`);
-          else if (op === 'equals_str') groupConditions.push(`answer === "${keyword.replace(/"/g, '\\"')}"`);
-        }
-      } else if (type === 'number' && !isNaN(parseFloat(val))) {
-        groupConditions.push(`Number(answer) ${op} ${parseFloat(val)}`);
-      }
-    });
-    if (groupConditions.length > 0) {
-      const ifStatement = index === 0 ? 'if' : 'else if';
-      code += `    ${ifStatement} (${groupConditions.join(` ${groupConnector} `)}) {\n`;
-      code += `        score += ${points};\n`;
-      code += `    }\n`;
-    }
-  });
-  code += `    return { score: Math.min(score, maxScore), maxScore: maxScore };\n`;
-  code += `}`;
-  return code;
 }
 
 function loadImageWithRetries(imgElement, srcUrl, maxRetries = 2) {
