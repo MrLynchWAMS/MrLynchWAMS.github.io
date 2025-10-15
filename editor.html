@@ -23,7 +23,7 @@
 </head>
 <body class="bg-gray-800 text-gray-200 font-sans">
     <div id="loading-overlay" class="fixed inset-0 bg-gray-800 flex items-center justify-center z-50">
-        <p class="text-white text-xl animate-pulse">Loading Editor...</p>
+        <p class="text-white text-xl animate-pulse">Authenticating...</p>
     </div>
 
     <div id="app-container" class="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 hidden">
@@ -160,12 +160,24 @@
     let assignmentId = null;
 
     // --- Auth State ---
+    let authReady = false;
+
+    // Safety timeout to prevent getting stuck on the loading screen
+    const authTimeout = setTimeout(() => {
+        if (!authReady) {
+            console.error("Firebase Auth failed to initialize in time.");
+            window.location.href = 'assignments.html';
+        }
+    }, 5000); // 5 seconds is a generous timeout
+
     auth.onAuthStateChanged(user => {
-        loadingOverlay.classList.add('hidden'); // Hide loader once auth check completes
+        authReady = true;
+        clearTimeout(authTimeout); // Authentication check is complete, cancel the safety timeout
+        loadingOverlay.classList.add('hidden');
 
         if (user) {
             currentUser = user;
-            appContainer.classList.remove('hidden'); // Show the main content
+            appContainer.classList.remove('hidden'); // Show the main application content
             
             const urlParams = new URLSearchParams(window.location.search);
             assignmentId = urlParams.get('id');
@@ -175,7 +187,7 @@
                 addQuestion(1);
             }
         } else {
-            // Only redirect if user is truly not logged in after check.
+            // If auth check completes and there's no user, then redirect.
             window.location.href = 'assignments.html';
         }
     });
@@ -248,7 +260,6 @@
             codeEl.value = getDefaultAnswerCheckerCode();
         }
         
-        // Always add a default rule group if the card is new, then generate code.
         if (!data) {
             const container = questionCard.querySelector('.rule-groups-container');
             if (container.children.length === 0) {
@@ -256,7 +267,6 @@
             }
         }
         generateCodeFromUI(questionCard);
-
 
         questionsContainer.appendChild(clone);
         renumberQuestions();
