@@ -261,7 +261,15 @@ function renderEditor() {
         <h4 class="font-semibold mb-2">Deadline & Late Policy</h4>
         <div class="grid grid-cols-3 gap-2 text-sm">
           <div><label>Deadline (mins)</label><input type="number" id="deadline-minutes-${index}" value="${slidePolicy.deadlineMinutes || 0}" class="w-full mt-1 p-2 bg-gray-700 rounded border-gray-600"></div>
-          <div><label>Penalty Type</label><select id="penalty-type-${index}" class="w-full mt-1 p-2 bg-gray-700 rounded border-gray-600"><option value="none" ${!slidePolicy.penaltyType || slidePolicy.penaltyType === 'none' ? 'selected' : ''}>None</option><option value="percent" ${slidePolicy.penaltyType === 'percent' ? 'selected' : ''}>%</option><option value="points" ${slidePolicy.penaltyType === 'points' ? 'selected' : ''}>Points</option></select></div>
+          <div>
+  <label>Penalty Type</label>
+  <select id="penalty-type-${index}" class="w-full mt-1 p-2 bg-gray-700 rounded border-gray-600">
+    <option value="none" ${!slidePolicy.penaltyType || slidePolicy.penaltyType === 'none' ? 'selected' : ''}>No penalty</option>
+    <option value="deduction" ${slidePolicy.penaltyType === 'deduction' || slidePolicy.penaltyType === 'percent' || slidePolicy.penaltyType === 'percentage' ? 'selected' : ''}>Percent deduction</option>
+    <option value="incremental" ${slidePolicy.penaltyType === 'incremental' || slidePolicy.penaltyType === 'points' || slidePolicy.penaltyType === 'per_minute' ? 'selected' : ''}>Points per minute</option>
+    <option value="zero" ${slidePolicy.penaltyType === 'zero' ? 'selected' : ''}>Zero if late</option>
+  </select>
+</div>
           <div><label>Penalty Value</label><input type="number" id="penalty-value-${index}" value="${slidePolicy.penaltyValue || 0}" class="w-full mt-1 p-2 bg-gray-700 rounded border-gray-600"></div>
         </div>
       </div>
