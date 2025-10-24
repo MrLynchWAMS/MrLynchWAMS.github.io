@@ -323,20 +323,25 @@ function CheckerWidget(container, initialCode = "") {
   // Mode toggle logic
   simpleBtn.onclick = () => {
     if (simpleDisabled) {
-      simpleDisabledNotice.classList.remove('hidden');
+      if (advancedEdited) {
+        simpleDisabledNotice.classList.remove('hidden');
+      }
       return;
     }
     mode = "simple";
     showSimpleMode();
     simpleDisabledNotice.classList.add('hidden');
-    livePreview.textContent = generateCodeFromUI(container);
-    advTextarea.value = generateCodeFromUI(container);
+    const generatedCode = generateCodeFromUI(container);
+    livePreview.textContent = generatedCode;
+    advTextarea.value = generatedCode;
   };
   advBtn.onclick = () => {
     mode = "advanced";
     showAdvancedMode();
-    simpleDisabledNotice.classList.remove('hidden');
-    ruleGroupsContainer.innerHTML = "";
+    if (advancedEdited) {
+      simpleDisabledNotice.classList.remove('hidden');
+    }
+    // Seed Advanced textarea with current Simple-generated code
     advTextarea.value = generateCodeFromUI(container);
   };
 
@@ -452,17 +457,18 @@ function generateCodeFromUI(container) {
   code += `    const maxScore = ${totalMaxScore || 100};\n`;
   code += `    let answer = typeof studentAnswer === 'string' ? studentAnswer.toLowerCase() : studentAnswer;\n`;
   code += `    let answerNum = (typeof answer === 'string') ? Number(answer.replace(/[^0-9.]/g, '')) : Number(answer);\n`;
-  let hasCondition = false;
+  let wroteIf = false;
   ruleGroups.forEach((group, index) => {
     const points = Number(group.querySelector('.rule-points').value) || 0;
     const groupConnector = group.querySelector('.group-connector').value;
+    const toastMessage = group.querySelector('.rule-toast-message')?.value.trim() || '';
+    const toastColor = group.querySelector('.rule-toast-color')?.value || 'default';
     let groupConditions = [];
     group.querySelectorAll('.condition-row').forEach(cond => {
       const type = cond.querySelector('.cond-type').value;
       const op = cond.querySelector('.cond-operator').value;
       const val = cond.querySelector('.cond-value').value.trim();
       if (!val) return;
-      hasCondition = true;
       if (type === 'text') {
         const keywords = val.split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
         if (keywords.length > 1 && (op === 'contains' || op === 'not_contains')) {
@@ -485,9 +491,15 @@ function generateCodeFromUI(container) {
       }
     });
     if (groupConditions.length > 0) {
-      const ifStatement = index === 0 ? 'if' : 'else if';
+      const ifStatement = wroteIf ? 'else if' : 'if';
+      wroteIf = true;
       code += `    ${ifStatement} (${groupConditions.join(` ${groupConnector} `)}) {\n`;
       code += `        score += ${points};\n`;
+      if (toastMessage) {
+        code += `        if (typeof showToast === "function") {\n`;
+        code += `            try { showToast("${toastMessage.replace(/"/g, '\\"')}", { color: "${toastColor}" }); } catch (_) {}\n`;
+        code += `        }\n`;
+      }
       code += `    }\n`;
     }
   });
@@ -520,6 +532,19 @@ function createRuleGroupElement(number) {
       ${createConditionElement().outerHTML}
     </div>
     <button class="add-condition-btn text-sm text-blue-400 hover:text-blue-300">+ Add Condition</button>
+    <div class="mt-2 pt-2 border-t border-gray-700 space-y-2">
+      <label class="block text-xs font-medium text-gray-400">Optional: Toast notification when this group matches</label>
+      <input type="text" class="rule-toast-message w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="Optional toast message to show when this group matches">
+      <div class="flex items-center space-x-2">
+        <label class="text-xs text-gray-400">Color:</label>
+        <select class="rule-toast-color bg-gray-700 border border-gray-600 rounded-md p-1 text-xs">
+          <option value="default">Default</option>
+          <option value="blue">Info (Blue)</option>
+          <option value="green">Success (Green)</option>
+          <option value="red">Error (Red)</option>
+        </select>
+      </div>
+    </div>
   `;
   return div;
 }
@@ -558,6 +583,19 @@ function createConditionElement() {
     } else {
       operatorSelect.innerHTML = `<option value="contains">contains</option><option value="not_contains">does not contain</option><option value="equals_str">is exactly</option>`;
       valueWrapper.innerHTML = `<input type="text" class="cond-value w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="keyword(s), comma-separated"><div class="text-options hidden text-xs mt-1"><label>Require: </label><select class="text-bool bg-gray-700 border border-gray-600 rounded-md p-0.5 text-sm"><option value="||">Any (OR)</option><option value="&&">All (AND)</option></select></div>`;
+    }
+  });
+  div.querySelector('.cond-operator').addEventListener('change', e => {
+    const type = div.querySelector('.cond-type').value;
+    const operator = e.target.value;
+    const textOptions = div.querySelector('.text-options');
+    const valueInput = div.querySelector('.cond-value');
+    if (type === 'text' && textOptions && valueInput) {
+      if ((operator === 'contains' || operator === 'not_contains') && valueInput.value.includes(',')) {
+        textOptions.classList.remove('hidden');
+      } else {
+        textOptions.classList.add('hidden');
+      }
     }
   });
   div.addEventListener('keyup', e => {
