@@ -108,13 +108,35 @@
         </div>
       </div>
       <div class="simple-mode-ui mt-2 p-3 bg-gray-700/50 border border-gray-600 rounded-lg space-y-4">
+        <div class="grid grid-cols-2 gap-4 text-sm border-b border-gray-700 pb-4">
+          <div>
+            <label class="flex items-center space-x-2 cursor-pointer">
+              <input type="checkbox" class="exclusive-scoring-toggle bg-gray-700 border-gray-600 rounded text-indigo-500 focus:ring-indigo-600">
+              <span>Exclusive scoring (stop at first match)</span>
+            </label>
+          </div>
+          <div class="flex items-center space-x-2">
+            <label class="whitespace-nowrap">Numeric equality tolerance (±)</label>
+            <input type="number" class="numeric-tolerance-input w-20 bg-gray-700 border border-gray-600 rounded-md p-1 text-center" value="0" min="0" step="any">
+          </div>
+        </div>
         <div class="rule-groups-container space-y-4"></div>
         <button class="add-rule-group-btn mt-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm">+ Add Rule Group</button>
+        
         <div class="mt-4">
           <label class="block text-xs font-medium text-gray-500">Live Code Preview (read-only)</label>
           <pre class="bg-gray-900 text-white p-2 rounded-md text-xs overflow-x-auto h-32"><code class="live-code-preview"></code></pre>
         </div>
-      </div>
+
+        <div class="mt-2 pt-2 border-t border-gray-700 space-y-2">
+          <label class="block text-xs font-medium text-gray-400">Quick Test</label>
+          <div class="flex items-center space-x-2">
+            <input type="text" class="quick-test-input w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="Enter a sample answer...">
+            <button class="quick-test-btn bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1 px-3 rounded-md text-sm">Run</button>
+            <span class="quick-test-result text-sm font-semibold text-gray-300"></span>
+          </div>
+        </div>
+        </div>
       <div class="advanced-mode-ui hidden">
         <textarea class="checker-textarea w-full h-64 p-2 bg-gray-700 rounded" placeholder="// Write your checker function here"></textarea>
         <div class="flex justify-end mt-2">
@@ -302,6 +324,14 @@ function CheckerWidget(container, initialCode = "") {
   const simpleDisabledNotice = container.querySelector('.simple-disabled-notice');
   const deleteAdvBtn = container.querySelector('.delete-advanced-btn');
 
+  // --- NEW UI Elements ---
+  const exclusiveToggle = container.querySelector('.exclusive-scoring-toggle');
+  const toleranceInput = container.querySelector('.numeric-tolerance-input');
+  const quickTestInput = container.querySelector('.quick-test-input');
+  const quickTestBtn = container.querySelector('.quick-test-btn');
+  const quickTestResult = container.querySelector('.quick-test-result');
+  // --- END NEW UI Elements ---
+
   container.getCode = () => (mode === "simple" ? generateCodeFromUI(container) : advTextarea.value);
   container.getMode = () => mode;
 
@@ -377,6 +407,26 @@ function CheckerWidget(container, initialCode = "") {
     ruleGroupsContainer.appendChild(createRuleGroupElement(ruleGroupsContainer.children.length + 1));
     updateCodeFromSimple();
   };
+
+  // --- NEW Quick Test Button Listener ---
+  quickTestBtn.onclick = () => {
+    const codeToTest = generateCodeFromUI(container);
+    const testAnswer = quickTestInput.value;
+    quickTestResult.textContent = ''; // Clear previous result
+    try {
+      // We need access to the global showToast
+      const checkerFunc = new Function('studentAnswer', 'showToast', codeToTest + '; return checkAnswer(studentAnswer);');
+      const resultScore = checkerFunc(testAnswer, window.showToast); // Pass the global showToast
+      quickTestResult.textContent = `Result: ${resultScore}`;
+      quickTestResult.style.color = '#d1d5db'; // text-gray-300
+    } catch (error) {
+      console.error("Quick Test Error:", error);
+      quickTestResult.textContent = `Error: ${error.message}`;
+      quickTestResult.style.color = '#f87171'; // text-red-400
+    }
+  };
+  // --- END Quick Test Button Listener ---
+
   ruleGroupsContainer.addEventListener('click', e => {
     if(e.target.classList.contains('add-condition-btn')) {
       e.target.previousElementSibling.appendChild(createConditionElement());
@@ -391,8 +441,14 @@ function CheckerWidget(container, initialCode = "") {
       updateCodeFromSimple();
     }
   });
+
+  // --- UPDATE Event Listeners to trigger code update ---
   ruleGroupsContainer.addEventListener('change', updateCodeFromSimple);
   ruleGroupsContainer.addEventListener('keyup', updateCodeFromSimple);
+  // Add listeners for new controls
+  exclusiveToggle.addEventListener('change', updateCodeFromSimple);
+  toleranceInput.addEventListener('input', updateCodeFromSimple);
+  // --- END UPDATE ---
 
   function showSimpleMode() {
     simpleUI.classList.remove('hidden');
@@ -445,52 +501,114 @@ function showDialog(title, message, onConfirm) {
   };
 }
 
-// Improved number extraction logic for mixed input
+// --- UPDATED Code Generator ---
 function generateCodeFromUI(container) {
+  // Get new UI settings
+  const isExclusive = container.querySelector('.exclusive-scoring-toggle').checked;
+  const tolerance = parseFloat(container.querySelector('.numeric-tolerance-input').value) || 0;
+
   const ruleGroups = container.querySelectorAll('.rule-group');
   let code = `function checkAnswer(studentAnswer) {\n`;
   code += `    let score = 0;\n`;
   let totalMaxScore = 0;
   ruleGroups.forEach(group => { totalMaxScore += Number(group.querySelector('.rule-points').value) || 0; });
   code += `    const maxScore = ${totalMaxScore || 100};\n`;
-  code += `    let answer = typeof studentAnswer === 'string' ? studentAnswer.toLowerCase() : studentAnswer;\n`;
-  code += `    let answerNum = (typeof answer === 'string') ? Number(answer.replace(/[^0-9.]/g, '')) : Number(answer);\n`;
-  let wroteIf = false;
+  
+  // Robust Number & Text Extraction
+  code += `    const answerStr = String(studentAnswer).toLowerCase();\n`;
+  // Regex: optional negative, digits (with or without commas), optional decimal part
+  code += `    const numMatches = answerStr.match(/-?(?:\\d{1,3}(?:,\\d{3})+|\\d+)(?:\\.\\d+)?/g) || [];\n`;
+  code += `    const answerNums = numMatches.map(s => parseFloat(s.replace(/,/g, '')));\n`;
+  code += `    const answerNum = answerNums.length ? answerNums[0] : NaN; // Kept for backward compatibility\n`;
+
+  // Tolerance Helper Function
+  if (tolerance > 0) {
+    code += `\n    function isNear(a, b, t) {\n`;
+    code += `        if (isNaN(a) || isNaN(b)) return false;\n`;
+    code += `        return Math.abs(a - b) <= t;\n`;
+    code += `    }\n`;
+  }
+
+  let wroteIf = false; // For exclusive mode
+  
   ruleGroups.forEach((group, index) => {
     const points = Number(group.querySelector('.rule-points').value) || 0;
     const groupConnector = group.querySelector('.group-connector').value;
     const toastMessage = group.querySelector('.rule-toast-message')?.value.trim() || '';
     const toastColor = group.querySelector('.rule-toast-color')?.value || 'default';
+    
     let groupConditions = [];
+    
     group.querySelectorAll('.condition-row').forEach(cond => {
       const type = cond.querySelector('.cond-type').value;
       const op = cond.querySelector('.cond-operator').value;
-      const val = cond.querySelector('.cond-value').value.trim();
-      if (!val) return;
+      const valInput = cond.querySelector('.cond-value');
+      if (!valInput || valInput.value.trim() === "") return; // Skip empty conditions
+      
+      const val = valInput.value.trim();
+
       if (type === 'text') {
         const keywords = val.split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
         if (keywords.length > 1 && (op === 'contains' || op === 'not_contains')) {
           const textBool = cond.querySelector('.text-bool').value;
-          const keywordConditions = keywords.map(k => `${op === 'not_contains' ? '!' : ''}answer.includes("${k.replace(/"/g, '\\"')}")`);
+          const keywordConditions = keywords.map(k => `${op === 'not_contains' ? '!' : ''}answerStr.includes("${k.replace(/"/g, '\\"')}")`);
           groupConditions.push(`(${keywordConditions.join(` ${textBool} `)})`);
         } else if (keywords.length > 0) {
           const keyword = keywords[0];
-          if (op === 'contains') groupConditions.push(`answer.includes("${keyword.replace(/"/g, '\\"')}")`);
-          else if (op === 'not_contains') groupConditions.push(`!answer.includes("${keyword.replace(/"/g, '\\"')}")`);
-          else if (op === 'equals_str') groupConditions.push(`answer === "${keyword.replace(/"/g, '\\"')}"`);
+          if (op === 'contains') groupConditions.push(`answerStr.includes("${keyword.replace(/"/g, '\\"')}")`);
+          else if (op === 'not_contains') groupConditions.push(`!answerStr.includes("${keyword.replace(/"/g, '\\"')}")`);
+          else if (op === 'equals_str') groupConditions.push(`answerStr === "${keyword.replace(/"/g, '\\"')}"`);
         }
-      } else if (type === 'number' && val !== "") {
-        // Use extracted number
-        let numericVal = parseFloat(val);
-        if (op === '==') groupConditions.push(`answerNum == ${numericVal}`);
-        else if (op === '!=') groupConditions.push(`answerNum != ${numericVal}`);
-        else if (op === '>') groupConditions.push(`answerNum > ${numericVal}`);
-        else if (op === '<') groupConditions.push(`answerNum < ${numericVal}`);
+      } else if (type === 'number') {
+        const numericVal = parseFloat(val);
+        if (isNaN(numericVal)) return; // Skip invalid number conditions
+
+        const pickMode = cond.querySelector('.number-pick-mode').value;
+        const nthIndex = parseInt(cond.querySelector('.number-index').value, 10); // 1-based
+
+        // Helper to create the comparison logic for a single number 'num'
+        const createComparison = (numVar) => {
+          if (op === '==') {
+            return tolerance > 0 ? `isNear(${numVar}, ${numericVal}, ${tolerance})` : `(${numVar} == ${numericVal})`;
+          } else if (op === '!=') {
+            return tolerance > 0 ? `!isNear(${numVar}, ${numericVal}, ${tolerance})` : `(${numVar} != ${numericVal})`;
+          } else if (op === '>') {
+            return `(${numVar} > ${numericVal})`;
+          } else if (op === '<') {
+            return `(${numVar} < ${numericVal})`;
+          }
+          return 'false'; // Default case
+        };
+
+        let conditionString = 'false';
+        switch (pickMode) {
+          case 'first':
+            conditionString = `(answerNums.length > 0 && ${createComparison('answerNums[0]')})`;
+            break;
+          case 'last':
+            conditionString = `(answerNums.length > 0 && ${createComparison('answerNums[answerNums.length - 1]')})`;
+            break;
+          case 'nth':
+            if (nthIndex > 0) {
+              // (nthIndex - 1) for 0-based array access
+              conditionString = `(answerNums.length >= ${nthIndex} && ${createComparison(`answerNums[${nthIndex - 1}]`)})`;
+            }
+            break;
+          case 'any':
+            conditionString = `(answerNums.some(num => ${createComparison('num')}))`;
+            break;
+        }
+        groupConditions.push(conditionString);
       }
     });
+
     if (groupConditions.length > 0) {
-      const ifStatement = wroteIf ? 'else if' : 'if';
-      wroteIf = true;
+      let ifStatement = 'if';
+      if (isExclusive) {
+        ifStatement = wroteIf ? 'else if' : 'if';
+        wroteIf = true;
+      }
+      
       code += `    ${ifStatement} (${groupConditions.join(` ${groupConnector} `)}) {\n`;
       code += `        score += ${points};\n`;
       if (toastMessage) {
@@ -501,6 +619,7 @@ function generateCodeFromUI(container) {
       code += `    }\n`;
     }
   });
+  
   code += `    return score;\n`;
   code += `}`;
   return code;
@@ -546,6 +665,8 @@ function createRuleGroupElement(number) {
   `;
   return div;
 }
+
+// --- UPDATED Condition Element Creator ---
 function createConditionElement() {
   const div = document.createElement('div');
   div.className = 'condition-row flex items-center space-x-2 bg-gray-900/50 p-2 rounded-md';
@@ -571,18 +692,55 @@ function createConditionElement() {
     </div>
     <button class="delete-btn text-red-400 hover:text-red-300 font-bold text-xl leading-none">&times;</button>
   `;
+
+  // Main Change is Here
   div.querySelector('.cond-type').addEventListener('change', e => {
     const operatorSelect = div.querySelector('.cond-operator');
     const valueWrapper = div.querySelector('.cond-value-wrapper');
     const type = e.target.value;
-    if(type === 'number') {
+    
+    if (type === 'number') {
       operatorSelect.innerHTML = `<option value="==">is equal to</option><option value="!=">is not equal to</option><option value=">">is greater than</option><option value="<">is less than</option>`;
-      valueWrapper.innerHTML = `<input type="number" class="cond-value w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="a number">`;
-    } else {
+      valueWrapper.innerHTML = `
+        <div class="flex items-center space-x-1">
+          <select class="number-pick-mode bg-gray-700 border border-gray-600 rounded-md p-1 text-sm">
+            <option value="first">First</option>
+            <option value="last">Last</option>
+            <option value="nth">Nth</option>
+            <option value="any">Any</option>
+          </select>
+          <input type="number" class="number-index w-12 bg-gray-700 border border-gray-600 rounded-md p-1 text-sm hidden" value="1" min="1" step="1">
+          <span class="text-sm text-gray-400">number</span>
+          <input type="number" class="cond-value w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="a number" step="any">
+        </div>
+      `;
+      // Add listener for the new select
+      valueWrapper.querySelector('.number-pick-mode').addEventListener('change', e_pick => {
+        const indexInput = valueWrapper.querySelector('.number-index');
+        if (e_pick.target.value === 'nth') {
+          indexInput.classList.remove('hidden');
+        } else {
+          indexInput.classList.add('hidden');
+        }
+      });
+
+    } else { // type === 'text'
       operatorSelect.innerHTML = `<option value="contains">contains</option><option value="not_contains">does not contain</option><option value="equals_str">is exactly</option>`;
-      valueWrapper.innerHTML = `<input type="text" class="cond-value w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="keyword(s), comma-separated"><div class="text-options hidden text-xs mt-1"><label>Require: </label><select class="text-bool bg-gray-700 border border-gray-600 rounded-md p-0.5 text-sm"><option value="||">Any (OR)</option><option value="&&">All (AND)</option></select></div>`;
+      valueWrapper.innerHTML = `
+        <input type="text" class="cond-value w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="keyword(s), comma-separated">
+        <div class="text-options hidden text-xs mt-1">
+          <label>Require: </label>
+          <select class="text-bool bg-gray-700 border border-gray-600 rounded-md p-0.5 text-sm">
+            <option value="||">Any (OR)</option>
+            <option value="&&">All (AND)</option>
+          </select>
+        </div>
+      `;
     }
   });
+  // End of Main Change
+
+  // Keep existing listeners for text options
   div.querySelector('.cond-operator').addEventListener('change', e => {
     const type = div.querySelector('.cond-type').value;
     const operator = e.target.value;
@@ -611,11 +769,15 @@ function createConditionElement() {
   });
   return div;
 }
+
 function getDefaultCheckerCode() {
   return `function checkAnswer(studentAnswer) {
     let score = 0;
     const maxScore = 100;
-    const answer = typeof studentAnswer === 'string' ? studentAnswer.toLowerCase() : studentAnswer;
+    const answerStr = String(studentAnswer).toLowerCase();
+    const numMatches = answerStr.match(/-?(?:\\d{1,3}(?:,\\d{3})+|\\d+)(?:\\.\\d+)?/g) || [];
+    const answerNums = numMatches.map(s => parseFloat(s.replace(/,/g, '')));
+    const answerNum = answerNums.length ? answerNums[0] : NaN;
     return score;
 }`;
 }
