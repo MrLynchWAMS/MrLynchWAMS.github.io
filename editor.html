@@ -338,9 +338,7 @@ function CheckerWidget(container, initialCode = "") {
   advBtn.onclick = () => {
     mode = "advanced";
     showAdvancedMode();
-    if (advancedEdited) {
-      simpleDisabledNotice.classList.remove('hidden');
-    }
+    // Don't show notice when switching to Advanced - only when trying to go back to Simple
     // Seed Advanced textarea with current Simple-generated code
     advTextarea.value = generateCodeFromUI(container);
   };
@@ -497,7 +495,7 @@ function generateCodeFromUI(container) {
       code += `        score += ${points};\n`;
       if (toastMessage) {
         code += `        if (typeof showToast === "function") {\n`;
-        code += `            try { showToast("${toastMessage.replace(/"/g, '\\"')}", { color: "${toastColor}" }); } catch (_) {}\n`;
+        code += `            try { showToast(${JSON.stringify(toastMessage)}, { color: ${JSON.stringify(toastColor)} }); } catch (_) {}\n`;
         code += `        }\n`;
       }
       code += `    }\n`;
