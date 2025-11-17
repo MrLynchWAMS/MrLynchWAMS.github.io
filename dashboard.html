@@ -159,51 +159,103 @@
             }
         });
     };
+// --- SETUP LIVE LISTENERS (OPTIMIZED) ---
+let displayUpdateTimeout = null;
+function debouncedDisplayUpdate() {
+    if (displayUpdateTimeout) clearTimeout(displayUpdateTimeout);
+    displayUpdateTimeout = setTimeout(() => {
+        calculateAllClassAverages();
+        populateClassLinks();
+        displayStudentData();
+    }, 100);
+}
 
-    // --- SETUP LIVE LISTENERS ---
-    function setupLiveStudentData() {
-        // Unsubscribe previous listeners (if any)
-        if (unsubscribeStudents) unsubscribeStudents();
-        if (unsubscribeSubmissions) unsubscribeSubmissions();
-        if (unsubscribeStatus) unsubscribeStatus();
+function setupLiveStudentData() {
+    // Unsubscribe previous listeners (if any)
+    if (unsubscribeStudents) unsubscribeStudents();
+    if (unsubscribeSubmissions) unsubscribeSubmissions();
+    if (unsubscribeStatus) unsubscribeStatus();
 
-        unsubscribeStudents = db.collection("students").onSnapshot(studentSnapshot => {
-            unsubscribeSubmissions = db.collection("submissions")
-                .where("assignmentId", "==", assignmentId)
-                .onSnapshot(submissionSnapshot => {
-                    unsubscribeStatus = db.collection("submissionStatus")
-                        .where("assignmentId", "==", assignmentId)
-                        .where("status", "==", "submitted")
-                        .onSnapshot(statusSnapshot => {
-                            // Process snapshots and update allStudentData
-                            const submissionsByStudent = {};
-                            submissionSnapshot.forEach(doc => {
-                                const data = { id: doc.id, ...doc.data() };
-                                if (!submissionsByStudent[data.studentEmail]) submissionsByStudent[data.studentEmail] = [];
-                                submissionsByStudent[data.studentEmail].push(data);
-                            });
-                            const submittedEmails = new Set(statusSnapshot.docs.map(doc => doc.data().studentEmail));
-                            allStudentData = studentSnapshot.docs.map(doc => ({
-                                ...doc.data(),
-                                submissions: submissionsByStudent[doc.data().email] || [],
-                                isSubmitted: submittedEmails.has(doc.data().email)
-                            }));
+    // Initialize data structures
+    const studentsMap = new Map();
+    const submissionsByStudent = new Map();
+    const submittedEmails = new Set();
 
-                            // PATCH: Set activeClass to first class after data loads, only once
-                            const assignedClasses = assignmentData.assignedClasses || [];
-                            const classesInAssignment = [...new Set(allStudentData.filter(s => assignedClasses.includes(String(s.class))).map(s => String(s.class)))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-                            if (!initialized && classesInAssignment.length > 0) {
-                                activeClass = classesInAssignment[0];
-                                initialized = true;
-                            }
-
-                            calculateAllClassAverages();
-                            populateClassLinks();
-                            displayStudentData();
-                        });
-                });
+    // Listener 1: Students collection
+    unsubscribeStudents = db.collection("students").onSnapshot(studentSnapshot => {
+        studentSnapshot.docChanges().forEach(change => {
+            const studentData = change.doc.data();
+            if (change.type === "added" || change.type === "modified") {
+                studentsMap.set(studentData.email, studentData);
+            } else if (change.type === "removed") {
+                studentsMap.delete(studentData.email);
+            }
         });
+        rebuildAllStudentData();
+    });
+
+    // Listener 2: Submissions for this assignment
+    unsubscribeSubmissions = db.collection("submissions")
+        .where("assignmentId", "==", assignmentId)
+        .onSnapshot(submissionSnapshot => {
+            submissionSnapshot.docChanges().forEach(change => {
+                const submission = { id: change.doc.id, ...change.doc.data() };
+                const studentEmail = submission.studentEmail;
+                
+                if (change.type === "removed") {
+                    const submissions = submissionsByStudent.get(studentEmail) || [];
+                    submissionsByStudent.set(
+                        studentEmail, 
+                        submissions.filter(s => s.id !== submission.id)
+                    );
+                } else {
+                    // added or modified
+                    if (!submissionsByStudent.has(studentEmail)) {
+                        submissionsByStudent.set(studentEmail, []);
+                    }
+                    const submissions = submissionsByStudent.get(studentEmail);
+                    const existingIndex = submissions.findIndex(s => s.id === submission.id);
+                    if (existingIndex >= 0) {
+                        submissions[existingIndex] = submission;
+                    } else {
+                        submissions.push(submission);
+                    }
+                }
+            });
+            rebuildAllStudentData();
+        });
+
+    // Listener 3: Submission status
+    unsubscribeStatus = db.collection("submissionStatus")
+        .where("assignmentId", "==", assignmentId)
+        .where("status", "==", "submitted")
+        .onSnapshot(statusSnapshot => {
+            submittedEmails.clear();
+            statusSnapshot.forEach(doc => {
+                submittedEmails.add(doc.data().studentEmail);
+            });
+            rebuildAllStudentData();
+        });
+
+    function rebuildAllStudentData() {
+        allStudentData = Array.from(studentsMap.values()).map(student => ({
+            ...student,
+            submissions: submissionsByStudent.get(student.email) || [],
+            isSubmitted: submittedEmails.has(student.email)
+        }));
+
+        // PATCH: Set activeClass to first class after data loads, only once
+        const assignedClasses = assignmentData.assignedClasses || [];
+        const classesInAssignment = [...new Set(allStudentData.filter(s => assignedClasses.includes(String(s.class))).map(s => String(s.class)))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+        if (!initialized && classesInAssignment.length > 0) {
+            activeClass = classesInAssignment[0];
+            initialized = true;
+        }
+
+        debouncedDisplayUpdate();
     }
+}
+   
 
     // --- CLEANUP LISTENERS ---
     function cleanupListeners() {
