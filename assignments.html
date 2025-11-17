@@ -196,7 +196,7 @@
                     const status = assignment.classStatus?.[className] || 'closed';
                     const color = status === 'open' ? 'text-green-400' : 'text-red-400';
                     const studentsInClass = studentRoster.filter(s => String(s.class) === className);
-                    const submissionCount = Object.values(submissionStatuses[assignment.id] || {}).filter(email => 
+                    const submissionCount = Object.keys(submissionStatuses[assignment.id] || {}).filter(email => 
                         studentsInClass.some(s => s.email === email)
                     ).length;
                     
@@ -267,7 +267,7 @@
                 const isAssigned = (assignment.assignedClasses || []).includes(className);
                 const currentStatus = isAssigned ? (classStatus[className] || 'closed') : 'not-assigned';
                 const studentsInClass = studentRoster.filter(s => String(s.class) === className);
-                const submissionCount = Object.values(submissionStatuses[assignment.id] || {}).filter(email => 
+                const submissionCount = Object.keys(submissionStatuses[assignment.id] || {}).filter(email => 
                     studentsInClass.some(s => s.email === email)
                 ).length;
 
