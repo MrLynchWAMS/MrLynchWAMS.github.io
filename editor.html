@@ -39,6 +39,8 @@
     }
     .dialog-box h3 { color: #fde68a; }
     .dialog-box button { margin: 0 0.5rem; }
+    /* Ensure reload button sits above image and is visible */
+    .reload-img-btn { z-index: 50; opacity: 0.95; }
   </style>
 </head>
 <body class="bg-gray-900 text-white font-sans">
@@ -324,8 +326,9 @@ function renderEditor() {
     // Wire reload button to retry loading this specific image (resets attempts)
     if (reloadBtn) {
       reloadBtn.addEventListener('click', () => {
-        // hide the button while retrying
+        // hide the button while retrying and clear placeholder flag
         reloadBtn.classList.add('hidden');
+        if (imgElement && imgElement.dataset) imgElement.dataset.isPlaceholder = 'false';
         loadImageWithRetries(imgElement, imageUrl, 2, reloadBtn);
       });
     }
@@ -838,11 +841,13 @@ function getDefaultCheckerCode() {
   Enhanced image loader:
   - Accepts an optional reloadBtn element.
   - Hides reloadBtn while attempting loads.
-  - Shows reloadBtn if final attempt fails.
-  - Hides reloadBtn on successful load.
+  - Shows reloadBtn if all retries fail.
+  - Keeps reload button visible when placeholder is shown (so user can retry).
+  - Uses imgElement.dataset.isPlaceholder to detect placeholder load vs real load.
 */
 function loadImageWithRetries(imgElement, srcUrl, maxRetries = 2, reloadBtn = null) {
   let attempt = 0;
+  const placeholderUrl = 'https://placehold.co/400x300/374151/9ca3af?text=Image+Load+Failed';
 
   // helper to update reload button visibility (safely)
   function setReloadVisible(visible) {
@@ -853,28 +858,48 @@ function loadImageWithRetries(imgElement, srcUrl, maxRetries = 2, reloadBtn = nu
     } catch (e) { /* ignore */ }
   }
 
+  function cleanupHandlers() {
+    imgElement.onload = null;
+    imgElement.onerror = null;
+  }
+
   function tryLoad() {
-    // hide reload button while trying
+    // before attempting, clear placeholder flag so onload/hide logic knows this is a real attempt
+    imgElement.dataset.isPlaceholder = 'false';
     setReloadVisible(false);
 
-    const urlWithCacheBust = `${srcUrl}&time=${new Date().getTime()}`;
-    // attach load handler to hide reload if image loads
+    // attach load handler to hide reload only when a real image (not placeholder) loads
     imgElement.onload = () => {
-      setReloadVisible(false);
-      imgElement.loading = 'eager';
+      // if this load is the placeholder image (we mark it), then show reload; else hide reload
+      if (imgElement.dataset && imgElement.dataset.isPlaceholder === 'true') {
+        setReloadVisible(true);
+      } else {
+        setReloadVisible(false);
+      }
+      cleanupHandlers();
     };
+
     imgElement.onerror = () => {
       attempt++;
       if (attempt < maxRetries) {
+        // try again after a short delay
         setTimeout(tryLoad, 1000);
       } else {
         console.error(`Could not load image after ${maxRetries} attempts: ${srcUrl}`);
-        imgElement.alt = "Image failed to load";
-        imgElement.src = 'https://placehold.co/400x300/374151/9ca3af?text=Image+Load+Failed';
-        // show the per-image reload button so user can retry the single image
+        // mark placeholder so onload knows this is the fallback
+        imgElement.dataset.isPlaceholder = 'true';
+        // set src to placeholder and show reload button (onload handler will preserve the reload visibility)
+        imgElement.src = placeholderUrl;
+        // ensure reload button visible if the placeholder image loads quickly (onload will run and show it),
+        // but set it explicitly anyway in case onload doesn't run in time.
         setReloadVisible(true);
+        cleanupHandlers();
       }
     };
+
+    // add cache bust param
+    const urlWithCacheBust = `${srcUrl}&time=${new Date().getTime()}`;
+    // Start load
     imgElement.src = urlWithCacheBust;
   }
 
