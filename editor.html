@@ -280,10 +280,14 @@ function renderEditor() {
     const slidePolicy = deadlinePolicy[`q${qNum}`] || {};
     const editorBox = document.createElement('div');
     editorBox.className = "slide-editor-box grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-800 p-4 rounded-lg";
+    // include a wrapper with an overlay reload button (hidden by default)
     editorBox.innerHTML = `
       <div>
         <h3 class="text-xl font-semibold mb-2">Slide ${qNum}</h3>
-        <img id="img-${slideId}" src="" class="w-full rounded border border-gray-700">
+        <div class="relative">
+          <img id="img-${slideId}" src="" class="w-full rounded border border-gray-700">
+          <button id="reload-btn-${slideId}" title="Reload image" aria-label="Reload image" class="reload-img-btn hidden absolute top-2 right-2 bg-yellow-400 text-black py-1 px-2 rounded text-sm">Reload</button>
+        </div>
       </div>
       <div id="checker-container-${qNum}"></div>
       <div class="mt-4 border-t border-gray-700 pt-4">
@@ -309,9 +313,22 @@ function renderEditor() {
     CheckerWidget(checkerWidgetDiv, checkerFunctions[`calc${qNum}`] || "");
     editorBox.querySelector(`#checker-container-${qNum}`).appendChild(checkerWidgetDiv);
     container.appendChild(editorBox);
+
     const imgElement = document.getElementById(`img-${slideId}`);
+    const reloadBtn = document.getElementById(`reload-btn-${slideId}`);
     const imageUrl = `https://docs.google.com/presentation/d/${assignmentData.presentationId}/export/png?id=${assignmentData.presentationId}&pageid=${slideId}`;
-    loadImageWithRetries(imgElement, imageUrl);
+
+    // Use the enhanced loader that supports showing the reload button on final failure
+    loadImageWithRetries(imgElement, imageUrl, 2, reloadBtn);
+
+    // Wire reload button to retry loading this specific image (resets attempts)
+    if (reloadBtn) {
+      reloadBtn.addEventListener('click', () => {
+        // hide the button while retrying
+        reloadBtn.classList.add('hidden');
+        loadImageWithRetries(imgElement, imageUrl, 2, reloadBtn);
+      });
+    }
   });
 }
 
@@ -816,11 +833,36 @@ function getDefaultCheckerCode() {
     return score;
 }`;
 }
-function loadImageWithRetries(imgElement, srcUrl, maxRetries = 2) {
+
+/*
+  Enhanced image loader:
+  - Accepts an optional reloadBtn element.
+  - Hides reloadBtn while attempting loads.
+  - Shows reloadBtn if final attempt fails.
+  - Hides reloadBtn on successful load.
+*/
+function loadImageWithRetries(imgElement, srcUrl, maxRetries = 2, reloadBtn = null) {
   let attempt = 0;
+
+  // helper to update reload button visibility (safely)
+  function setReloadVisible(visible) {
+    try {
+      if (!reloadBtn) return;
+      if (visible) reloadBtn.classList.remove('hidden');
+      else reloadBtn.classList.add('hidden');
+    } catch (e) { /* ignore */ }
+  }
+
   function tryLoad() {
+    // hide reload button while trying
+    setReloadVisible(false);
+
     const urlWithCacheBust = `${srcUrl}&time=${new Date().getTime()}`;
-    imgElement.src = urlWithCacheBust;
+    // attach load handler to hide reload if image loads
+    imgElement.onload = () => {
+      setReloadVisible(false);
+      imgElement.loading = 'eager';
+    };
     imgElement.onerror = () => {
       attempt++;
       if (attempt < maxRetries) {
@@ -829,11 +871,16 @@ function loadImageWithRetries(imgElement, srcUrl, maxRetries = 2) {
         console.error(`Could not load image after ${maxRetries} attempts: ${srcUrl}`);
         imgElement.alt = "Image failed to load";
         imgElement.src = 'https://placehold.co/400x300/374151/9ca3af?text=Image+Load+Failed';
+        // show the per-image reload button so user can retry the single image
+        setReloadVisible(true);
       }
     };
+    imgElement.src = urlWithCacheBust;
   }
+
   tryLoad();
 }
+
 async function saveAssignment() {
   const saveBtn = document.getElementById('saveBtn');
   try {
