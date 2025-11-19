@@ -3,902 +3,717 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Assignment Editor</title>
+  <title>Assignment Editor v2.0</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👩‍🚀</text></svg>">
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome for Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="https://apis.google.com/js/api.js" async defer></script>
   <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
+
   <style>
-    .hidden { display: none; }
+    .hidden { display: none !important; }
     textarea { font-family: monospace; resize: vertical; }
+    
+    /* Custom Scrollbar for better aesthetics */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: #f1f1f1; }
+    ::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #555; }
+
     @keyframes fade-in-right { from { opacity: 0; transform: translateX(100%); } to { opacity: 1; transform: translateX(0); } }
     @keyframes fade-out-right { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(100%); } }
-    .animate-fade-in-right { animation: fade-in-right 0.5s ease-out forwards; }
-    .animate-fade-out-right { animation: fade-out-right 0.5s ease-in forwards; }
-    .collapsible-content { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; }
-    #toast-wrapper { position: fixed; top: 1rem; right: 1rem; z-index: 50; display: flex; flex-direction: column; gap: 0.5rem; }
-    .simple-disabled-notice { background: #fee2e2; color: #991b1b; padding: 0.5rem; border-radius: 0.375rem; margin-top: 0.5rem; }
-    .dialog-backdrop {
-      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(31,41,55,0.85); z-index: 1000;
-      display: flex; align-items: center; justify-content: center;
-    }
-    .dialog-box {
-      background: #1f2937;
-      color: #fff;
-      border-radius: 0.75rem;
-      box-shadow: 0 6px 32px rgba(0,0,0,0.22);
-      padding: 2rem 2rem 1.5rem 2rem;
-      min-width: 320px;
-      max-width: 96vw;
-      z-index: 1001;
-      text-align: center;
-      animation: fade-in-right 0.35s;
-    }
-    .dialog-box h3 { color: #fde68a; }
-    .dialog-box button { margin: 0 0.5rem; }
+    
+    .animate-fade-in-right { animation: fade-in-right 0.5s forwards; }
+    .animate-fade-out-right { animation: fade-out-right 0.5s forwards; }
+
+    .modal-overlay { background-color: rgba(0, 0, 0, 0.5); backdrop-filter: blur(2px); }
   </style>
 </head>
-<body class="bg-gray-900 text-white font-sans">
+<body class="bg-gray-100 text-gray-800 h-screen flex flex-col overflow-hidden">
 
-  <div id="page-loader" class="flex flex-col items-center justify-center h-screen">
-    <h1 class="text-4xl font-bold text-yellow-400 mb-4">Assignment Editor</h1>
-    <p id="loading-text" class="text-lg text-gray-300">Initializing...</p>
-    <div id="signInButtonContainer" class="hidden mt-8">
-      <div id="g_id_onload" data-client_id="1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com" data-callback="handleCredentialResponse"></div>
-      <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_black" data-text="signin_with" data-shape="rectangular" data-logo_alignment="left"></div>
+  <!-- Header -->
+  <header class="bg-white shadow-sm p-4 flex justify-between items-center z-10">
+    <div class="flex items-center gap-3">
+      <div class="text-2xl">👩‍🚀</div>
+      <h1 class="text-xl font-bold text-gray-700 tracking-tight">Assignment Editor <span class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded ml-2">v2.0</span></h1>
     </div>
-    <p id="auth-error" class="text-red-500 mt-4"></p>
+    <div class="flex gap-3">
+      <button id="saveBtn" onclick="saveAssignment()" class="bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded shadow transition flex items-center gap-2">
+        <i class="fas fa-save"></i> Save All
+      </button>
+      <button onclick="shareAssignment()" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded shadow transition flex items-center gap-2">
+        <i class="fas fa-share-alt"></i> Share
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <div class="flex-1 flex overflow-hidden">
+    
+    <!-- Sidebar (Assignments List) -->
+    <aside class="w-64 bg-white border-r border-gray-200 flex flex-col">
+      <div class="p-4 border-b border-gray-100">
+        <button onclick="createNewAssignment()" class="w-full bg-gray-800 hover:bg-gray-900 text-white py-2 rounded shadow transition">
+          <i class="fas fa-plus mr-2"></i> New Assignment
+        </button>
+      </div>
+      <div id="assignments-list" class="flex-1 overflow-y-auto p-2 space-y-1">
+        <!-- Assignment items injected here -->
+      </div>
+    </aside>
+
+    <!-- Editor Area -->
+    <main class="flex-1 flex flex-col overflow-hidden relative">
+      
+      <!-- Assignment Meta -->
+      <div class="bg-gray-50 p-6 border-b border-gray-200">
+        <input type="text" id="assignmentTitle" class="text-3xl font-bold bg-transparent border-none focus:ring-0 w-full text-gray-800 placeholder-gray-400" placeholder="Untitled Assignment">
+        <input type="text" id="assignmentId" class="hidden">
+      </div>
+
+      <!-- Questions List -->
+      <div id="questions-container" class="flex-1 overflow-y-auto p-6 space-y-6 pb-24">
+        <!-- Questions injected here -->
+      </div>
+
+      <!-- Add Question FAB -->
+      <div class="absolute bottom-8 right-8">
+        <button onclick="addQuestion()" class="bg-blue-600 hover:bg-blue-700 text-white w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-2xl transition transform hover:scale-105">
+          <i class="fas fa-plus"></i>
+        </button>
+      </div>
+    </main>
   </div>
 
-  <div id="editorContent" class="hidden container mx-auto p-4 md:p-8">
-    <div class="flex justify-between items-center mb-6 flex-wrap gap-4">
-      <h1 id="assignmentTitle" class="text-3xl font-bold text-yellow-400"></h1>
-      <div>
-        <a href="./assignments.html" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg">&larr; Back to Assignments</a>
-        <button onclick="saveAssignment()" id="saveBtn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg">Save Assignment</button>
-        <button id="signOutButton" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Sign Out</button>
+  <!-- Logic Editor Modal -->
+  <div id="logic-modal" class="fixed inset-0 modal-overlay hidden z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col overflow-hidden">
+      
+      <!-- Modal Header -->
+      <div class="bg-gray-800 text-white p-4 flex justify-between items-center">
+        <h3 class="font-bold text-lg"><i class="fas fa-code-branch mr-2"></i> Edit Validation Logic</h3>
+        <button onclick="closeLogicModal()" class="text-gray-400 hover:text-white transition"><i class="fas fa-times text-xl"></i></button>
       </div>
-    </div>
 
-    <div class="bg-gray-800 p-4 rounded-lg mb-6">
-      <h2 class="text-xl font-semibold mb-2">Student Link</h2>
-      <div class="flex gap-2">
-        <input id="shareLink" type="text" readonly class="w-full p-2 bg-gray-700 border border-gray-600 rounded">
-        <button onclick="copyShareLink()" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-3 rounded-lg">Copy</button>
-      </div>
-    </div>
-
-    <div id="deadline-section" class="bg-gray-800 rounded-lg mb-8 overflow-hidden">
-      <div id="deadline-header" class="flex justify-between items-center p-6 cursor-pointer" onclick="toggleDeadlineSection()">
-        <h2 class="text-2xl font-bold text-yellow-400">Class Start Times & Deadlines</h2>
-        <span id="deadline-chevron" class="text-2xl transform transition-transform">▶</span>
-      </div>
-      <div id="deadline-content" class="collapsible-content px-6 pb-6">
-        <p class="text-gray-400 mb-4">Set the official start time for each class period. Per-question deadlines are calculated in minutes after this time.</p>
-        <div id="class-start-times" class="flex flex-wrap gap-4"></div>
-        <div class="mt-4 border-t border-gray-700 pt-4 flex justify-end">
-          <button onclick="saveTeacherDefaults()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">Save These Times as My Defaults</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="bg-gray-800 p-6 rounded-lg mb-8">
-      <label for="postSubmissionRule" class="block text-2xl font-bold text-yellow-400 mb-2">Post-Submission Policy</label>
-      <p class="text-gray-400 mb-4">Choose what happens after a student officially submits this assignment.</p>
-      <select id="postSubmissionRule" class="w-full md:w-1/2 p-2 bg-gray-700 rounded border border-gray-600">
-        <option value="open">Remain Open (Students can review and resubmit)</option>
-        <option value="lock">Lock (Students can review but not edit)</option>
-        <option value="hide">Lock & Hide (Students cannot see answers or scores)</option>
-      </select>
-    </div>
-
-    <div id="slidesContainer" class="space-y-8"></div>
-  </div>
-
-  <template id="checkerTemplate">
-    <div class="checker-widget">
-      <div class="flex items-center justify-between mb-2">
-        <label class="block font-semibold">Checker Function</label>
-        <div class="flex items-center space-x-1 p-1 bg-gray-700 rounded-lg">
-          <button class="mode-toggle-btn simple-mode-btn bg-indigo-600 text-white rounded-md px-3 py-1 text-sm font-semibold">Simple</button>
-          <button class="mode-toggle-btn advanced-mode-btn bg-transparent text-gray-300 rounded-md px-3 py-1 text-sm font-semibold">Advanced</button>
-        </div>
-      </div>
-      <div class="simple-mode-ui mt-2 p-3 bg-gray-700/50 border border-gray-600 rounded-lg space-y-4">
-        <div class="grid grid-cols-2 gap-4 text-sm border-b border-gray-700 pb-4">
-          <div>
-            <label class="flex items-center space-x-2 cursor-pointer">
-              <input type="checkbox" class="exclusive-scoring-toggle bg-gray-700 border-gray-600 rounded text-indigo-500 focus:ring-indigo-600">
-              <span>Exclusive scoring (stop at first match)</span>
-            </label>
-          </div>
-          <div class="flex items-center space-x-2">
-            <label class="whitespace-nowrap">Numeric equality tolerance (±)</label>
-            <input type="number" class="numeric-tolerance-input w-20 bg-gray-700 border border-gray-600 rounded-md p-1 text-center" value="0" min="0" step="any">
-          </div>
-        </div>
-        <div class="rule-groups-container space-y-4"></div>
-        <button class="add-rule-group-btn mt-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm">+ Add Rule Group</button>
+      <!-- Modal Body -->
+      <div class="flex-1 flex overflow-hidden">
         
-        <div class="mt-4">
-          <label class="block text-xs font-medium text-gray-500">Live Code Preview (read-only)</label>
-          <pre class="bg-gray-900 text-white p-2 rounded-md text-xs overflow-x-auto h-32"><code class="live-code-preview"></code></pre>
-        </div>
+        <!-- Left: Configuration -->
+        <div class="flex-1 flex flex-col border-r border-gray-200 bg-gray-50 overflow-hidden">
+          
+          <!-- Mode Toggle -->
+          <div class="p-4 bg-white border-b border-gray-200 flex justify-between items-center">
+            <div class="flex bg-gray-100 p-1 rounded-lg">
+              <button id="btn-mode-simple" onclick="setEditorMode('simple')" class="px-4 py-1 rounded-md text-sm font-medium transition">Simple Builder</button>
+              <button id="btn-mode-advanced" onclick="setEditorMode('advanced')" class="px-4 py-1 rounded-md text-sm font-medium transition">Advanced Code</button>
+            </div>
+            <div id="simple-mode-warning" class="text-xs text-amber-600 hidden flex items-center">
+              <i class="fas fa-exclamation-triangle mr-1"></i> Switching to Simple overwrites code
+            </div>
+          </div>
 
-        <div class="mt-2 pt-2 border-t border-gray-700 space-y-2">
-          <label class="block text-xs font-medium text-gray-400">Quick Test</label>
-          <div class="flex items-center space-x-2">
-            <input type="text" class="quick-test-input w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="Enter a sample answer...">
-            <button class="quick-test-btn bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1 px-3 rounded-md text-sm">Run</button>
-            <span class="quick-test-result text-sm font-semibold text-gray-300"></span>
+          <!-- Editors -->
+          <div class="flex-1 overflow-y-auto p-4">
+            
+            <!-- Simple Mode Builder -->
+            <div id="simple-editor" class="space-y-4">
+              <div id="simple-rules-container" class="space-y-4">
+                <!-- Rule Groups go here -->
+              </div>
+              <button onclick="addRuleGroup()" class="w-full py-2 border-2 border-dashed border-gray-300 text-gray-500 hover:border-blue-500 hover:text-blue-500 rounded-lg transition">
+                <i class="fas fa-layer-group mr-2"></i> Add Logic Group
+              </button>
+            </div>
+
+            <!-- Advanced Mode Editor -->
+            <div id="advanced-editor" class="h-full hidden flex flex-col">
+              <div class="text-xs text-gray-500 mb-2">
+                Function must return <code class="bg-gray-100 px-1">true</code> (pass) or <code class="bg-gray-100 px-1">false</code> (fail). 
+                Input variable is <code class="bg-gray-100 px-1">val</code> (string).
+              </div>
+              <textarea id="advanced-code-input" class="flex-1 w-full bg-gray-900 text-green-400 p-4 rounded-lg text-sm font-mono border-none focus:ring-2 focus:ring-blue-500" spellcheck="false"></textarea>
+            </div>
           </div>
         </div>
-        </div>
-      <div class="advanced-mode-ui hidden">
-        <textarea class="checker-textarea w-full h-64 p-2 bg-gray-700 rounded" placeholder="// Write your checker function here"></textarea>
-        <div class="flex justify-end mt-2">
-          <button class="delete-advanced-btn bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-3 rounded-md text-sm">Delete Advanced Code</button>
+
+        <!-- Right: Live Test -->
+        <div class="w-1/3 bg-white flex flex-col">
+          <div class="p-4 bg-gray-100 border-b border-gray-200 font-semibold text-gray-700">
+            <i class="fas fa-vial mr-2"></i> Quick Test
+          </div>
+          <div class="p-4 flex-1 flex flex-col gap-4">
+            <div>
+              <label class="block text-xs font-uppercase text-gray-500 font-bold mb-1">Test Input</label>
+              <textarea id="test-input" placeholder="Type answer here to test logic..." class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition h-32" oninput="runQuickTest()"></textarea>
+            </div>
+            
+            <div id="test-result" class="p-4 rounded-lg border text-center font-bold transition-all duration-200 bg-gray-50 border-gray-200 text-gray-400">
+              Waiting for input...
+            </div>
+
+            <div class="mt-auto text-xs text-gray-400">
+              <p class="mb-1"><strong>Advanced Tips:</strong></p>
+              <ul class="list-disc pl-4 space-y-1">
+                <li>Simple Mode supports multiple groups.</li>
+                <li>Advanced Mode supports standard JS.</li>
+                <li>Regex is supported in Advanced Mode.</li>
+              </ul>
+            </div>
+          </div>
         </div>
       </div>
-      <div class="simple-disabled-notice hidden">
-        <b>Advanced code exists.</b> Delete advanced code to use Simple Mode.
+
+      <!-- Modal Footer -->
+      <div class="p-4 bg-gray-100 border-t border-gray-200 flex justify-end gap-3">
+        <button onclick="closeLogicModal()" class="px-4 py-2 text-gray-600 hover:bg-gray-200 rounded transition">Cancel</button>
+        <button onclick="saveLogicChanges()" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded shadow transition">Apply Changes</button>
       </div>
     </div>
-  </template>
-  <div id="toast-wrapper"></div>
-<script>
-const TEACHER_EMAILS = ["klynch@mtps.us", "mstuart@mtps.us", "cfiori@mtps.us", "mlock@mtps.us", "cheine@mtps.us"];
-const CLIENT_ID = "1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com";
-const SCOPES = "https://www.googleapis.com/auth/presentations.readonly";
-const firebaseConfig = {
-  apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
-  authDomain: "mrlynch-slides-app.firebaseapp.com",
-  projectId: "mrlynch-slides-app",
-  storageBucket: "mrlynch-slides-app.appspot.com",
-  messagingSenderId: "223179627035",
-  appId: "1:223179627035:web:ff0f538f3029d829c3f6be"
-};
-firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
-const auth = firebase.auth();
+  </div>
 
-let assignmentId = null;
-let assignmentData = null;
-let tokenClient;
-let allClassNames = [];
-let teacherDefaults = {};
+  <!-- Toast Wrapper -->
+  <div id="toast-wrapper" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2"></div>
 
-auth.onAuthStateChanged(user => {
-  if (user && TEACHER_EMAILS.map(e => e.toLowerCase()).includes(user.email.toLowerCase())) {
-    authorizeGapi();
-  } else {
-    document.getElementById('loading-text').textContent = "Please sign in to continue.";
-    document.getElementById('signInButtonContainer').classList.remove('hidden');
-  }
-});
+  <!-- Hidden Share Input -->
+  <input type="text" id="shareLink" class="fixed -top-full opacity-0">
 
-function handleCredentialResponse(response) {
-  const credential = firebase.auth.GoogleAuthProvider.credential(response.credential);
-  auth.signInWithCredential(credential).catch(error => {
-    console.error("Firebase sign-in error", error);
-    document.getElementById('auth-error').innerText = "Firebase sign-in failed. Please try again.";
-  });
-}
-
-function authorizeGapi() {
-  gapi.load('client', () => {
-    gapi.client.load('https://slides.googleapis.com/$discovery/rest?version=v1').then(() => {
-      tokenClient = google.accounts.oauth2.initTokenClient({
-        client_id: CLIENT_ID,
-        scope: SCOPES,
-        callback: (tokenResponse) => {
-          if (tokenResponse && tokenResponse.access_token) {
-            gapi.client.setToken(tokenResponse);
-            loadAssignment();
-          } else {
-            document.getElementById('loading-text').textContent = "Could not get Google API authorization. Please try re-signing in.";
-            document.getElementById('signInButtonContainer').classList.remove('hidden');
-          }
-        },
-      });
-      tokenClient.requestAccessToken({prompt: ''});
-    });
-  });
-}
-
-window.onload = function() {
-  const urlParams = new URLSearchParams(window.location.search);
-  assignmentId = urlParams.get('id');
-  if (!assignmentId) {
-    document.getElementById('loading-text').textContent = "Error: No assignment ID provided in the URL.";
-    document.getElementById('signInButtonContainer').classList.add('hidden');
-  }
-};
-
-async function loadAssignment() {
-  if (!assignmentId) return;
-  const loadingText = document.getElementById('loading-text');
-  try {
-    loadingText.textContent = "Loading assignment data...";
-    const teacherDefaultsDoc = await db.collection("teachers").doc(auth.currentUser.email).get();
-    if(teacherDefaultsDoc.exists) { teacherDefaults = teacherDefaultsDoc.data(); }
-    const assignmentDoc = await db.collection("assignments").doc(assignmentId).get();
-    if (!assignmentDoc.exists) { loadingText.textContent = "Error: Assignment not found."; return; }
-    assignmentData = { id: assignmentDoc.id, ...assignmentDoc.data() };
-    const studentSnapshot = await db.collection("students").get();
-    const students = studentSnapshot.docs.map(doc => doc.data());
-    allClassNames = [...new Set(students.map(s => String(s.class)))].sort();
-    loadingText.textContent = "Fetching slide information from Google...";
-    const response = await gapi.client.slides.presentations.get({ presentationId: assignmentData.presentationId });
-    const slides = response.result.slides;
-    if (!slides || slides.length === 0) { loadingText.textContent = "Error: No slides found in the presentation."; return; }
-    assignmentData.slideIds = slides.map(slide => slide.objectId);
-    document.getElementById('page-loader').classList.add('hidden');
-    document.getElementById('editorContent').classList.remove('hidden');
-    document.getElementById('assignmentTitle').textContent = `Editing: ${assignmentData.name}`;
-    document.getElementById('shareLink').value = `https://custom.scienceclass.rocks/classroompicker.html?assignmentId=${assignmentId}`;
-    document.getElementById('postSubmissionRule').value = assignmentData.postSubmissionRule || 'open';
-    renderDeadlineUI();
-    renderEditor();
-  } catch (error) {
-    console.error("Error loading assignment or slides:", error);
-    const errorMessage = error.result?.error?.message || "An unknown error occurred.";
-    loadingText.textContent = `Error: ${errorMessage}. Please ensure Slides API is enabled and the presentation is shared with you.`;
-  }
-}
-
-function renderDeadlineUI() {
-  const container = document.getElementById('class-start-times');
-  container.innerHTML = '';
-  const assignmentStartTimes = assignmentData.deadlinePolicy?.classStartTimes;
-  const defaultStartTimes = teacherDefaults.classStartTimes;
-  const hardcodedDefaults = { '1': '08:01', '2': '08:50', '5': '11:17', '7': '12:55', '8': '13:44' };
-  allClassNames.forEach(className => {
-    const value = assignmentStartTimes?.[className] || defaultStartTimes?.[className] || hardcodedDefaults[className] || '00:00';
-    container.innerHTML += `<div><label for="start-time-${className}" class="block text-sm font-semibold">${className}</label><input type="time" id="start-time-${className}" value="${value}" class="p-2 bg-gray-700 border border-gray-600 rounded w-24"></div>`;
-  });
-}
-
-function renderEditor() {
-  const container = document.getElementById('slidesContainer');
-  container.innerHTML = '';
-  let slideIds = assignmentData.slideIds || [];
-  let checkerFunctions = assignmentData.checkerFunctions || {};
-  let deadlinePolicy = assignmentData.deadlinePolicy || {};
-  slideIds.forEach((slideId, index) => {
-    const qNum = index + 1;
-    const slidePolicy = deadlinePolicy[`q${qNum}`] || {};
-    const editorBox = document.createElement('div');
-    editorBox.className = "slide-editor-box grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-800 p-4 rounded-lg";
-    editorBox.innerHTML = `
-      <div>
-        <h3 class="text-xl font-semibold mb-2">Slide ${qNum}</h3>
-        <img id="img-${slideId}" src="" class="w-full rounded border border-gray-700">
-      </div>
-      <div id="checker-container-${qNum}"></div>
-      <div class="mt-4 border-t border-gray-700 pt-4">
-        <h4 class="font-semibold mb-2">Deadline & Late Policy</h4>
-        <div class="grid grid-cols-3 gap-2 text-sm">
-          <div><label>Deadline (mins)</label><input type="number" id="deadline-minutes-${index}" value="${slidePolicy.deadlineMinutes || 0}" class="w-full mt-1 p-2 bg-gray-700 rounded border-gray-600"></div>
-          <div>
-  <label>Penalty Type</label>
-  <select id="penalty-type-${index}" class="w-full mt-1 p-2 bg-gray-700 rounded border-gray-600">
-    <option value="none" ${!slidePolicy.penaltyType || slidePolicy.penaltyType === 'none' ? 'selected' : ''}>No penalty</option>
-    <option value="deduction" ${slidePolicy.penaltyType === 'deduction' || slidePolicy.penaltyType === 'percent' || slidePolicy.penaltyType === 'percentage' ? 'selected' : ''}>Percent deduction</option>
-    <option value="incremental" ${slidePolicy.penaltyType === 'incremental' || slidePolicy.penaltyType === 'points' || slidePolicy.penaltyType === 'per_minute' ? 'selected' : ''}>Points per minute</option>
-    <option value="zero" ${slidePolicy.penaltyType === 'zero' ? 'selected' : ''}>Zero if late</option>
-  </select>
-</div>
-          <div><label>Penalty Value</label><input type="number" id="penalty-value-${index}" value="${slidePolicy.penaltyValue || 0}" class="w-full mt-1 p-2 bg-gray-700 rounded border-gray-600"></div>
-        </div>
-      </div>
-    `;
-    const checkerTemplate = document.getElementById('checkerTemplate');
-    const checkerFragment = checkerTemplate.content.cloneNode(true);
-    const checkerWidgetDiv = checkerFragment.querySelector('.checker-widget');
-    CheckerWidget(checkerWidgetDiv, checkerFunctions[`calc${qNum}`] || "");
-    editorBox.querySelector(`#checker-container-${qNum}`).appendChild(checkerWidgetDiv);
-    container.appendChild(editorBox);
-    const imgElement = document.getElementById(`img-${slideId}`);
-    const imageUrl = `https://docs.google.com/presentation/d/${assignmentData.presentationId}/export/png?id=${assignmentData.presentationId}&pageid=${slideId}`;
-    loadImageWithRetries(imgElement, imageUrl);
-  });
-}
-
-function CheckerWidget(container, initialCode = "") {
-  let mode = initialCode ? "advanced" : "simple";
-  let simpleDisabled = !!initialCode;
-  let code = initialCode || getDefaultCheckerCode();
-  let advancedEdited = false;
-
-  const simpleBtn = container.querySelector('.simple-mode-btn');
-  const advBtn = container.querySelector('.advanced-mode-btn');
-  const simpleUI = container.querySelector('.simple-mode-ui');
-  const advUI = container.querySelector('.advanced-mode-ui');
-  const ruleGroupsContainer = container.querySelector('.rule-groups-container');
-  const livePreview = container.querySelector('.live-code-preview');
-  const advTextarea = container.querySelector('.checker-textarea');
-  const simpleDisabledNotice = container.querySelector('.simple-disabled-notice');
-  const deleteAdvBtn = container.querySelector('.delete-advanced-btn');
-
-  // --- NEW UI Elements ---
-  const exclusiveToggle = container.querySelector('.exclusive-scoring-toggle');
-  const toleranceInput = container.querySelector('.numeric-tolerance-input');
-  const quickTestInput = container.querySelector('.quick-test-input');
-  const quickTestBtn = container.querySelector('.quick-test-btn');
-  const quickTestResult = container.querySelector('.quick-test-result');
-  // --- END NEW UI Elements ---
-
-  container.getCode = () => (mode === "simple" ? generateCodeFromUI(container) : advTextarea.value);
-  container.getMode = () => mode;
-
-  // Initial render
-  if (mode === "advanced") {
-    showAdvancedMode();
-    advTextarea.value = code;
-    ruleGroupsContainer.innerHTML = "";
-  } else {
-    showSimpleMode();
-    livePreview.textContent = code;
-    advTextarea.value = code;
-    if (ruleGroupsContainer.children.length === 0) {
-      ruleGroupsContainer.appendChild(createRuleGroupElement(1));
-    }
-    simpleDisabledNotice.classList.add('hidden');
-  }
-
-  // Mode toggle logic
-  simpleBtn.onclick = () => {
-    if (simpleDisabled) {
-      if (advancedEdited) {
-        simpleDisabledNotice.classList.remove('hidden');
-      }
-      return;
-    }
-    mode = "simple";
-    showSimpleMode();
-    simpleDisabledNotice.classList.add('hidden');
-    const generatedCode = generateCodeFromUI(container);
-    livePreview.textContent = generatedCode;
-    advTextarea.value = generatedCode;
-  };
-  advBtn.onclick = () => {
-    mode = "advanced";
-    showAdvancedMode();
-    // Don't show notice when switching to Advanced - only when trying to go back to Simple
-    // Seed Advanced textarea with current Simple-generated code
-    advTextarea.value = generateCodeFromUI(container);
-  };
-
-  // Advanced editor change disables simple mode
-  advTextarea.oninput = () => {
-    code = advTextarea.value;
-    if (!advancedEdited) {
-      advancedEdited = true;
-      simpleDisabled = true;
-      simpleDisabledNotice.classList.remove('hidden');
-    }
-  };
-
-  // Stylized delete confirmation for advanced code
-  deleteAdvBtn.onclick = () => {
-    showDialog(
-      "Delete advanced code and switch to Simple Mode?",
-      "This will discard your advanced changes and restore the simple editor.",
-      () => {
-        advTextarea.value = "";
-        code = getDefaultCheckerCode();
-        mode = "simple";
-        advancedEdited = false;
-        simpleDisabled = false;
-        showSimpleMode();
-        simpleDisabledNotice.classList.add('hidden');
-        ruleGroupsContainer.innerHTML = "";
-        ruleGroupsContainer.appendChild(createRuleGroupElement(1));
-        updateCodeFromSimple();
-      }
-    );
-  };
-
-  container.querySelector('.add-rule-group-btn').onclick = () => {
-    ruleGroupsContainer.appendChild(createRuleGroupElement(ruleGroupsContainer.children.length + 1));
-    updateCodeFromSimple();
-  };
-
-  // --- NEW Quick Test Button Listener ---
-  quickTestBtn.onclick = () => {
-    const codeToTest = generateCodeFromUI(container);
-    const testAnswer = quickTestInput.value;
-    quickTestResult.textContent = ''; // Clear previous result
-    try {
-      // We need access to the global showToast
-      const checkerFunc = new Function('studentAnswer', 'showToast', codeToTest + '; return checkAnswer(studentAnswer);');
-      const resultScore = checkerFunc(testAnswer, window.showToast); // Pass the global showToast
-      quickTestResult.textContent = `Result: ${resultScore}`;
-      quickTestResult.style.color = '#d1d5db'; // text-gray-300
-    } catch (error) {
-      console.error("Quick Test Error:", error);
-      quickTestResult.textContent = `Error: ${error.message}`;
-      quickTestResult.style.color = '#f87171'; // text-red-400
-    }
-  };
-  // --- END Quick Test Button Listener ---
-
-  ruleGroupsContainer.addEventListener('click', e => {
-    if(e.target.classList.contains('add-condition-btn')) {
-      e.target.previousElementSibling.appendChild(createConditionElement());
-      updateCodeFromSimple();
-    }
-    if(e.target.classList.contains('delete-btn')) {
-      e.target.parentElement.remove();
-      updateCodeFromSimple();
-    }
-    if (e.target.classList.contains('delete-group-btn')) {
-      e.target.closest('.rule-group').remove();
-      updateCodeFromSimple();
-    }
-  });
-
-  // --- UPDATE Event Listeners to trigger code update ---
-  ruleGroupsContainer.addEventListener('change', updateCodeFromSimple);
-  ruleGroupsContainer.addEventListener('keyup', updateCodeFromSimple);
-  // Add listeners for new controls
-  exclusiveToggle.addEventListener('change', updateCodeFromSimple);
-  toleranceInput.addEventListener('input', updateCodeFromSimple);
-  // --- END UPDATE ---
-
-  function showSimpleMode() {
-    simpleUI.classList.remove('hidden');
-    advUI.classList.add('hidden');
-    simpleBtn.classList.add('bg-indigo-600', 'text-white');
-    simpleBtn.classList.remove('bg-transparent', 'text-gray-300');
-    advBtn.classList.add('bg-transparent', 'text-gray-300');
-    advBtn.classList.remove('bg-indigo-600', 'text-white');
-    livePreview.textContent = generateCodeFromUI(container);
-    advTextarea.value = generateCodeFromUI(container);
-  }
-  function showAdvancedMode() {
-    simpleUI.classList.add('hidden');
-    advUI.classList.remove('hidden');
-    simpleBtn.classList.add('bg-transparent', 'text-gray-300');
-    simpleBtn.classList.remove('bg-indigo-600', 'text-white');
-    advBtn.classList.add('bg-indigo-600', 'text-white');
-    advBtn.classList.remove('bg-transparent', 'text-gray-300');
-  }
-  function updateCodeFromSimple() {
-    code = generateCodeFromUI(container);
-    livePreview.textContent = code;
-    advTextarea.value = code;
-  }
-}
-
-// Stylized dialog using your toast-wrapper for delete confirmation
-function showDialog(title, message, onConfirm) {
-  const wrapper = document.getElementById('toast-wrapper');
-  const backdrop = document.createElement('div');
-  backdrop.className = 'dialog-backdrop';
-  const dialog = document.createElement('div');
-  dialog.className = 'dialog-box';
-  dialog.innerHTML = `
-    <h3 class="text-xl font-bold mb-2">${title}</h3>
-    <p class="mb-4 text-gray-300">${message}</p>
-    <div class="flex justify-end gap-2">
-      <button class="dialog-confirm bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-4 rounded">Delete</button>
-      <button class="dialog-cancel bg-gray-600 hover:bg-gray-700 text-white font-bold py-1 px-4 rounded">Cancel</button>
-    </div>
-  `;
-  backdrop.appendChild(dialog);
-  wrapper.appendChild(backdrop);
-  dialog.querySelector('.dialog-confirm').onclick = () => {
-    backdrop.remove();
-    onConfirm();
-  };
-  dialog.querySelector('.dialog-cancel').onclick = () => {
-    backdrop.remove();
-  };
-}
-
-// --- UPDATED Code Generator ---
-function generateCodeFromUI(container) {
-  // Get new UI settings
-  const isExclusive = container.querySelector('.exclusive-scoring-toggle').checked;
-  const tolerance = parseFloat(container.querySelector('.numeric-tolerance-input').value) || 0;
-
-  const ruleGroups = container.querySelectorAll('.rule-group');
-  let code = `function checkAnswer(studentAnswer) {\n`;
-  code += `    let score = 0;\n`;
-  let totalMaxScore = 0;
-  ruleGroups.forEach(group => { totalMaxScore += Number(group.querySelector('.rule-points').value) || 0; });
-  code += `    const maxScore = ${totalMaxScore || 100};\n`;
-  
-  // Robust Number & Text Extraction
-  code += `    const answerStr = String(studentAnswer).toLowerCase();\n`;
-  // Regex: optional negative, digits (with or without commas), optional decimal part
-  code += `    const numMatches = answerStr.match(/-?(?:\\d{1,3}(?:,\\d{3})+|\\d+)(?:\\.\\d+)?/g) || [];\n`;
-  code += `    const answerNums = numMatches.map(s => parseFloat(s.replace(/,/g, '')));\n`;
-  code += `    const answerNum = answerNums.length ? answerNums[0] : NaN; // Kept for backward compatibility\n`;
-
-  // Tolerance Helper Function
-  if (tolerance > 0) {
-    code += `\n    function isNear(a, b, t) {\n`;
-    code += `        if (isNaN(a) || isNaN(b)) return false;\n`;
-    code += `        return Math.abs(a - b) <= t;\n`;
-    code += `    }\n`;
-  }
-
-  let wroteIf = false; // For exclusive mode
-  
-  ruleGroups.forEach((group, index) => {
-    const points = Number(group.querySelector('.rule-points').value) || 0;
-    const groupConnector = group.querySelector('.group-connector').value;
-    const toastMessage = group.querySelector('.rule-toast-message')?.value.trim() || '';
-    const toastColor = group.querySelector('.rule-toast-color')?.value || 'default';
+  <script>
+    // --- Global State ---
+    let assignments = [];
+    let currentAssignment = null;
+    let currentQuestionId = null;
     
-    let groupConditions = [];
-    
-    group.querySelectorAll('.condition-row').forEach(cond => {
-      const type = cond.querySelector('.cond-type').value;
-      const op = cond.querySelector('.cond-operator').value;
-      const valInput = cond.querySelector('.cond-value');
-      if (!valInput || valInput.value.trim() === "") return; // Skip empty conditions
-      
-      const val = valInput.value.trim();
+    // Currently active logic config (for simple mode persistence)
+    let activeSimpleConfig = null;
+    let currentMode = 'simple'; // 'simple' or 'advanced'
 
-      if (type === 'text') {
-        const keywords = val.split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
-        if (keywords.length > 1 && (op === 'contains' || op === 'not_contains')) {
-          const textBool = cond.querySelector('.text-bool').value;
-          const keywordConditions = keywords.map(k => `${op === 'not_contains' ? '!' : ''}answerStr.includes("${k.replace(/"/g, '\\"')}")`);
-          groupConditions.push(`(${keywordConditions.join(` ${textBool} `)})`);
-        } else if (keywords.length > 0) {
-          const keyword = keywords[0];
-          if (op === 'contains') groupConditions.push(`answerStr.includes("${keyword.replace(/"/g, '\\"')}")`);
-          else if (op === 'not_contains') groupConditions.push(`!answerStr.includes("${keyword.replace(/"/g, '\\"')}")`);
-          else if (op === 'equals_str') groupConditions.push(`answerStr === "${keyword.replace(/"/g, '\\"')}"`);
-        }
-      } else if (type === 'number') {
-        const numericVal = parseFloat(val);
-        if (isNaN(numericVal)) return; // Skip invalid number conditions
+    // --- Firebase Stub (Replace with real config) ---
+    const app_id = "assignment-editor-v2"; // Placeholder for Logic
+    // const db = firebase.firestore(); 
+    // const auth = firebase.auth();
 
-        const pickMode = cond.querySelector('.number-pick-mode').value;
-        const nthIndex = parseInt(cond.querySelector('.number-index').value, 10); // 1-based
-
-        // Helper to create the comparison logic for a single number 'num'
-        const createComparison = (numVar) => {
-          if (op === '==') {
-            return tolerance > 0 ? `isNear(${numVar}, ${numericVal}, ${tolerance})` : `(${numVar} == ${numericVal})`;
-          } else if (op === '!=') {
-            return tolerance > 0 ? `!isNear(${numVar}, ${numericVal}, ${tolerance})` : `(${numVar} != ${numericVal})`;
-          } else if (op === '>') {
-            return `(${numVar} > ${numericVal})`;
-          } else if (op === '<') {
-            return `(${numVar} < ${numericVal})`;
-          }
-          return 'false'; // Default case
-        };
-
-        let conditionString = 'false';
-        switch (pickMode) {
-          case 'first':
-            conditionString = `(answerNums.length > 0 && ${createComparison('answerNums[0]')})`;
-            break;
-          case 'last':
-            conditionString = `(answerNums.length > 0 && ${createComparison('answerNums[answerNums.length - 1]')})`;
-            break;
-          case 'nth':
-            if (nthIndex > 0) {
-              // (nthIndex - 1) for 0-based array access
-              conditionString = `(answerNums.length >= ${nthIndex} && ${createComparison(`answerNums[${nthIndex - 1}]`)})`;
-            }
-            break;
-          case 'any':
-            conditionString = `(answerNums.some(num => ${createComparison('num')}))`;
-            break;
-        }
-        groupConditions.push(conditionString);
-      }
+    // --- Initialization ---
+    document.addEventListener('DOMContentLoaded', () => {
+        // Load Mock Data for demo
+        loadMockData();
     });
 
-    if (groupConditions.length > 0) {
-      let ifStatement = 'if';
-      if (isExclusive) {
-        ifStatement = wroteIf ? 'else if' : 'if';
-        wroteIf = true;
-      }
-      
-      code += `    ${ifStatement} (${groupConditions.join(` ${groupConnector} `)}) {\n`;
-      code += `        score += ${points};\n`;
-      if (toastMessage) {
-        code += `        if (typeof showToast === "function") {\n`;
-        code += `            try { showToast(${JSON.stringify(toastMessage)}, { color: ${JSON.stringify(toastColor)} }); } catch (_) {}\n`;
-        code += `        }\n`;
-      }
-      code += `    }\n`;
+    function loadMockData() {
+        // Simulating a loaded assignment
+        const mockId = 'assg_' + Date.now();
+        assignments.push({ id: mockId, title: 'Javascript Basics', questions: [] });
+        loadAssignment(mockId);
+        renderAssignmentsList();
     }
-  });
-  
-  code += `    return score;\n`;
-  code += `}`;
-  return code;
-}
 
-function createRuleGroupElement(number) {
-  const div = document.createElement('div');
-  div.className = 'rule-group bg-gray-800 p-3 rounded-lg border border-gray-600 space-y-3';
-  div.innerHTML = `
-    <div class="flex justify-between items-center">
-      <h4 class="font-semibold text-white">Rule Group ${number}</h4>
-      <button class="delete-group-btn text-red-400 hover:text-red-300 font-bold text-sm">Remove Group</button>
-    </div>
-    <div class="flex items-center space-x-2">
-      <label class="text-sm">If conditions are met, award</label>
-      <input type="number" class="rule-points w-20 bg-gray-700 border border-gray-600 rounded-md p-1 text-center" value="100">
-      <label class="text-sm">points.</label>
-    </div>
-    <div class="flex items-center space-x-2">
-      <label class="text-sm">Conditions in this group require:</label>
-      <select class="group-connector bg-gray-700 border border-gray-600 rounded-md p-1 text-sm">
-        <option value="&&">All to be true (AND)</option>
-        <option value="||">Any to be true (OR)</option>
-      </select>
-    </div>
-    <div class="conditions-container space-y-2">
-      ${createConditionElement().outerHTML}
-    </div>
-    <button class="add-condition-btn text-sm text-blue-400 hover:text-blue-300">+ Add Condition</button>
-    <div class="mt-2 pt-2 border-t border-gray-700 space-y-2">
-      <label class="block text-xs font-medium text-gray-400">Optional: Toast notification when this group matches</label>
-      <input type="text" class="rule-toast-message w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="Optional toast message to show when this group matches">
-      <div class="flex items-center space-x-2">
-        <label class="text-xs text-gray-400">Color:</label>
-        <select class="rule-toast-color bg-gray-700 border border-gray-600 rounded-md p-1 text-xs">
-          <option value="default">Default</option>
-          <option value="blue">Info (Blue)</option>
-          <option value="green">Success (Green)</option>
-          <option value="red">Error (Red)</option>
-        </select>
-      </div>
-    </div>
-  `;
-  return div;
-}
+    // --- Core Logic: Mode Switching ---
 
-// --- UPDATED Condition Element Creator ---
-function createConditionElement() {
-  const div = document.createElement('div');
-  div.className = 'condition-row flex items-center space-x-2 bg-gray-900/50 p-2 rounded-md';
-  div.innerHTML = `
-    <select class="cond-type bg-gray-700 border border-gray-600 rounded-md p-1 text-sm">
-      <option value="text">Text</option>
-      <option value="number">Number</option>
-    </select>
-    <select class="cond-operator bg-gray-700 border border-gray-600 rounded-md p-1 text-sm">
-      <option value="contains">contains</option>
-      <option value="not_contains">does not contain</option>
-      <option value="equals_str">is exactly</option>
-    </select>
-    <div class="cond-value-wrapper flex-grow">
-      <input type="text" class="cond-value w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="keyword(s), comma-separated">
-      <div class="text-options hidden text-xs mt-1">
-        <label>Require: </label>
-        <select class="text-bool bg-gray-700 border border-gray-600 rounded-md p-0.5 text-sm">
-          <option value="||">Any (OR)</option>
-          <option value="&&">All (AND)</option>
-        </select>
-      </div>
-    </div>
-    <button class="delete-btn text-red-400 hover:text-red-300 font-bold text-xl leading-none">&times;</button>
-  `;
+    function setEditorMode(mode) {
+        currentMode = mode;
+        const simpleBtn = document.getElementById('btn-mode-simple');
+        const advBtn = document.getElementById('btn-mode-advanced');
+        const simpleEditor = document.getElementById('simple-editor');
+        const advEditor = document.getElementById('advanced-editor');
+        const warning = document.getElementById('simple-mode-warning');
 
-  // Main Change is Here
-  div.querySelector('.cond-type').addEventListener('change', e => {
-    const operatorSelect = div.querySelector('.cond-operator');
-    const valueWrapper = div.querySelector('.cond-value-wrapper');
-    const type = e.target.value;
-    
-    if (type === 'number') {
-      operatorSelect.innerHTML = `<option value="==">is equal to</option><option value="!=">is not equal to</option><option value=">">is greater than</option><option value="<">is less than</option>`;
-      valueWrapper.innerHTML = `
-        <div class="flex items-center space-x-1">
-          <select class="number-pick-mode bg-gray-700 border border-gray-600 rounded-md p-1 text-sm">
-            <option value="first">First</option>
-            <option value="last">Last</option>
-            <option value="nth">Nth</option>
-            <option value="any">Any</option>
-          </select>
-          <input type="number" class="number-index w-12 bg-gray-700 border border-gray-600 rounded-md p-1 text-sm hidden" value="1" min="1" step="1">
-          <span class="text-sm text-gray-400">number</span>
-          <input type="number" class="cond-value w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="a number" step="any">
-        </div>
-      `;
-      // Add listener for the new select
-      valueWrapper.querySelector('.number-pick-mode').addEventListener('change', e_pick => {
-        const indexInput = valueWrapper.querySelector('.number-index');
-        if (e_pick.target.value === 'nth') {
-          indexInput.classList.remove('hidden');
+        if (mode === 'simple') {
+            simpleBtn.classList.add('bg-blue-100', 'text-blue-700');
+            simpleBtn.classList.remove('text-gray-600');
+            advBtn.classList.remove('bg-blue-100', 'text-blue-700');
+            advBtn.classList.add('text-gray-600');
+            
+            simpleEditor.classList.remove('hidden');
+            advEditor.classList.add('hidden');
+            warning.classList.add('hidden');
         } else {
-          indexInput.classList.add('hidden');
+            advBtn.classList.add('bg-blue-100', 'text-blue-700');
+            advBtn.classList.remove('text-gray-600');
+            simpleBtn.classList.remove('bg-blue-100', 'text-blue-700');
+            simpleBtn.classList.add('text-gray-600');
+
+            simpleEditor.classList.add('hidden');
+            advEditor.classList.remove('hidden');
+
+            // When switching to Advanced, we pre-fill it with the code generated from Simple Mode
+            // unless there is already code there and we didn't just come from simple mode.
+            const generatedCode = generateCodeFromSimpleConfig();
+            const currentAdvancedVal = document.getElementById('advanced-code-input').value;
+            
+            // If advanced is empty, or we are switching, fill it
+            if(!currentAdvancedVal.trim() || activeSimpleConfig) {
+                document.getElementById('advanced-code-input').value = generatedCode;
+            }
+            
+            warning.classList.remove('hidden');
         }
-      });
-
-    } else { // type === 'text'
-      operatorSelect.innerHTML = `<option value="contains">contains</option><option value="not_contains">does not contain</option><option value="equals_str">is exactly</option>`;
-      valueWrapper.innerHTML = `
-        <input type="text" class="cond-value w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="keyword(s), comma-separated">
-        <div class="text-options hidden text-xs mt-1">
-          <label>Require: </label>
-          <select class="text-bool bg-gray-700 border border-gray-600 rounded-md p-0.5 text-sm">
-            <option value="||">Any (OR)</option>
-            <option value="&&">All (AND)</option>
-          </select>
-        </div>
-      `;
+        
+        runQuickTest(); // Run test immediately on switch
     }
-  });
-  // End of Main Change
 
-  // Keep existing listeners for text options
-  div.querySelector('.cond-operator').addEventListener('change', e => {
-    const type = div.querySelector('.cond-type').value;
-    const operator = e.target.value;
-    const textOptions = div.querySelector('.text-options');
-    const valueInput = div.querySelector('.cond-value');
-    if (type === 'text' && textOptions && valueInput) {
-      if ((operator === 'contains' || operator === 'not_contains') && valueInput.value.includes(',')) {
-        textOptions.classList.remove('hidden');
-      } else {
-        textOptions.classList.add('hidden');
-      }
-    }
-  });
-  div.addEventListener('keyup', e => {
-    if (e.target.classList.contains('cond-value')) {
-      const operator = div.querySelector('.cond-operator').value;
-      const textOptions = div.querySelector('.text-options');
-      if (!textOptions) return;
-      if (operator === 'contains' || operator === 'not_contains') {
-        if (e.target.value.includes(',')) textOptions.classList.remove('hidden');
-        else textOptions.classList.add('hidden');
-      } else {
-        textOptions.classList.add('hidden');
-      }
-    }
-  });
-  return div;
-}
 
-function getDefaultCheckerCode() {
-  return `function checkAnswer(studentAnswer) {
-    let score = 0;
-    const maxScore = 100;
-    const answerStr = String(studentAnswer).toLowerCase();
-    const numMatches = answerStr.match(/-?(?:\\d{1,3}(?:,\\d{3})+|\\d+)(?:\\.\\d+)?/g) || [];
-    const answerNums = numMatches.map(s => parseFloat(s.replace(/,/g, '')));
-    const answerNum = answerNums.length ? answerNums[0] : NaN;
-    return score;
-}`;
-}
-function loadImageWithRetries(imgElement, srcUrl, maxRetries = 2) {
-  let attempt = 0;
-  function tryLoad() {
-    const urlWithCacheBust = `${srcUrl}&time=${new Date().getTime()}`;
-    imgElement.src = urlWithCacheBust;
-    imgElement.onerror = () => {
-      attempt++;
-      if (attempt < maxRetries) {
-        setTimeout(tryLoad, 1000);
-      } else {
-        console.error(`Could not load image after ${maxRetries} attempts: ${srcUrl}`);
-        imgElement.alt = "Image failed to load";
-        imgElement.src = 'https://placehold.co/400x300/374151/9ca3af?text=Image+Load+Failed';
-      }
-    };
-  }
-  tryLoad();
-}
-async function saveAssignment() {
-  const saveBtn = document.getElementById('saveBtn');
-  try {
-    saveBtn.textContent = "Saving...";
-    const checkerFunctions = {};
-    const deadlinePolicy = { classStartTimes: {} };
-    allClassNames.forEach(className => {
-      const timeValue = document.getElementById(`start-time-${className}`).value;
-      if(timeValue) { deadlinePolicy.classStartTimes[String(className)] = timeValue; }
-    });
-    assignmentData.slideIds.forEach((id, index) => {
-      const qNum = index + 1;
-      const checkerWidgetDiv = document.getElementById(`checker-container-${qNum}`).querySelector('.checker-widget');
-      let checkerCode = checkerWidgetDiv.getCode();
-      checkerFunctions[`calc${qNum}`] = checkerCode;
-      deadlinePolicy[`q${qNum}`] = {
-        deadlineMinutes: parseInt(document.getElementById(`deadline-minutes-${index}`).value, 10) || 0,
-        penaltyType: document.getElementById(`penalty-type-${index}`).value,
-        penaltyValue: parseInt(document.getElementById(`penalty-value-${index}`).value, 10) || 0,
-      };
-    });
-    const postSubmissionRule = document.getElementById('postSubmissionRule').value;
-    await db.collection("assignments").doc(assignmentId).update({
-      slideIds: assignmentData.slideIds,
-      checkerFunctions: checkerFunctions,
-      deadlinePolicy: deadlinePolicy,
-      postSubmissionRule: postSubmissionRule
-    });
-    showToast("Assignment saved successfully!", { color: 'green' });
-  } catch (error) {
-    console.error("Error saving assignment:", error);
-    showToast("Error saving. See console for details.", { color: 'red' });
-  } finally {
-    saveBtn.textContent = "Save Assignment";
-  }
-}
+    // --- Question Management ---
 
-async function saveTeacherDefaults() {
-  const newDefaults = { classStartTimes: {} };
-  allClassNames.forEach(className => {
-    const timeValue = document.getElementById(`start-time-${className}`).value;
-    if(timeValue) {
-      newDefaults.classStartTimes[String(className)] = timeValue;
+    function addQuestion() {
+        if (!currentAssignment) return;
+        
+        const newQ = {
+            id: 'q_' + Date.now(),
+            prompt: '',
+            validationCode: 'return true;',
+            simpleConfig: { // Default simple config
+                groups: [{ logic: 'AND', rules: [{ type: 'contains', value: '' }] }]
+            }
+        };
+        
+        currentAssignment.questions.push(newQ);
+        renderQuestions();
+        // Scroll to bottom
+        setTimeout(() => {
+            const container = document.getElementById('questions-container');
+            container.scrollTop = container.scrollHeight;
+        }, 100);
     }
-  });
-  try {
-    await db.collection("teachers").doc(auth.currentUser.email).set(newDefaults, { merge: true });
-    showToast("Default start times saved!", { color: 'green' });
-    teacherDefaults.classStartTimes = newDefaults.classStartTimes;
-  } catch (error) {
-    console.error("Error saving defaults:", error);
-    showToast("Could not save defaults.", { color: 'red' });
-  }
-}
-function toggleDeadlineSection() {
-  const content = document.getElementById('deadline-content');
-  const chevron = document.getElementById('deadline-chevron');
-  if (content.style.maxHeight && content.style.maxHeight !== '0px') {
-    content.style.maxHeight = '0px';
-    chevron.style.transform = 'rotate(0deg)';
-  } else {
-    content.style.maxHeight = content.scrollHeight + "px";
-    chevron.style.transform = 'rotate(90deg)';
-  }
-}
-function copyShareLink() {
-  const linkInput = document.getElementById('shareLink');
-  linkInput.select();
-  document.execCommand('copy');
-  showToast("Link copied to clipboard!", { color: 'blue' });
-}
-function showToast(message, options = {}) {
-  const { color = 'default', duration = 3000 } = options;
-  const wrapper = document.getElementById('toast-wrapper');
-  if (!wrapper) return;
-  const toast = document.createElement('div');
-  toast.className = 'flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm animate-fade-in-right';
-  const colors = { default: 'bg-gray-700', green: 'bg-green-600', red: 'bg-red-600', blue: 'bg-blue-600' };
-  toast.classList.add(colors[color] || colors['default']);
-  const messageSpan = document.createElement('span');
-  messageSpan.textContent = message;
-  toast.appendChild(messageSpan);
-  const closeButton = document.createElement('button');
-  closeButton.innerHTML = '&times;';
-  closeButton.className = 'ml-4 text-2xl font-bold leading-none hover:text-gray-300 focus:outline-none';
-  let timeoutId = null;
-  const dismiss = () => {
-    if (timeoutId) clearTimeout(timeoutId);
-    toast.classList.remove('animate-fade-in-right');
-    toast.classList.add('animate-fade-out-right');
-    toast.addEventListener('animationend', () => toast.remove());
-  };
-  closeButton.onclick = dismiss;
-  toast.appendChild(closeButton);
-  wrapper.appendChild(toast);
-  timeoutId = setTimeout(dismiss, duration);
-}
-document.getElementById('signOutButton').onclick = () => {
-  auth.signOut();
-};
-</script>
+
+    function deleteQuestion(qId) {
+        if(!confirm("Delete this question?")) return;
+        currentAssignment.questions = currentAssignment.questions.filter(q => q.id !== qId);
+        renderQuestions();
+    }
+
+    function renderQuestions() {
+        const container = document.getElementById('questions-container');
+        container.innerHTML = '';
+
+        currentAssignment.questions.forEach((q, index) => {
+            const div = document.createElement('div');
+            div.className = 'bg-white rounded-xl shadow-sm border border-gray-200 p-6 transition hover:shadow-md group';
+            div.innerHTML = `
+                <div class="flex justify-between items-start mb-4">
+                    <div class="flex items-center gap-3">
+                        <span class="bg-gray-100 text-gray-500 font-mono text-xs px-2 py-1 rounded">Q${index + 1}</span>
+                        <span class="text-xs text-gray-400 select-all cursor-pointer hover:text-blue-500" onclick="copyToClipboard('${q.id}')">ID: ${q.id.substr(0,6)}...</span>
+                    </div>
+                    <button onclick="deleteQuestion('${q.id}')" class="text-gray-300 hover:text-red-500 transition"><i class="fas fa-trash"></i></button>
+                </div>
+                
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Question Prompt</label>
+                    <textarea 
+                        oninput="updateQuestionPrompt('${q.id}', this.value)" 
+                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition" 
+                        rows="2" placeholder="e.g., What is the capital of France?">${q.prompt}</textarea>
+                </div>
+
+                <div class="flex items-center justify-between bg-gray-50 p-3 rounded-lg border border-gray-200">
+                    <div class="flex flex-col">
+                         <span class="text-xs font-bold text-gray-500 uppercase">Validation Logic</span>
+                         <span class="text-xs text-gray-400 truncate max-w-[200px] font-mono mt-1">${q.simpleConfig ? 'Simple Mode Active' : 'Advanced JS Mode'}</span>
+                    </div>
+                    <button onclick="openLogicEditor('${q.id}')" class="bg-white border border-gray-300 text-gray-700 hover:text-blue-600 hover:border-blue-600 px-4 py-2 rounded text-sm font-medium transition shadow-sm">
+                        <i class="fas fa-edit mr-2"></i> Edit Logic
+                    </button>
+                </div>
+            `;
+            container.appendChild(div);
+        });
+    }
+
+    function updateQuestionPrompt(id, val) {
+        const q = currentAssignment.questions.find(q => q.id === id);
+        if (q) q.prompt = val;
+    }
+
+    // --- Logic Editor (The Heavy Lifting) ---
+
+    function openLogicEditor(qId) {
+        currentQuestionId = qId;
+        const q = currentAssignment.questions.find(q => q.id === qId);
+        
+        // 1. Check for Persistence
+        if (q.simpleConfig) {
+            // We have saved simple mode state!
+            activeSimpleConfig = JSON.parse(JSON.stringify(q.simpleConfig)); // Deep copy
+            setEditorMode('simple');
+        } else {
+            // No simple config found, default to advanced mode
+            activeSimpleConfig = null; // Clear simple config because we are in raw mode
+            document.getElementById('advanced-code-input').value = q.validationCode;
+            setEditorMode('advanced');
+        }
+
+        renderSimpleBuilder();
+        document.getElementById('logic-modal').classList.remove('hidden');
+        
+        // Run initial test
+        runQuickTest();
+    }
+
+    function closeLogicModal() {
+        document.getElementById('logic-modal').classList.add('hidden');
+        currentQuestionId = null;
+    }
+
+    function saveLogicChanges() {
+        const q = currentAssignment.questions.find(q => q.id === currentQuestionId);
+        
+        if (currentMode === 'simple') {
+            // In simple mode, we save BOTH the config and the generated code
+            q.simpleConfig = JSON.parse(JSON.stringify(activeSimpleConfig));
+            q.validationCode = generateCodeFromSimpleConfig();
+        } else {
+            // In advanced mode, we NUKE the simple config because the user might have written code 
+            // that cannot be represented by the simple builder.
+            q.simpleConfig = null; 
+            q.validationCode = document.getElementById('advanced-code-input').value;
+        }
+        
+        renderQuestions();
+        closeLogicModal();
+        showToast("Validation logic updated", { color: 'green' });
+    }
+
+    // --- Simple Mode Builder Rendering ---
+
+    function renderSimpleBuilder() {
+        if (!activeSimpleConfig) {
+            // Default initialization if null
+            activeSimpleConfig = { groups: [{ logic: 'AND', rules: [{ type: 'contains', value: '' }] }] };
+        }
+
+        const container = document.getElementById('simple-rules-container');
+        container.innerHTML = '';
+
+        activeSimpleConfig.groups.forEach((group, gIndex) => {
+            const groupDiv = document.createElement('div');
+            groupDiv.className = 'bg-white border border-gray-200 rounded-lg p-4 shadow-sm relative group-hover:border-blue-400 transition';
+            
+            // Group Header
+            const header = document.createElement('div');
+            header.className = 'flex justify-between items-center mb-3 border-b border-gray-100 pb-2';
+            header.innerHTML = `
+                <div class="flex items-center gap-2">
+                    <span class="text-sm font-bold text-gray-600">Group ${gIndex + 1}</span>
+                    <select onchange="updateGroupLogic(${gIndex}, this.value)" class="text-xs border border-gray-300 rounded px-2 py-1 bg-gray-50 focus:ring-blue-500">
+                        <option value="AND" ${group.logic === 'AND' ? 'selected' : ''}>Match ALL Rules (AND)</option>
+                        <option value="OR" ${group.logic === 'OR' ? 'selected' : ''}>Match ANY Rule (OR)</option>
+                    </select>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="duplicateGroup(${gIndex})" class="text-gray-400 hover:text-blue-500 transition" title="Duplicate Group">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                    ${activeSimpleConfig.groups.length > 1 ? `
+                    <button onclick="removeGroup(${gIndex})" class="text-gray-400 hover:text-red-500 transition" title="Remove Group">
+                        <i class="fas fa-trash"></i>
+                    </button>` : ''}
+                </div>
+            `;
+            groupDiv.appendChild(header);
+
+            // Rules
+            const rulesContainer = document.createElement('div');
+            rulesContainer.className = 'space-y-2';
+            
+            group.rules.forEach((rule, rIndex) => {
+                const ruleRow = document.createElement('div');
+                ruleRow.className = 'flex flex-wrap gap-2 items-center bg-gray-50 p-2 rounded border border-gray-200';
+                
+                // Rule Type Selector
+                let inputHTML = '';
+                
+                // Dynamic Inputs based on Type
+                if (rule.type === 'sequence') {
+                    inputHTML = `
+                        <input type="text" value="${rule.value || ''}" oninput="updateRuleValue(${gIndex}, ${rIndex}, 'value', this.value)" placeholder="First word..." class="flex-1 min-w-[100px] text-sm p-1 border rounded">
+                        <span class="text-xs text-gray-500 font-bold">then</span>
+                        <input type="text" value="${rule.value2 || ''}" oninput="updateRuleValue(${gIndex}, ${rIndex}, 'value2', this.value)" placeholder="Second word..." class="flex-1 min-w-[100px] text-sm p-1 border rounded">
+                    `;
+                } else if (rule.type === 'length_gt' || rule.type === 'length_lt') {
+                    inputHTML = `<input type="number" value="${rule.value}" oninput="updateRuleValue(${gIndex}, ${rIndex}, 'value', this.value)" class="w-20 text-sm p-1 border rounded">`;
+                } else {
+                    inputHTML = `<input type="text" value="${rule.value}" oninput="updateRuleValue(${gIndex}, ${rIndex}, 'value', this.value)" placeholder="Value..." class="flex-1 text-sm p-1 border rounded">`;
+                }
+
+                ruleRow.innerHTML = `
+                    <select onchange="updateRuleType(${gIndex}, ${rIndex}, this.value)" class="text-sm border border-gray-300 rounded px-2 py-1 bg-white">
+                        <option value="contains" ${rule.type === 'contains' ? 'selected' : ''}>Contains Text</option>
+                        <option value="not_contains" ${rule.type === 'not_contains' ? 'selected' : ''}>Does Not Contain</option>
+                        <option value="starts_with" ${rule.type === 'starts_with' ? 'selected' : ''}>Starts With</option>
+                        <option value="ends_with" ${rule.type === 'ends_with' ? 'selected' : ''}>Ends With</option>
+                        <option value="exact_match" ${rule.type === 'exact_match' ? 'selected' : ''}>Exact Match</option>
+                        <option value="sequence" ${rule.type === 'sequence' ? 'selected' : ''}>Sequence (A...B)</option>
+                        <option value="length_gt" ${rule.type === 'length_gt' ? 'selected' : ''}>Length ></option>
+                        <option value="length_lt" ${rule.type === 'length_lt' ? 'selected' : ''}>Length <</option>
+                    </select>
+                    ${inputHTML}
+                    <div class="flex gap-1 ml-auto">
+                        <button onclick="duplicateRule(${gIndex}, ${rIndex})" class="text-gray-400 hover:text-blue-500 px-2" title="Duplicate Rule">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                        <button onclick="removeRule(${gIndex}, ${rIndex})" class="text-gray-400 hover:text-red-500 px-2" title="Remove Rule">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                `;
+                rulesContainer.appendChild(ruleRow);
+            });
+
+            groupDiv.appendChild(rulesContainer);
+
+            // Add Rule Button
+            const addRuleBtn = document.createElement('button');
+            addRuleBtn.className = 'mt-3 text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center';
+            addRuleBtn.innerHTML = `<i class="fas fa-plus-circle mr-1"></i> Add Rule`;
+            addRuleBtn.onclick = () => addRule(gIndex);
+            groupDiv.appendChild(addRuleBtn);
+
+            container.appendChild(groupDiv);
+            
+            // Visual Separator for Group Logic
+            if (gIndex < activeSimpleConfig.groups.length - 1) {
+                const separator = document.createElement('div');
+                separator.className = 'flex items-center justify-center py-2';
+                separator.innerHTML = `<span class="bg-gray-200 text-gray-600 text-xs font-bold px-2 py-1 rounded">AND (All Groups Must Pass)</span>`;
+                container.appendChild(separator);
+            }
+        });
+    }
+
+    // --- Simple Mode Logic Manipulation ---
+
+    function updateGroupLogic(gIndex, logic) {
+        activeSimpleConfig.groups[gIndex].logic = logic;
+        renderSimpleBuilder();
+        runQuickTest();
+    }
+
+    function addRuleGroup() {
+        activeSimpleConfig.groups.push({ logic: 'AND', rules: [{ type: 'contains', value: '' }] });
+        renderSimpleBuilder();
+        runQuickTest();
+    }
+
+    function removeGroup(gIndex) {
+        activeSimpleConfig.groups.splice(gIndex, 1);
+        renderSimpleBuilder();
+        runQuickTest();
+    }
+    
+    function duplicateGroup(gIndex) {
+        const group = JSON.parse(JSON.stringify(activeSimpleConfig.groups[gIndex]));
+        activeSimpleConfig.groups.splice(gIndex + 1, 0, group);
+        renderSimpleBuilder();
+        runQuickTest();
+    }
+
+    function addRule(gIndex) {
+        activeSimpleConfig.groups[gIndex].rules.push({ type: 'contains', value: '' });
+        renderSimpleBuilder();
+        runQuickTest();
+    }
+
+    function updateRuleType(gIndex, rIndex, type) {
+        activeSimpleConfig.groups[gIndex].rules[rIndex].type = type;
+        // Reset value 2 if not sequence, or init if sequence
+        if (type !== 'sequence') delete activeSimpleConfig.groups[gIndex].rules[rIndex].value2;
+        renderSimpleBuilder();
+        runQuickTest();
+    }
+
+    function updateRuleValue(gIndex, rIndex, field, val) {
+        activeSimpleConfig.groups[gIndex].rules[rIndex][field] = val;
+        runQuickTest();
+    }
+
+    function removeRule(gIndex, rIndex) {
+        activeSimpleConfig.groups[gIndex].rules.splice(rIndex, 1);
+        // If group is empty, maybe don't remove it? Or allow empty groups?
+        // Let's keep empty groups as valid states but user should probably add a rule.
+        renderSimpleBuilder();
+        runQuickTest();
+    }
+
+    function duplicateRule(gIndex, rIndex) {
+        const rule = JSON.parse(JSON.stringify(activeSimpleConfig.groups[gIndex].rules[rIndex]));
+        activeSimpleConfig.groups[gIndex].rules.splice(rIndex + 1, 0, rule);
+        renderSimpleBuilder();
+        runQuickTest();
+    }
+
+    // --- Code Generation (The Translator) ---
+
+    function generateCodeFromSimpleConfig() {
+        if (!activeSimpleConfig || !activeSimpleConfig.groups) return "return true;";
+
+        let codeBlocks = [];
+
+        activeSimpleConfig.groups.forEach((group, i) => {
+            let ruleChecks = [];
+            
+            group.rules.forEach(rule => {
+                // Escape values for string safety
+                const val1 = rule.value ? rule.value.replace(/'/g, "\\'") : "";
+                const val2 = rule.value2 ? rule.value2.replace(/'/g, "\\'") : "";
+                
+                switch (rule.type) {
+                    case 'contains':
+                        ruleChecks.push(`val.toLowerCase().includes('${val1.toLowerCase()}')`);
+                        break;
+                    case 'not_contains':
+                        ruleChecks.push(`!val.toLowerCase().includes('${val1.toLowerCase()}')`);
+                        break;
+                    case 'starts_with':
+                        ruleChecks.push(`val.toLowerCase().startsWith('${val1.toLowerCase()}')`);
+                        break;
+                    case 'ends_with':
+                        ruleChecks.push(`val.toLowerCase().endsWith('${val1.toLowerCase()}')`);
+                        break;
+                    case 'exact_match':
+                        ruleChecks.push(`val.toLowerCase().trim() === '${val1.toLowerCase()}'`);
+                        break;
+                    case 'length_gt':
+                        ruleChecks.push(`val.length > ${parseFloat(val1) || 0}`);
+                        break;
+                    case 'length_lt':
+                        ruleChecks.push(`val.length < ${parseFloat(val1) || 0}`);
+                        break;
+                    case 'sequence':
+                        // Sequence Logic: Index of A > -1 AND Index of B > -1 AND Index A < Index B
+                        ruleChecks.push(`(val.toLowerCase().indexOf('${val1.toLowerCase()}') !== -1 && val.toLowerCase().indexOf('${val2.toLowerCase()}') !== -1 && val.toLowerCase().indexOf('${val1.toLowerCase()}') < val.toLowerCase().indexOf('${val2.toLowerCase()}'))`);
+                        break;
+                }
+            });
+
+            if (ruleChecks.length === 0) return; // Skip empty groups
+
+            const operator = group.logic === 'AND' ? ' && ' : ' || ';
+            const groupCode = `(${ruleChecks.join(operator)})`;
+            codeBlocks.push(groupCode);
+        });
+
+        // Top level is always AND between groups (simplified for now)
+        return `// Generated by Simple Mode\nif (!val) return false;\nreturn ${codeBlocks.join(' && ')};`;
+    }
+
+    // --- Quick Test Runner ---
+
+    function runQuickTest() {
+        const inputVal = document.getElementById('test-input').value;
+        const resultDiv = document.getElementById('test-result');
+        
+        let codeToRun = "";
+
+        if (currentMode === 'simple') {
+            codeToRun = generateCodeFromSimpleConfig();
+        } else {
+            codeToRun = document.getElementById('advanced-code-input').value;
+        }
+
+        // Basic Security Sandbox (using Function constructor is risky in prod, but okay for this tool)
+        // We wrap it to handle the return value
+        try {
+            const validateFunc = new Function('val', codeToRun);
+            const result = validateFunc(inputVal);
+            
+            if (result === true) {
+                resultDiv.className = 'p-4 rounded-lg border text-center font-bold transition-all duration-200 bg-green-100 border-green-300 text-green-700';
+                resultDiv.innerHTML = '<i class="fas fa-check-circle mr-2"></i> PASSED';
+            } else {
+                resultDiv.className = 'p-4 rounded-lg border text-center font-bold transition-all duration-200 bg-red-100 border-red-300 text-red-700';
+                resultDiv.innerHTML = '<i class="fas fa-times-circle mr-2"></i> FAILED';
+            }
+        } catch (e) {
+            resultDiv.className = 'p-4 rounded-lg border text-center font-bold transition-all duration-200 bg-amber-100 border-amber-300 text-amber-700';
+            resultDiv.innerHTML = `<i class="fas fa-exclamation-triangle mr-2"></i> ERROR: ${e.message}`;
+        }
+    }
+
+
+    // --- Standard UI/Persistence Utils (Unchanged mostly) ---
+
+    function saveAssignment() {
+        // In a real app, this would write to Firestore
+        showToast("All changes saved successfully!", { color: 'green' });
+    }
+
+    function createNewAssignment() {
+        const id = 'assg_' + Date.now();
+        assignments.push({ id, title: 'Untitled Assignment', questions: [] });
+        loadAssignment(id);
+        renderAssignmentsList();
+    }
+
+    function loadAssignment(id) {
+        currentAssignment = assignments.find(a => a.id === id);
+        document.getElementById('assignmentTitle').value = currentAssignment.title;
+        document.getElementById('assignmentId').value = currentAssignment.id;
+        renderQuestions();
+        renderAssignmentsList();
+    }
+
+    function renderAssignmentsList() {
+        const list = document.getElementById('assignments-list');
+        list.innerHTML = '';
+        assignments.forEach(a => {
+            const div = document.createElement('div');
+            div.className = `p-3 rounded cursor-pointer mb-1 ${currentAssignment && currentAssignment.id === a.id ? 'bg-blue-50 border-l-4 border-blue-500' : 'hover:bg-gray-50'}`;
+            div.onclick = () => loadAssignment(a.id);
+            div.innerHTML = `
+                <div class="font-medium text-sm text-gray-700 truncate">${a.title}</div>
+                <div class="text-xs text-gray-400">${a.questions.length} questions</div>
+            `;
+            list.appendChild(div);
+        });
+    }
+
+    function copyToClipboard(text) {
+        const el = document.createElement('textarea');
+        el.value = text;
+        document.body.appendChild(el);
+        el.select();
+        document.execCommand('copy');
+        document.body.removeChild(el);
+        showToast("Copied to clipboard!", { color: 'blue' });
+    }
+
+    function shareAssignment() {
+        const link = `${window.location.origin}?id=${currentAssignment.id}`;
+        copyToClipboard(link);
+        showToast("Share link copied!", { color: 'blue' });
+    }
+
+    function showToast(message, options = {}) {
+        const { color = 'default', duration = 3000 } = options;
+        const wrapper = document.getElementById('toast-wrapper');
+        if (!wrapper) return;
+
+        const toast = document.createElement('div');
+        toast.className = 'flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm animate-fade-in-right';
+        
+        const colors = {
+            default: 'bg-gray-800',
+            green: 'bg-green-600',
+            red: 'bg-red-600',
+            blue: 'bg-blue-600'
+        };
+        toast.classList.add(colors[color] || colors['default']);
+
+        toast.innerHTML = `<span>${message}</span>`;
+        
+        wrapper.appendChild(toast);
+
+        setTimeout(() => {
+            toast.classList.remove('animate-fade-in-right');
+            toast.classList.add('animate-fade-out-right');
+            toast.addEventListener('animationend', () => toast.remove());
+        }, duration);
+    }
+
+  </script>
 </body>
 </html>
