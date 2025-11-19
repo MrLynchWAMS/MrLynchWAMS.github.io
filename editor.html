@@ -129,20 +129,27 @@
         </div>
 
         <div class="mt-2 pt-2 border-t border-gray-700 space-y-2">
-          <label class="block text-xs font-medium text-gray-400">Quick Test</label>
-          <div class="flex items-center space-x-2">
-            <input type="text" class="quick-test-input w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="Enter a sample answer...">
-            <button class="quick-test-btn bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1 px-3 rounded-md text-sm">Run</button>
-            <span class="quick-test-result text-sm font-semibold text-gray-300"></span>
-          </div>
+          <label class="block text-xs font-medium text-gray-400">Optional: Toast notification when this group matches is set per-group</label>
         </div>
-        </div>
+      </div>
+
       <div class="advanced-mode-ui hidden">
         <textarea class="checker-textarea w-full h-64 p-2 bg-gray-700 rounded" placeholder="// Write your checker function here"></textarea>
         <div class="flex justify-end mt-2">
           <button class="delete-advanced-btn bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-3 rounded-md text-sm">Delete Advanced Code</button>
         </div>
       </div>
+
+      <!-- Quick Test area moved out so it's available in BOTH modes -->
+      <div class="universal-quick-test mt-2 pt-2 border-t border-gray-700 space-y-2">
+        <label class="block text-xs font-medium text-gray-400">Quick Test</label>
+        <div class="flex items-center space-x-2">
+          <input type="text" class="quick-test-input w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="Enter a sample answer...">
+          <button class="quick-test-btn bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1 px-3 rounded-md text-sm">Run</button>
+          <span class="quick-test-result text-sm font-semibold text-gray-300"></span>
+        </div>
+      </div>
+
       <div class="simple-disabled-notice hidden">
         <b>Advanced code exists.</b> Delete advanced code to use Simple Mode.
       </div>
@@ -258,7 +265,7 @@ function renderDeadlineUI() {
   const hardcodedDefaults = { '1': '08:01', '2': '08:50', '5': '11:17', '7': '12:55', '8': '13:44' };
   allClassNames.forEach(className => {
     const value = assignmentStartTimes?.[className] || defaultStartTimes?.[className] || hardcodedDefaults[className] || '00:00';
-    container.innerHTML += `<div><label for="start-time-${className}" class="block text-sm font-semibold">${className}</label><input type="time" id="start-time-${className}" value="${value}" class="p-2 bg-gray-700 border border-gray-600 rounded w-24"></div>`;
+    container.innerHTML += `<div><label for="start-time-${className}" class="block text-sm font-semibold">${className}</label><input type="time" id="start-time-${className}" value="${value}" class="p-2 bg-gray-700 border border-gray-600 rounded"></div>`;
   });
 }
 
@@ -282,17 +289,17 @@ function renderEditor() {
       <div class="mt-4 border-t border-gray-700 pt-4">
         <h4 class="font-semibold mb-2">Deadline & Late Policy</h4>
         <div class="grid grid-cols-3 gap-2 text-sm">
-          <div><label>Deadline (mins)</label><input type="number" id="deadline-minutes-${index}" value="${slidePolicy.deadlineMinutes || 0}" class="w-full mt-1 p-2 bg-gray-700 rounded border-gray-600"></div>
+          <div><label>Deadline (mins)</label><input type="number" id="deadline-minutes-${index}" value="${slidePolicy.deadlineMinutes || 0}" class="w-full mt-1 p-2 bg-gray-700 rounded border border-gray-600"></div>
           <div>
   <label>Penalty Type</label>
-  <select id="penalty-type-${index}" class="w-full mt-1 p-2 bg-gray-700 rounded border-gray-600">
+  <select id="penalty-type-${index}" class="w-full mt-1 p-2 bg-gray-700 rounded border border-gray-600">
     <option value="none" ${!slidePolicy.penaltyType || slidePolicy.penaltyType === 'none' ? 'selected' : ''}>No penalty</option>
     <option value="deduction" ${slidePolicy.penaltyType === 'deduction' || slidePolicy.penaltyType === 'percent' || slidePolicy.penaltyType === 'percentage' ? 'selected' : ''}>Percent deduction</option>
     <option value="incremental" ${slidePolicy.penaltyType === 'incremental' || slidePolicy.penaltyType === 'points' || slidePolicy.penaltyType === 'per_minute' ? 'selected' : ''}>Points per minute</option>
     <option value="zero" ${slidePolicy.penaltyType === 'zero' ? 'selected' : ''}>Zero if late</option>
   </select>
 </div>
-          <div><label>Penalty Value</label><input type="number" id="penalty-value-${index}" value="${slidePolicy.penaltyValue || 0}" class="w-full mt-1 p-2 bg-gray-700 rounded border-gray-600"></div>
+          <div><label>Penalty Value</label><input type="number" id="penalty-value-${index}" value="${slidePolicy.penaltyValue || 0}" class="w-full mt-1 p-2 bg-gray-700 rounded border border-gray-600"></div>
         </div>
       </div>
     `;
@@ -408,14 +415,13 @@ function CheckerWidget(container, initialCode = "") {
     updateCodeFromSimple();
   };
 
-  // --- NEW Quick Test Button Listener ---
+  // --- Quick Test Button Listener (works for both modes now) ---
   quickTestBtn.onclick = () => {
-    const codeToTest = generateCodeFromUI(container);
+    const codeToTest = container.getCode();
     const testAnswer = quickTestInput.value;
     quickTestResult.textContent = ''; // Clear previous result
     try {
-      // We need access to the global showToast
-      const checkerFunc = new Function('studentAnswer', 'showToast', codeToTest + '; return checkAnswer(studentAnswer);');
+      const checkerFunc = new Function('studentAnswer', 'showToast', codeToTest + '\n; return typeof checkAnswer === "function" ? checkAnswer(studentAnswer) : null;');
       const resultScore = checkerFunc(testAnswer, window.showToast); // Pass the global showToast
       quickTestResult.textContent = `Result: ${resultScore}`;
       quickTestResult.style.color = '#d1d5db'; // text-gray-300
@@ -549,7 +555,34 @@ function generateCodeFromUI(container) {
 
       if (type === 'text') {
         const keywords = val.split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
-        if (keywords.length > 1 && (op === 'contains' || op === 'not_contains')) {
+        // Ordered (check keywords appear in the answer in the same order)
+        if (op === 'ordered') {
+          if (keywords.length === 0) return;
+          if (keywords.length === 1) {
+            // single keyword -> same as contains
+            groupConditions.push(`answerStr.includes("${keywords[0].replace(/"/g, '\\"')}")`);
+          } else {
+            // create iterative indexOf-based check to ensure order
+            const kwsArrayLiteral = JSON.stringify(keywords);
+            code += `\n    // Ordered check for keywords ${kwsArrayLiteral}\n`;
+            code += `    (function(){\n`;
+            code += `        const _kws = ${kwsArrayLiteral};\n`;
+            code += `        let _pos = 0; let _ok = true;\n`;
+            code += `        for (let _i = 0; _i < _kws.length; _i++){\n`;
+            code += `            const _p = answerStr.indexOf(_kws[_i], _pos);\n`;
+            code += `            if (_p === -1) { _ok = false; break; }\n`;
+            code += `            _pos = _p + _kws[_i].length;\n`;
+            code += `        }\n`;
+            code += `        if (_ok) {\n`;
+            code += `            score += ${points};\n`;
+            if (toastMessage) {
+              code += `            if (typeof showToast === "function") { try { showToast(${JSON.stringify(toastMessage)}, { color: ${JSON.stringify(toastColor)} }); } catch (_) {} }\n`;
+            }
+            code += `            return; }\n`;
+            code += `    })();\n`;
+            return; // already applied points inline, skip adding later
+          }
+        } else if (keywords.length > 1 && (op === 'contains' || op === 'not_contains')) {
           const textBool = cond.querySelector('.text-bool').value;
           const keywordConditions = keywords.map(k => `${op === 'not_contains' ? '!' : ''}answerStr.includes("${k.replace(/"/g, '\\"')}")`);
           groupConditions.push(`(${keywordConditions.join(` ${textBool} `)})`);
@@ -679,6 +712,7 @@ function createConditionElement() {
       <option value="contains">contains</option>
       <option value="not_contains">does not contain</option>
       <option value="equals_str">is exactly</option>
+      <option value="ordered">contains in order</option>
     </select>
     <div class="cond-value-wrapper flex-grow">
       <input type="text" class="cond-value w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="keyword(s), comma-separated">
@@ -725,7 +759,7 @@ function createConditionElement() {
       });
 
     } else { // type === 'text'
-      operatorSelect.innerHTML = `<option value="contains">contains</option><option value="not_contains">does not contain</option><option value="equals_str">is exactly</option>`;
+      operatorSelect.innerHTML = `<option value="contains">contains</option><option value="not_contains">does not contain</option><option value="equals_str">is exactly</option><option value="ordered">contains in order</option>`;
       valueWrapper.innerHTML = `
         <input type="text" class="cond-value w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="keyword(s), comma-separated">
         <div class="text-options hidden text-xs mt-1">
@@ -747,6 +781,7 @@ function createConditionElement() {
     const textOptions = div.querySelector('.text-options');
     const valueInput = div.querySelector('.cond-value');
     if (type === 'text' && textOptions && valueInput) {
+      // show text-options only for contains / not_contains when there are multiple keywords
       if ((operator === 'contains' || operator === 'not_contains') && valueInput.value.includes(',')) {
         textOptions.classList.remove('hidden');
       } else {
