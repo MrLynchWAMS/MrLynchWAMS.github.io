@@ -901,14 +901,18 @@ function generateCodeFromUI(container) {
     code += `    }\n`;
   }
 
+  // Track whether we've written the first if statement (for exclusive scoring mode)
   let wroteIf = false;
   
+  // Each Rule Group represents a single scoring rule with combined conditions.
+  // Points are awarded once per group if the combined condition evaluates to true.
   ruleGroups.forEach((group) => {
     const points = Number(group.querySelector('.rule-points').value) || 0;
     const groupConnector = group.querySelector('.group-connector').value;
     const toastMessage = group.querySelector('.rule-toast-message')?.value.trim() || '';
     const toastColor = group.querySelector('.rule-toast-color')?.value || 'default';
     
+    // Collect condition expressions for this group (to be combined with && or ||)
     let groupConditions = [];
     
     group.querySelectorAll('.condition-row').forEach(cond => {
@@ -926,24 +930,10 @@ function generateCodeFromUI(container) {
           if (keywords.length === 1) {
             groupConditions.push(`answerStr.includes("${keywords[0].replace(/"/g, '\\"')}")`);
           } else {
+            // Generate a pure boolean expression (IIFE that returns true/false) for ordered keyword check
             const kwsArrayLiteral = JSON.stringify(keywords);
-            code += `\n    // Ordered check for keywords ${kwsArrayLiteral}\n`;
-            code += `    (function(){\n`;
-            code += `        const _kws = ${kwsArrayLiteral};\n`;
-            code += `        let _pos = 0; let _ok = true;\n`;
-            code += `        for (let _i = 0; _i < _kws.length; _i++){\n`;
-            code += `            const _p = answerStr.indexOf(_kws[_i], _pos);\n`;
-            code += `            if (_p === -1) { _ok = false; break; }\n`;
-            code += `            _pos = _p + _kws[_i].length;\n`;
-            code += `        }\n`;
-            code += `        if (_ok) {\n`;
-            code += `            score += ${points};\n`;
-            if (toastMessage) {
-              code += `            if (typeof showToast === "function") { try { showToast(${JSON.stringify(toastMessage)}, { color: ${JSON.stringify(toastColor)} }); } catch (_) {} }\n`;
-            }
-            code += `            return; }\n`;
-            code += `    })();\n`;
-            return;
+            const orderedCheckExpr = `(function(){ const _kws = ${kwsArrayLiteral}; let _pos = 0; for (let _i = 0; _i < _kws.length; _i++){ const _p = answerStr.indexOf(_kws[_i], _pos); if (_p === -1) return false; _pos = _p + _kws[_i].length; } return true; })()`;
+            groupConditions.push(orderedCheckExpr);
           }
         } else if (keywords.length > 1 && (op === 'contains' || op === 'not_contains')) {
           const textBool = cond.querySelector('.text-bool').value;
@@ -996,8 +986,12 @@ function generateCodeFromUI(container) {
       }
     });
 
+    // Emit the group-level scoring logic if there are any conditions
+    // Each group awards points exactly once if its combined condition is true
     if (groupConditions.length > 0) {
       let ifStatement = 'if';
+      // In exclusive scoring mode, only the first matching group awards points (using if/else if chain)
+      // In non-exclusive mode, all matching groups award points (using independent if statements)
       if (isExclusive) {
         ifStatement = wroteIf ? 'else if' : 'if';
         wroteIf = true;
