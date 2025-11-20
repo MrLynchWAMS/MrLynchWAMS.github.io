@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Comprehensive Code Generator Tests</title>
+  <style>
+    body { font-family: monospace; padding: 20px; background: #1a1a1a; color: #fff; }
+    .test-case { background: #333; padding: 15px; margin: 10px 0; border-radius: 5px; }
+    .test-result { background: #2a2a2a; padding: 10px; margin-top: 10px; border-radius: 5px; white-space: pre-wrap; font-size: 11px; max-height: 400px; overflow-y: auto; }
+    .pass { color: #4f4; }
+    .fail { color: #f44; }
+    h2 { color: #4af; margin-bottom: 5px; }
+    button { background: #4af; color: #000; padding: 8px 16px; border: none; border-radius: 5px; cursor: pointer; margin: 5px 5px 5px 0; }
+    button:hover { background: #6cf; }
+    .summary { background: #444; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+  </style>
+</head>
+<body>
+  <h1>Comprehensive Code Generator Tests</h1>
+  <div class="summary">
+    <button onclick="runAllTests()">Run All Tests</button>
+    <div id="summary"></div>
+  </div>
+  
+  <div class="test-case">
+    <h2>Test 1: Contains + Ordered + Not Contains with ALL logic</h2>
+    <p>3 conditions in one group, group connector = &&</p>
+    <button onclick="runTest1()">Run Test 1</button>
+    <div id="result1" class="test-result"></div>
+  </div>
+  
+  <div class="test-case">
+    <h2>Test 2: Contains + Ordered + Not Contains with ANY logic</h2>
+    <p>3 conditions in one group, group connector = ||</p>
+    <button onclick="runTest2()">Run Test 2</button>
+    <div id="result2" class="test-result"></div>
+  </div>
+  
+  <div class="test-case">
+    <h2>Test 3: Multiple rule groups (exclusive scoring)</h2>
+    <p>2 groups with 2 conditions each, exclusive=true</p>
+    <button onclick="runTest3()">Run Test 3</button>
+    <div id="result3" class="test-result"></div>
+  </div>
+  
+  <div class="test-case">
+    <h2>Test 4: Single ordered condition with one keyword</h2>
+    <p>Ordered with single keyword should be treated like simple contains</p>
+    <button onclick="runTest4()">Run Test 4</button>
+    <div id="result4" class="test-result"></div>
+  </div>
+  
+  <div class="test-case">
+    <h2>Test 5: Multiple rule groups (non-exclusive scoring)</h2>
+    <p>2 groups with 2 conditions each, exclusive=false</p>
+    <button onclick="runTest5()">Run Test 5</button>
+    <div id="result5" class="test-result"></div>
+  </div>
+  
+  <div id="test-container" style="display: none;">
+    <input type="checkbox" class="exclusive-scoring-toggle">
+    <input type="number" class="numeric-tolerance-input" value="0">
+  </div>
+
+  <script>
+function generateCodeFromUI(container) {
+  const isExclusive = container.querySelector('.exclusive-scoring-toggle').checked;
+  const tolerance = parseFloat(container.querySelector('.numeric-tolerance-input').value) || 0;
+
+  const ruleGroups = container.querySelectorAll('.rule-group');
+  let code = `function checkAnswer(studentAnswer) {\n`;
+  code += `    let score = 0;\n`;
+  let totalMaxScore = 0;
+  ruleGroups.forEach(group => { totalMaxScore += Number(group.querySelector('.rule-points').value) || 0; });
+  code += `    const maxScore = ${totalMaxScore || 100};\n`;
+  
+  code += `    const answerStr = String(studentAnswer).toLowerCase();\n`;
+  code += `    const numMatches = answerStr.match(/-?(?:\\d{1,3}(?:,\\d{3})+|\\d+)(?:\\.\\d+)?/g) || [];\n`;
+  code += `    const answerNums = numMatches.map(s => parseFloat(s.replace(/,/g, '')));\n`;
+  code += `    const answerNum = answerNums.length ? answerNums[0] : NaN; // Kept for backward compatibility\n`;
+
+  if (tolerance > 0) {
+    code += `\n    function isNear(a, b, t) {\n`;
+    code += `        if (isNaN(a) || isNaN(b)) return false;\n`;
+    code += `        return Math.abs(a - b) <= t;\n`;
+    code += `    }\n`;
+  }
+
+  // Track whether we've written the first if statement (for exclusive scoring mode)
+  let wroteIf = false;
+  
+  // Each Rule Group represents a single scoring rule with combined conditions.
+  // Points are awarded once per group if the combined condition evaluates to true.
+  // IMPORTANT: All conditions within a group are collected into groupConditions array
+  // and then combined with the group's connector (&&  for ALL, || for ANY) into a single if statement.
+  ruleGroups.forEach((group) => {
+    const points = Number(group.querySelector('.rule-points').value) || 0;
+    const groupConnector = group.querySelector('.group-connector').value;
+    const toastMessage = group.querySelector('.rule-toast-message')?.value.trim() || '';
+    const toastColor = group.querySelector('.rule-toast-color')?.value || 'default';
+    
+    // Collect condition expressions for this group (to be combined with && or ||)
+    // Each condition must contribute a pure boolean expression to this array.
+    // No condition should emit its own if block or directly manipulate score.
+    let groupConditions = [];
+    
+    group.querySelectorAll('.condition-row').forEach(cond => {
+      const type = cond.querySelector('.cond-type').value;
+      const op = cond.querySelector('.cond-operator').value;
+      const valInput = cond.querySelector('.cond-value');
+      if (!valInput || valInput.value.trim() === "") return;
+      
+      const val = valInput.value.trim();
+
+      if (type === 'text') {
+        const keywords = val.split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
+        
+        // Handle "contains in order" operator
+        // This checks if keywords appear in the answer in the specified sequence.
+        // For a single keyword, treat it as a simple contains check.
+        // For multiple keywords, generate a pure boolean IIFE that returns true/false.
+        if (op === 'ordered') {
+          if (keywords.length === 0) return;
+          if (keywords.length === 1) {
+            // Single keyword: use simple includes (no need for IIFE)
+            groupConditions.push(`answerStr.includes("${keywords[0].replace(/"/g, '\\"')}")`);
+          } else {
+            // Multiple keywords: generate a pure boolean expression (IIFE that returns true/false)
+            // This IIFE does NOT award points or return from checkAnswer - it only returns true/false
+            const kwsArrayLiteral = JSON.stringify(keywords);
+            const orderedCheckExpr = `(function(){ const _kws = ${kwsArrayLiteral}; let _pos = 0; for (let _i = 0; _i < _kws.length; _i++){ const _p = answerStr.indexOf(_kws[_i], _pos); if (_p === -1) return false; _pos = _p + _kws[_i].length; } return true; })()`;
+            groupConditions.push(orderedCheckExpr);
+          }
+        } else if (keywords.length > 1 && (op === 'contains' || op === 'not_contains')) {
+          // Multiple keywords with contains/not_contains: use per-condition textBool (&&/||)
+          // to combine the keywords within this single condition
+          // Note: textBool is for combining keywords WITHIN a condition,
+          // while groupConnector is for combining conditions WITHIN a group
+          const textBool = cond.querySelector('.text-bool').value;
+          const keywordConditions = keywords.map(k => `${op === 'not_contains' ? '!' : ''}answerStr.includes("${k.replace(/"/g, '\\"')}")`);
+          groupConditions.push(`(${keywordConditions.join(` ${textBool} `)})`);
+        } else if (keywords.length > 0) {
+          // Single keyword with contains, not_contains, or equals_str
+          const keyword = keywords[0];
+          if (op === 'contains') groupConditions.push(`answerStr.includes("${keyword.replace(/"/g, '\\"')}")`);
+          else if (op === 'not_contains') groupConditions.push(`!answerStr.includes("${keyword.replace(/"/g, '\\"')}")`);
+          else if (op === 'equals_str') groupConditions.push(`answerStr === "${keyword.replace(/"/g, '\\"')}"`);
+        }
+      } else if (type === 'number') {
+        const numericVal = parseFloat(val);
+        if (isNaN(numericVal)) return;
+
+        const pickMode = cond.querySelector('.number-pick-mode').value;
+        const nthIndex = parseInt(cond.querySelector('.number-index').value, 10);
+
+        const createComparison = (numVar) => {
+          if (op === '==') {
+            return tolerance > 0 ? `isNear(${numVar}, ${numericVal}, ${tolerance})` : `(${numVar} == ${numericVal})`;
+          } else if (op === '!=') {
+            return tolerance > 0 ? `!isNear(${numVar}, ${numericVal}, ${tolerance})` : `(${numVar} != ${numericVal})`;
+          } else if (op === '>') {
+            return `(${numVar} > ${numericVal})`;
+          } else if (op === '<') {
+            return `(${numVar} < ${numericVal})`;
+          }
+          return 'false';
+        };
+
+        let conditionString = 'false';
+        switch (pickMode) {
+          case 'first':
+            conditionString = `(answerNums.length > 0 && ${createComparison('answerNums[0]')})`;
+            break;
+          case 'last':
+            conditionString = `(answerNums.length > 0 && ${createComparison('answerNums[answerNums.length - 1]')})`;
+            break;
+          case 'nth':
+            if (nthIndex > 0) {
+              conditionString = `(answerNums.length >= ${nthIndex} && ${createComparison(`answerNums[${nthIndex - 1}]`)})`;
+            }
+            break;
+          case 'any':
+            conditionString = `(answerNums.some(num => ${createComparison('num')}))`;
+            break;
+        }
+        groupConditions.push(conditionString);
+      }
+    });
+
+    // Emit the group-level scoring logic if there are any conditions.
+    // Each group awards points exactly once if its combined condition is true.
+    // All conditions in groupConditions are joined with the group's connector (&&  or ||).
+    if (groupConditions.length > 0) {
+      let ifStatement = 'if';
+      // In exclusive scoring mode, only the first matching group awards points (using if/else if chain)
+      // In non-exclusive mode, all matching groups award points (using independent if statements)
+      if (isExclusive) {
+        ifStatement = wroteIf ? 'else if' : 'if';
+        wroteIf = true;
+      }
+      
+      // Join all conditions with the group connector to form a single boolean expression
+      code += `    ${ifStatement} (${groupConditions.join(` ${groupConnector} `)}) {\n`;
+      code += `        score += ${points};\n`;
+      if (toastMessage) {
+        code += `        if (typeof showToast === "function") {\n`;
+        code += `            try { showToast(${JSON.stringify(toastMessage)}, { color: ${JSON.stringify(toastColor)} }); } catch (_) {}\n`;
+        code += `        }\n`;
+      }
+      code += `    }\n`;
+    }
+  });
+  
+  code += `    return score;\n`;
+  code += `}`;
+  return code;
+}
+
+function createContainer() {
+  const container = document.getElementById('test-container');
+  container.querySelectorAll('.rule-group').forEach(g => g.remove());
+  return container;
+}
+
+function createRuleGroup(points, connector) {
+  const ruleGroup = document.createElement('div');
+  ruleGroup.className = 'rule-group';
+  ruleGroup.innerHTML = `
+    <input type="number" class="rule-points" value="${points}">
+    <select class="group-connector"><option value="${connector}" selected>${connector}</option></select>
+    <input class="rule-toast-message" value="">
+    <select class="rule-toast-color"><option value="default">default</option></select>
+  `;
+  return ruleGroup;
+}
+
+function addCondition(group, type, op, value) {
+  const cond = document.createElement('div');
+  cond.className = 'condition-row';
+  cond.innerHTML = `
+    <select class="cond-type"><option value="${type}" selected>${type}</option></select>
+    <select class="cond-operator"><option value="${op}" selected>${op}</option></select>
+    <input class="cond-value" value="${value}">
+    <select class="text-bool"><option value="||">OR</option></select>
+  `;
+  group.appendChild(cond);
+}
+
+function analyzeCode(code, expectedIfCount, testName) {
+  const ifCount = (code.match(/^\s*if\s*\(/gm) || []).length;
+  const elseIfCount = (code.match(/^\s*else if\s*\(/gm) || []).length;
+  const totalConditionals = ifCount + elseIfCount;
+  
+  let result = `Generated Code:\n${code}\n\n`;
+  result += `=== ANALYSIS ===\n`;
+  result += `Total if blocks: ${ifCount}\n`;
+  result += `Total else-if blocks: ${elseIfCount}\n`;
+  result += `Total conditionals: ${totalConditionals}\n`;
+  
+  return { result, totalConditionals, ifCount, elseIfCount };
+}
+
+function runTest1() {
+  const container = createContainer();
+  container.querySelector('.exclusive-scoring-toggle').checked = true;
+  
+  const group = createRuleGroup(50, '&&');
+  addCondition(group, 'text', 'contains', 'condens');
+  addCondition(group, 'text', 'ordered', 'gas, liquid');
+  addCondition(group, 'text', 'not_contains', 'solid');
+  container.appendChild(group);
+  
+  const code = generateCodeFromUI(container);
+  const analysis = analyzeCode(code, 1, 'Test 1');
+  
+  const hasCondens = code.includes('answerStr.includes("condens")');
+  const hasOrdered = code.includes('const _kws = ["gas","liquid"]');
+  const hasSolid = code.includes('!answerStr.includes("solid")');
+  const hasAndJoin = code.match(/answerStr\.includes\("condens"\)\s*&&/);
+  
+  let verdict = '';
+  if (analysis.totalConditionals === 1 && hasCondens && hasOrdered && hasSolid && hasAndJoin) {
+    verdict = '✓ PASSED: All conditions combined in single if block with &&';
+  } else {
+    verdict = '✗ FAILED: Expected single if block with all conditions joined by &&';
+  }
+  
+  document.getElementById('result1').innerHTML = `<span class="${verdict.includes('PASSED') ? 'pass' : 'fail'}">${verdict}</span>\n\n${analysis.result}`;
+  return verdict.includes('PASSED');
+}
+
+function runTest2() {
+  const container = createContainer();
+  container.querySelector('.exclusive-scoring-toggle').checked = true;
+  
+  const group = createRuleGroup(50, '||');
+  addCondition(group, 'text', 'contains', 'condens');
+  addCondition(group, 'text', 'ordered', 'gas, liquid');
+  addCondition(group, 'text', 'not_contains', 'solid');
+  container.appendChild(group);
+  
+  const code = generateCodeFromUI(container);
+  const analysis = analyzeCode(code, 1, 'Test 2');
+  
+  const hasOrJoin = code.match(/answerStr\.includes\("condens"\)\s*\|\|/);
+  
+  let verdict = '';
+  if (analysis.totalConditionals === 1 && hasOrJoin) {
+    verdict = '✓ PASSED: All conditions combined in single if block with ||';
+  } else {
+    verdict = '✗ FAILED: Expected single if block with all conditions joined by ||';
+  }
+  
+  document.getElementById('result2').innerHTML = `<span class="${verdict.includes('PASSED') ? 'pass' : 'fail'}">${verdict}</span>\n\n${analysis.result}`;
+  return verdict.includes('PASSED');
+}
+
+function runTest3() {
+  const container = createContainer();
+  container.querySelector('.exclusive-scoring-toggle').checked = true;
+  
+  const group1 = createRuleGroup(50, '&&');
+  addCondition(group1, 'text', 'contains', 'water');
+  addCondition(group1, 'text', 'contains', 'ice');
+  container.appendChild(group1);
+  
+  const group2 = createRuleGroup(30, '&&');
+  addCondition(group2, 'text', 'contains', 'steam');
+  addCondition(group2, 'text', 'contains', 'vapor');
+  container.appendChild(group2);
+  
+  const code = generateCodeFromUI(container);
+  const analysis = analyzeCode(code, 2, 'Test 3');
+  
+  const hasElseIf = code.includes('else if');
+  
+  let verdict = '';
+  if (analysis.totalConditionals === 2 && hasElseIf) {
+    verdict = '✓ PASSED: Two groups with if/else-if chain (exclusive)';
+  } else {
+    verdict = '✗ FAILED: Expected if/else-if chain for exclusive scoring';
+  }
+  
+  document.getElementById('result3').innerHTML = `<span class="${verdict.includes('PASSED') ? 'pass' : 'fail'}">${verdict}</span>\n\n${analysis.result}`;
+  return verdict.includes('PASSED');
+}
+
+function runTest4() {
+  const container = createContainer();
+  container.querySelector('.exclusive-scoring-toggle').checked = true;
+  
+  const group = createRuleGroup(100, '&&');
+  addCondition(group, 'text', 'ordered', 'water');
+  container.appendChild(group);
+  
+  const code = generateCodeFromUI(container);
+  const analysis = analyzeCode(code, 1, 'Test 4');
+  
+  const hasSimpleIncludes = code.includes('answerStr.includes("water")');
+  const hasNoIIFE = !code.includes('function()');
+  
+  let verdict = '';
+  if (analysis.totalConditionals === 1 && hasSimpleIncludes && hasNoIIFE) {
+    verdict = '✓ PASSED: Single keyword ordered treated as simple includes';
+  } else {
+    verdict = '✗ FAILED: Single keyword ordered should use simple includes, not IIFE';
+  }
+  
+  document.getElementById('result4').innerHTML = `<span class="${verdict.includes('PASSED') ? 'pass' : 'fail'}">${verdict}</span>\n\n${analysis.result}`;
+  return verdict.includes('PASSED');
+}
+
+function runTest5() {
+  const container = createContainer();
+  container.querySelector('.exclusive-scoring-toggle').checked = false;
+  
+  const group1 = createRuleGroup(50, '&&');
+  addCondition(group1, 'text', 'contains', 'water');
+  addCondition(group1, 'text', 'contains', 'ice');
+  container.appendChild(group1);
+  
+  const group2 = createRuleGroup(30, '&&');
+  addCondition(group2, 'text', 'contains', 'steam');
+  addCondition(group2, 'text', 'contains', 'vapor');
+  container.appendChild(group2);
+  
+  const code = generateCodeFromUI(container);
+  const analysis = analyzeCode(code, 2, 'Test 5');
+  
+  const hasNoElseIf = !code.includes('else if');
+  
+  let verdict = '';
+  if (analysis.ifCount === 2 && hasNoElseIf) {
+    verdict = '✓ PASSED: Two independent if blocks (non-exclusive)';
+  } else {
+    verdict = '✗ FAILED: Expected two independent if blocks for non-exclusive scoring';
+  }
+  
+  document.getElementById('result5').innerHTML = `<span class="${verdict.includes('PASSED') ? 'pass' : 'fail'}">${verdict}</span>\n\n${analysis.result}`;
+  return verdict.includes('PASSED');
+}
+
+function runAllTests() {
+  const results = [
+    runTest1(),
+    runTest2(),
+    runTest3(),
+    runTest4(),
+    runTest5()
+  ];
+  
+  const passed = results.filter(r => r).length;
+  const total = results.length;
+  
+  const summaryDiv = document.getElementById('summary');
+  summaryDiv.innerHTML = `<h3>Summary: ${passed}/${total} tests passed</h3>`;
+  summaryDiv.className = passed === total ? 'pass' : 'fail';
+}
+  </script>
+</body>
+</html>

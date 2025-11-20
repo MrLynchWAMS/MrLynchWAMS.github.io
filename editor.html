@@ -906,6 +906,8 @@ function generateCodeFromUI(container) {
   
   // Each Rule Group represents a single scoring rule with combined conditions.
   // Points are awarded once per group if the combined condition evaluates to true.
+  // IMPORTANT: All conditions within a group are collected into groupConditions array
+  // and then combined with the group's connector (&&  for ALL, || for ANY) into a single if statement.
   ruleGroups.forEach((group) => {
     const points = Number(group.querySelector('.rule-points').value) || 0;
     const groupConnector = group.querySelector('.group-connector').value;
@@ -913,6 +915,8 @@ function generateCodeFromUI(container) {
     const toastColor = group.querySelector('.rule-toast-color')?.value || 'default';
     
     // Collect condition expressions for this group (to be combined with && or ||)
+    // Each condition must contribute a pure boolean expression to this array.
+    // No condition should emit its own if block or directly manipulate score.
     let groupConditions = [];
     
     group.querySelectorAll('.condition-row').forEach(cond => {
@@ -925,21 +929,33 @@ function generateCodeFromUI(container) {
 
       if (type === 'text') {
         const keywords = val.split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
+        
+        // Handle "contains in order" operator
+        // This checks if keywords appear in the answer in the specified sequence.
+        // For a single keyword, treat it as a simple contains check.
+        // For multiple keywords, generate a pure boolean IIFE that returns true/false.
         if (op === 'ordered') {
           if (keywords.length === 0) return;
           if (keywords.length === 1) {
+            // Single keyword: use simple includes (no need for IIFE)
             groupConditions.push(`answerStr.includes("${keywords[0].replace(/"/g, '\\"')}")`);
           } else {
-            // Generate a pure boolean expression (IIFE that returns true/false) for ordered keyword check
+            // Multiple keywords: generate a pure boolean expression (IIFE that returns true/false)
+            // This IIFE does NOT award points or return from checkAnswer - it only returns true/false
             const kwsArrayLiteral = JSON.stringify(keywords);
             const orderedCheckExpr = `(function(){ const _kws = ${kwsArrayLiteral}; let _pos = 0; for (let _i = 0; _i < _kws.length; _i++){ const _p = answerStr.indexOf(_kws[_i], _pos); if (_p === -1) return false; _pos = _p + _kws[_i].length; } return true; })()`;
             groupConditions.push(orderedCheckExpr);
           }
         } else if (keywords.length > 1 && (op === 'contains' || op === 'not_contains')) {
+          // Multiple keywords with contains/not_contains: use per-condition textBool (&&/||)
+          // to combine the keywords within this single condition
+          // Note: textBool is for combining keywords WITHIN a condition,
+          // while groupConnector is for combining conditions WITHIN a group
           const textBool = cond.querySelector('.text-bool').value;
           const keywordConditions = keywords.map(k => `${op === 'not_contains' ? '!' : ''}answerStr.includes("${k.replace(/"/g, '\\"')}")`);
           groupConditions.push(`(${keywordConditions.join(` ${textBool} `)})`);
         } else if (keywords.length > 0) {
+          // Single keyword with contains, not_contains, or equals_str
           const keyword = keywords[0];
           if (op === 'contains') groupConditions.push(`answerStr.includes("${keyword.replace(/"/g, '\\"')}")`);
           else if (op === 'not_contains') groupConditions.push(`!answerStr.includes("${keyword.replace(/"/g, '\\"')}")`);
@@ -986,8 +1002,9 @@ function generateCodeFromUI(container) {
       }
     });
 
-    // Emit the group-level scoring logic if there are any conditions
-    // Each group awards points exactly once if its combined condition is true
+    // Emit the group-level scoring logic if there are any conditions.
+    // Each group awards points exactly once if its combined condition is true.
+    // All conditions in groupConditions are joined with the group's connector (&&  or ||).
     if (groupConditions.length > 0) {
       let ifStatement = 'if';
       // In exclusive scoring mode, only the first matching group awards points (using if/else if chain)
@@ -997,6 +1014,7 @@ function generateCodeFromUI(container) {
         wroteIf = true;
       }
       
+      // Join all conditions with the group connector to form a single boolean expression
       code += `    ${ifStatement} (${groupConditions.join(` ${groupConnector} `)}) {\n`;
       code += `        score += ${points};\n`;
       if (toastMessage) {
