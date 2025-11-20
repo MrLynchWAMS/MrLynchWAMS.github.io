@@ -351,13 +351,12 @@ function CheckerWidget(container, initialCode = "") {
   const simpleDisabledNotice = container.querySelector('.simple-disabled-notice');
   const deleteAdvBtn = container.querySelector('.delete-advanced-btn');
 
-  // --- NEW UI Elements ---
+  // NEW UI Elements
   const exclusiveToggle = container.querySelector('.exclusive-scoring-toggle');
   const toleranceInput = container.querySelector('.numeric-tolerance-input');
   const quickTestInput = container.querySelector('.quick-test-input');
   const quickTestBtn = container.querySelector('.quick-test-btn');
   const quickTestResult = container.querySelector('.quick-test-result');
-  // --- END NEW UI Elements ---
 
   container.getCode = () => (mode === "simple" ? generateCodeFromUI(container) : advTextarea.value);
   container.getMode = () => mode;
@@ -392,11 +391,11 @@ function CheckerWidget(container, initialCode = "") {
     livePreview.textContent = generatedCode;
     advTextarea.value = generatedCode;
   };
+
   advBtn.onclick = () => {
     mode = "advanced";
     showAdvancedMode();
-    // Don't show notice when switching to Advanced - only when trying to go back to Simple
-    // Seed Advanced textarea with current Simple-generated code
+    // seed with current simple-generated code
     advTextarea.value = generateCodeFromUI(container);
   };
 
@@ -430,150 +429,179 @@ function CheckerWidget(container, initialCode = "") {
     );
   };
 
+  // Add Rule Group button (existing)
   container.querySelector('.add-rule-group-btn').onclick = () => {
-    ruleGroupsContainer.appendChild(createRuleGroupElement(ruleGroupsContainer.children.length + 1));
+    ruleGroupsContainer.appendChild(
+      createRuleGroupElement(ruleGroupsContainer.children.length + 1)
+    );
     updateCodeFromSimple();
   };
 
-  // --- Quick Test Button Listener (works for both modes now) ---
-/* Replace the existing quickTestBtn.onclick = (...) handler with the following code */
-quickTestBtn.onclick = () => {
-  const codeToTest = container.getCode();
-  const testAnswerRaw = quickTestInput.value;
-  quickTestResult.textContent = ''; // Clear previous result
+  // ======================
+  // NEW: EVENT DELEGATION FOR SIMPLE MODE UI
+  // ======================
+  ruleGroupsContainer.addEventListener('click', (e) => {
+    const target = e.target;
 
-  // Create an isolated iframe to evaluate the user's code
-  const frame = document.createElement('iframe');
-  frame.style.display = 'none';
-  frame.src = 'about:blank';
-  document.body.appendChild(frame);
-
-  try {
-    const win = frame.contentWindow;
-    // Snapshot of globals before evaluating user code
-    const before = new Set(Object.getOwnPropertyNames(win));
-
-    // Evaluate user code inside iframe, capturing syntax/runtime errors
-    try {
-      win.eval(codeToTest);
-    } catch (evalErr) {
-      quickTestResult.textContent = `Error evaluating code: ${evalErr.message}`;
-      quickTestResult.style.color = '#f87171';
-      document.body.removeChild(frame);
+    // Remove a whole rule group
+    if (target.classList.contains('delete-group-btn')) {
+      const group = target.closest('.rule-group');
+      if (group) {
+        group.remove();
+        // Renumber remaining groups' headings
+        Array.from(ruleGroupsContainer.querySelectorAll('.rule-group')).forEach((g, idx) => {
+          const title = g.querySelector('h4');
+          if (title) title.textContent = `Rule Group ${idx + 1}`;
+        });
+        updateCodeFromSimple();
+      }
       return;
     }
 
-    // Discover newly added globals (likely functions)
-    const afterProps = Object.getOwnPropertyNames(win);
-    const newProps = afterProps.filter(p => !before.has(p));
+    // Add a new condition row within a group
+    if (target.classList.contains('add-condition-btn')) {
+      const group = target.closest('.rule-group');
+      if (group) {
+        const conditionsContainer = group.querySelector('.conditions-container');
+        if (conditionsContainer) {
+          conditionsContainer.appendChild(createConditionElement());
+          updateCodeFromSimple();
+        }
+      }
+      return;
+    }
 
-    // Filter to functions
-    let funcNames = newProps.filter(name => {
-      try { return typeof win[name] === 'function'; } catch (e) { return false; }
-    });
+    // Delete a single condition row
+    if (target.classList.contains('delete-btn')) {
+      const row = target.closest('.condition-row');
+      if (row) {
+        row.remove();
+        updateCodeFromSimple();
+      }
+      return;
+    }
+  });
 
-    // Heuristic: if none found, scan global functions for likely candidates
-    if (funcNames.length === 0) {
-      const heuristics = ['checkAnswer','check','calc','validate','grade','score','match'];
-      const allNames = afterProps;
-      for (const name of allNames) {
-        try {
-          if (typeof win[name] === 'function') {
-            for (const h of heuristics) {
-              if (name.toLowerCase().startsWith(h.toLowerCase())) {
-                funcNames.push(name);
-                break;
+  // --- Quick Test Button Listener (already present in your file) ---
+  quickTestBtn.onclick = () => {
+    const codeToTest = container.getCode();
+    const testAnswerRaw = quickTestInput.value;
+    quickTestResult.textContent = ''; // Clear previous result
+
+    const frame = document.createElement('iframe');
+    frame.style.display = 'none';
+    frame.src = 'about:blank';
+    document.body.appendChild(frame);
+
+    try {
+      const win = frame.contentWindow;
+      const before = new Set(Object.getOwnPropertyNames(win));
+
+      try {
+        win.eval(codeToTest);
+      } catch (evalErr) {
+        quickTestResult.textContent = `Error evaluating code: ${evalErr.message}`;
+        quickTestResult.style.color = '#f87171';
+        document.body.removeChild(frame);
+        return;
+      }
+
+      const afterProps = Object.getOwnPropertyNames(win);
+      const newProps = afterProps.filter(p => !before.has(p));
+
+      let funcNames = newProps.filter(name => {
+        try { return typeof win[name] === 'function'; } catch (e) { return false; }
+      });
+
+      if (funcNames.length === 0) {
+        const heuristics = ['checkAnswer','check','calc','validate','grade','score','match'];
+        const allNames = afterProps;
+        for (const name of allNames) {
+          try {
+            if (typeof win[name] === 'function') {
+              for (const h of heuristics) {
+                if (name.toLowerCase().startsWith(h.toLowerCase())) {
+                  funcNames.push(name);
+                  break;
+                }
               }
             }
-          }
-        } catch (e) {}
+          } catch (e) {}
+        }
       }
-    }
 
-    // Final fallback: any function except known built-ins
-    if (funcNames.length === 0) {
-      const blacklist = new Set(['Object','Math','Date','String','Number','Array','Promise','fetch','window','self','parent','frames','top','localStorage','sessionStorage','indexedDB','console']);
-      const allNames = Object.getOwnPropertyNames(win);
-      for (const name of allNames) {
-        if (blacklist.has(name)) continue;
+      if (funcNames.length === 0) {
+        const blacklist = new Set(['Object','Math','Date','String','Number','Array','Promise','fetch','window','self','parent','frames','top','localStorage','sessionStorage','indexedDB','console']);
+        const allNames = Object.getOwnPropertyNames(win);
+        for (const name of allNames) {
+          if (blacklist.has(name)) continue;
+          try {
+            if (typeof win[name] === 'function') {
+              funcNames.push(name);
+            }
+          } catch (e) {}
+        }
+      }
+
+      if (funcNames.length === 0) {
+        quickTestResult.textContent = 'No callable function found in the provided code.';
+        quickTestResult.style.color = '#f87171';
+        document.body.removeChild(frame);
+        return;
+      }
+
+      let chosenName = funcNames.find(n => n === 'checkAnswer') || funcNames[0];
+      const fn = win[chosenName];
+
+      const showToastShim = (...args) => { try { window.showToast && window.showToast(...args); } catch(e){} };
+      const userProfileShim = { name: 'Test Student' };
+
+      const variants = [];
+      variants.push([testAnswerRaw]);
+      variants.push([testAnswerRaw, showToastShim]);
+      variants.push([testAnswerRaw, showToastShim, userProfileShim]);
+
+      const maybeNum = parseFloat(testAnswerRaw);
+      if (!isNaN(maybeNum)) {
+        variants.push([maybeNum]);
+        variants.push([maybeNum, showToastShim]);
+        variants.push([maybeNum, showToastShim, userProfileShim]);
+      }
+      variants.push([]);
+
+      let lastError = null;
+      let called = false;
+      let result;
+      for (const args of variants) {
         try {
-          if (typeof win[name] === 'function') {
-            funcNames.push(name);
-          }
-        } catch (e) {}
+          result = fn.apply(win, args);
+          called = true;
+          break;
+        } catch (callErr) {
+          lastError = callErr;
+        }
       }
-    }
 
-    if (funcNames.length === 0) {
-      quickTestResult.textContent = 'No callable function found in the provided code.';
-      quickTestResult.style.color = '#f87171';
-      document.body.removeChild(frame);
-      return;
-    }
-
-    // Prefer a function literally named checkAnswer if present
-    let chosenName = funcNames.find(n => n === 'checkAnswer') || funcNames[0];
-    const fn = win[chosenName];
-
-    // Build shims
-    const showToastShim = (...args) => { try { window.showToast && window.showToast(...args); } catch(e){} };
-    const userProfileShim = { name: 'Test Student' };
-
-    // Prepare candidate argument variants to try
-    const variants = [];
-    // string raw answer
-    variants.push([testAnswerRaw]);
-    variants.push([testAnswerRaw, showToastShim]);
-    variants.push([testAnswerRaw, showToastShim, userProfileShim]);
-    // numeric variants if applicable
-    const maybeNum = parseFloat(testAnswerRaw);
-    if (!isNaN(maybeNum)) {
-      variants.push([maybeNum]);
-      variants.push([maybeNum, showToastShim]);
-      variants.push([maybeNum, showToastShim, userProfileShim]);
-    }
-    // also try calling with no args (some functions return constant)
-    variants.push([]);
-
-    // Try calling with each variant until one succeeds
-    let lastError = null;
-    let called = false;
-    let result;
-    for (const args of variants) {
-      try {
-        result = fn.apply(win, args);
-        called = true;
-        break;
-      } catch (callErr) {
-        lastError = callErr;
-        // continue to next variant
+      if (!called) {
+        quickTestResult.textContent = `Error calling function '${chosenName}': ${lastError ? lastError.message : 'unknown error'}`;
+        quickTestResult.style.color = '#f87171';
+      } else {
+        let out;
+        try { out = typeof result === 'undefined' ? 'undefined' : JSON.stringify(result); } catch (e) { out = String(result); }
+        quickTestResult.textContent = `Result: ${out}`;
+        quickTestResult.style.color = '#d1d5db';
       }
+
+    } finally {
+      if (frame && frame.parentNode) frame.parentNode.removeChild(frame);
     }
+  };
 
-    if (!called) {
-      quickTestResult.textContent = `Error calling function '${chosenName}': ${lastError ? lastError.message : 'unknown error'}`;
-      quickTestResult.style.color = '#f87171';
-    } else {
-      // Display returned value (safe stringify)
-      let out;
-      try { out = typeof result === 'undefined' ? 'undefined' : JSON.stringify(result); } catch (e) { out = String(result); }
-      quickTestResult.textContent = `Result: ${out}`;
-      quickTestResult.style.color = '#d1d5db';
-    }
-
-  } finally {
-    // Ensure iframe cleaned up
-    if (frame && frame.parentNode) frame.parentNode.removeChild(frame);
-  }
-};
-
-  // --- UPDATE Event Listeners to trigger code update ---
+  // Keep code updated when simple UI changes
   ruleGroupsContainer.addEventListener('change', updateCodeFromSimple);
   ruleGroupsContainer.addEventListener('keyup', updateCodeFromSimple);
-  // Add listeners for new controls
   exclusiveToggle.addEventListener('change', updateCodeFromSimple);
   toleranceInput.addEventListener('input', updateCodeFromSimple);
-  // --- END UPDATE ---
 
   function showSimpleMode() {
     simpleUI.classList.remove('hidden');
@@ -585,6 +613,7 @@ quickTestBtn.onclick = () => {
     livePreview.textContent = generateCodeFromUI(container);
     advTextarea.value = generateCodeFromUI(container);
   }
+
   function showAdvancedMode() {
     simpleUI.classList.add('hidden');
     advUI.classList.remove('hidden');
@@ -593,6 +622,7 @@ quickTestBtn.onclick = () => {
     advBtn.classList.add('bg-indigo-600', 'text-white');
     advBtn.classList.remove('bg-transparent', 'text-gray-300');
   }
+
   function updateCodeFromSimple() {
     code = generateCodeFromUI(container);
     livePreview.textContent = code;
