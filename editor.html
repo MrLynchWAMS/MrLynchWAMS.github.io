@@ -440,15 +440,149 @@ function CheckerWidget(container, initialCode = "") {
     const codeToTest = container.getCode();
     const testAnswer = quickTestInput.value;
     quickTestResult.textContent = ''; // Clear previous result
+    
+    // Create a same-origin iframe for isolated execution
+    const iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    document.body.appendChild(iframe);
+    
     try {
-      const checkerFunc = new Function('studentAnswer', 'showToast', codeToTest + '\n; return typeof checkAnswer === "function" ? checkAnswer(studentAnswer) : null;');
-      const resultScore = checkerFunc(testAnswer, window.showToast); // Pass the global showToast
-      quickTestResult.textContent = `Result: ${resultScore}`;
-      quickTestResult.style.color = '#d1d5db'; // text-gray-300
+      const iframeWindow = iframe.contentWindow;
+      
+      // Snapshot the iframe's global properties before evaluation
+      const beforeProps = Object.getOwnPropertyNames(iframeWindow);
+      
+      // Evaluate the user's code in the iframe
+      try {
+        iframeWindow.eval(codeToTest);
+      } catch (evalError) {
+        quickTestResult.textContent = `Syntax/Eval Error: ${evalError.message}`;
+        quickTestResult.style.color = '#f87171'; // text-red-400
+        document.body.removeChild(iframe);
+        return;
+      }
+      
+      // Discover new functions created on the iframe window
+      const afterProps = Object.getOwnPropertyNames(iframeWindow);
+      const newProps = afterProps.filter(p => !beforeProps.includes(p));
+      
+      // Blacklist built-in/irrelevant globals to avoid false positives
+      const blacklist = ['eval', 'Function', 'Object', 'Array', 'String', 'Number', 'Boolean', 
+                        'Date', 'RegExp', 'Error', 'Math', 'JSON', 'console', 'window', 
+                        'document', 'location', 'navigator', 'screen', 'history'];
+      
+      const discoveredFuncs = newProps.filter(p => {
+        try {
+          return typeof iframeWindow[p] === 'function' && !blacklist.includes(p);
+        } catch (e) {
+          return false;
+        }
+      });
+      
+      // Select the function to call using heuristics
+      let targetFunc = null;
+      let targetFuncName = null;
+      
+      // Prefer 'checkAnswer' if present
+      if (discoveredFuncs.includes('checkAnswer')) {
+        targetFunc = iframeWindow.checkAnswer;
+        targetFuncName = 'checkAnswer';
+      } else {
+        // Check heuristics: starts with check, calc, grade, validate, score, match (case-insensitive)
+        const heuristicPatterns = /^(check|calc|grade|validate|score|match)/i;
+        const heuristicMatches = discoveredFuncs.filter(name => heuristicPatterns.test(name));
+        
+        if (heuristicMatches.length > 0) {
+          targetFuncName = heuristicMatches[0];
+          targetFunc = iframeWindow[targetFuncName];
+        } else if (discoveredFuncs.length > 0) {
+          // Pick the first discovered function
+          targetFuncName = discoveredFuncs[0];
+          targetFunc = iframeWindow[targetFuncName];
+        }
+      }
+      
+      if (!targetFunc) {
+        quickTestResult.textContent = 'Error: No checker function found in code';
+        quickTestResult.style.color = '#f87171'; // text-red-400
+        document.body.removeChild(iframe);
+        return;
+      }
+      
+      // Create shims for arguments
+      const showToastShim = (message, options) => {
+        if (typeof window.showToast === 'function') {
+          window.showToast(message, options);
+        }
+      };
+      
+      const userProfileShim = { name: 'Test Student' };
+      
+      // Parse numeric answer if possible
+      const numericAnswer = parseFloat(testAnswer);
+      const isNumeric = !isNaN(numericAnswer);
+      
+      // Try different argument shapes in order until one succeeds
+      const attemptShapes = [
+        // Text/string attempts
+        { args: [testAnswer], desc: '(studentAnswer)' },
+        { args: [testAnswer, showToastShim], desc: '(studentAnswer, showToast)' },
+        { args: [testAnswer, showToastShim, userProfileShim], desc: '(studentAnswer, showToast, userProfile)' },
+      ];
+      
+      // Add numeric attempts if applicable
+      if (isNumeric) {
+        attemptShapes.push(
+          { args: [numericAnswer], desc: '(numericAnswer)' },
+          { args: [numericAnswer, showToastShim], desc: '(numericAnswer, showToast)' },
+          { args: [numericAnswer, showToastShim, userProfileShim], desc: '(numericAnswer, showToast, userProfile)' }
+        );
+      }
+      
+      let result = null;
+      let successfulShape = null;
+      let lastError = null;
+      
+      for (const shape of attemptShapes) {
+        try {
+          result = targetFunc.apply(iframeWindow, shape.args);
+          successfulShape = shape.desc;
+          break; // Success, stop trying
+        } catch (callError) {
+          lastError = callError;
+          // Continue to next shape
+        }
+      }
+      
+      if (successfulShape) {
+        // Display the result
+        let displayValue = result;
+        if (typeof result === 'object' && result !== null) {
+          try {
+            displayValue = JSON.stringify(result);
+          } catch (e) {
+            displayValue = String(result);
+          }
+        }
+        quickTestResult.textContent = `Result: ${displayValue}`;
+        quickTestResult.style.color = '#d1d5db'; // text-gray-300
+      } else {
+        // All attempts failed
+        quickTestResult.textContent = `Call Error: ${lastError ? lastError.message : 'All argument shapes failed'}`;
+        quickTestResult.style.color = '#f87171'; // text-red-400
+      }
+      
     } catch (error) {
       console.error("Quick Test Error:", error);
       quickTestResult.textContent = `Error: ${error.message}`;
       quickTestResult.style.color = '#f87171'; // text-red-400
+    } finally {
+      // Always clean up the iframe
+      try {
+        document.body.removeChild(iframe);
+      } catch (e) {
+        // Ignore cleanup errors
+      }
     }
   };
   // --- END Quick Test Button Listener ---
