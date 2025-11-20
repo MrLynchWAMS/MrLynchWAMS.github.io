@@ -137,8 +137,13 @@
 
       <div class="advanced-mode-ui hidden">
         <textarea class="checker-textarea w-full h-64 p-2 bg-gray-700 rounded" placeholder="// Write your checker function here"></textarea>
-        <div class="flex justify-end mt-2">
-          <button class="delete-advanced-btn bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-3 rounded-md text-sm">Delete Advanced Code</button>
+        <div class="flex justify-between mt-2">
+          <button class="convert-to-simple-btn bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded-md text-sm">
+            Convert back to Simple
+          </button>
+          <button class="delete-advanced-btn bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-3 rounded-md text-sm">
+            Delete Advanced Code
+          </button>
         </div>
       </div>
 
@@ -267,7 +272,7 @@ function renderDeadlineUI() {
   const hardcodedDefaults = { '1': '08:01', '2': '08:50', '5': '11:17', '7': '12:55', '8': '13:44' };
   allClassNames.forEach(className => {
     const value = assignmentStartTimes?.[className] || defaultStartTimes?.[className] || hardcodedDefaults[className] || '00:00';
-    container.innerHTML += `<div><label for="start-time-${className}" class="block text-sm font-semibold">${className}</label><input type="time" id="start-time-${className}" value="${value}" class="p-2 bg-gray-700 border border-gray-600 rounded"></div>`;
+    container.innerHTML += `<div><label for="start-time-${className}" class="block text-sm font-semibold">${className}</label><input type="time" id="start-time-${className}" value="${value}" class="p-2 bg-gray-700 border border-gray-600 rounded w-28"></div>`;
   });
 }
 
@@ -276,13 +281,13 @@ function renderEditor() {
   container.innerHTML = '';
   let slideIds = assignmentData.slideIds || [];
   let checkerFunctions = assignmentData.checkerFunctions || {};
+  let checkerMeta = assignmentData.checkerMeta || {};
   let deadlinePolicy = assignmentData.deadlinePolicy || {};
   slideIds.forEach((slideId, index) => {
     const qNum = index + 1;
     const slidePolicy = deadlinePolicy[`q${qNum}`] || {};
     const editorBox = document.createElement('div');
     editorBox.className = "slide-editor-box grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-800 p-4 rounded-lg";
-    // include a wrapper with an overlay reload button (hidden by default)
     editorBox.innerHTML = `
       <div>
         <h3 class="text-xl font-semibold mb-2">Slide ${qNum}</h3>
@@ -295,24 +300,35 @@ function renderEditor() {
       <div class="mt-4 border-t border-gray-700 pt-4">
         <h4 class="font-semibold mb-2">Deadline & Late Policy</h4>
         <div class="grid grid-cols-3 gap-2 text-sm">
-          <div><label>Deadline (mins)</label><input type="number" id="deadline-minutes-${index}" value="${slidePolicy.deadlineMinutes || 0}" class="w-full mt-1 p-2 bg-gray-700 rounded border border-gray-600"></div>
           <div>
-  <label>Penalty Type</label>
-  <select id="penalty-type-${index}" class="w-full mt-1 p-2 bg-gray-700 rounded border border-gray-600">
-    <option value="none" ${!slidePolicy.penaltyType || slidePolicy.penaltyType === 'none' ? 'selected' : ''}>No penalty</option>
-    <option value="deduction" ${slidePolicy.penaltyType === 'deduction' || slidePolicy.penaltyType === 'percent' || slidePolicy.penaltyType === 'percentage' ? 'selected' : ''}>Percent deduction</option>
-    <option value="incremental" ${slidePolicy.penaltyType === 'incremental' || slidePolicy.penaltyType === 'points' || slidePolicy.penaltyType === 'per_minute' ? 'selected' : ''}>Points per minute</option>
-    <option value="zero" ${slidePolicy.penaltyType === 'zero' ? 'selected' : ''}>Zero if late</option>
-  </select>
-</div>
-          <div><label>Penalty Value</label><input type="number" id="penalty-value-${index}" value="${slidePolicy.penaltyValue || 0}" class="w-full mt-1 p-2 bg-gray-700 rounded border border-gray-600"></div>
+            <label>Deadline (mins)</label>
+            <input type="number" id="deadline-minutes-${index}" value="${slidePolicy.deadlineMinutes || 0}" class="w-full mt-1 p-2 bg-gray-700 rounded border border-gray-600">
+          </div>
+          <div>
+            <label>Penalty Type</label>
+            <select id="penalty-type-${index}" class="w-full mt-1 p-2 bg-gray-700 rounded border border-gray-600">
+              <option value="none" ${!slidePolicy.penaltyType || slidePolicy.penaltyType === 'none' ? 'selected' : ''}>No penalty</option>
+              <option value="deduction" ${slidePolicy.penaltyType === 'deduction' || slidePolicy.penaltyType === 'percent' || slidePolicy.penaltyType === 'percentage' ? 'selected' : ''}>Percent deduction</option>
+              <option value="incremental" ${slidePolicy.penaltyType === 'incremental' || slidePolicy.penaltyType === 'points' || slidePolicy.penaltyType === 'per_minute' ? 'selected' : ''}>Points per minute</option>
+              <option value="zero" ${slidePolicy.penaltyType === 'zero' ? 'selected' : ''}>Zero if late</option>
+            </select>
+          </div>
+          <div>
+            <label>Penalty Value</label>
+            <input type="number" id="penalty-value-${index}" value="${slidePolicy.penaltyValue || 0}" class="w-full mt-1 p-2 bg-gray-700 rounded border border-gray-600">
+          </div>
         </div>
       </div>
     `;
     const checkerTemplate = document.getElementById('checkerTemplate');
     const checkerFragment = checkerTemplate.content.cloneNode(true);
     const checkerWidgetDiv = checkerFragment.querySelector('.checker-widget');
-    CheckerWidget(checkerWidgetDiv, checkerFunctions[`calc${qNum}`] || "");
+
+    const funcName = `calc${qNum}`;
+    const initialCode = checkerFunctions[funcName] || "";
+    const initialMeta = checkerMeta[funcName] || null;
+
+    CheckerWidget(checkerWidgetDiv, initialCode, initialMeta);
     editorBox.querySelector(`#checker-container-${qNum}`).appendChild(checkerWidgetDiv);
     container.appendChild(editorBox);
 
@@ -320,13 +336,10 @@ function renderEditor() {
     const reloadBtn = document.getElementById(`reload-btn-${slideId}`);
     const imageUrl = `https://docs.google.com/presentation/d/${assignmentData.presentationId}/export/png?id=${assignmentData.presentationId}&pageid=${slideId}`;
 
-    // Use the enhanced loader that supports showing the reload button on final failure
     loadImageWithRetries(imgElement, imageUrl, 2, reloadBtn);
 
-    // Wire reload button to retry loading this specific image (resets attempts)
     if (reloadBtn) {
       reloadBtn.addEventListener('click', () => {
-        // hide the button while retrying and clear placeholder flag
         reloadBtn.classList.add('hidden');
         if (imgElement && imgElement.dataset) imgElement.dataset.isPlaceholder = 'false';
         loadImageWithRetries(imgElement, imageUrl, 2, reloadBtn);
@@ -335,11 +348,131 @@ function renderEditor() {
   });
 }
 
-function CheckerWidget(container, initialCode = "") {
-  let mode = initialCode ? "advanced" : "simple";
-  let simpleDisabled = !!initialCode;
+// Extract a structured config from the current Simple UI
+function serializeSimpleConfig(container) {
+  const isExclusive = container.querySelector('.exclusive-scoring-toggle')?.checked || false;
+  const tolerance = parseFloat(container.querySelector('.numeric-tolerance-input')?.value) || 0;
+
+  const groups = [];
+  container.querySelectorAll('.rule-group').forEach(group => {
+    const points = Number(group.querySelector('.rule-points')?.value) || 0;
+    const groupConnector = group.querySelector('.group-connector')?.value || '&&';
+    const toastMessage = group.querySelector('.rule-toast-message')?.value || '';
+    const toastColor = group.querySelector('.rule-toast-color')?.value || 'default';
+
+    const conditions = [];
+    group.querySelectorAll('.condition-row').forEach(cond => {
+      const type = cond.querySelector('.cond-type')?.value || 'text';
+      const op = cond.querySelector('.cond-operator')?.value || 'contains';
+      const valInput = cond.querySelector('.cond-value');
+      const value = valInput ? valInput.value : '';
+
+      const condConfig = { type, op, value };
+
+      if (type === 'text') {
+        const textBoolEl = cond.querySelector('.text-bool');
+        if (textBoolEl) condConfig.textBool = textBoolEl.value || '||';
+      } else if (type === 'number') {
+        const pickModeEl = cond.querySelector('.number-pick-mode');
+        const idxEl = cond.querySelector('.number-index');
+        condConfig.pickMode = pickModeEl ? pickModeEl.value : 'first';
+        condConfig.index = idxEl ? parseInt(idxEl.value || '1', 10) : 1;
+      }
+
+      conditions.push(condConfig);
+    });
+
+    groups.push({
+      points,
+      groupConnector,
+      toastMessage,
+      toastColor,
+      conditions
+    });
+  });
+
+  return { isExclusive, tolerance, groups };
+}
+
+// Build Simple UI from a structured config
+function buildUIFromSimpleConfig(container, config) {
+  const exclusiveToggle = container.querySelector('.exclusive-scoring-toggle');
+  const toleranceInput = container.querySelector('.numeric-tolerance-input');
+  const ruleGroupsContainer = container.querySelector('.rule-groups-container');
+
+  if (exclusiveToggle) exclusiveToggle.checked = !!config.isExclusive;
+  if (toleranceInput) toleranceInput.value = config.tolerance ?? 0;
+
+  ruleGroupsContainer.innerHTML = '';
+
+  (config.groups || []).forEach((g, idx) => {
+    const groupEl = createRuleGroupElement(idx + 1);
+
+    const pointsInput = groupEl.querySelector('.rule-points');
+    const connectorSelect = groupEl.querySelector('.group-connector');
+    const toastMessageInput = groupEl.querySelector('.rule-toast-message');
+    const toastColorSelect = groupEl.querySelector('.rule-toast-color');
+
+    if (pointsInput) pointsInput.value = g.points ?? 0;
+    if (connectorSelect) connectorSelect.value = g.groupConnector || '&&';
+    if (toastMessageInput) toastMessageInput.value = g.toastMessage || '';
+    if (toastColorSelect) toastColorSelect.value = g.toastColor || 'default';
+
+    const condContainer = groupEl.querySelector('.conditions-container');
+    if (condContainer) {
+      condContainer.innerHTML = '';
+      (g.conditions || []).forEach(c => {
+        const condEl = createConditionElement();
+        const typeSelect = condEl.querySelector('.cond-type');
+        const opSelect = condEl.querySelector('.cond-operator');
+
+        if (typeSelect) typeSelect.value = c.type || 'text';
+        typeSelect.dispatchEvent(new Event('change'));
+
+        if (opSelect) opSelect.value = c.op || (c.type === 'number' ? '==' : 'contains');
+
+        if (c.type === 'text') {
+          const valueInput = condEl.querySelector('.cond-value');
+          const textBoolEl = condEl.querySelector('.text-bool');
+          if (valueInput) valueInput.value = c.value || '';
+          if (textBoolEl && c.textBool) textBoolEl.value = c.textBool;
+        } else if (c.type === 'number') {
+          const valueInput = condEl.querySelector('.cond-value');
+          const pickModeEl = condEl.querySelector('.number-pick-mode');
+          const idxEl = condEl.querySelector('.number-index');
+          if (valueInput) valueInput.value = c.value || '';
+          if (pickModeEl && c.pickMode) pickModeEl.value = c.pickMode;
+          if (idxEl && typeof c.index === 'number') {
+            idxEl.value = String(c.index);
+            if (c.pickMode === 'nth') {
+              idxEl.classList.remove('hidden');
+            } else {
+              idxEl.classList.add('hidden');
+            }
+          }
+        }
+
+        condContainer.appendChild(condEl);
+      });
+    }
+
+    ruleGroupsContainer.appendChild(groupEl);
+  });
+
+  if (!ruleGroupsContainer.children.length) {
+    ruleGroupsContainer.appendChild(createRuleGroupElement(1));
+  }
+}
+
+function CheckerWidget(container, initialCode = "", initialMeta = null) {
+  let mode = "simple";
+  let simpleDisabled = false;
   let code = initialCode || getDefaultCheckerCode();
   let advancedEdited = false;
+  let initialAdvancedText = initialCode || "";
+  let lastSavedSimpleConfig = initialMeta && initialMeta.simpleConfig
+    ? initialMeta.simpleConfig
+    : null;
 
   const simpleBtn = container.querySelector('.simple-mode-btn');
   const advBtn = container.querySelector('.advanced-mode-btn');
@@ -350,8 +483,8 @@ function CheckerWidget(container, initialCode = "") {
   const advTextarea = container.querySelector('.checker-textarea');
   const simpleDisabledNotice = container.querySelector('.simple-disabled-notice');
   const deleteAdvBtn = container.querySelector('.delete-advanced-btn');
+  const convertToSimpleBtn = container.querySelector('.convert-to-simple-btn');
 
-  // NEW UI Elements
   const exclusiveToggle = container.querySelector('.exclusive-scoring-toggle');
   const toleranceInput = container.querySelector('.numeric-tolerance-input');
   const quickTestInput = container.querySelector('.quick-test-input');
@@ -361,22 +494,67 @@ function CheckerWidget(container, initialCode = "") {
   container.getCode = () => (mode === "simple" ? generateCodeFromUI(container) : advTextarea.value);
   container.getMode = () => mode;
 
-  // Initial render
-  if (mode === "advanced") {
-    showAdvancedMode();
-    advTextarea.value = code;
-    ruleGroupsContainer.innerHTML = "";
-  } else {
-    showSimpleMode();
-    livePreview.textContent = code;
-    advTextarea.value = code;
+  const hasInitialCode = !!initialCode && initialCode.trim().length > 0;
+  const initialMode = initialMeta && initialMeta.mode ? initialMeta.mode : null;
+  const initialSimpleConfig = initialMeta && initialMeta.simpleConfig ? initialMeta.simpleConfig : null;
+
+  if (!hasInitialCode) {
+    mode = "simple";
+    simpleDisabled = false;
+    advancedEdited = false;
     if (ruleGroupsContainer.children.length === 0) {
       ruleGroupsContainer.appendChild(createRuleGroupElement(1));
     }
+    updateCodeFromSimple();
+    showSimpleMode();
     simpleDisabledNotice.classList.add('hidden');
+  } else if (initialMode === "simple") {
+    mode = "simple";
+    simpleDisabled = false;
+    advancedEdited = false;
+
+    if (initialSimpleConfig) {
+      buildUIFromSimpleConfig(container, initialSimpleConfig);
+      lastSavedSimpleConfig = initialSimpleConfig;
+    } else {
+      if (ruleGroupsContainer.children.length === 0) {
+        ruleGroupsContainer.appendChild(createRuleGroupElement(1));
+      }
+    }
+
+    updateCodeFromSimple();
+    showSimpleMode();
+    simpleDisabledNotice.classList.add('hidden');
+  } else if (initialMode === "advanced") {
+    mode = "advanced";
+    simpleDisabled = true;
+    advancedEdited = true;
+    showAdvancedMode();
+    advTextarea.value = initialCode;
+    ruleGroupsContainer.innerHTML = "";
+    simpleDisabledNotice.classList.remove('hidden');
+  } else {
+    if (hasInitialCode) {
+      mode = "advanced";
+      simpleDisabled = true;
+      advancedEdited = true;
+      showAdvancedMode();
+      advTextarea.value = initialCode;
+      ruleGroupsContainer.innerHTML = "";
+      simpleDisabledNotice.classList.remove('hidden');
+    } else {
+      mode = "simple";
+      simpleDisabled = false;
+      advancedEdited = false;
+      if (ruleGroupsContainer.children.length === 0) {
+        ruleGroupsContainer.appendChild(createRuleGroupElement(1));
+      }
+      updateCodeFromSimple();
+      showSimpleMode();
+      simpleDisabledNotice.classList.add('hidden');
+    }
   }
 
-  // Mode toggle logic
   simpleBtn.onclick = () => {
     if (simpleDisabled) {
       if (advancedEdited) {
@@ -390,26 +568,36 @@ function CheckerWidget(container, initialCode = "") {
     const generatedCode = generateCodeFromUI(container);
     livePreview.textContent = generatedCode;
     advTextarea.value = generatedCode;
+    initialAdvancedText = generatedCode;
   };
 
   advBtn.onclick = () => {
     mode = "advanced";
     showAdvancedMode();
-    // seed with current simple-generated code
-    advTextarea.value = generateCodeFromUI(container);
-  };
-
-  // Advanced editor change disables simple mode
-  advTextarea.oninput = () => {
-    code = advTextarea.value;
-    if (!advancedEdited) {
-      advancedEdited = true;
-      simpleDisabled = true;
-      simpleDisabledNotice.classList.remove('hidden');
+    if (!hasInitialCode || initialMode === "simple" || !advancedEdited) {
+      const fromSimple = generateCodeFromUI(container);
+      advTextarea.value = fromSimple;
+      initialAdvancedText = fromSimple;
     }
   };
 
-  // Stylized delete confirmation for advanced code
+  advTextarea.oninput = () => {
+    code = advTextarea.value;
+    const trimmedNow = advTextarea.value.trim();
+    const trimmedInitial = initialAdvancedText.trim();
+    const actuallyChanged = trimmedNow !== trimmedInitial;
+
+    if (actuallyChanged && !advancedEdited) {
+      advancedEdited = true;
+      simpleDisabled = true;
+      simpleDisabledNotice.classList.remove('hidden');
+    } else if (!actuallyChanged && advancedEdited) {
+      advancedEdited = false;
+      simpleDisabled = false;
+      simpleDisabledNotice.classList.add('hidden');
+    }
+  };
+
   deleteAdvBtn.onclick = () => {
     showDialog(
       "Delete advanced code and switch to Simple Mode?",
@@ -429,7 +617,45 @@ function CheckerWidget(container, initialCode = "") {
     );
   };
 
-  // Add Rule Group button (existing)
+  if (convertToSimpleBtn) {
+    convertToSimpleBtn.onclick = () => {
+      if (!lastSavedSimpleConfig) {
+        if (typeof showToast === "function") {
+          showToast("No simple configuration found to convert.", { color: "red" });
+        }
+        return;
+      }
+
+      const temp = container.cloneNode(true);
+      buildUIFromSimpleConfig(temp, lastSavedSimpleConfig);
+      const expectedSimpleCode = generateCodeFromUI(temp);
+
+      const currentTrimmed = advTextarea.value.trim();
+      const expectedTrimmed = expectedSimpleCode.trim();
+      const compatible = currentTrimmed === expectedTrimmed;
+
+      const doConvert = () => {
+        mode = "simple";
+        simpleDisabled = false;
+        advancedEdited = false;
+        buildUIFromSimpleConfig(container, lastSavedSimpleConfig);
+        updateCodeFromSimple();
+        showSimpleMode();
+        simpleDisabledNotice.classList.add('hidden');
+      };
+
+      if (!compatible) {
+        showDialog(
+          "Convert back to Simple?",
+          "The current advanced code does not exactly match the last simple configuration. Converting back to Simple will discard any custom advanced edits.",
+          doConvert
+        );
+      } else {
+        doConvert();
+      }
+    };
+  }
+
   container.querySelector('.add-rule-group-btn').onclick = () => {
     ruleGroupsContainer.appendChild(
       createRuleGroupElement(ruleGroupsContainer.children.length + 1)
@@ -437,18 +663,13 @@ function CheckerWidget(container, initialCode = "") {
     updateCodeFromSimple();
   };
 
-  // ======================
-  // NEW: EVENT DELEGATION FOR SIMPLE MODE UI
-  // ======================
   ruleGroupsContainer.addEventListener('click', (e) => {
     const target = e.target;
 
-    // Remove a whole rule group
     if (target.classList.contains('delete-group-btn')) {
       const group = target.closest('.rule-group');
       if (group) {
         group.remove();
-        // Renumber remaining groups' headings
         Array.from(ruleGroupsContainer.querySelectorAll('.rule-group')).forEach((g, idx) => {
           const title = g.querySelector('h4');
           if (title) title.textContent = `Rule Group ${idx + 1}`;
@@ -458,7 +679,6 @@ function CheckerWidget(container, initialCode = "") {
       return;
     }
 
-    // Add a new condition row within a group
     if (target.classList.contains('add-condition-btn')) {
       const group = target.closest('.rule-group');
       if (group) {
@@ -471,7 +691,6 @@ function CheckerWidget(container, initialCode = "") {
       return;
     }
 
-    // Delete a single condition row
     if (target.classList.contains('delete-btn')) {
       const row = target.closest('.condition-row');
       if (row) {
@@ -482,11 +701,10 @@ function CheckerWidget(container, initialCode = "") {
     }
   });
 
-  // --- Quick Test Button Listener (already present in your file) ---
   quickTestBtn.onclick = () => {
     const codeToTest = container.getCode();
     const testAnswerRaw = quickTestInput.value;
-    quickTestResult.textContent = ''; // Clear previous result
+    quickTestResult.textContent = '';
 
     const frame = document.createElement('iframe');
     frame.style.display = 'none';
@@ -597,7 +815,6 @@ function CheckerWidget(container, initialCode = "") {
     }
   };
 
-  // Keep code updated when simple UI changes
   ruleGroupsContainer.addEventListener('change', updateCodeFromSimple);
   ruleGroupsContainer.addEventListener('keyup', updateCodeFromSimple);
   exclusiveToggle.addEventListener('change', updateCodeFromSimple);
@@ -611,7 +828,10 @@ function CheckerWidget(container, initialCode = "") {
     advBtn.classList.add('bg-transparent', 'text-gray-300');
     advBtn.classList.remove('bg-indigo-600', 'text-white');
     livePreview.textContent = generateCodeFromUI(container);
-    advTextarea.value = generateCodeFromUI(container);
+    if (!advancedEdited) {
+      advTextarea.value = generateCodeFromUI(container);
+      initialAdvancedText = advTextarea.value;
+    }
   }
 
   function showAdvancedMode() {
@@ -626,11 +846,13 @@ function CheckerWidget(container, initialCode = "") {
   function updateCodeFromSimple() {
     code = generateCodeFromUI(container);
     livePreview.textContent = code;
-    advTextarea.value = code;
+    if (!advancedEdited) {
+      advTextarea.value = code;
+      initialAdvancedText = code;
+    }
   }
 }
 
-// Stylized dialog using your toast-wrapper for delete confirmation
 function showDialog(title, message, onConfirm) {
   const wrapper = document.getElementById('toast-wrapper');
   const backdrop = document.createElement('div');
@@ -656,9 +878,7 @@ function showDialog(title, message, onConfirm) {
   };
 }
 
-// --- UPDATED Code Generator ---
 function generateCodeFromUI(container) {
-  // Get new UI settings
   const isExclusive = container.querySelector('.exclusive-scoring-toggle').checked;
   const tolerance = parseFloat(container.querySelector('.numeric-tolerance-input').value) || 0;
 
@@ -669,14 +889,11 @@ function generateCodeFromUI(container) {
   ruleGroups.forEach(group => { totalMaxScore += Number(group.querySelector('.rule-points').value) || 0; });
   code += `    const maxScore = ${totalMaxScore || 100};\n`;
   
-  // Robust Number & Text Extraction
   code += `    const answerStr = String(studentAnswer).toLowerCase();\n`;
-  // Regex: optional negative, digits (with or without commas), optional decimal part
   code += `    const numMatches = answerStr.match(/-?(?:\\d{1,3}(?:,\\d{3})+|\\d+)(?:\\.\\d+)?/g) || [];\n`;
   code += `    const answerNums = numMatches.map(s => parseFloat(s.replace(/,/g, '')));\n`;
   code += `    const answerNum = answerNums.length ? answerNums[0] : NaN; // Kept for backward compatibility\n`;
 
-  // Tolerance Helper Function
   if (tolerance > 0) {
     code += `\n    function isNear(a, b, t) {\n`;
     code += `        if (isNaN(a) || isNaN(b)) return false;\n`;
@@ -684,9 +901,9 @@ function generateCodeFromUI(container) {
     code += `    }\n`;
   }
 
-  let wroteIf = false; // For exclusive mode
+  let wroteIf = false;
   
-  ruleGroups.forEach((group, index) => {
+  ruleGroups.forEach((group) => {
     const points = Number(group.querySelector('.rule-points').value) || 0;
     const groupConnector = group.querySelector('.group-connector').value;
     const toastMessage = group.querySelector('.rule-toast-message')?.value.trim() || '';
@@ -698,20 +915,17 @@ function generateCodeFromUI(container) {
       const type = cond.querySelector('.cond-type').value;
       const op = cond.querySelector('.cond-operator').value;
       const valInput = cond.querySelector('.cond-value');
-      if (!valInput || valInput.value.trim() === "") return; // Skip empty conditions
+      if (!valInput || valInput.value.trim() === "") return;
       
       const val = valInput.value.trim();
 
       if (type === 'text') {
         const keywords = val.split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
-        // Ordered (check keywords appear in the answer in the same order)
         if (op === 'ordered') {
           if (keywords.length === 0) return;
           if (keywords.length === 1) {
-            // single keyword -> same as contains
             groupConditions.push(`answerStr.includes("${keywords[0].replace(/"/g, '\\"')}")`);
           } else {
-            // create iterative indexOf-based check to ensure order
             const kwsArrayLiteral = JSON.stringify(keywords);
             code += `\n    // Ordered check for keywords ${kwsArrayLiteral}\n`;
             code += `    (function(){\n`;
@@ -729,7 +943,7 @@ function generateCodeFromUI(container) {
             }
             code += `            return; }\n`;
             code += `    })();\n`;
-            return; // already applied points inline, skip adding later
+            return;
           }
         } else if (keywords.length > 1 && (op === 'contains' || op === 'not_contains')) {
           const textBool = cond.querySelector('.text-bool').value;
@@ -743,12 +957,11 @@ function generateCodeFromUI(container) {
         }
       } else if (type === 'number') {
         const numericVal = parseFloat(val);
-        if (isNaN(numericVal)) return; // Skip invalid number conditions
+        if (isNaN(numericVal)) return;
 
         const pickMode = cond.querySelector('.number-pick-mode').value;
-        const nthIndex = parseInt(cond.querySelector('.number-index').value, 10); // 1-based
+        const nthIndex = parseInt(cond.querySelector('.number-index').value, 10);
 
-        // Helper to create the comparison logic for a single number 'num'
         const createComparison = (numVar) => {
           if (op === '==') {
             return tolerance > 0 ? `isNear(${numVar}, ${numericVal}, ${tolerance})` : `(${numVar} == ${numericVal})`;
@@ -759,7 +972,7 @@ function generateCodeFromUI(container) {
           } else if (op === '<') {
             return `(${numVar} < ${numericVal})`;
           }
-          return 'false'; // Default case
+          return 'false';
         };
 
         let conditionString = 'false';
@@ -772,7 +985,6 @@ function generateCodeFromUI(container) {
             break;
           case 'nth':
             if (nthIndex > 0) {
-              // (nthIndex - 1) for 0-based array access
               conditionString = `(answerNums.length >= ${nthIndex} && ${createComparison(`answerNums[${nthIndex - 1}]`)})`;
             }
             break;
@@ -848,7 +1060,6 @@ function createRuleGroupElement(number) {
   return div;
 }
 
-// --- UPDATED Condition Element Creator ---
 function createConditionElement() {
   const div = document.createElement('div');
   div.className = 'condition-row flex items-center space-x-2 bg-gray-900/50 p-2 rounded-md';
@@ -876,7 +1087,6 @@ function createConditionElement() {
     <button class="delete-btn text-red-400 hover:text-red-300 font-bold text-xl leading-none">&times;</button>
   `;
 
-  // Main Change is Here
   div.querySelector('.cond-type').addEventListener('change', e => {
     const operatorSelect = div.querySelector('.cond-operator');
     const valueWrapper = div.querySelector('.cond-value-wrapper');
@@ -897,7 +1107,6 @@ function createConditionElement() {
           <input type="number" class="cond-value w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="a number" step="any">
         </div>
       `;
-      // Add listener for the new select
       valueWrapper.querySelector('.number-pick-mode').addEventListener('change', e_pick => {
         const indexInput = valueWrapper.querySelector('.number-index');
         if (e_pick.target.value === 'nth') {
@@ -907,7 +1116,7 @@ function createConditionElement() {
         }
       });
 
-    } else { // type === 'text'
+    } else {
       operatorSelect.innerHTML = `<option value="contains">contains</option><option value="not_contains">does not contain</option><option value="equals_str">is exactly</option><option value="ordered">contains in order</option>`;
       valueWrapper.innerHTML = `
         <input type="text" class="cond-value w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="keyword(s), comma-separated">
@@ -921,16 +1130,13 @@ function createConditionElement() {
       `;
     }
   });
-  // End of Main Change
 
-  // Keep existing listeners for text options
   div.querySelector('.cond-operator').addEventListener('change', e => {
     const type = div.querySelector('.cond-type').value;
     const operator = e.target.value;
     const textOptions = div.querySelector('.text-options');
     const valueInput = div.querySelector('.cond-value');
     if (type === 'text' && textOptions && valueInput) {
-      // show text-options only for contains / not_contains when there are multiple keywords
       if ((operator === 'contains' || operator === 'not_contains') && valueInput.value.includes(',')) {
         textOptions.classList.remove('hidden');
       } else {
@@ -938,6 +1144,7 @@ function createConditionElement() {
       }
     }
   });
+
   div.addEventListener('keyup', e => {
     if (e.target.classList.contains('cond-value')) {
       const operator = div.querySelector('.cond-operator').value;
@@ -966,6 +1173,63 @@ function getDefaultCheckerCode() {
 }`;
 }
 
+async function saveAssignment() {
+  const saveBtn = document.getElementById('saveBtn');
+  try {
+    saveBtn.textContent = "Saving...";
+    const checkerFunctions = {};
+    const checkerMeta = {};
+    const deadlinePolicy = { classStartTimes: {} };
+
+    allClassNames.forEach(className => {
+      const timeValue = document.getElementById(`start-time-${className}`).value;
+      if (timeValue) {
+        deadlinePolicy.classStartTimes[String(className)] = timeValue;
+      }
+    });
+
+    assignmentData.slideIds.forEach((id, index) => {
+      const qNum = index + 1;
+      const checkerWidgetDiv = document
+        .getElementById(`checker-container-${qNum}`)
+        .querySelector('.checker-widget');
+
+      const funcName = `calc${qNum}`;
+      const mode = checkerWidgetDiv.getMode();
+      const code = checkerWidgetDiv.getCode();
+
+      checkerFunctions[funcName] = code;
+
+      const metaForThis = { mode };
+      if (mode === "simple") {
+        metaForThis.simpleConfig = serializeSimpleConfig(checkerWidgetDiv);
+      }
+      checkerMeta[funcName] = metaForThis;
+
+      deadlinePolicy[`q${qNum}`] = {
+        deadlineMinutes: parseInt(document.getElementById(`deadline-minutes-${index}`).value, 10) || 0,
+        penaltyType: document.getElementById(`penalty-type-${index}`).value,
+        penaltyValue: parseInt(document.getElementById(`penalty-value-${index}`).value, 10) || 0,
+      };
+    });
+
+    const postSubmissionRule = document.getElementById('postSubmissionRule').value;
+    await db.collection("assignments").doc(assignmentId).update({
+      slideIds: assignmentData.slideIds,
+      checkerFunctions: checkerFunctions,
+      checkerMeta: checkerMeta,
+      deadlinePolicy: deadlinePolicy,
+      postSubmissionRule: postSubmissionRule
+    });
+    showToast("Assignment saved successfully!", { color: 'green' });
+  } catch (error) {
+    console.error("Error saving assignment:", error);
+    showToast("Error saving. See console for details.", { color: 'red' });
+  } finally {
+    saveBtn.textContent = "Save Assignment";
+  }
+}
+
 /*
   Enhanced image loader:
   - Accepts an optional reloadBtn element.
@@ -978,7 +1242,6 @@ function loadImageWithRetries(imgElement, srcUrl, maxRetries = 2, reloadBtn = nu
   let attempt = 0;
   const placeholderUrl = 'https://placehold.co/400x300/374151/9ca3af?text=Image+Load+Failed';
 
-  // helper to update reload button visibility (safely)
   function setReloadVisible(visible) {
     try {
       if (!reloadBtn) return;
@@ -993,13 +1256,10 @@ function loadImageWithRetries(imgElement, srcUrl, maxRetries = 2, reloadBtn = nu
   }
 
   function tryLoad() {
-    // before attempting, clear placeholder flag so onload/hide logic knows this is a real attempt
     imgElement.dataset.isPlaceholder = 'false';
     setReloadVisible(false);
 
-    // attach load handler to hide reload only when a real image (not placeholder) loads
     imgElement.onload = () => {
-      // if this load is the placeholder image (we mark it), then show reload; else hide reload
       if (imgElement.dataset && imgElement.dataset.isPlaceholder === 'true') {
         setReloadVisible(true);
       } else {
@@ -1011,130 +1271,84 @@ function loadImageWithRetries(imgElement, srcUrl, maxRetries = 2, reloadBtn = nu
     imgElement.onerror = () => {
       attempt++;
       if (attempt < maxRetries) {
-        // try again after a short delay
         setTimeout(tryLoad, 1000);
       } else {
         console.error(`Could not load image after ${maxRetries} attempts: ${srcUrl}`);
-        // mark placeholder so onload knows this is the fallback
         imgElement.dataset.isPlaceholder = 'true';
-        // set src to placeholder and show reload button (onload handler will preserve the reload visibility)
         imgElement.src = placeholderUrl;
-        // ensure reload button visible if the placeholder image loads quickly (onload will run and show it),
-        // but set it explicitly anyway in case onload doesn't run in time.
         setReloadVisible(true);
         cleanupHandlers();
       }
     };
 
-    // add cache bust param
     const urlWithCacheBust = `${srcUrl}&time=${new Date().getTime()}`;
-    // Start load
     imgElement.src = urlWithCacheBust;
   }
 
   tryLoad();
 }
 
-async function saveAssignment() {
-  const saveBtn = document.getElementById('saveBtn');
-  try {
-    saveBtn.textContent = "Saving...";
-    const checkerFunctions = {};
-    const deadlinePolicy = { classStartTimes: {} };
-    allClassNames.forEach(className => {
-      const timeValue = document.getElementById(`start-time-${className}`).value;
-      if(timeValue) { deadlinePolicy.classStartTimes[String(className)] = timeValue; }
-    });
-    assignmentData.slideIds.forEach((id, index) => {
-      const qNum = index + 1;
-      const checkerWidgetDiv = document.getElementById(`checker-container-${qNum}`).querySelector('.checker-widget');
-      let checkerCode = checkerWidgetDiv.getCode();
-      checkerFunctions[`calc${qNum}`] = checkerCode;
-      deadlinePolicy[`q${qNum}`] = {
-        deadlineMinutes: parseInt(document.getElementById(`deadline-minutes-${index}`).value, 10) || 0,
-        penaltyType: document.getElementById(`penalty-type-${index}`).value,
-        penaltyValue: parseInt(document.getElementById(`penalty-value-${index}`).value, 10) || 0,
-      };
-    });
-    const postSubmissionRule = document.getElementById('postSubmissionRule').value;
-    await db.collection("assignments").doc(assignmentId).update({
-      slideIds: assignmentData.slideIds,
-      checkerFunctions: checkerFunctions,
-      deadlinePolicy: deadlinePolicy,
-      postSubmissionRule: postSubmissionRule
-    });
-    showToast("Assignment saved successfully!", { color: 'green' });
-  } catch (error) {
-    console.error("Error saving assignment:", error);
-    showToast("Error saving. See console for details.", { color: 'red' });
-  } finally {
-    saveBtn.textContent = "Save Assignment";
-  }
+function copyShareLink() {
+  const shareLinkInput = document.getElementById('shareLink');
+  shareLinkInput.select();
+  shareLinkInput.setSelectionRange(0, 99999);
+  document.execCommand("copy");
+  showToast("Link copied to clipboard!", { color: 'blue' });
 }
 
-async function saveTeacherDefaults() {
-  const newDefaults = { classStartTimes: {} };
-  allClassNames.forEach(className => {
-    const timeValue = document.getElementById(`start-time-${className}`).value;
-    if(timeValue) {
-      newDefaults.classStartTimes[String(className)] = timeValue;
-    }
-  });
-  try {
-    await db.collection("teachers").doc(auth.currentUser.email).set(newDefaults, { merge: true });
-    showToast("Default start times saved!", { color: 'green' });
-    teacherDefaults.classStartTimes = newDefaults.classStartTimes;
-  } catch (error) {
-    console.error("Error saving defaults:", error);
-    showToast("Could not save defaults.", { color: 'red' });
-  }
+function showToast(message, options = {}) {
+  const wrapper = document.getElementById('toast-wrapper');
+  const toast = document.createElement('div');
+  let bg = 'bg-gray-800';
+  if (options.color === 'green') bg = 'bg-green-600';
+  else if (options.color === 'red') bg = 'bg-red-600';
+  else if (options.color === 'blue') bg = 'bg-blue-600';
+
+  toast.className = `${bg} text-white px-4 py-2 rounded shadow animate-fade-in-right`;
+  toast.textContent = message;
+  wrapper.appendChild(toast);
+  setTimeout(() => {
+    toast.classList.remove('animate-fade-in-right');
+    toast.classList.add('animate-fade-out-right');
+    setTimeout(() => toast.remove(), 500);
+  }, options.duration || 3000);
 }
+
 function toggleDeadlineSection() {
   const content = document.getElementById('deadline-content');
   const chevron = document.getElementById('deadline-chevron');
   if (content.style.maxHeight && content.style.maxHeight !== '0px') {
-    content.style.maxHeight = '0px';
+    content.style.maxHeight = '0';
     chevron.style.transform = 'rotate(0deg)';
   } else {
-    content.style.maxHeight = content.scrollHeight + "px";
+    content.style.maxHeight = content.scrollHeight + 'px';
     chevron.style.transform = 'rotate(90deg)';
   }
 }
-function copyShareLink() {
-  const linkInput = document.getElementById('shareLink');
-  linkInput.select();
-  document.execCommand('copy');
-  showToast("Link copied to clipboard!", { color: 'blue' });
+
+async function saveTeacherDefaults() {
+  try {
+    const classStartTimes = {};
+    allClassNames.forEach(className => {
+      const timeValue = document.getElementById(`start-time-${className}`).value;
+      if (timeValue) classStartTimes[String(className)] = timeValue;
+    });
+    await db.collection("teachers").doc(auth.currentUser.email).set({ classStartTimes }, { merge: true });
+    showToast("Default start times saved!", { color: 'green' });
+  } catch (e) {
+    console.error("Error saving teacher defaults:", e);
+    showToast("Error saving defaults.", { color: 'red' });
+  }
 }
-function showToast(message, options = {}) {
-  const { color = 'default', duration = 3000 } = options;
-  const wrapper = document.getElementById('toast-wrapper');
-  if (!wrapper) return;
-  const toast = document.createElement('div');
-  toast.className = 'flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm animate-fade-in-right';
-  const colors = { default: 'bg-gray-700', green: 'bg-green-600', red: 'bg-red-600', blue: 'bg-blue-600' };
-  toast.classList.add(colors[color] || colors['default']);
-  const messageSpan = document.createElement('span');
-  messageSpan.textContent = message;
-  toast.appendChild(messageSpan);
-  const closeButton = document.createElement('button');
-  closeButton.innerHTML = '&times;';
-  closeButton.className = 'ml-4 text-2xl font-bold leading-none hover:text-gray-300 focus:outline-none';
-  let timeoutId = null;
-  const dismiss = () => {
-    if (timeoutId) clearTimeout(timeoutId);
-    toast.classList.remove('animate-fade-in-right');
-    toast.classList.add('animate-fade-out-right');
-    toast.addEventListener('animationend', () => toast.remove());
-  };
-  closeButton.onclick = dismiss;
-  toast.appendChild(closeButton);
-  wrapper.appendChild(toast);
-  timeoutId = setTimeout(dismiss, duration);
-}
-document.getElementById('signOutButton').onclick = () => {
-  auth.signOut();
-};
+
+document.getElementById('signOutButton').addEventListener('click', () => {
+  auth.signOut().then(() => {
+    window.location.href = './index.html';
+  }).catch(error => {
+    console.error("Error signing out:", error);
+    showToast("Sign out failed.", { color: 'red' });
+  });
+});
 </script>
 </body>
 </html>
