@@ -415,7 +415,8 @@ function setupLiveStudentData() {
 
         let headerHtml = `<tr>
             <th class="px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-64">Student Name</th>
-            <th class="px-2 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider w-20">Submitted</th>`;
+            <th class="px-2 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider w-20">Submitted</th>
+            <th class="px-2 py-3 text-center text-xs font-medium text-yellow-400 uppercase tracking-wider w-16">Aura</th>`;
         for (let i = 1; i <= numQuestions; i++) {
             headerHtml += `<th class="px-2 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer hover:text-yellow-400" onclick="showQuestionSubmissions(${i - 1})">Q${i}</th>`;
         }
@@ -423,7 +424,7 @@ function setupLiveStudentData() {
         
         let classAverageRowHtml = '';
         if (showScores) {
-            classAverageRowHtml = `<tr><td class="text-xs font-semibold text-cyan-400 px-3">Class Average:</td><td class="px-2"></td>`;
+            classAverageRowHtml = `<tr><td class="text-xs font-semibold text-cyan-400 px-3">Class Average:</td><td class="px-2"></td><td class="px-2"></td>`;
             for (let i = 0; i < numQuestions; i++) {
                 const scores = sortedStudents.map(s => s.submissions.filter(sub => sub.slideIndex === i).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0]).filter(Boolean).map(sub => sub.score);
                 const avg = scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(0) : '-';
@@ -444,9 +445,14 @@ function setupLiveStudentData() {
                 avgScoreDisplay = `<span class="text-xs text-gray-400 ml-2 font-mono ${blackoutMode ? 'blackout' : ''}">(${studentAvg})</span>`;
             }
 
+            // Check if any submission has auraAwarded
+            const hasAuraAwarded = student.submissions.some(sub => sub.auraAwarded === true);
+            const auraCell = hasAuraAwarded ? '<span class="text-yellow-400">✅</span>' : '<span class="text-gray-600">-</span>';
+
             tableHtml += `<tr class="hover:bg-gray-700">
                 <td class="px-3 py-4 whitespace-nowrap text-sm font-medium text-white cursor-pointer hover:text-yellow-400 truncate" onclick="showStudentSubmissions('${student.email}')">${displayName}${avgScoreDisplay}</td>
                 <td class="px-2 py-4 whitespace-nowrap text-center"><input type="checkbox" onchange="toggleSubmissionStatus('${student.email}', this.checked)" ${student.isSubmitted ? 'checked' : ''} class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"></td>
+                <td class="px-2 py-4 whitespace-nowrap text-center">${auraCell}</td>
             `;
             
             for (let i = 0; i < numQuestions; i++) {

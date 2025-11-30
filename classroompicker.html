@@ -55,8 +55,12 @@
             </div>
         </div>
         <div id="mainContainer" class="hidden">
-             <div class="flex justify-end mb-4">
-                <button onclick="handleSignOut()" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Sign Out</button>
+             <div class="flex justify-between items-center mb-4">
+                <div></div>
+                <div class="flex items-center gap-4">
+                    <div id="user-info-container"></div>
+                    <button onclick="handleSignOut()" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Sign Out</button>
+                </div>
              </div>
              <div class="main-content-grid grid grid-cols-1 md:grid-cols-3 gap-8">
                 <div class="slides-column md:col-span-2 bg-gray-800 p-4 rounded-lg flex flex-col">
@@ -194,7 +198,7 @@
         const errorP = document.getElementById('loadingError');
         const loader = document.getElementById('pageLoader');
         if (TEACHER_EMAILS.map(e => e.toLowerCase()).includes(profile.email.toLowerCase())) {
-            userProfile = { name: profile.name, email: profile.email, class: 'Teacher' };
+            userProfile = { name: profile.name, email: profile.email, class: 'Teacher', auraLifetime: 0, auraBalance: 0 };
             initializeStudentSession();
             return;
         }
@@ -207,9 +211,13 @@
                 auth.signOut();
                 return;
             }
-            const studentData = studentQuery.docs[0].data();
+            const studentDoc = studentQuery.docs[0];
+            const studentData = studentDoc.data();
             const studentClass = String(studentData.class);
             profile.class = studentClass;
+            profile.auraLifetime = studentData.auraLifetime || 0;
+            profile.auraBalance = studentData.auraBalance || 0;
+            profile.studentDocId = studentDoc.id;
             const assignedClasses = assignmentData.assignedClasses || [];
             if (!assignedClasses.includes(studentClass)) {
                 loader.classList.remove('hidden');
@@ -234,12 +242,44 @@
         }
     }
     
+    function getAuraColor(lifetimePoints) {
+        if (lifetimePoints >= 100) return 'border-purple-500 shadow-purple-500/50';
+        if (lifetimePoints >= 50) return 'border-yellow-400 shadow-yellow-400/50';
+        if (lifetimePoints >= 20) return 'border-blue-400';
+        return 'border-gray-500';
+    }
+
+    function updateUserHeader() {
+        const lifetime = userProfile.auraLifetime || 0;
+        const balance = userProfile.auraBalance || 0;
+        const user = auth.currentUser;
+        const photo = (user && user.photoURL) ? user.photoURL : 'https://via.placeholder.com/40';
+
+        const headerHTML = `
+            <div class="flex items-center cursor-pointer hover:opacity-90 transition" onclick="openAuraStore()">
+                <div class="text-right mr-3 hidden sm:block">
+                    <div class="font-bold text-white text-sm">${userProfile.name}</div>
+                    <div class="text-xs font-mono text-yellow-400">
+                        ${balance} ✧
+                    </div>
+                </div>
+                <img src="${photo}" 
+                     class="w-10 h-10 rounded-full border-2 ${getAuraColor(lifetime)} shadow-lg object-cover">
+            </div>
+        `;
+        const container = document.getElementById('user-info-container');
+        if (container) container.innerHTML = headerHTML;
+    }
+    
     async function initializeStudentSession() {
         document.getElementById('loginContainer').classList.add('hidden');
         const loader = document.getElementById('pageLoader');
         loader.classList.remove('hidden');
         loader.querySelector('h1').textContent = `Loading your work, ${userProfile.name.split(' ')[0]}...`;
         await fetchStudentSubmissions();
+        
+        // Update user header with Aura info
+        updateUserHeader();
         
         // **FIX:** Check if assignment should be hidden on load
         const postRule = assignmentData.postSubmissionRule || 'open';
@@ -540,6 +580,9 @@ slideStates.forEach((state, index) => {
         let finalScore = baseScore;
         const policy = assignmentData.deadlinePolicy;
 
+        // Determine if on time for Aura purposes
+        let isOnTime = true;
+        
         if (policy && userProfile.class !== 'Teacher') {
             const qPolicy = policy[`q${currentSlideIndex + 1}`];
             const classStartTimeStr = policy.classStartTimes?.[userProfile.class];
@@ -552,6 +595,7 @@ slideStates.forEach((state, index) => {
                 const deadline = new Date(startTime.getTime() + qPolicy.deadlineMinutes * 60000);
                 
                 if (now > deadline) {
+                    isOnTime = false;
                     const minutesLate = Math.ceil((now - deadline) / 60000);
                     switch (qPolicy.penaltyType) {
                         case 'zero': finalScore = 0; showToast(`Submitted ${minutesLate} mins late. Score is 0.`, {color: 'red', duration: 7000}); break;
@@ -571,8 +615,64 @@ slideStates.forEach((state, index) => {
             return;
         }
         try {
-            const submission = { studentName: userProfile.name, studentEmail: userProfile.email, assignmentId: assignmentData.id, slideIndex: currentSlideIndex, answer: studentAnswer, score: finalScore, timestamp: firebase.firestore.FieldValue.serverTimestamp() };
+            // --- AURA LOGIC START ---
+            const auraAmount = assignmentData.auraAmount || 1;
+            const minReq = assignmentData.auraMinScore || 0;
+            const timeReq = assignmentData.auraOnTime || false;
+            
+            let auraEarned = 0;
+            let auraAwarded = false;
+            
+            // Check if aura was already awarded for this slide in previous submissions
+            const existingSubmissions = await db.collection("submissions")
+                .where("studentEmail", "==", userProfile.email)
+                .where("assignmentId", "==", assignmentData.id)
+                .where("slideIndex", "==", currentSlideIndex)
+                .where("auraAwarded", "==", true)
+                .get();
+            
+            const alreadyAwarded = !existingSubmissions.empty;
+            
+            // Only award if not previously awarded and meets criteria
+            if (!alreadyAwarded && finalScore >= minReq && (!timeReq || isOnTime)) {
+                auraEarned = auraAmount;
+                auraAwarded = true;
+            }
+            
+            const submission = { 
+                studentName: userProfile.name, 
+                studentEmail: userProfile.email, 
+                assignmentId: assignmentData.id, 
+                slideIndex: currentSlideIndex, 
+                answer: studentAnswer, 
+                score: finalScore, 
+                timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                auraAwarded: auraAwarded,
+                auraAmount: auraEarned
+            };
             await db.collection("submissions").add(submission);
+            
+            // Atomic Increment for Student Profile
+            if (auraEarned > 0 && userProfile.studentDocId) {
+                try {
+                    await db.collection('students').doc(userProfile.studentDocId).update({
+                        auraLifetime: firebase.firestore.FieldValue.increment(auraEarned),
+                        auraBalance: firebase.firestore.FieldValue.increment(auraEarned)
+                    });
+                    // Update local userProfile only after successful database update
+                    userProfile.auraLifetime = (userProfile.auraLifetime || 0) + auraEarned;
+                    userProfile.auraBalance = (userProfile.auraBalance || 0) + auraEarned;
+                    // Update header display
+                    updateUserHeader();
+                    // Trigger visual feedback
+                    showToast(`+${auraEarned} Aura Points!`, {color: 'yellow', duration: 3000});
+                } catch (auraError) {
+                    console.error("Error updating aura points:", auraError);
+                    // Don't show aura toast if update failed, but submission was still saved
+                }
+            }
+            // --- AURA LOGIC END ---
+            
             showToast("Answer saved!", { color: 'blue', position: 'bottom-right', duration: 2000 });
         } catch (error) {
             console.error("Error saving to Firestore:", error);
@@ -595,7 +695,7 @@ slideStates.forEach((state, index) => {
         }
         const toast = document.createElement('div');
         toast.className = 'flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm w-full animate-fade-in-up pointer-events-auto';
-        const colors = { default: 'bg-gray-700', green: 'bg-green-600', red: 'bg-red-600', blue: 'bg-blue-600' };
+        const colors = { default: 'bg-gray-700', green: 'bg-green-600', red: 'bg-red-600', blue: 'bg-blue-600', yellow: 'bg-yellow-500' };
         toast.classList.add(colors[color] || colors['default']);
         const messageSpan = document.createElement('span');
         messageSpan.className = "text-left";
@@ -713,6 +813,118 @@ slideStates.forEach((state, index) => {
                 submitButton.disabled = false;
                 submitButton.textContent = 'Submit Assignment';
             }
+        });
+    }
+
+    let currentAuraTab = 'store';
+
+    window.openAuraStore = function() {
+        // Remove existing if any
+        const existing = document.getElementById('aura-modal');
+        if (existing) existing.remove();
+
+        const modalHTML = `
+            <div class="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50" id="aura-modal">
+                <div class="bg-gray-800 rounded-xl max-w-lg w-full text-white border border-gray-600 shadow-2xl flex flex-col max-h-[90vh]">
+                    <div class="flex border-b border-gray-600">
+                        <button onclick="switchAuraTab('store')" id="tab-btn-store" class="flex-1 py-3 font-bold text-yellow-400 border-b-2 border-yellow-400 bg-gray-700">Store</button>
+                        <button onclick="switchAuraTab('leaderboard')" id="tab-btn-leaderboard" class="flex-1 py-3 font-bold text-gray-400 hover:bg-gray-700">Leaderboard</button>
+                    </div>
+                    <div id="aura-content" class="p-6 overflow-y-auto flex-1"></div>
+                    <div class="p-4 bg-gray-900 border-t border-gray-700">
+                        <button onclick="document.getElementById('aura-modal').remove()" class="w-full py-2 bg-gray-700 hover:bg-gray-600 rounded text-gray-300">Close</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        renderStoreTab();
+    };
+
+    window.switchAuraTab = function(tab) {
+        currentAuraTab = tab;
+        const storeBtn = document.getElementById('tab-btn-store');
+        const leadBtn = document.getElementById('tab-btn-leaderboard');
+        
+        if (tab === 'store') {
+            storeBtn.className = "flex-1 py-3 font-bold text-yellow-400 border-b-2 border-yellow-400 bg-gray-700 transition";
+            leadBtn.className = "flex-1 py-3 font-bold text-gray-400 hover:bg-gray-700 transition";
+            renderStoreTab();
+        } else {
+            storeBtn.className = "flex-1 py-3 font-bold text-gray-400 hover:bg-gray-700 transition";
+            leadBtn.className = "flex-1 py-3 font-bold text-purple-400 border-b-2 border-purple-400 bg-gray-700 transition";
+            renderLeaderboardTab();
+        }
+    };
+
+    function renderStoreTab() {
+        // Requires userProfile global variable
+        const balance = userProfile.auraBalance || 0;
+        document.getElementById('aura-content').innerHTML = `
+            <div class="text-center mb-4">
+                <div class="text-sm text-gray-400">Current Balance</div>
+                <div class="text-3xl font-bold text-yellow-400">${balance} ✧</div>
+            </div>
+            <div class="space-y-3">
+                 <div class="flex justify-between p-3 bg-gray-700 rounded border border-gray-600 items-center">
+                    <span>🎧 Listen to Music</span> <span class="bg-gray-900 px-2 py-1 rounded text-yellow-400 font-mono">5 ✧</span>
+                </div>
+                <div class="flex justify-between p-3 bg-gray-700 rounded border border-gray-600 items-center">
+                    <span>🪑 Swap Seats (1 Day)</span> <span class="bg-gray-900 px-2 py-1 rounded text-yellow-400 font-mono">10 ✧</span>
+                </div>
+                <div class="flex justify-between p-3 bg-gray-700 rounded border border-gray-600 items-center">
+                    <span>🎟️ Homework Pass</span> <span class="bg-gray-900 px-2 py-1 rounded text-yellow-400 font-mono">20 ✧</span>
+                </div>
+            </div>
+            <p class="text-center text-xs text-gray-500 mt-4">Redemption features coming soon.</p>
+        `;
+    }
+
+    function renderLeaderboardTab() {
+        const container = document.getElementById('aura-content');
+        container.innerHTML = '<div class="text-center text-gray-400">Loading...</div>';
+        
+        // Query logic: Filter by class if available, sort by Lifetime Aura
+        let query = db.collection('students');
+        if (userProfile.class && userProfile.class !== 'Teacher') query = query.where('class', '==', userProfile.class);
+        
+        query.get().then(snapshot => {
+            let students = [];
+            snapshot.forEach(doc => {
+                const d = doc.data();
+                students.push({
+                    name: d.name || "Anonymous",
+                    score: d.auraLifetime || 0,
+                    isMe: d.email === userProfile.email
+                });
+            });
+            
+            // Sort High to Low
+            students.sort((a, b) => b.score - a.score);
+            
+            let html = '<div class="space-y-2">';
+            let rank = 1;
+            
+            // Render Top 10 logic handling ties
+            for (let i = 0; i < students.length; i++) {
+                if (i > 0 && students[i].score < students[i-1].score) rank = i + 1;
+                if (rank > 10) break;
+                
+                const s = students[i];
+                const medal = rank === 1 ? '🥇' : (rank === 2 ? '🥈' : (rank === 3 ? '🥉' : rank));
+                const bgClass = s.isMe ? 'bg-purple-900/50 border-purple-500' : 'bg-gray-700 border-transparent';
+                
+                html += `
+                    <div class="flex justify-between items-center p-2 rounded border ${bgClass}">
+                        <div class="flex items-center gap-3">
+                            <span class="w-6 text-center font-mono text-gray-400">${medal}</span>
+                            <span class="${s.isMe ? 'font-bold text-white' : 'text-gray-300'}">${s.name}</span>
+                        </div>
+                        <span class="font-mono text-purple-300 font-bold">${s.score}</span>
+                    </div>`;
+            }
+            html += '</div>';
+            container.innerHTML = html;
         });
     }
 </script>
