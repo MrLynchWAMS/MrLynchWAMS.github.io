@@ -155,13 +155,15 @@
             classData[className]
                 .sort((a,b) => a.name.localeCompare(b.name))
                 .forEach(student => {
+                const aura = student.auraLifetime || 0;
                 studentListHTML += `
                     <li class="flex justify-between items-center py-2 border-b border-gray-700">
-                        <div>
+                        <div class="flex-1">
                             <p class="font-medium">${student.name}</p>
                             <p class="text-sm text-gray-400">${student.email}</p>
                         </div>
-                        <div class="flex gap-2">
+                        <div class="flex items-center gap-4">
+                            <span class="text-yellow-400 font-mono text-sm" title="Lifetime Aura">${aura} ✧</span>
                             <button onclick='openStudentModal(${JSON.stringify(student)})' class="text-blue-400 hover:text-blue-300 text-sm">Edit</button>
                             <button onclick="handleDeleteStudent('${student.id}', '${student.name}')" class="text-red-400 hover:text-red-300 text-sm">Delete</button>
                         </div>
@@ -171,6 +173,7 @@
 
             classCard.innerHTML = `
                 <h2 class="text-2xl font-bold text-yellow-400 mb-4">${className}</h2>
+                <div class="text-xs text-gray-500 mb-2 flex justify-end pr-20">Lifetime Aura</div>
                 <ul class="space-y-2">${studentListHTML}</ul>
             `;
             rosterContainer.appendChild(classCard);
