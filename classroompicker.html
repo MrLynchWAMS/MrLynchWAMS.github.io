@@ -654,17 +654,22 @@ slideStates.forEach((state, index) => {
             
             // Atomic Increment for Student Profile
             if (auraEarned > 0 && userProfile.studentDocId) {
-                await db.collection('students').doc(userProfile.studentDocId).update({
-                    auraLifetime: firebase.firestore.FieldValue.increment(auraEarned),
-                    auraBalance: firebase.firestore.FieldValue.increment(auraEarned)
-                });
-                // Update local userProfile
-                userProfile.auraLifetime = (userProfile.auraLifetime || 0) + auraEarned;
-                userProfile.auraBalance = (userProfile.auraBalance || 0) + auraEarned;
-                // Update header display
-                updateUserHeader();
-                // Trigger visual feedback
-                showToast(`+${auraEarned} Aura Points!`, {color: 'yellow', duration: 3000}); 
+                try {
+                    await db.collection('students').doc(userProfile.studentDocId).update({
+                        auraLifetime: firebase.firestore.FieldValue.increment(auraEarned),
+                        auraBalance: firebase.firestore.FieldValue.increment(auraEarned)
+                    });
+                    // Update local userProfile only after successful database update
+                    userProfile.auraLifetime = (userProfile.auraLifetime || 0) + auraEarned;
+                    userProfile.auraBalance = (userProfile.auraBalance || 0) + auraEarned;
+                    // Update header display
+                    updateUserHeader();
+                    // Trigger visual feedback
+                    showToast(`+${auraEarned} Aura Points!`, {color: 'yellow', duration: 3000});
+                } catch (auraError) {
+                    console.error("Error updating aura points:", auraError);
+                    // Don't show aura toast if update failed, but submission was still saved
+                }
             }
             // --- AURA LOGIC END ---
             
