@@ -69,7 +69,22 @@
                 <label for="studentClass" class="block text-sm font-medium text-gray-300 mb-2">Class</label>
                 <input type="text" id="studentClass" class="w-full p-3 mb-4 bg-gray-700 rounded border border-gray-600">
                 
-                <p id="modal-error" class="text-red-500 mb-4"></p>
+                <!-- Aura Controls -->
+                <div class="border-t border-gray-600 pt-4 mt-4">
+                    <h4 class="text-sm font-semibold text-yellow-400 mb-3">✧ Aura Points</h4>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label for="studentAuraLifetime" class="block text-sm font-medium text-gray-300 mb-2">Lifetime Aura</label>
+                            <input type="number" id="studentAuraLifetime" step="0.1" min="0" value="0" class="w-full p-3 bg-gray-700 rounded border border-gray-600">
+                        </div>
+                        <div>
+                            <label for="studentAuraBalance" class="block text-sm font-medium text-gray-300 mb-2">Spendable Balance</label>
+                            <input type="number" id="studentAuraBalance" step="0.1" min="0" value="0" class="w-full p-3 bg-gray-700 rounded border border-gray-600">
+                        </div>
+                    </div>
+                </div>
+                
+                <p id="modal-error" class="text-red-500 mb-4 mt-4"></p>
                 <button onclick="handleSaveStudent()" id="saveStudentBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg btn-action">Save Student</button>
             </div>
         </div>
@@ -188,6 +203,8 @@
         document.getElementById('studentEmail').value = '';
         document.getElementById('studentPasscode').value = '';
         document.getElementById('studentClass').value = '';
+        document.getElementById('studentAuraLifetime').value = '0';
+        document.getElementById('studentAuraBalance').value = '0';
         document.getElementById('modal-error').innerText = '';
 
         if (student) {
@@ -197,6 +214,8 @@
             document.getElementById('studentEmail').value = student.email;
             document.getElementById('studentPasscode').value = student.passcode;
             document.getElementById('studentClass').value = student.class;
+            document.getElementById('studentAuraLifetime').value = student.auraLifetime || 0;
+            document.getElementById('studentAuraBalance').value = student.auraBalance || 0;
         } else {
             modalTitle.innerText = "Add Student";
         }
@@ -211,11 +230,13 @@
             name: document.getElementById('studentName').value.trim(),
             email: document.getElementById('studentEmail').value.toLowerCase().trim(),
             passcode: parseInt(document.getElementById('studentPasscode').value.trim(), 10),
-            class: document.getElementById('studentClass').value.trim()
+            class: document.getElementById('studentClass').value.trim(),
+            auraLifetime: parseFloat(document.getElementById('studentAuraLifetime').value) || 0,
+            auraBalance: parseFloat(document.getElementById('studentAuraBalance').value) || 0
         };
 
         if (!student.name || !student.email || !student.passcode || !student.class) {
-            document.getElementById('modal-error').innerText = "All fields are required.";
+            document.getElementById('modal-error').innerText = "Name, email, passcode, and class are required.";
             return;
         }
         if (isNaN(student.passcode)) {

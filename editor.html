@@ -99,10 +99,11 @@
 
     <div class="mb-4 p-4 bg-gray-700 rounded-lg border border-gray-600">
       <h3 class="font-bold text-yellow-400 mb-2">✧ Aura Rewards</h3>
+      <p class="text-sm text-gray-400 mb-3">Aura is awarded once per assignment at submit time if the student meets the criteria.</p>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
           <label class="block text-sm text-gray-400 mb-1">Aura Points</label>
-          <input type="number" id="auraAmount" value="1" min="0" max="100" class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none">
+          <input type="number" id="auraAmount" value="1" min="0" max="100" step="0.1" class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none">
         </div>
         <div>
           <label class="block text-sm text-gray-400 mb-1">Min Score %</label>
@@ -112,6 +113,15 @@
           <input type="checkbox" id="auraOnTime" class="w-4 h-4 text-yellow-500 rounded focus:ring-yellow-500 bg-gray-700 border-gray-500">
           <label for="auraOnTime" class="ml-2 text-sm text-gray-300">Must be on time</label>
         </div>
+      </div>
+      <div class="mt-4 pt-4 border-t border-gray-600">
+        <label class="block text-sm text-gray-400 mb-2">Aura Due Date/Time <span class="text-gray-500">(required if "Must be on time" is checked)</span></label>
+        <div class="flex items-center gap-3">
+          <input type="date" id="auraDueDate" class="p-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none">
+          <input type="time" id="auraDueTime" class="p-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none">
+          <button type="button" onclick="clearAuraDueAt()" class="text-sm text-gray-400 hover:text-white">Clear</button>
+        </div>
+        <p id="auraDueAtWarning" class="hidden text-yellow-400 text-xs mt-2">⚠️ "Must be on time" is checked but no due date is set. On-time requirement will be ignored.</p>
       </div>
     </div>
 
@@ -276,6 +286,23 @@ async function loadAssignment() {
     document.getElementById('auraAmount').value = assignmentData.auraAmount ?? 1;
     document.getElementById('auraMinScore').value = assignmentData.auraMinScore ?? 0;
     document.getElementById('auraOnTime').checked = assignmentData.auraOnTime || false;
+    
+    // Load auraDueAt date/time into the UI
+    if (assignmentData.auraDueAt) {
+      const dueDate = assignmentData.auraDueAt.toDate 
+        ? assignmentData.auraDueAt.toDate() 
+        : new Date(assignmentData.auraDueAt);
+      // Format date as YYYY-MM-DD for date input
+      const dateStr = dueDate.toISOString().split('T')[0];
+      // Format time as HH:MM for time input
+      const timeStr = dueDate.toTimeString().slice(0, 5);
+      document.getElementById('auraDueDate').value = dateStr;
+      document.getElementById('auraDueTime').value = timeStr;
+    }
+    
+    // Check for warning about on-time without due date
+    updateAuraDueAtWarning();
+    
     renderDeadlineUI();
     renderEditor();
   } catch (error) {
@@ -1250,10 +1277,26 @@ async function saveAssignment() {
     });
 
     const postSubmissionRule = document.getElementById('postSubmissionRule').value;
-    const auraAmount = parseInt(document.getElementById('auraAmount').value) || 1;
-    const auraMinScore = parseInt(document.getElementById('auraMinScore').value) || 0;
+    const auraAmount = parseFloat(document.getElementById('auraAmount').value) || 0;
+    const auraMinScore = parseFloat(document.getElementById('auraMinScore').value) || 0;
     const auraOnTime = document.getElementById('auraOnTime').checked;
-    await db.collection("assignments").doc(assignmentId).update({
+    
+    // Build auraDueAt from date/time inputs
+    const auraDueDateStr = document.getElementById('auraDueDate').value;
+    const auraDueTimeStr = document.getElementById('auraDueTime').value;
+    let auraDueAt = null;
+    if (auraDueDateStr && auraDueTimeStr) {
+      // Combine date and time into a Date object, then convert to Firestore Timestamp
+      const combinedDateStr = `${auraDueDateStr}T${auraDueTimeStr}`;
+      const dueDate = new Date(combinedDateStr);
+      auraDueAt = firebase.firestore.Timestamp.fromDate(dueDate);
+    } else if (auraDueDateStr) {
+      // If only date is provided, use midnight
+      const dueDate = new Date(`${auraDueDateStr}T00:00`);
+      auraDueAt = firebase.firestore.Timestamp.fromDate(dueDate);
+    }
+    
+    const updateData = {
       slideIds: assignmentData.slideIds,
       checkerFunctions: checkerFunctions,
       checkerMeta: checkerMeta,
@@ -1262,7 +1305,17 @@ async function saveAssignment() {
       auraAmount: auraAmount,
       auraMinScore: auraMinScore,
       auraOnTime: auraOnTime
-    });
+    };
+    
+    // Add or remove auraDueAt based on whether it's set
+    if (auraDueAt) {
+      updateData.auraDueAt = auraDueAt;
+    } else {
+      // Use FieldValue.delete() to remove the field if no due date is set
+      updateData.auraDueAt = firebase.firestore.FieldValue.delete();
+    }
+    
+    await db.collection("assignments").doc(assignmentId).update(updateData);
     showToast("Assignment saved successfully!", { color: 'green' });
   } catch (error) {
     console.error("Error saving assignment:", error);
@@ -1382,6 +1435,30 @@ async function saveTeacherDefaults() {
     showToast("Error saving defaults.", { color: 'red' });
   }
 }
+
+// Clear Aura due date/time fields
+function clearAuraDueAt() {
+  document.getElementById('auraDueDate').value = '';
+  document.getElementById('auraDueTime').value = '';
+  updateAuraDueAtWarning();
+}
+
+// Show/hide warning if auraOnTime is checked but no due date is set
+function updateAuraDueAtWarning() {
+  const auraOnTime = document.getElementById('auraOnTime').checked;
+  const auraDueDate = document.getElementById('auraDueDate').value;
+  const warningEl = document.getElementById('auraDueAtWarning');
+  
+  if (auraOnTime && !auraDueDate) {
+    warningEl.classList.remove('hidden');
+  } else {
+    warningEl.classList.add('hidden');
+  }
+}
+
+// Add event listeners for aura on-time checkbox and due date changes
+document.getElementById('auraOnTime').addEventListener('change', updateAuraDueAtWarning);
+document.getElementById('auraDueDate').addEventListener('change', updateAuraDueAtWarning);
 
 document.getElementById('signOutButton').addEventListener('click', () => {
   auth.signOut().then(() => {
