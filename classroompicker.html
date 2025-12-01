@@ -255,12 +255,16 @@
         const user = auth.currentUser;
         const photo = (user && user.photoURL) ? user.photoURL : 'https://via.placeholder.com/40';
 
+        // Header shows spendable balance prominently, with lifetime below
         const headerHTML = `
             <div class="flex items-center cursor-pointer hover:opacity-90 transition" onclick="openAuraStore()">
                 <div class="text-right mr-3 hidden sm:block">
                     <div class="font-bold text-white text-sm">${userProfile.name}</div>
                     <div class="text-xs font-mono text-yellow-400">
-                        ${balance} ✧
+                        ${balance} ✧ <span class="text-gray-400">(Spendable)</span>
+                    </div>
+                    <div class="text-xs font-mono text-gray-500">
+                        Lifetime: ${lifetime} ✧
                     </div>
                 </div>
                 <img src="${photo}" 
@@ -615,30 +619,7 @@ slideStates.forEach((state, index) => {
             return;
         }
         try {
-            // --- AURA LOGIC START ---
-            const auraAmount = assignmentData.auraAmount || 1;
-            const minReq = assignmentData.auraMinScore || 0;
-            const timeReq = assignmentData.auraOnTime || false;
-            
-            let auraEarned = 0;
-            let auraAwarded = false;
-            
-            // Check if aura was already awarded for this slide in previous submissions
-            const existingSubmissions = await db.collection("submissions")
-                .where("studentEmail", "==", userProfile.email)
-                .where("assignmentId", "==", assignmentData.id)
-                .where("slideIndex", "==", currentSlideIndex)
-                .where("auraAwarded", "==", true)
-                .get();
-            
-            const alreadyAwarded = !existingSubmissions.empty;
-            
-            // Only award if not previously awarded and meets criteria
-            if (!alreadyAwarded && finalScore >= minReq && (!timeReq || isOnTime)) {
-                auraEarned = auraAmount;
-                auraAwarded = true;
-            }
-            
+            // Save the submission (Aura is awarded at assignment submit time, not per-question)
             const submission = { 
                 studentName: userProfile.name, 
                 studentEmail: userProfile.email, 
@@ -646,32 +627,9 @@ slideStates.forEach((state, index) => {
                 slideIndex: currentSlideIndex, 
                 answer: studentAnswer, 
                 score: finalScore, 
-                timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-                auraAwarded: auraAwarded,
-                auraAmount: auraEarned
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
             };
             await db.collection("submissions").add(submission);
-            
-            // Atomic Increment for Student Profile
-            if (auraEarned > 0 && userProfile.studentDocId) {
-                try {
-                    await db.collection('students').doc(userProfile.studentDocId).update({
-                        auraLifetime: firebase.firestore.FieldValue.increment(auraEarned),
-                        auraBalance: firebase.firestore.FieldValue.increment(auraEarned)
-                    });
-                    // Update local userProfile only after successful database update
-                    userProfile.auraLifetime = (userProfile.auraLifetime || 0) + auraEarned;
-                    userProfile.auraBalance = (userProfile.auraBalance || 0) + auraEarned;
-                    // Update header display
-                    updateUserHeader();
-                    // Trigger visual feedback
-                    showToast(`+${auraEarned} Aura Points!`, {color: 'yellow', duration: 3000});
-                } catch (auraError) {
-                    console.error("Error updating aura points:", auraError);
-                    // Don't show aura toast if update failed, but submission was still saved
-                }
-            }
-            // --- AURA LOGIC END ---
             
             showToast("Answer saved!", { color: 'blue', position: 'bottom-right', duration: 2000 });
         } catch (error) {
@@ -783,28 +741,98 @@ slideStates.forEach((state, index) => {
                 submitButton.disabled = true;
                 submitButton.textContent = 'Submitting...';
         
-                await db.collection("submissionStatus").add({
+                // Create submissionStatus document and keep the reference
+                const statusRef = await db.collection("submissionStatus").add({
                     studentEmail: userProfile.email,
                     studentName: userProfile.name,
                     assignmentId: assignmentData.id,
                     status: 'submitted',
-                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                    auraAwarded: false
                 });
         
                 isSubmitted = true;
                 showToast("Assignment submitted successfully!", {color: 'green', duration: 5000});
+
+                // --- AURA AWARDING AT SUBMIT TIME ---
+                // Aura is awarded once per assignment, based on overall average, at submit time
+                try {
+                    // Calculate overall assignment average from slideStates
+                    let totalScore = 0;
+                    let counted = 0;
+                    slideStates.forEach(state => {
+                        if (state && typeof state.score === 'number') {
+                            totalScore += state.score;
+                            counted++;
+                        }
+                    });
+                    const overallAverage = counted > 0 ? totalScore / counted : 0;
+
+                    // Read assignment-level Aura config
+                    const auraAmount = parseFloat(assignmentData.auraAmount) || 0;
+                    const auraMinScore = parseFloat(assignmentData.auraMinScore) || 0;
+                    const auraOnTime = assignmentData.auraOnTime || false;
+                    const auraDueAt = assignmentData.auraDueAt;
+
+                    // Compute assignment-level on-time status
+                    let isOnTimeAssignment = true;
+                    if (auraOnTime && auraDueAt) {
+                        const now = new Date();
+                        const dueAt = auraDueAt.toDate 
+                            ? auraDueAt.toDate() 
+                            : new Date(auraDueAt);
+                        isOnTimeAssignment = now <= dueAt;
+                    }
+
+                    // Check if Aura was already awarded (double-award prevention)
+                    const statusDoc = await statusRef.get();
+                    const alreadyAwarded = statusDoc.exists && statusDoc.data().auraAwarded === true;
+
+                    // Award Aura if all conditions are met
+                    if (
+                        auraAmount > 0 &&
+                        overallAverage >= auraMinScore &&
+                        (!auraOnTime || isOnTimeAssignment) &&
+                        !alreadyAwarded &&
+                        userProfile.studentDocId
+                    ) {
+                        // Update student document with atomic increment
+                        await db.collection('students').doc(userProfile.studentDocId).update({
+                            auraLifetime: firebase.firestore.FieldValue.increment(auraAmount),
+                            auraBalance: firebase.firestore.FieldValue.increment(auraAmount)
+                        });
+
+                        // Mark Aura as awarded in submissionStatus
+                        await statusRef.update({
+                            auraAwarded: true,
+                            auraAmount: auraAmount
+                        });
+
+                        // Update local userProfile
+                        userProfile.auraLifetime = (userProfile.auraLifetime || 0) + auraAmount;
+                        userProfile.auraBalance = (userProfile.auraBalance || 0) + auraAmount;
+                        updateUserHeader();
+
+                        // Show Aura toast
+                        showToast(`+${auraAmount} Aura for scoring ${overallAverage.toFixed(1)}%!`, {color: 'yellow', duration: 4000});
+                    }
+                } catch (auraError) {
+                    // Aura awarding failed but submission still succeeded
+                    console.error("Error awarding Aura:", auraError);
+                }
+                // --- END AURA AWARDING ---
         
                 const postRule = assignmentData.postSubmissionRule || 'open';
                 
-                // **FIX:** On submit, show summary for 'hide' rule
+                // On submit, show summary based on post-submission rule
                 if (postRule === 'hide') {
                     showToast("Assignment is now hidden.", {color: 'blue', duration: 3000});
-                    showSummary(); // This will hide main container and show summary
+                    showSummary();
                 } else if (postRule === 'lock') {
                     showToast("Assignment is now locked. You can review but not edit.", {color: 'blue', duration: 5000});
-                    showSummary(); // Still show summary, but it will be reviewable
+                    showSummary();
                 } else {
-                     showSummary(); // Show summary for 'open' rule as well
+                    showSummary();
                 }
 
             } catch (error) {
@@ -858,12 +886,14 @@ slideStates.forEach((state, index) => {
     };
 
     function renderStoreTab() {
-        // Requires userProfile global variable
+        // Show spendable balance prominently, with lifetime context below
         const balance = userProfile.auraBalance || 0;
+        const lifetime = userProfile.auraLifetime || 0;
         document.getElementById('aura-content').innerHTML = `
             <div class="text-center mb-4">
-                <div class="text-sm text-gray-400">Current Balance</div>
+                <div class="text-sm text-gray-400">Spendable Balance</div>
                 <div class="text-3xl font-bold text-yellow-400">${balance} ✧</div>
+                <div class="text-xs text-purple-400 mt-1">Lifetime: ${lifetime} ✧</div>
             </div>
             <div class="space-y-3">
                  <div class="flex justify-between p-3 bg-gray-700 rounded border border-gray-600 items-center">
@@ -885,6 +915,7 @@ slideStates.forEach((state, index) => {
         container.innerHTML = '<div class="text-center text-gray-400">Loading...</div>';
         
         // Query logic: Filter by class if available, sort by Lifetime Aura
+        // Leaderboard uses auraLifetime for ranking (not spendable balance)
         let query = db.collection('students');
         if (userProfile.class && userProfile.class !== 'Teacher') query = query.where('class', '==', userProfile.class);
         
@@ -899,7 +930,7 @@ slideStates.forEach((state, index) => {
                 });
             });
             
-            // Sort High to Low
+            // Sort High to Low by lifetime Aura
             students.sort((a, b) => b.score - a.score);
             
             let html = '<div class="space-y-2">';
@@ -925,6 +956,15 @@ slideStates.forEach((state, index) => {
             }
             html += '</div>';
             container.innerHTML = html;
+        }).catch(error => {
+            // Handle Firestore read errors gracefully
+            console.error("Error loading leaderboard:", error);
+            container.innerHTML = `
+                <div class="text-center text-red-400">
+                    <p class="mb-2">Could not load leaderboard.</p>
+                    <p class="text-sm text-gray-500">Please try again later.</p>
+                </div>
+            `;
         });
     }
 </script>
