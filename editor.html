@@ -992,7 +992,7 @@ function generateCodeFromUI(container) {
         const pickModeEl = cond.querySelector('.number-pick-mode');
         const nthIndexEl = cond.querySelector('.number-index');
         const pickMode = pickModeEl ? pickModeEl.value : 'first';
-        const nthIndex = nthIndexEl ? parseInt(nthIndexEl.value, 10) : 1;
+        const nthIndex = nthIndexEl ? (parseInt(nthIndexEl.value, 10) || 1) : 1;
 
         const createComparison = (numVar) => {
           if (op === '==') {
