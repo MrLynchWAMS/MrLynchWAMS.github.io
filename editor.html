@@ -1302,10 +1302,18 @@ async function saveAssignment() {
     // Build auraDueAt Timestamp if both date and time are provided
     let auraDueAt = null;
     if (auraDueDateStr && auraDueTimeStr) {
-      const [year, month, day] = auraDueDateStr.split('-').map(Number);
-      const [hour, minute] = auraDueTimeStr.split(':').map(Number);
-      const localDate = new Date(year, month - 1, day, hour, minute, 0, 0);
-      auraDueAt = firebase.firestore.Timestamp.fromDate(localDate);
+      const dateParts = auraDueDateStr.split('-');
+      const timeParts = auraDueTimeStr.split(':');
+      // Validate expected format
+      if (dateParts.length === 3 && timeParts.length >= 2) {
+        const [year, month, day] = dateParts.map(Number);
+        const [hour, minute] = timeParts.map(Number);
+        // Validate parsed values are valid numbers
+        if (!isNaN(year) && !isNaN(month) && !isNaN(day) && !isNaN(hour) && !isNaN(minute)) {
+          const localDate = new Date(year, month - 1, day, hour, minute, 0, 0);
+          auraDueAt = firebase.firestore.Timestamp.fromDate(localDate);
+        }
+      }
     }
     
     // Build the update payload
