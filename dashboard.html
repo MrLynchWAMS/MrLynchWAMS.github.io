@@ -483,7 +483,7 @@ function setupLiveStudentData() {
             let violationsCell = '';
             if (hasFocusMode) {
                 if (violationCount > 0) {
-                    violationsCell = `<td class="px-2 py-4 whitespace-nowrap text-center cursor-pointer" onclick="showViolations('${escapeHtml(student.email)}')"><span class="text-red-400 font-bold">${violationCount}</span></td>`;
+                    violationsCell = `<td class="px-2 py-4 whitespace-nowrap text-center cursor-pointer" onclick="showViolations('${escapeHtml(student.email)}')"><span class="text-red-400 font-bold">${escapeHtml(String(violationCount))}</span></td>`;
                 } else {
                     violationsCell = `<td class="px-2 py-4 whitespace-nowrap text-center"><span class="text-gray-600">-</span></td>`;
                 }
@@ -907,7 +907,7 @@ function setupLiveStudentData() {
         
         let contentHtml = '<div class="space-y-4">';
         if (violations.length > 0) {
-            contentHtml += `<p class="text-red-400 font-semibold mb-4">Total Violations: ${violations.length}</p>`;
+            contentHtml += `<p class="text-red-400 font-semibold mb-4">Total Violations: ${escapeHtml(String(violations.length))}</p>`;
             violations.forEach(violation => {
                 const date = violation.timestamp ? new Date(violation.timestamp.seconds * 1000).toLocaleString() : 'N/A';
                 const typeLabels = {
@@ -918,15 +918,16 @@ function setupLiveStudentData() {
                     'blocked_key': '⌨️ Blocked Key',
                     'blocked_shortcut': '⌨️ Blocked Shortcut'
                 };
-                const typeLabel = typeLabels[violation.violationType] || violation.violationType;
+                const typeLabel = typeLabels[violation.violationType] || escapeHtml(violation.violationType || 'Unknown');
+                const slideNum = typeof violation.slideIndex === 'number' ? violation.slideIndex + 1 : 1;
                 
                 contentHtml += `<div class="bg-red-900/30 border border-red-700 p-4 rounded-lg">
                     <div class="flex justify-between items-center mb-2">
                         <p class="font-bold text-lg text-red-400">${typeLabel}</p>
-                        <p class="text-sm text-gray-400">${date}</p>
+                        <p class="text-sm text-gray-400">${escapeHtml(date)}</p>
                     </div>
-                    <p class="text-gray-300">${violation.description || 'No description'}</p>
-                    <p class="text-xs text-gray-500 mt-1">Slide: Q${(violation.slideIndex || 0) + 1}</p>
+                    <p class="text-gray-300">${escapeHtml(violation.description || 'No description')}</p>
+                    <p class="text-xs text-gray-500 mt-1">Slide: Q${escapeHtml(String(slideNum))}</p>
                 </div>`;
             });
         } else {

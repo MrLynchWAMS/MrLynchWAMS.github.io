@@ -495,11 +495,13 @@
         }
         
         for (const combo of blockedCombos) {
-            const shiftMatch = combo.shift ? event.shiftKey : true; // If combo requires shift, check it; otherwise ignore
-            if (combo.ctrl && event.ctrlKey && shiftMatch && 
+            // If combo requires shift, check if shift is pressed
+            // If combo doesn't require shift (combo.shift is undefined/false), allow blocking with or without shift
+            const shiftOk = combo.shift ? event.shiftKey : true;
+            if (combo.ctrl && event.ctrlKey && shiftOk && 
                 event.key.toLowerCase() === combo.key) {
                 event.preventDefault();
-                logViolation('blocked_shortcut', `Blocked shortcut: Ctrl+${combo.shift ? 'Shift+' : ''}${combo.key.toUpperCase()}`);
+                logViolation('blocked_shortcut', `Blocked shortcut: Ctrl+${event.shiftKey ? 'Shift+' : ''}${combo.key.toUpperCase()}`);
                 showToast("This keyboard shortcut is disabled in Focus Mode.", { color: 'red', duration: 2000, position: 'bottom-center' });
                 return;
             }
