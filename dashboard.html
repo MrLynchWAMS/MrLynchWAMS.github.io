@@ -70,6 +70,7 @@
                         <label class="flex items-center"><input type="checkbox" id="hideNames" onchange="toggleDisplayOptions()" class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"><span class="ml-2">Hide Names</span></label>
                         <label class="flex items-center"><input type="checkbox" id="showScores" onchange="toggleDisplayOptions()" class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"><span class="ml-2">Show Scores</span></label>
                         <label class="flex items-center"><input type="checkbox" id="blackoutMode" onchange="toggleDisplayOptions()" class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"><span class="ml-2">Blackout Mode</span></label>
+                        <label class="flex items-center"><input type="checkbox" id="showBehaviorToggle" checked onchange="toggleDisplayOptions()" class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"><span class="ml-2">Show Aura & Violations</span></label>
                     </div>
                     <div class="h-6 border-l border-gray-600 hidden md:block"></div>
                     <div class="flex items-center gap-4">
@@ -128,6 +129,7 @@
     let hideNames = false;
     let showScores = false;
     let blackoutMode = false;
+    let showBehavior = true;
     let sortMode = 'lastName';
     let staticRandomOrder = [];
     let showAllAttempts = localStorage.getItem('dashboardShowAllAttempts') === 'true';
@@ -183,6 +185,7 @@ function setupLiveStudentData() {
     const submissionsByStudent = new Map();
     const submittedEmails = new Set();
     const violationsByStudent = new Map();
+    const auraByStudent = new Map();
 
     // Listener 1: Students collection
     unsubscribeStudents = db.collection("students").onSnapshot(studentSnapshot => {
@@ -228,14 +231,21 @@ function setupLiveStudentData() {
             rebuildAllStudentData();
         });
 
-    // Listener 3: Submission status
+    // Listener 3: Submission status (includes Aura data)
     unsubscribeStatus = db.collection("submissionStatus")
         .where("assignmentId", "==", assignmentId)
         .where("status", "==", "submitted")
         .onSnapshot(statusSnapshot => {
             submittedEmails.clear();
+            auraByStudent.clear();
             statusSnapshot.forEach(doc => {
-                submittedEmails.add(doc.data().studentEmail);
+                const data = doc.data();
+                submittedEmails.add(data.studentEmail);
+                // Store aura data for this student
+                auraByStudent.set(data.studentEmail, {
+                    auraAwarded: data.auraAwarded || false,
+                    auraAmount: data.auraAmount || 0
+                });
             });
             rebuildAllStudentData();
         });
@@ -257,12 +267,17 @@ function setupLiveStudentData() {
         });
 
     function rebuildAllStudentData() {
-        allStudentData = Array.from(studentsMap.values()).map(student => ({
-            ...student,
-            submissions: submissionsByStudent.get(student.email) || [],
-            isSubmitted: submittedEmails.has(student.email),
-            violations: violationsByStudent.get(student.email) || []
-        }));
+        allStudentData = Array.from(studentsMap.values()).map(student => {
+            const auraData = auraByStudent.get(student.email) || { auraAwarded: false, auraAmount: 0 };
+            return {
+                ...student,
+                submissions: submissionsByStudent.get(student.email) || [],
+                isSubmitted: submittedEmails.has(student.email),
+                violations: violationsByStudent.get(student.email) || [],
+                auraAwarded: auraData.auraAwarded,
+                auraAmount: auraData.auraAmount
+            };
+        });
 
         // PATCH: Set activeClass to first class after data loads, only once
         const assignedClasses = assignmentData.assignedClasses || [];
@@ -404,6 +419,7 @@ function setupLiveStudentData() {
         hideNames = document.getElementById('hideNames').checked;
         showScores = document.getElementById('showScores').checked;
         blackoutMode = document.getElementById('blackoutMode').checked;
+        showBehavior = document.getElementById('showBehaviorToggle').checked;
         const avgEl = document.getElementById('activeClassAvg');
         if (avgEl) avgEl.classList.toggle('hidden', !showScores);
         displayStudentData();
@@ -437,10 +453,12 @@ function setupLiveStudentData() {
 
         let headerHtml = `<tr>
             <th class="px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-64">Student Name</th>
-            <th class="px-2 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider w-20">Submitted</th>
-            <th class="px-2 py-3 text-center text-xs font-medium text-yellow-400 uppercase tracking-wider w-16">Aura</th>`;
-        if (hasFocusMode) {
-            headerHtml += `<th class="px-2 py-3 text-center text-xs font-medium text-red-400 uppercase tracking-wider w-16" title="Focus Mode Violations">🔒</th>`;
+            <th class="px-2 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider w-20">Submitted</th>`;
+        if (showBehavior) {
+            headerHtml += `<th class="px-2 py-3 text-center text-xs font-medium text-yellow-400 uppercase tracking-wider w-16">Aura</th>`;
+            if (hasFocusMode) {
+                headerHtml += `<th class="px-2 py-3 text-center text-xs font-medium text-red-400 uppercase tracking-wider w-16" title="Focus Mode Violations">🔒</th>`;
+            }
         }
         for (let i = 1; i <= numQuestions; i++) {
             headerHtml += `<th class="px-2 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer hover:text-yellow-400" onclick="showQuestionSubmissions(${i - 1})">Q${i}</th>`;
@@ -449,9 +467,12 @@ function setupLiveStudentData() {
         
         let classAverageRowHtml = '';
         if (showScores) {
-            classAverageRowHtml = `<tr><td class="text-xs font-semibold text-cyan-400 px-3">Class Average:</td><td class="px-2"></td><td class="px-2"></td>`;
-            if (hasFocusMode) {
+            classAverageRowHtml = `<tr><td class="text-xs font-semibold text-cyan-400 px-3">Class Average:</td><td class="px-2"></td>`;
+            if (showBehavior) {
                 classAverageRowHtml += `<td class="px-2"></td>`;
+                if (hasFocusMode) {
+                    classAverageRowHtml += `<td class="px-2"></td>`;
+                }
             }
             for (let i = 0; i < numQuestions; i++) {
                 const scores = sortedStudents.map(s => s.submissions.filter(sub => sub.slideIndex === i).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0]).filter(Boolean).map(sub => sub.score);
@@ -474,15 +495,21 @@ function setupLiveStudentData() {
                 avgScoreDisplay = `<span class="text-xs text-gray-400 ml-2 font-mono ${blackoutMode ? 'blackout' : ''}">(${escapeHtml(studentAvg)})</span>`;
             }
 
-            // Check if any submission has auraAwarded
-            const hasAuraAwarded = student.submissions.some(sub => sub.auraAwarded === true);
-            const auraCell = hasAuraAwarded ? '<span class="text-yellow-400">✅</span>' : '<span class="text-gray-600">-</span>';
+            // Use assignment-level aura data from submissionStatus
+            let auraCell = '';
+            if (showBehavior) {
+                if (student.auraAwarded) {
+                    auraCell = `<td class="px-2 py-4 whitespace-nowrap text-center"><span class="text-yellow-400">${escapeHtml(String(student.auraAmount))} ✧</span></td>`;
+                } else {
+                    auraCell = `<td class="px-2 py-4 whitespace-nowrap text-center"><span class="text-gray-600">-</span></td>`;
+                }
+            }
 
             // Focus Mode violations
             const violations = student.violations || [];
             const violationCount = violations.length;
             let violationsCell = '';
-            if (hasFocusMode) {
+            if (showBehavior && hasFocusMode) {
                 if (violationCount > 0) {
                     violationsCell = `<td class="px-2 py-4 whitespace-nowrap text-center cursor-pointer" onclick="showViolations('${escapeHtml(student.email)}')"><span class="text-red-400 font-bold">${escapeHtml(String(violationCount))}</span></td>`;
                 } else {
@@ -494,7 +521,7 @@ function setupLiveStudentData() {
             tableHtml += `<tr class="hover:bg-gray-700">
                 <td class="px-3 py-4 whitespace-nowrap text-sm font-medium text-white cursor-pointer hover:text-yellow-400 truncate" onclick="showStudentSubmissions('${escapedEmail}')">${displayName}${avgScoreDisplay}</td>
                 <td class="px-2 py-4 whitespace-nowrap text-center"><input type="checkbox" onchange="toggleSubmissionStatus('${escapedEmail}', this.checked)" ${student.isSubmitted ? 'checked' : ''} class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"></td>
-                <td class="px-2 py-4 whitespace-nowrap text-center">${auraCell}</td>
+                ${auraCell}
                 ${violationsCell}
             `;
             
@@ -977,6 +1004,7 @@ function setupLiveStudentData() {
         if (hasFocusMode) {
             headers.push("Focus Violations");
         }
+        headers.push("Aura");
         for (let i = 1; i <= numQuestions; i++) { headers.push(`Q${i} Score`); }
         csvContent += headers.join(',') + "\r\n";
         
@@ -1008,6 +1036,7 @@ function setupLiveStudentData() {
             if (hasFocusMode) {
                 row.push((student.violations || []).length);
             }
+            row.push(student.auraAwarded ? student.auraAmount : 0);
             row = [...row, ...questionScores].join(',');
             csvContent += row + "\r\n";
         });
