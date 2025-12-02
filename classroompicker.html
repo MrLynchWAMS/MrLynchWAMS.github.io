@@ -396,11 +396,8 @@
         // Show Focus Mode indicator
         document.getElementById('focusModeIndicator').classList.remove('hidden');
         
-        // Load existing violation count from session
-        const savedViolations = sessionStorage.getItem(`violations_${assignmentId}_${userProfile.email}`);
-        if (savedViolations) {
-            violationCount = parseInt(savedViolations, 10) || 0;
-        }
+        // Load existing violation count from Firestore
+        loadViolationCount();
         
         // 1. DISABLE RIGHT CLICK (Context Menu)
         document.addEventListener('contextmenu', handleContextMenu);
@@ -423,6 +420,19 @@
         console.log("Focus Mode initialized. Monitoring active.");
     }
     
+    async function loadViolationCount() {
+        try {
+            const snapshot = await db.collection("focusViolations")
+                .where("studentEmail", "==", userProfile.email)
+                .where("assignmentId", "==", assignmentData.id)
+                .get();
+            violationCount = snapshot.size;
+        } catch (error) {
+            console.error("Error loading violation count:", error);
+            violationCount = 0;
+        }
+    }
+    
     function handleContextMenu(event) {
         if (!focusModeActive || isSubmitted) return;
         event.preventDefault();
@@ -441,7 +451,6 @@
         if (!focusModeActive || isSubmitted) return;
         
         violationCount++;
-        sessionStorage.setItem(`violations_${assignmentId}_${userProfile.email}`, violationCount);
         
         logViolation('window_blur', 'Window lost focus (tab switch or sidebar click)');
         
@@ -486,8 +495,8 @@
         }
         
         for (const combo of blockedCombos) {
-            if (combo.ctrl && event.ctrlKey && 
-                (!combo.shift || event.shiftKey) && 
+            const shiftMatch = combo.shift ? event.shiftKey : true; // If combo requires shift, check it; otherwise ignore
+            if (combo.ctrl && event.ctrlKey && shiftMatch && 
                 event.key.toLowerCase() === combo.key) {
                 event.preventDefault();
                 logViolation('blocked_shortcut', `Blocked shortcut: Ctrl+${combo.shift ? 'Shift+' : ''}${combo.key.toUpperCase()}`);
@@ -503,7 +512,6 @@
         if (document.hidden) {
             // Tab was switched away
             violationCount++;
-            sessionStorage.setItem(`violations_${assignmentId}_${userProfile.email}`, violationCount);
             
             logViolation('tab_hidden', 'Tab became hidden (tab switch)');
             
@@ -570,8 +578,48 @@
             
             overlay.classList.remove('hidden');
             
+            // Calculate aura eligibility (same logic as regular submit)
+            let auraAwarded = false;
+            let auraAmount = 0;
+            
+            try {
+                // Calculate overall assignment average from slideStates
+                let totalScore = 0;
+                slideStates.forEach(state => {
+                    if (state && typeof state.score === 'number') {
+                        totalScore += state.score;
+                    }
+                });
+                const overallAverage = slideStates.length > 0 ? totalScore / slideStates.length : 0;
+                
+                // Read assignment-level Aura config
+                const assignmentAuraAmount = parseFloat(assignmentData.auraAmount) || 0;
+                const auraMinScore = parseFloat(assignmentData.auraMinScore) || 0;
+                const auraOnTime = assignmentData.auraOnTime || false;
+                const auraDueAt = assignmentData.auraDueAt;
+                
+                // Compute assignment-level on-time status
+                let isOnTimeAssignment = true;
+                if (auraOnTime && auraDueAt) {
+                    const now = new Date();
+                    const dueAt = auraDueAt.toDate ? auraDueAt.toDate() : new Date(auraDueAt);
+                    isOnTimeAssignment = now <= dueAt;
+                }
+                
+                // Check aura eligibility
+                if (assignmentAuraAmount > 0 && 
+                    overallAverage >= auraMinScore && 
+                    (!auraOnTime || isOnTimeAssignment) &&
+                    userProfile.studentDocId) {
+                    auraAwarded = true;
+                    auraAmount = assignmentAuraAmount;
+                }
+            } catch (auraError) {
+                console.error("Error calculating aura eligibility:", auraError);
+            }
+            
             // Create submissionStatus document
-            await db.collection("submissionStatus").add({
+            const statusRef = await db.collection("submissionStatus").add({
                 studentEmail: userProfile.email,
                 studentName: userProfile.name,
                 assignmentId: assignmentData.id,
@@ -579,8 +627,24 @@
                 timestamp: firebase.firestore.FieldValue.serverTimestamp(),
                 submittedByFocusViolation: true,
                 violationCount: violationCount,
-                auraAwarded: false
+                auraAwarded: auraAwarded,
+                auraAmount: auraAwarded ? auraAmount : 0
             });
+            
+            // Award aura if eligible
+            if (auraAwarded && userProfile.studentDocId) {
+                try {
+                    await db.collection('students').doc(userProfile.studentDocId).update({
+                        auraLifetime: firebase.firestore.FieldValue.increment(auraAmount),
+                        auraBalance: firebase.firestore.FieldValue.increment(auraAmount)
+                    });
+                    userProfile.auraLifetime = (userProfile.auraLifetime || 0) + auraAmount;
+                    userProfile.auraBalance = (userProfile.auraBalance || 0) + auraAmount;
+                    updateUserHeader();
+                } catch (e) {
+                    console.error("Error awarding aura:", e);
+                }
+            }
             
             isSubmitted = true;
             focusModeActive = false; // Disable further monitoring

@@ -483,15 +483,16 @@ function setupLiveStudentData() {
             let violationsCell = '';
             if (hasFocusMode) {
                 if (violationCount > 0) {
-                    violationsCell = `<td class="px-2 py-4 whitespace-nowrap text-center cursor-pointer" onclick="showViolations('${student.email}')"><span class="text-red-400 font-bold">${violationCount}</span></td>`;
+                    violationsCell = `<td class="px-2 py-4 whitespace-nowrap text-center cursor-pointer" onclick="showViolations('${escapeHtml(student.email)}')"><span class="text-red-400 font-bold">${violationCount}</span></td>`;
                 } else {
                     violationsCell = `<td class="px-2 py-4 whitespace-nowrap text-center"><span class="text-gray-600">-</span></td>`;
                 }
             }
 
+            const escapedEmail = escapeHtml(student.email);
             tableHtml += `<tr class="hover:bg-gray-700">
-                <td class="px-3 py-4 whitespace-nowrap text-sm font-medium text-white cursor-pointer hover:text-yellow-400 truncate" onclick="showStudentSubmissions('${student.email}')">${displayName}${avgScoreDisplay}</td>
-                <td class="px-2 py-4 whitespace-nowrap text-center"><input type="checkbox" onchange="toggleSubmissionStatus('${student.email}', this.checked)" ${student.isSubmitted ? 'checked' : ''} class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"></td>
+                <td class="px-3 py-4 whitespace-nowrap text-sm font-medium text-white cursor-pointer hover:text-yellow-400 truncate" onclick="showStudentSubmissions('${escapedEmail}')">${displayName}${avgScoreDisplay}</td>
+                <td class="px-2 py-4 whitespace-nowrap text-center"><input type="checkbox" onchange="toggleSubmissionStatus('${escapedEmail}', this.checked)" ${student.isSubmitted ? 'checked' : ''} class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"></td>
                 <td class="px-2 py-4 whitespace-nowrap text-center">${auraCell}</td>
                 ${violationsCell}
             `;
@@ -501,7 +502,7 @@ function setupLiveStudentData() {
                 
                 if (blackoutMode) {
                     if (latestSubmission) {
-                        tableHtml += `<td class="px-2 py-4 whitespace-nowrap cursor-pointer" onclick="showSubmissions('${student.email}', ${i})"><div class="w-full bg-black rounded-full h-6"></div></td>`;
+                        tableHtml += `<td class="px-2 py-4 whitespace-nowrap cursor-pointer" onclick="showSubmissions('${escapedEmail}', ${i})"><div class="w-full bg-black rounded-full h-6"></div></td>`;
                     } else {
                         tableHtml += `<td class="px-2 py-4"><div class="h-6 rounded-full border-2 border-dashed border-gray-400"></div></td>`;
                     }
@@ -510,7 +511,7 @@ function setupLiveStudentData() {
                         const score = latestSubmission.score;
                         const color = score >= 90 ? 'bg-green-500' : score >= 70 ? 'bg-yellow-500' : 'bg-red-500';
                         const scoreDisplay = showScores ? score : '';
-                        tableHtml += `<td class="px-2 py-4 whitespace-nowrap text-sm font-semibold cursor-pointer" onclick="showSubmissions('${student.email}', ${i})">
+                        tableHtml += `<td class="px-2 py-4 whitespace-nowrap text-sm font-semibold cursor-pointer" onclick="showSubmissions('${escapedEmail}', ${i})">
                             <div class="w-full bg-gray-600 rounded-full h-6 relative">
                                 <div class="${color} h-6 rounded-full text-center text-white text-xs flex items-center justify-center" style="width: ${score}%">${scoreDisplay}</div>
                             </div></td>`;
@@ -939,6 +940,15 @@ function setupLiveStudentData() {
     function handleCredentialResponse(response) { 
         auth.signInWithCredential(firebase.auth.GoogleAuthProvider.credential(response.credential))
             .catch(err => console.error("Sign-in failed:", err)); 
+    }
+    
+    // Helper function to escape HTML special characters to prevent XSS
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str).replace(/[&<>"']/g, function(match) {
+            const escapeMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+            return escapeMap[match];
+        });
     }
     
     function showToast(message, options = {}) {
