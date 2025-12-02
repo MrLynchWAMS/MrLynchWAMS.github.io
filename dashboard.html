@@ -238,15 +238,46 @@ function setupLiveStudentData() {
         .onSnapshot(statusSnapshot => {
             submittedEmails.clear();
             auraByStudent.clear();
+            
+            // Aggregate all docs per student to select the "best" one for Aura
+            const docsByStudent = new Map();
             statusSnapshot.forEach(doc => {
                 const data = doc.data();
-                submittedEmails.add(data.studentEmail);
-                // Store aura data for this student
-                auraByStudent.set(data.studentEmail, {
-                    auraAwarded: data.auraAwarded || false,
-                    auraAmount: data.auraAmount || 0
+                const email = data.studentEmail;
+                submittedEmails.add(email);
+                
+                if (!docsByStudent.has(email)) {
+                    docsByStudent.set(email, []);
+                }
+                docsByStudent.get(email).push(data);
+            });
+            
+            // For each student, select the best doc for Aura data
+            // Priority: most recent timestamp, then prefer auraAwarded=true
+            docsByStudent.forEach((docs, email) => {
+                let bestDoc = docs[0];
+                for (let i = 1; i < docs.length; i++) {
+                    const current = docs[i];
+                    const bestTimestamp = bestDoc.timestamp?.seconds || 0;
+                    const currentTimestamp = current.timestamp?.seconds || 0;
+                    
+                    if (currentTimestamp > bestTimestamp) {
+                        bestDoc = current;
+                    } else if (currentTimestamp === bestTimestamp) {
+                        // If timestamps are equal, prefer the one with auraAwarded=true
+                        if (current.auraAwarded && !bestDoc.auraAwarded) {
+                            bestDoc = current;
+                        }
+                    }
+                }
+                
+                // Populate auraByStudent from the chosen best doc
+                auraByStudent.set(email, {
+                    auraAwarded: !!bestDoc.auraAwarded,
+                    auraAmount: typeof bestDoc.auraAmount === 'number' ? bestDoc.auraAmount : 0
                 });
             });
+            
             rebuildAllStudentData();
         });
 
