@@ -99,10 +99,11 @@
 
     <div class="mb-4 p-4 bg-gray-700 rounded-lg border border-gray-600">
       <h3 class="font-bold text-yellow-400 mb-2">✧ Aura Rewards</h3>
+      <p class="text-xs text-gray-400 mb-3">Aura is awarded once per assignment at submit time, based on overall assignment average.</p>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
           <label class="block text-sm text-gray-400 mb-1">Aura Points</label>
-          <input type="number" id="auraAmount" value="1" min="0" max="100" class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none">
+          <input type="number" id="auraAmount" value="1" min="0" max="100" step="0.1" class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none">
         </div>
         <div>
           <label class="block text-sm text-gray-400 mb-1">Min Score %</label>
@@ -113,6 +114,17 @@
           <label for="auraOnTime" class="ml-2 text-sm text-gray-300">Must be on time</label>
         </div>
       </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">Aura Deadline Date</label>
+          <input type="date" id="auraDueDate" class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none">
+        </div>
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">Aura Deadline Time</label>
+          <input type="time" id="auraDueTime" class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none">
+        </div>
+      </div>
+      <p class="text-xs text-gray-500 mt-2">If "Must be on time" is checked, both date and time must be set. Students must submit before this deadline to earn Aura.</p>
     </div>
 
     <div id="slidesContainer" class="space-y-8"></div>
@@ -276,6 +288,28 @@ async function loadAssignment() {
     document.getElementById('auraAmount').value = assignmentData.auraAmount ?? 1;
     document.getElementById('auraMinScore').value = assignmentData.auraMinScore ?? 0;
     document.getElementById('auraOnTime').checked = assignmentData.auraOnTime || false;
+    
+    // Populate Aura deadline date/time using teacher's local timezone
+    const auraDueDateInput = document.getElementById('auraDueDate');
+    const auraDueTimeInput = document.getElementById('auraDueTime');
+    if (assignmentData.auraDueAt) {
+      const dueAt = assignmentData.auraDueAt.toDate 
+        ? assignmentData.auraDueAt.toDate() 
+        : new Date(assignmentData.auraDueAt);
+      // Format as yyyy-mm-dd for date input (local timezone)
+      const year = dueAt.getFullYear();
+      const month = String(dueAt.getMonth() + 1).padStart(2, '0');
+      const day = String(dueAt.getDate()).padStart(2, '0');
+      auraDueDateInput.value = `${year}-${month}-${day}`;
+      // Format as HH:MM for time input (24-hour, local timezone)
+      const hours = String(dueAt.getHours()).padStart(2, '0');
+      const minutes = String(dueAt.getMinutes()).padStart(2, '0');
+      auraDueTimeInput.value = `${hours}:${minutes}`;
+    } else {
+      auraDueDateInput.value = '';
+      auraDueTimeInput.value = '';
+    }
+    
     renderDeadlineUI();
     renderEditor();
   } catch (error) {
@@ -1250,10 +1284,40 @@ async function saveAssignment() {
     });
 
     const postSubmissionRule = document.getElementById('postSubmissionRule').value;
-    const auraAmount = parseInt(document.getElementById('auraAmount').value) || 1;
-    const auraMinScore = parseInt(document.getElementById('auraMinScore').value) || 0;
+    const auraAmount = parseFloat(document.getElementById('auraAmount').value) || 0;
+    const auraMinScore = parseFloat(document.getElementById('auraMinScore').value) || 0;
     const auraOnTime = document.getElementById('auraOnTime').checked;
-    await db.collection("assignments").doc(assignmentId).update({
+    
+    // Read Aura deadline date and time
+    const auraDueDateStr = document.getElementById('auraDueDate').value;
+    const auraDueTimeStr = document.getElementById('auraDueTime').value;
+    
+    // Validation: if auraOnTime is true, require both date and time
+    if (auraOnTime && (!auraDueDateStr || !auraDueTimeStr)) {
+      showToast("To require 'Must be on time', please set both Aura deadline date and time.", { color: 'red' });
+      saveBtn.textContent = "Save Assignment";
+      return;
+    }
+    
+    // Build auraDueAt Timestamp if both date and time are provided
+    let auraDueAt = null;
+    if (auraDueDateStr && auraDueTimeStr) {
+      const dateParts = auraDueDateStr.split('-');
+      const timeParts = auraDueTimeStr.split(':');
+      // Validate expected format
+      if (dateParts.length === 3 && timeParts.length >= 2) {
+        const [year, month, day] = dateParts.map(Number);
+        const [hour, minute] = timeParts.map(Number);
+        // Validate parsed values are valid numbers
+        if (!isNaN(year) && !isNaN(month) && !isNaN(day) && !isNaN(hour) && !isNaN(minute)) {
+          const localDate = new Date(year, month - 1, day, hour, minute, 0, 0);
+          auraDueAt = firebase.firestore.Timestamp.fromDate(localDate);
+        }
+      }
+    }
+    
+    // Build the update payload
+    const updatePayload = {
       slideIds: assignmentData.slideIds,
       checkerFunctions: checkerFunctions,
       checkerMeta: checkerMeta,
@@ -1262,7 +1326,16 @@ async function saveAssignment() {
       auraAmount: auraAmount,
       auraMinScore: auraMinScore,
       auraOnTime: auraOnTime
-    });
+    };
+    
+    // Include auraDueAt if set, otherwise delete it from the document
+    if (auraDueAt) {
+      updatePayload.auraDueAt = auraDueAt;
+    } else {
+      updatePayload.auraDueAt = firebase.firestore.FieldValue.delete();
+    }
+    
+    await db.collection("assignments").doc(assignmentId).update(updatePayload);
     showToast("Assignment saved successfully!", { color: 'green' });
   } catch (error) {
     console.error("Error saving assignment:", error);
