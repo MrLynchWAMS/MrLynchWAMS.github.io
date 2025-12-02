@@ -480,11 +480,11 @@
         // Block F12 (Dev tools), Ctrl+Shift+I (Dev tools), Ctrl+P (Print), Ctrl+S (Save)
         const blockedKeys = ['F12'];
         const blockedCombos = [
-            { ctrl: true, shift: true, key: 'i' },
-            { ctrl: true, shift: true, key: 'j' },
-            { ctrl: true, key: 'p' },
-            { ctrl: true, key: 's' },
-            { ctrl: true, key: 'u' } // View source
+            { ctrl: true, shift: true, key: 'i' },  // Dev tools
+            { ctrl: true, shift: true, key: 'j' },  // Dev tools console
+            { ctrl: true, shift: false, key: 'p' }, // Print
+            { ctrl: true, shift: false, key: 's' }, // Save
+            { ctrl: true, shift: false, key: 'u' }  // View source
         ];
         
         if (blockedKeys.includes(event.key)) {
@@ -495,10 +495,9 @@
         }
         
         for (const combo of blockedCombos) {
-            // If combo requires shift, check if shift is pressed
-            // If combo doesn't require shift (combo.shift is undefined/false), allow blocking with or without shift
-            const shiftOk = combo.shift ? event.shiftKey : true;
-            if (combo.ctrl && event.ctrlKey && shiftOk && 
+            // Check if shift key state matches exactly what combo requires
+            const shiftMatches = combo.shift === event.shiftKey;
+            if (combo.ctrl && event.ctrlKey && shiftMatches && 
                 event.key.toLowerCase() === combo.key) {
                 event.preventDefault();
                 logViolation('blocked_shortcut', `Blocked shortcut: Ctrl+${event.shiftKey ? 'Shift+' : ''}${combo.key.toUpperCase()}`);

@@ -464,13 +464,14 @@ function setupLiveStudentData() {
 
         let tableHtml = '';
         sortedStudents.forEach((student, index) => {
-            const displayName = hideNames ? `Student ${index + 1}` : student.name;
+            const rawDisplayName = hideNames ? `Student ${index + 1}` : student.name;
+            const displayName = escapeHtml(rawDisplayName);
             const latestScores = Array.from({ length: numQuestions }, (_, i) => student.submissions.filter(s => s.slideIndex === i).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0]?.score || 0);
             const studentAvg = latestScores.length > 0 ? (latestScores.reduce((a, b) => a + b, 0) / latestScores.length).toFixed(0) : '-';
 
             let avgScoreDisplay = '';
             if (showScores) {
-                avgScoreDisplay = `<span class="text-xs text-gray-400 ml-2 font-mono ${blackoutMode ? 'blackout' : ''}">(${studentAvg})</span>`;
+                avgScoreDisplay = `<span class="text-xs text-gray-400 ml-2 font-mono ${blackoutMode ? 'blackout' : ''}">(${escapeHtml(studentAvg)})</span>`;
             }
 
             // Check if any submission has auraAwarded
