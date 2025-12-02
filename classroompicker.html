@@ -156,6 +156,10 @@
     let assignmentId;
     let isSubmitted = false;
     let confirmCallback = null;
+    
+    // Aura display state - session-only, no persistence needed
+    // Tracks whether user has opened the aura popup at least once this session
+    let hasOpenedAuraPopup = false;
 
     window.onload = async function() {
         const urlParams = new URLSearchParams(window.location.search);
@@ -242,10 +246,11 @@
         }
     }
     
-    function getAuraColor(lifetimePoints) {
-        if (lifetimePoints >= 100) return 'border-purple-500 shadow-purple-500/50';
-        if (lifetimePoints >= 50) return 'border-yellow-400 shadow-yellow-400/50';
-        if (lifetimePoints >= 20) return 'border-blue-400';
+    function getAuraColor(points) {
+        // Color thresholds based on aura points
+        if (points >= 100) return 'border-purple-500 shadow-purple-500/50';
+        if (points >= 50) return 'border-yellow-400 shadow-yellow-400/50';
+        if (points >= 20) return 'border-blue-400';
         return 'border-gray-500';
     }
 
@@ -255,22 +260,47 @@
         const user = auth.currentUser;
         const photo = (user && user.photoURL) ? user.photoURL : 'https://via.placeholder.com/40';
 
-        // Header shows spendable balance prominently, with lifetime below
-        const headerHTML = `
-            <div class="flex items-center cursor-pointer hover:opacity-90 transition" onclick="openAuraStore()">
-                <div class="text-right mr-3 hidden sm:block">
-                    <div class="font-bold text-white text-sm">${userProfile.name}</div>
-                    <div class="text-xs font-mono text-yellow-400">
-                        ${balance} ✧ <span class="text-gray-400">(Spendable)</span>
+        // Border color is always based on lifetime aura
+        const borderColor = getAuraColor(lifetime);
+
+        // Header shows both balance and lifetime info
+        // Visual emphasis changes based on whether popup has been opened
+        let headerHTML;
+        if (!hasOpenedAuraPopup) {
+            // Before popup: emphasize lifetime, show balance as secondary
+            headerHTML = `
+                <div class="flex items-center cursor-pointer hover:opacity-90 transition" onclick="openAuraStore()">
+                    <div class="text-right mr-3 hidden sm:block">
+                        <div class="font-bold text-white text-sm">${userProfile.name}</div>
+                        <div class="text-xs font-mono text-purple-400">
+                            Lifetime: ${lifetime} ✧
+                        </div>
+                        <div class="text-xs font-mono text-gray-500">
+                            Balance: ${balance} ✧
+                        </div>
                     </div>
-                    <div class="text-xs font-mono text-gray-500">
-                        Lifetime: ${lifetime} ✧
-                    </div>
+                    <img src="${photo}" 
+                         class="w-10 h-10 rounded-full border-2 ${borderColor} shadow-lg object-cover">
                 </div>
-                <img src="${photo}" 
-                     class="w-10 h-10 rounded-full border-2 ${getAuraColor(lifetime)} shadow-lg object-cover">
-            </div>
-        `;
+            `;
+        } else {
+            // After popup opened: show spendable balance prominently, lifetime below
+            headerHTML = `
+                <div class="flex items-center cursor-pointer hover:opacity-90 transition" onclick="openAuraStore()">
+                    <div class="text-right mr-3 hidden sm:block">
+                        <div class="font-bold text-white text-sm">${userProfile.name}</div>
+                        <div class="text-xs font-mono text-yellow-400">
+                            ${balance} ✧ <span class="text-gray-400">(Spendable)</span>
+                        </div>
+                        <div class="text-xs font-mono text-gray-500">
+                            Lifetime: ${lifetime} ✧
+                        </div>
+                    </div>
+                    <img src="${photo}" 
+                         class="w-10 h-10 rounded-full border-2 ${borderColor} shadow-lg object-cover">
+                </div>
+            `;
+        }
         const container = document.getElementById('user-info-container');
         if (container) container.innerHTML = headerHTML;
     }
@@ -851,6 +881,14 @@ slideStates.forEach((state, index) => {
     let currentAuraTab = 'store';
 
     window.openAuraStore = function() {
+        // Mark that user has opened the popup at least once this session
+        // This makes the aura display mode sticky after first open
+        if (!hasOpenedAuraPopup) {
+            hasOpenedAuraPopup = true;
+            // Update header to reflect the new display state
+            updateUserHeader();
+        }
+        
         // Remove existing if any
         const existing = document.getElementById('aura-modal');
         if (existing) existing.remove();

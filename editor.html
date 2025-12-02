@@ -323,11 +323,47 @@ function renderDeadlineUI() {
   const container = document.getElementById('class-start-times');
   container.innerHTML = '';
   const assignmentStartTimes = assignmentData.deadlinePolicy?.classStartTimes;
+  const classDueAt = assignmentData.deadlinePolicy?.classDueAt || {};
   const defaultStartTimes = teacherDefaults.classStartTimes;
   const hardcodedDefaults = { '1': '08:01', '2': '08:50', '5': '11:17', '7': '12:55', '8': '13:44' };
   allClassNames.forEach(className => {
-    const value = assignmentStartTimes?.[className] || defaultStartTimes?.[className] || hardcodedDefaults[className] || '00:00';
-    container.innerHTML += `<div><label for="start-time-${className}" class="block text-sm font-semibold">${className}</label><input type="time" id="start-time-${className}" value="${value}" class="p-2 bg-gray-700 border border-gray-600 rounded w-28"></div>`;
+    const startTimeValue = assignmentStartTimes?.[className] || defaultStartTimes?.[className] || hardcodedDefaults[className] || '00:00';
+    
+    // Parse per-class due date/time from Firestore Timestamp or ISO string
+    let dueDateValue = '';
+    let dueTimeValue = '';
+    const classDue = classDueAt[className];
+    if (classDue) {
+      const dueAt = classDue.toDate ? classDue.toDate() : new Date(classDue);
+      if (!isNaN(dueAt.getTime())) {
+        const year = dueAt.getFullYear();
+        const month = String(dueAt.getMonth() + 1).padStart(2, '0');
+        const day = String(dueAt.getDate()).padStart(2, '0');
+        dueDateValue = `${year}-${month}-${day}`;
+        const hours = String(dueAt.getHours()).padStart(2, '0');
+        const minutes = String(dueAt.getMinutes()).padStart(2, '0');
+        dueTimeValue = `${hours}:${minutes}`;
+      }
+    }
+    
+    container.innerHTML += `
+      <div class="bg-gray-700 p-3 rounded-lg">
+        <label class="block text-sm font-semibold mb-2">Period ${className}</label>
+        <div class="flex flex-col gap-2">
+          <div class="flex items-center gap-2">
+            <label for="start-time-${className}" class="text-xs text-gray-400 w-20">Start Time</label>
+            <input type="time" id="start-time-${className}" value="${startTimeValue}" class="p-2 bg-gray-800 border border-gray-600 rounded w-28 text-sm">
+          </div>
+          <div class="flex items-center gap-2">
+            <label for="due-date-${className}" class="text-xs text-gray-400 w-20">Due Date</label>
+            <input type="date" id="due-date-${className}" value="${dueDateValue}" class="p-2 bg-gray-800 border border-gray-600 rounded text-sm">
+          </div>
+          <div class="flex items-center gap-2">
+            <label for="due-time-${className}" class="text-xs text-gray-400 w-20">Due Time</label>
+            <input type="time" id="due-time-${className}" value="${dueTimeValue}" class="p-2 bg-gray-800 border border-gray-600 rounded w-28 text-sm">
+          </div>
+        </div>
+      </div>`;
   });
 }
 
@@ -1249,12 +1285,30 @@ async function saveAssignment() {
     saveBtn.textContent = "Saving...";
     const checkerFunctions = {};
     const checkerMeta = {};
-    const deadlinePolicy = { classStartTimes: {} };
+    const deadlinePolicy = { classStartTimes: {}, classDueAt: {} };
 
     allClassNames.forEach(className => {
       const timeValue = document.getElementById(`start-time-${className}`).value;
       if (timeValue) {
         deadlinePolicy.classStartTimes[String(className)] = timeValue;
+      }
+      
+      // Read per-class due date and time
+      const dueDateStr = document.getElementById(`due-date-${className}`).value;
+      const dueTimeStr = document.getElementById(`due-time-${className}`).value;
+      
+      // Build per-class due Timestamp if both date and time are provided
+      if (dueDateStr && dueTimeStr) {
+        const dateParts = dueDateStr.split('-');
+        const timeParts = dueTimeStr.split(':');
+        if (dateParts.length === 3 && timeParts.length >= 2) {
+          const [year, month, day] = dateParts.map(Number);
+          const [hour, minute] = timeParts.map(Number);
+          if (!isNaN(year) && !isNaN(month) && !isNaN(day) && !isNaN(hour) && !isNaN(minute)) {
+            const localDate = new Date(year, month - 1, day, hour, minute, 0, 0);
+            deadlinePolicy.classDueAt[String(className)] = firebase.firestore.Timestamp.fromDate(localDate);
+          }
+        }
       }
     });
 
