@@ -1003,8 +1003,8 @@ function setupLiveStudentData() {
         let headers = ["Email", "Last Name", "First Name", "Last, First", "Class", "Average Score", "Completion %"];
         if (hasFocusMode) {
             headers.push("Focus Violations");
-            headers.push("Aura");
         }
+        headers.push("Aura");
         for (let i = 1; i <= numQuestions; i++) { headers.push(`Q${i} Score`); }
         csvContent += headers.join(',') + "\r\n";
         
@@ -1035,8 +1035,8 @@ function setupLiveStudentData() {
             let row = [student.email, `"${lastName}"`, `"${firstName}"`, lastFirst, student.class, averageScore, completionPercentage];
             if (hasFocusMode) {
                 row.push((student.violations || []).length);
-                row.push(student.auraAwarded ? student.auraAmount : 0);
             }
+            row.push(student.auraAwarded ? student.auraAmount : 0);
             row = [...row, ...questionScores].join(',');
             csvContent += row + "\r\n";
         });
