@@ -97,6 +97,34 @@
       </select>
     </div>
 
+    <div class="bg-gray-800 p-6 rounded-lg mb-8 border border-red-900/30">
+      <div class="flex items-center gap-3 mb-2">
+        <span class="text-2xl">🔒</span>
+        <label class="text-2xl font-bold text-yellow-400">Focus Mode</label>
+      </div>
+      <p class="text-gray-400 mb-4">When enabled, students will be monitored for tab switches, right-clicks, and other potential cheating behaviors. A lock icon will appear to indicate the assignment is in Focus Mode.</p>
+      
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <label class="flex items-center cursor-pointer">
+            <input type="checkbox" id="focusModeEnabled" class="w-5 h-5 text-red-500 rounded focus:ring-red-500 bg-gray-700 border-gray-500">
+            <span class="ml-3 text-lg font-semibold text-white">Enable Focus Mode</span>
+          </label>
+          <p class="text-xs text-gray-500 mt-2">When enabled, right-click, drag-and-drop, and certain keyboard shortcuts will be blocked.</p>
+        </div>
+        
+        <div id="focusModeOptions" class="hidden">
+          <label class="block text-sm text-gray-400 mb-2">On Violation (tab switch, sidebar click, etc.)</label>
+          <select id="focusModeAction" class="w-full p-2 bg-gray-700 rounded border border-gray-600">
+            <option value="log">Log Only (record violation, student continues)</option>
+            <option value="warn">Warn & Log (show overlay, must click to continue)</option>
+            <option value="submit">Auto-Submit & Lock (immediately submit and lock assignment)</option>
+          </select>
+          <p class="text-xs text-gray-500 mt-2">All violations are logged to the dashboard regardless of this setting.</p>
+        </div>
+      </div>
+    </div>
+
     <div class="mb-4 p-4 bg-gray-700 rounded-lg border border-gray-600">
       <h3 class="font-bold text-yellow-400 mb-2">✧ Aura Rewards</h3>
       <p class="text-xs text-gray-400 mb-3">Aura is awarded once per assignment at submit time, based on overall assignment average.</p>
@@ -309,6 +337,19 @@ async function loadAssignment() {
       auraDueDateInput.value = '';
       auraDueTimeInput.value = '';
     }
+    
+    // Load Focus Mode settings
+    const focusModeEnabled = document.getElementById('focusModeEnabled');
+    const focusModeAction = document.getElementById('focusModeAction');
+    const focusModeOptions = document.getElementById('focusModeOptions');
+    focusModeEnabled.checked = assignmentData.focusModeEnabled || false;
+    focusModeAction.value = assignmentData.focusModeAction || 'log';
+    focusModeOptions.classList.toggle('hidden', !focusModeEnabled.checked);
+    
+    // Toggle Focus Mode options visibility
+    focusModeEnabled.addEventListener('change', () => {
+      focusModeOptions.classList.toggle('hidden', !focusModeEnabled.checked);
+    });
     
     renderDeadlineUI();
     renderEditor();
@@ -1342,6 +1383,10 @@ async function saveAssignment() {
     const auraMinScore = parseFloat(document.getElementById('auraMinScore').value) || 0;
     const auraOnTime = document.getElementById('auraOnTime').checked;
     
+    // Read Focus Mode settings
+    const focusModeEnabled = document.getElementById('focusModeEnabled').checked;
+    const focusModeAction = document.getElementById('focusModeAction').value;
+    
     // Read Aura deadline date and time
     const auraDueDateStr = document.getElementById('auraDueDate').value;
     const auraDueTimeStr = document.getElementById('auraDueTime').value;
@@ -1379,7 +1424,9 @@ async function saveAssignment() {
       postSubmissionRule: postSubmissionRule,
       auraAmount: auraAmount,
       auraMinScore: auraMinScore,
-      auraOnTime: auraOnTime
+      auraOnTime: auraOnTime,
+      focusModeEnabled: focusModeEnabled,
+      focusModeAction: focusModeAction
     };
     
     // Include auraDueAt if set, otherwise delete it from the document
