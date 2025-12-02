@@ -106,7 +106,7 @@
                         <p id="overallScore" class="text-5xl font-bold"></p>
                     </div>
                     <div class="text-center">
-                        <p class="text-lg text-gray-400">Aura Balance</p>
+                        <p class="text-lg text-gray-400">Aura (This Assignment)</p>
                         <p id="overallAura" class="text-3xl font-bold text-yellow-400"></p>
                     </div>
                 </div>
@@ -179,6 +179,7 @@
     let assignmentId;
     let isSubmitted = false;
     let confirmCallback = null;
+    let assignmentAuraEarned = 0; // Aura from THIS assignment only for the current student
     
     // Aura display state - session-only, no persistence needed
     // Tracks whether user has opened the aura popup at least once this session
@@ -364,13 +365,18 @@
     async function fetchStudentSubmissions() {
         if (!userProfile || !assignmentData) return;
         try {
-            // Check submission status
+            // Check submission status and get assignment-level Aura
             const statusQuery = db.collection("submissionStatus")
                 .where("studentEmail", "==", userProfile.email)
                 .where("assignmentId", "==", assignmentData.id);
             const statusSnapshot = await statusQuery.get();
             if (!statusSnapshot.empty) {
-                isSubmitted = statusSnapshot.docs[0].data().status === 'submitted';
+                const statusData = statusSnapshot.docs[0].data();
+                isSubmitted = statusData.status === 'submitted';
+                assignmentAuraEarned = statusData.auraAwarded ? (statusData.auraAmount || 0) : 0;
+            } else {
+                isSubmitted = false;
+                assignmentAuraEarned = 0;
             }
             
             const q = db.collection("submissions").where("studentEmail", "==", userProfile.email).where("assignmentId", "==", assignmentData.id);
@@ -648,6 +654,9 @@
                     userProfile.auraLifetime = (userProfile.auraLifetime || 0) + auraAmount;
                     userProfile.auraBalance = (userProfile.auraBalance || 0) + auraAmount;
                     updateUserHeader();
+                    
+                    // Update local assignment-level Aura display
+                    assignmentAuraEarned = auraAmount;
                 } catch (e) {
                     console.error("Error awarding aura:", e);
                 }
@@ -882,9 +891,9 @@ slideStates.forEach((state, index) => {
         document.getElementById('overallScore').innerHTML = `<span class="${overallColor}">${overallAverage}%</span>`;
         document.getElementById('perQuestionScores').innerHTML = perQuestionHTML;
         
-        // Display Aura balance
-        const auraBalance = userProfile.auraBalance || 0;
-        document.getElementById('overallAura').innerHTML = `${auraBalance} ✧ <span class="text-sm text-gray-400">(Balance)</span>`;
+        // Display Aura earned from this assignment
+        const auraThisAssignment = assignmentAuraEarned || 0;
+        document.getElementById('overallAura').innerHTML = `${auraThisAssignment} ✧`;
     }
 
     function hideSummary() {
@@ -1163,6 +1172,9 @@ slideStates.forEach((state, index) => {
                         userProfile.auraLifetime = (userProfile.auraLifetime || 0) + auraAmount;
                         userProfile.auraBalance = (userProfile.auraBalance || 0) + auraAmount;
                         updateUserHeader();
+                        
+                        // Update local assignment-level Aura display
+                        assignmentAuraEarned = auraAmount;
 
                         // Show Aura toast
                         showToast(`+${auraAmount} Aura for scoring ${overallAverage.toFixed(1)}%!`, {color: 'yellow', duration: 4000});
