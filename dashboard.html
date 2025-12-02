@@ -265,7 +265,7 @@ function setupLiveStudentData() {
                         bestDoc = current;
                     } else if (currentTimestamp === bestTimestamp) {
                         // If timestamps are equal, prefer the one with auraAwarded=true
-                        if (current.auraAwarded && !bestDoc.auraAwarded) {
+                        if (!!current.auraAwarded && !bestDoc.auraAwarded) {
                             bestDoc = current;
                         }
                     }
