@@ -100,9 +100,15 @@
         <div id="summaryContainer" class="hidden">
             <div class="bg-gray-800 p-8 rounded-lg shadow-xl max-w-2xl mx-auto">
                 <h1 id="summaryTitle" class="text-3xl font-bold text-yellow-400 mb-4 text-center">Assignment Summary</h1>
-                <div class="text-center mb-6">
-                    <p class="text-lg text-gray-400">Overall Score</p>
-                    <p id="overallScore" class="text-5xl font-bold"></p>
+                <div class="flex justify-center gap-8 mb-6">
+                    <div class="text-center">
+                        <p class="text-lg text-gray-400">Overall Score</p>
+                        <p id="overallScore" class="text-5xl font-bold"></p>
+                    </div>
+                    <div class="text-center">
+                        <p class="text-lg text-gray-400">Aura Balance</p>
+                        <p id="overallAura" class="text-3xl font-bold text-yellow-400"></p>
+                    </div>
                 </div>
                 <div id="perQuestionScores" class="space-y-3"></div>
                 <div class="mt-8 flex gap-4">
@@ -875,6 +881,10 @@ slideStates.forEach((state, index) => {
         const overallColor = overallAverage >= 90 ? 'text-green-400' : overallAverage >= 60 ? 'text-yellow-400' : 'text-red-400';
         document.getElementById('overallScore').innerHTML = `<span class="${overallColor}">${overallAverage}%</span>`;
         document.getElementById('perQuestionScores').innerHTML = perQuestionHTML;
+        
+        // Display Aura balance
+        const auraBalance = userProfile.auraBalance || 0;
+        document.getElementById('overallAura').innerHTML = `${auraBalance} ✧ <span class="text-sm text-gray-400">(Balance)</span>`;
     }
 
     function hideSummary() {
