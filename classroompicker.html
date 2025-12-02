@@ -127,6 +127,23 @@
         </div>
     </div>
 
+    <!-- Focus Mode Lockout Overlay -->
+    <div id="focusLockoutOverlay" class="hidden fixed inset-0 bg-red-900 bg-opacity-95 flex flex-col items-center justify-center z-[100]">
+        <div class="text-center p-8">
+            <div class="text-8xl mb-6">⚠️</div>
+            <h2 class="text-4xl font-bold text-white mb-4">Focus Violation Detected</h2>
+            <p id="lockoutMessage" class="text-xl text-red-200 mb-6">You left the assignment window. This has been logged.</p>
+            <p id="violationCountDisplay" class="text-lg text-yellow-400 mb-8">Violations: <span id="violationNum">0</span></p>
+            <button id="returnToAssignmentBtn" onclick="dismissLockoutOverlay()" class="bg-white text-red-900 font-bold py-3 px-8 rounded-lg text-xl hover:bg-gray-200">Return to Assignment</button>
+        </div>
+    </div>
+
+    <!-- Focus Mode Indicator (shown when Focus Mode is active) -->
+    <div id="focusModeIndicator" class="hidden fixed top-4 left-4 z-40 flex items-center gap-2 bg-red-900/80 text-white px-3 py-2 rounded-lg border border-red-700" title="Focus Mode is active. Tab switching and external tools are monitored.">
+        <span class="text-xl">🔒</span>
+        <span class="text-sm font-semibold">Focus Mode Active</span>
+    </div>
+
     <div id="toast-wrapper-top-left" class="toast-wrapper top-left space-y-3"></div>
     <div id="toast-wrapper-top-center" class="toast-wrapper top-center space-y-3"></div>
     <div id="toast-wrapper-top-right" class="toast-wrapper top-right space-y-3"></div>
@@ -160,6 +177,12 @@
     // Aura display state - session-only, no persistence needed
     // Tracks whether user has opened the aura popup at least once this session
     let hasOpenedAuraPopup = false;
+    
+    // Focus Mode state
+    let focusModeActive = false;
+    let focusModeAction = 'log';
+    let violationCount = 0;
+    let focusModeInitialized = false;
 
     window.onload = async function() {
         const urlParams = new URLSearchParams(window.location.search);
@@ -315,6 +338,11 @@
         // Update user header with Aura info
         updateUserHeader();
         
+        // Initialize Focus Mode if enabled (only for non-teacher accounts)
+        if (assignmentData.focusModeEnabled && !TEACHER_EMAILS.map(e => e.toLowerCase()).includes(userProfile.email.toLowerCase())) {
+            initializeFocusMode();
+        }
+        
         // **FIX:** Check if assignment should be hidden on load
         const postRule = assignmentData.postSubmissionRule || 'open';
         if (isSubmitted && postRule === 'hide') {
@@ -353,6 +381,285 @@
             showToast("Could not load your previous work.", { color: 'red' });
         }
     }
+
+    // ===============================
+    // FOCUS MODE FUNCTIONS
+    // ===============================
+    
+    function initializeFocusMode() {
+        if (focusModeInitialized) return;
+        focusModeInitialized = true;
+        
+        focusModeActive = true;
+        focusModeAction = assignmentData.focusModeAction || 'log';
+        
+        // Show Focus Mode indicator
+        document.getElementById('focusModeIndicator').classList.remove('hidden');
+        
+        // Load existing violation count from Firestore
+        loadViolationCount();
+        
+        // 1. DISABLE RIGHT CLICK (Context Menu)
+        document.addEventListener('contextmenu', handleContextMenu);
+        
+        // 2. DISABLE DRAG AND DROP (Prevents dragging images to sidebar/Google Lens)
+        document.addEventListener('dragstart', handleDragStart);
+        
+        // 3. WINDOW BLUR (User left the window / Clicked sidebar / Tab switch)
+        window.addEventListener('blur', handleWindowBlur);
+        
+        // 4. WINDOW FOCUS (User returned)
+        window.addEventListener('focus', handleWindowFocus);
+        
+        // 5. KEYBOARD SHORTCUT BLOCKER
+        document.addEventListener('keydown', handleKeyDown);
+        
+        // 6. Visibility change (for tab switches)
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        
+        console.log("Focus Mode initialized. Monitoring active.");
+    }
+    
+    async function loadViolationCount() {
+        try {
+            const snapshot = await db.collection("focusViolations")
+                .where("studentEmail", "==", userProfile.email)
+                .where("assignmentId", "==", assignmentData.id)
+                .get();
+            violationCount = snapshot.size;
+        } catch (error) {
+            console.error("Error loading violation count:", error);
+            violationCount = 0;
+        }
+    }
+    
+    function handleContextMenu(event) {
+        if (!focusModeActive || isSubmitted) return;
+        event.preventDefault();
+        logViolation('right_click', 'Right-click blocked');
+        showToast("Right-click is disabled in Focus Mode.", { color: 'red', duration: 2000, position: 'bottom-center' });
+    }
+    
+    function handleDragStart(event) {
+        if (!focusModeActive || isSubmitted) return;
+        event.preventDefault();
+        logViolation('drag_drop', 'Drag-and-drop blocked');
+        showToast("Drag-and-drop is disabled in Focus Mode.", { color: 'red', duration: 2000, position: 'bottom-center' });
+    }
+    
+    function handleWindowBlur() {
+        if (!focusModeActive || isSubmitted) return;
+        
+        violationCount++;
+        
+        logViolation('window_blur', 'Window lost focus (tab switch or sidebar click)');
+        
+        // Update title as warning
+        document.title = "⚠️ RETURN TO TEST";
+        
+        if (focusModeAction === 'submit') {
+            // Auto-submit the assignment
+            handleFocusViolationSubmit();
+        } else if (focusModeAction === 'warn') {
+            // Show lockout overlay
+            showLockoutOverlay();
+        }
+        // 'log' mode just logs the violation, no overlay
+    }
+    
+    function handleWindowFocus() {
+        if (!focusModeActive) return;
+        
+        // Restore title
+        document.title = assignmentData.name + " - IterātED";
+    }
+    
+    function handleKeyDown(event) {
+        if (!focusModeActive || isSubmitted) return;
+        
+        // Block F12 (Dev tools), Ctrl+Shift+I (Dev tools), Ctrl+P (Print), Ctrl+S (Save)
+        const blockedKeys = ['F12'];
+        const blockedCombos = [
+            { ctrl: true, shift: true, key: 'i' },  // Dev tools
+            { ctrl: true, shift: true, key: 'j' },  // Dev tools console
+            { ctrl: true, shift: false, key: 'p' }, // Print
+            { ctrl: true, shift: false, key: 's' }, // Save
+            { ctrl: true, shift: false, key: 'u' }  // View source
+        ];
+        
+        if (blockedKeys.includes(event.key)) {
+            event.preventDefault();
+            logViolation('blocked_key', `Blocked key: ${event.key}`);
+            showToast(`${event.key} is disabled in Focus Mode.`, { color: 'red', duration: 2000, position: 'bottom-center' });
+            return;
+        }
+        
+        for (const combo of blockedCombos) {
+            // Check if shift key state matches exactly what combo requires
+            const shiftMatches = combo.shift === event.shiftKey;
+            if (combo.ctrl && event.ctrlKey && shiftMatches && 
+                event.key.toLowerCase() === combo.key) {
+                event.preventDefault();
+                logViolation('blocked_shortcut', `Blocked shortcut: Ctrl+${event.shiftKey ? 'Shift+' : ''}${combo.key.toUpperCase()}`);
+                showToast("This keyboard shortcut is disabled in Focus Mode.", { color: 'red', duration: 2000, position: 'bottom-center' });
+                return;
+            }
+        }
+    }
+    
+    function handleVisibilityChange() {
+        if (!focusModeActive || isSubmitted) return;
+        
+        if (document.hidden) {
+            // Tab was switched away
+            violationCount++;
+            
+            logViolation('tab_hidden', 'Tab became hidden (tab switch)');
+            
+            document.title = "⚠️ RETURN TO TEST";
+            
+            if (focusModeAction === 'submit') {
+                handleFocusViolationSubmit();
+            } else if (focusModeAction === 'warn') {
+                showLockoutOverlay();
+            }
+        }
+    }
+    
+    async function logViolation(violationType, description) {
+        try {
+            await db.collection("focusViolations").add({
+                studentEmail: userProfile.email,
+                studentName: userProfile.name,
+                assignmentId: assignmentData.id,
+                violationType: violationType,
+                description: description,
+                slideIndex: currentSlideIndex,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        } catch (error) {
+            console.error("Error logging violation:", error);
+        }
+    }
+    
+    function showLockoutOverlay() {
+        const overlay = document.getElementById('focusLockoutOverlay');
+        const violationNum = document.getElementById('violationNum');
+        const lockoutMessage = document.getElementById('lockoutMessage');
+        
+        violationNum.textContent = violationCount;
+        lockoutMessage.textContent = "You left the assignment window. This has been logged.";
+        
+        overlay.classList.remove('hidden');
+    }
+    
+    function dismissLockoutOverlay() {
+        const overlay = document.getElementById('focusLockoutOverlay');
+        overlay.classList.add('hidden');
+        document.title = assignmentData.name + " - IterātED";
+    }
+    
+    async function handleFocusViolationSubmit() {
+        if (isSubmitted) return;
+        
+        try {
+            // Show lockout overlay with submit message
+            const overlay = document.getElementById('focusLockoutOverlay');
+            const violationNum = document.getElementById('violationNum');
+            const lockoutMessage = document.getElementById('lockoutMessage');
+            const returnBtn = document.getElementById('returnToAssignmentBtn');
+            
+            violationNum.textContent = violationCount;
+            lockoutMessage.textContent = "Your assignment has been automatically submitted due to a Focus Mode violation.";
+            returnBtn.textContent = "View Results";
+            returnBtn.onclick = function() {
+                dismissLockoutOverlay();
+                showSummary();
+            };
+            
+            overlay.classList.remove('hidden');
+            
+            // Calculate aura eligibility (same logic as regular submit)
+            let auraAwarded = false;
+            let auraAmount = 0;
+            
+            try {
+                // Calculate overall assignment average from slideStates
+                let totalScore = 0;
+                slideStates.forEach(state => {
+                    if (state && typeof state.score === 'number') {
+                        totalScore += state.score;
+                    }
+                });
+                const overallAverage = slideStates.length > 0 ? totalScore / slideStates.length : 0;
+                
+                // Read assignment-level Aura config
+                const assignmentAuraAmount = parseFloat(assignmentData.auraAmount) || 0;
+                const auraMinScore = parseFloat(assignmentData.auraMinScore) || 0;
+                const auraOnTime = assignmentData.auraOnTime || false;
+                const auraDueAt = assignmentData.auraDueAt;
+                
+                // Compute assignment-level on-time status
+                let isOnTimeAssignment = true;
+                if (auraOnTime && auraDueAt) {
+                    const now = new Date();
+                    const dueAt = auraDueAt.toDate ? auraDueAt.toDate() : new Date(auraDueAt);
+                    isOnTimeAssignment = now <= dueAt;
+                }
+                
+                // Check aura eligibility
+                if (assignmentAuraAmount > 0 && 
+                    overallAverage >= auraMinScore && 
+                    (!auraOnTime || isOnTimeAssignment) &&
+                    userProfile.studentDocId) {
+                    auraAwarded = true;
+                    auraAmount = assignmentAuraAmount;
+                }
+            } catch (auraError) {
+                console.error("Error calculating aura eligibility:", auraError);
+            }
+            
+            // Create submissionStatus document
+            const statusRef = await db.collection("submissionStatus").add({
+                studentEmail: userProfile.email,
+                studentName: userProfile.name,
+                assignmentId: assignmentData.id,
+                status: 'submitted',
+                timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                submittedByFocusViolation: true,
+                violationCount: violationCount,
+                auraAwarded: auraAwarded,
+                auraAmount: auraAwarded ? auraAmount : 0
+            });
+            
+            // Award aura if eligible
+            if (auraAwarded && userProfile.studentDocId) {
+                try {
+                    await db.collection('students').doc(userProfile.studentDocId).update({
+                        auraLifetime: firebase.firestore.FieldValue.increment(auraAmount),
+                        auraBalance: firebase.firestore.FieldValue.increment(auraAmount)
+                    });
+                    userProfile.auraLifetime = (userProfile.auraLifetime || 0) + auraAmount;
+                    userProfile.auraBalance = (userProfile.auraBalance || 0) + auraAmount;
+                    updateUserHeader();
+                } catch (e) {
+                    console.error("Error awarding aura:", e);
+                }
+            }
+            
+            isSubmitted = true;
+            focusModeActive = false; // Disable further monitoring
+            
+            showToast("Assignment auto-submitted due to Focus Mode violation.", { color: 'red', duration: 7000 });
+            
+        } catch (error) {
+            console.error("Error auto-submitting assignment:", error);
+            showToast("Error during auto-submit. Please contact your teacher.", { color: 'red' });
+        }
+    }
+    // ===============================
+    // END FOCUS MODE FUNCTIONS
+    // ===============================
 
     async function handlePasscodeSignIn() {
         const email = document.getElementById('emailInput').value.toLowerCase().trim();

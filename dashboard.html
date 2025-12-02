@@ -137,6 +137,7 @@
     let unsubscribeStudents = null;
     let unsubscribeSubmissions = null;
     let unsubscribeStatus = null;
+    let unsubscribeViolations = null;
 
     window.onload = function() {
         const urlParams = new URLSearchParams(window.location.search);
@@ -175,11 +176,13 @@ function setupLiveStudentData() {
     if (unsubscribeStudents) unsubscribeStudents();
     if (unsubscribeSubmissions) unsubscribeSubmissions();
     if (unsubscribeStatus) unsubscribeStatus();
+    if (unsubscribeViolations) unsubscribeViolations();
 
     // Initialize data structures
     const studentsMap = new Map();
     const submissionsByStudent = new Map();
     const submittedEmails = new Set();
+    const violationsByStudent = new Map();
 
     // Listener 1: Students collection
     unsubscribeStudents = db.collection("students").onSnapshot(studentSnapshot => {
@@ -237,11 +240,28 @@ function setupLiveStudentData() {
             rebuildAllStudentData();
         });
 
+    // Listener 4: Focus Mode violations for this assignment
+    unsubscribeViolations = db.collection("focusViolations")
+        .where("assignmentId", "==", assignmentId)
+        .onSnapshot(violationSnapshot => {
+            violationsByStudent.clear();
+            violationSnapshot.forEach(doc => {
+                const violation = { id: doc.id, ...doc.data() };
+                const studentEmail = violation.studentEmail;
+                if (!violationsByStudent.has(studentEmail)) {
+                    violationsByStudent.set(studentEmail, []);
+                }
+                violationsByStudent.get(studentEmail).push(violation);
+            });
+            rebuildAllStudentData();
+        });
+
     function rebuildAllStudentData() {
         allStudentData = Array.from(studentsMap.values()).map(student => ({
             ...student,
             submissions: submissionsByStudent.get(student.email) || [],
-            isSubmitted: submittedEmails.has(student.email)
+            isSubmitted: submittedEmails.has(student.email),
+            violations: violationsByStudent.get(student.email) || []
         }));
 
         // PATCH: Set activeClass to first class after data loads, only once
@@ -262,6 +282,7 @@ function setupLiveStudentData() {
         if (unsubscribeStudents) unsubscribeStudents();
         if (unsubscribeSubmissions) unsubscribeSubmissions();
         if (unsubscribeStatus) unsubscribeStatus();
+        if (unsubscribeViolations) unsubscribeViolations();
     }
     window.addEventListener("beforeunload", cleanupListeners);
 
@@ -412,11 +433,15 @@ function setupLiveStudentData() {
         const studentList = document.getElementById('studentData');
         const numQuestions = assignmentData.slideIds.length;
         const sortedStudents = getCurrentlySortedStudents();
+        const hasFocusMode = assignmentData.focusModeEnabled;
 
         let headerHtml = `<tr>
             <th class="px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-64">Student Name</th>
             <th class="px-2 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider w-20">Submitted</th>
             <th class="px-2 py-3 text-center text-xs font-medium text-yellow-400 uppercase tracking-wider w-16">Aura</th>`;
+        if (hasFocusMode) {
+            headerHtml += `<th class="px-2 py-3 text-center text-xs font-medium text-red-400 uppercase tracking-wider w-16" title="Focus Mode Violations">🔒</th>`;
+        }
         for (let i = 1; i <= numQuestions; i++) {
             headerHtml += `<th class="px-2 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer hover:text-yellow-400" onclick="showQuestionSubmissions(${i - 1})">Q${i}</th>`;
         }
@@ -425,6 +450,9 @@ function setupLiveStudentData() {
         let classAverageRowHtml = '';
         if (showScores) {
             classAverageRowHtml = `<tr><td class="text-xs font-semibold text-cyan-400 px-3">Class Average:</td><td class="px-2"></td><td class="px-2"></td>`;
+            if (hasFocusMode) {
+                classAverageRowHtml += `<td class="px-2"></td>`;
+            }
             for (let i = 0; i < numQuestions; i++) {
                 const scores = sortedStudents.map(s => s.submissions.filter(sub => sub.slideIndex === i).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0]).filter(Boolean).map(sub => sub.score);
                 const avg = scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(0) : '-';
@@ -436,23 +464,38 @@ function setupLiveStudentData() {
 
         let tableHtml = '';
         sortedStudents.forEach((student, index) => {
-            const displayName = hideNames ? `Student ${index + 1}` : student.name;
+            const rawDisplayName = hideNames ? `Student ${index + 1}` : student.name;
+            const displayName = escapeHtml(rawDisplayName);
             const latestScores = Array.from({ length: numQuestions }, (_, i) => student.submissions.filter(s => s.slideIndex === i).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0]?.score || 0);
             const studentAvg = latestScores.length > 0 ? (latestScores.reduce((a, b) => a + b, 0) / latestScores.length).toFixed(0) : '-';
 
             let avgScoreDisplay = '';
             if (showScores) {
-                avgScoreDisplay = `<span class="text-xs text-gray-400 ml-2 font-mono ${blackoutMode ? 'blackout' : ''}">(${studentAvg})</span>`;
+                avgScoreDisplay = `<span class="text-xs text-gray-400 ml-2 font-mono ${blackoutMode ? 'blackout' : ''}">(${escapeHtml(studentAvg)})</span>`;
             }
 
             // Check if any submission has auraAwarded
             const hasAuraAwarded = student.submissions.some(sub => sub.auraAwarded === true);
             const auraCell = hasAuraAwarded ? '<span class="text-yellow-400">✅</span>' : '<span class="text-gray-600">-</span>';
 
+            // Focus Mode violations
+            const violations = student.violations || [];
+            const violationCount = violations.length;
+            let violationsCell = '';
+            if (hasFocusMode) {
+                if (violationCount > 0) {
+                    violationsCell = `<td class="px-2 py-4 whitespace-nowrap text-center cursor-pointer" onclick="showViolations('${escapeHtml(student.email)}')"><span class="text-red-400 font-bold">${escapeHtml(String(violationCount))}</span></td>`;
+                } else {
+                    violationsCell = `<td class="px-2 py-4 whitespace-nowrap text-center"><span class="text-gray-600">-</span></td>`;
+                }
+            }
+
+            const escapedEmail = escapeHtml(student.email);
             tableHtml += `<tr class="hover:bg-gray-700">
-                <td class="px-3 py-4 whitespace-nowrap text-sm font-medium text-white cursor-pointer hover:text-yellow-400 truncate" onclick="showStudentSubmissions('${student.email}')">${displayName}${avgScoreDisplay}</td>
-                <td class="px-2 py-4 whitespace-nowrap text-center"><input type="checkbox" onchange="toggleSubmissionStatus('${student.email}', this.checked)" ${student.isSubmitted ? 'checked' : ''} class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"></td>
+                <td class="px-3 py-4 whitespace-nowrap text-sm font-medium text-white cursor-pointer hover:text-yellow-400 truncate" onclick="showStudentSubmissions('${escapedEmail}')">${displayName}${avgScoreDisplay}</td>
+                <td class="px-2 py-4 whitespace-nowrap text-center"><input type="checkbox" onchange="toggleSubmissionStatus('${escapedEmail}', this.checked)" ${student.isSubmitted ? 'checked' : ''} class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"></td>
                 <td class="px-2 py-4 whitespace-nowrap text-center">${auraCell}</td>
+                ${violationsCell}
             `;
             
             for (let i = 0; i < numQuestions; i++) {
@@ -460,7 +503,7 @@ function setupLiveStudentData() {
                 
                 if (blackoutMode) {
                     if (latestSubmission) {
-                        tableHtml += `<td class="px-2 py-4 whitespace-nowrap cursor-pointer" onclick="showSubmissions('${student.email}', ${i})"><div class="w-full bg-black rounded-full h-6"></div></td>`;
+                        tableHtml += `<td class="px-2 py-4 whitespace-nowrap cursor-pointer" onclick="showSubmissions('${escapedEmail}', ${i})"><div class="w-full bg-black rounded-full h-6"></div></td>`;
                     } else {
                         tableHtml += `<td class="px-2 py-4"><div class="h-6 rounded-full border-2 border-dashed border-gray-400"></div></td>`;
                     }
@@ -469,7 +512,7 @@ function setupLiveStudentData() {
                         const score = latestSubmission.score;
                         const color = score >= 90 ? 'bg-green-500' : score >= 70 ? 'bg-yellow-500' : 'bg-red-500';
                         const scoreDisplay = showScores ? score : '';
-                        tableHtml += `<td class="px-2 py-4 whitespace-nowrap text-sm font-semibold cursor-pointer" onclick="showSubmissions('${student.email}', ${i})">
+                        tableHtml += `<td class="px-2 py-4 whitespace-nowrap text-sm font-semibold cursor-pointer" onclick="showSubmissions('${escapedEmail}', ${i})">
                             <div class="w-full bg-gray-600 rounded-full h-6 relative">
                                 <div class="${color} h-6 rounded-full text-center text-white text-xs flex items-center justify-center" style="width: ${score}%">${scoreDisplay}</div>
                             </div></td>`;
@@ -848,9 +891,66 @@ function setupLiveStudentData() {
         currentModalView = null; 
     }
     
+    function showViolations(studentEmail) {
+        const student = allStudentData.find(s => s.email === studentEmail);
+        if (!student) return;
+        
+        const sortedStudents = getCurrentlySortedStudents();
+        const studentIndex = sortedStudents.findIndex(s => s.email === studentEmail);
+        const displayName = hideNames && studentIndex > -1 ? `Student ${studentIndex + 1}` : student.name;
+        
+        document.getElementById('modalTitle').innerHTML = `🔒 Focus Mode Violations for ${displayName}`;
+        document.getElementById('showAllAttemptsToggle').parentElement.classList.add('hidden');
+        
+        const violations = (student.violations || []).sort((a, b) => 
+            (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0)
+        );
+        
+        let contentHtml = '<div class="space-y-4">';
+        if (violations.length > 0) {
+            contentHtml += `<p class="text-red-400 font-semibold mb-4">Total Violations: ${escapeHtml(String(violations.length))}</p>`;
+            violations.forEach(violation => {
+                const date = violation.timestamp ? new Date(violation.timestamp.seconds * 1000).toLocaleString() : 'N/A';
+                const typeLabels = {
+                    'window_blur': '📱 Tab Switch / Sidebar',
+                    'tab_hidden': '📱 Tab Hidden',
+                    'right_click': '🖱️ Right-Click Attempt',
+                    'drag_drop': '🖐️ Drag & Drop Attempt',
+                    'blocked_key': '⌨️ Blocked Key',
+                    'blocked_shortcut': '⌨️ Blocked Shortcut'
+                };
+                const typeLabel = typeLabels[violation.violationType] || escapeHtml(violation.violationType || 'Unknown');
+                const slideNum = typeof violation.slideIndex === 'number' ? violation.slideIndex + 1 : 1;
+                
+                contentHtml += `<div class="bg-red-900/30 border border-red-700 p-4 rounded-lg">
+                    <div class="flex justify-between items-center mb-2">
+                        <p class="font-bold text-lg text-red-400">${typeLabel}</p>
+                        <p class="text-sm text-gray-400">${escapeHtml(date)}</p>
+                    </div>
+                    <p class="text-gray-300">${escapeHtml(violation.description || 'No description')}</p>
+                    <p class="text-xs text-gray-500 mt-1">Slide: Q${escapeHtml(String(slideNum))}</p>
+                </div>`;
+            });
+        } else {
+            contentHtml += '<p class="text-green-400">No violations recorded for this student.</p>';
+        }
+        contentHtml += '</div>';
+        document.getElementById('modalContent').innerHTML = contentHtml;
+        document.getElementById('submissionModal').classList.remove('hidden');
+    }
+    
     function handleCredentialResponse(response) { 
         auth.signInWithCredential(firebase.auth.GoogleAuthProvider.credential(response.credential))
             .catch(err => console.error("Sign-in failed:", err)); 
+    }
+    
+    // Helper function to escape HTML special characters to prevent XSS
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str).replace(/[&<>"']/g, function(match) {
+            const escapeMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+            return escapeMap[match];
+        });
     }
     
     function showToast(message, options = {}) {
@@ -872,7 +972,11 @@ function setupLiveStudentData() {
     function exportToCSV() {
         let csvContent = "";
         const numQuestions = assignmentData.slideIds.length;
+        const hasFocusMode = assignmentData.focusModeEnabled;
         let headers = ["Email", "Last Name", "First Name", "Last, First", "Class", "Average Score", "Completion %"];
+        if (hasFocusMode) {
+            headers.push("Focus Violations");
+        }
         for (let i = 1; i <= numQuestions; i++) { headers.push(`Q${i} Score`); }
         csvContent += headers.join(',') + "\r\n";
         
@@ -899,7 +1003,12 @@ function setupLiveStudentData() {
             }
             const averageScore = attemptedQuestions > 0 ? (totalScore / attemptedQuestions).toFixed(2) : "";
             const completionPercentage = numQuestions > 0 ? ((attemptedQuestions / numQuestions) * 100).toFixed(2) : "0.00";
-            let row = [student.email, `"${lastName}"`, `"${firstName}"`, lastFirst, student.class, averageScore, completionPercentage, ...questionScores].join(',');
+            
+            let row = [student.email, `"${lastName}"`, `"${firstName}"`, lastFirst, student.class, averageScore, completionPercentage];
+            if (hasFocusMode) {
+                row.push((student.violations || []).length);
+            }
+            row = [...row, ...questionScores].join(',');
             csvContent += row + "\r\n";
         });
         
