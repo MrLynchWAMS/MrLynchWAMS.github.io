@@ -529,8 +529,8 @@ function setupLiveStudentData() {
             // Use assignment-level aura data from submissionStatus
             let auraCell = '';
             if (showBehavior) {
-                if (student.auraAwarded) {
-                    auraCell = `<td class="px-2 py-4 whitespace-nowrap text-center"><span class="text-yellow-400">${escapeHtml(String(student.auraAmount))} ✧</span></td>`;
+                if (student.auraAwarded || student.auraAmount > 0) {
+                    auraCell = `<td class="px-2 py-4 whitespace-nowrap text-center"><span class="text-yellow-400">${escapeHtml(String(student.auraAmount || 0))} ✧</span></td>`;
                 } else {
                     auraCell = `<td class="px-2 py-4 whitespace-nowrap text-center"><span class="text-gray-600">-</span></td>`;
                 }
@@ -857,6 +857,7 @@ function setupLiveStudentData() {
     function showStudentSubmissions(studentEmail, specificSlide = null) {
         currentModalView = { type: 'student', email: studentEmail, slide: specificSlide };
         document.getElementById('showAllAttemptsToggle').checked = showAllAttempts;
+        document.getElementById('showAllAttemptsToggle').parentElement.classList.remove('hidden');
         const student = allStudentData.find(s => s.email === studentEmail);
         if (!student) return;
 
@@ -885,6 +886,7 @@ function setupLiveStudentData() {
     function showQuestionSubmissions(slideIndex) {
         currentModalView = { type: 'question', slide: slideIndex };
         document.getElementById('showAllAttemptsToggle').checked = showAllAttempts;
+        document.getElementById('showAllAttemptsToggle').parentElement.classList.remove('hidden');
         document.getElementById('modalTitle').innerHTML = `All Submissions for Question ${slideIndex + 1} <button onclick="regradeQuestion(${slideIndex})" class="ml-4 text-sm bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded-lg">Regrade</button>`;
         
         const studentsForModal = getCurrentlySortedStudents();
