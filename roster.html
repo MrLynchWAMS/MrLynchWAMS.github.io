@@ -455,11 +455,22 @@
                 if (!existing) {
                     dedupeMap[key] = sub;
                 } else {
-                    // Compare timestamps, fallback to doc id if timestamps are equal or missing
-                    // Note: Firestore auto-generated IDs are chronologically sortable
-                    if (sub.timestamp > existing.timestamp || 
-                        (sub.timestamp === existing.timestamp && sub.id > existing.id)) {
-                        dedupeMap[key] = sub;
+                    // Compare timestamps; if both are valid (non-zero), use timestamp
+                    // Otherwise, fallback to doc id (Firestore auto-generated IDs contain timestamp info)
+                    const subHasTimestamp = sub.timestamp > 0;
+                    const existingHasTimestamp = existing.timestamp > 0;
+                    
+                    if (subHasTimestamp && existingHasTimestamp) {
+                        if (sub.timestamp > existing.timestamp) {
+                            dedupeMap[key] = sub;
+                        } else if (sub.timestamp === existing.timestamp && sub.id > existing.id) {
+                            dedupeMap[key] = sub;
+                        }
+                    } else {
+                        // One or both timestamps missing, use doc ID
+                        if (sub.id > existing.id) {
+                            dedupeMap[key] = sub;
+                        }
                     }
                 }
             });
