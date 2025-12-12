@@ -531,15 +531,14 @@
                     : 0;
                 
                 return {
-                    id: assignment.assignmentId,  // Add id for sorting consistency
+                    id: assignment.assignmentId,  // For sorting consistency with submission objects
                     assignmentId: assignment.assignmentId,
                     assignmentName: assignment.assignmentName,
                     score: avgScore,
                     timestamp: assignment.latestTimestamp,
                     auraAwarded: assignment.auraAwarded,
                     auraAmount: assignment.totalAuraAwarded,
-                    questionCount: assignment.submissions.length,
-                    slideIndex: undefined  // Explicitly set to undefined for consolidated view
+                    questionCount: assignment.submissions.length
                 };
             });
         }
