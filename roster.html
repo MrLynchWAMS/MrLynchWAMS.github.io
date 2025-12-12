@@ -250,7 +250,7 @@
                     <li class="flex justify-between items-center py-2 border-b border-gray-700">
                         <div class="flex-1">
                             <p class="font-medium">
-                                <span class="text-blue-400 hover:underline cursor-pointer" onclick='openStudentPerformance("${student.id}", "${student.name.replace(/'/g, "\\'")}", "${student.email}", ${lifetime})'>${student.name}</span>
+                                <span class="text-blue-400 hover:underline cursor-pointer" onclick='openStudentPerformance("${student.id}", "${student.name.replace(/'/g, "\\'").replace(/"/g, '&quot;')}", "${student.email.replace(/"/g, '&quot;')}", ${lifetime})'>${student.name}</span>
                             </p>
                             <p class="text-sm text-gray-400">${student.email}</p>
                         </div>
@@ -404,8 +404,12 @@
             statusQuery.forEach(doc => {
                 const data = doc.data();
                 const assignmentId = data.assignmentId;
+                const currentTimestamp = data.timestamp?.seconds;
+                const existingTimestamp = statusByAssignment[assignmentId]?.timestamp?.seconds;
+                
                 if (!statusByAssignment[assignmentId] || 
-                    (data.timestamp?.seconds || 0) > (statusByAssignment[assignmentId].timestamp?.seconds || 0)) {
+                    (currentTimestamp !== undefined && existingTimestamp !== undefined && currentTimestamp > existingTimestamp) ||
+                    (currentTimestamp !== undefined && existingTimestamp === undefined)) {
                     statusByAssignment[assignmentId] = data;
                 }
             });
@@ -435,7 +439,7 @@
                     .map(s => s.timestamp?.seconds || 0)
                     .filter(t => t > 0);
                 const latestTimestamp = timestamps.length > 0 
-                    ? Math.max(...timestamps) 
+                    ? timestamps.reduce((max, current) => Math.max(max, current), 0)
                     : 0;
                 
                 // Get aura info from status
