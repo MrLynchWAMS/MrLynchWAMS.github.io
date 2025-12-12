@@ -117,13 +117,17 @@
             </div>
             
             <!-- Date Filter -->
-            <div class="p-4 border-b border-gray-700 flex items-center gap-4">
+            <div class="p-4 border-b border-gray-700 flex items-center gap-4 flex-wrap">
                 <label class="text-sm font-medium text-gray-300">Date Range:</label>
                 <input type="date" id="perf-date-start" class="p-2 bg-gray-700 rounded border border-gray-600 text-sm">
                 <span class="text-gray-400">to</span>
                 <input type="date" id="perf-date-end" class="p-2 bg-gray-700 rounded border border-gray-600 text-sm">
                 <button onclick="filterPerformanceByDate()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Filter</button>
                 <button onclick="clearPerformanceFilter()" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Clear</button>
+                <div class="flex items-center gap-2 ml-4">
+                    <input type="checkbox" id="perf-show-all-attempts" onchange="togglePerformanceMode()" class="w-4 h-4 bg-gray-700 border-gray-600 rounded">
+                    <label for="perf-show-all-attempts" class="text-sm font-medium text-gray-300">Show all attempts (raw)</label>
+                </div>
             </div>
             
             <!-- Submissions Table -->
@@ -132,9 +136,10 @@
                     <thead class="bg-gray-700 sticky top-0">
                         <tr>
                             <th class="text-left p-3 text-sm font-medium text-gray-300">Assignment</th>
+                            <th class="text-left p-3 text-sm font-medium text-gray-300">Slide</th>
                             <th class="text-left p-3 text-sm font-medium text-gray-300">Date</th>
                             <th class="text-left p-3 text-sm font-medium text-gray-300">Score</th>
-                            <th class="text-left p-3 text-sm font-medium text-gray-300">Aura Awarded</th>
+                            <th class="text-left p-3 text-sm font-medium text-gray-300">Aura</th>
                         </tr>
                     </thead>
                     <tbody id="perf-submissions-table" class="divide-y divide-gray-700">
@@ -365,9 +370,10 @@
         document.getElementById('perf-student-email').textContent = email;
         document.getElementById('perf-student-lifetime').textContent = `Lifetime Aura: ${auraLifetime} ✧`;
         
-        // Clear date filters
+        // Clear date filters and checkbox
         document.getElementById('perf-date-start').value = '';
         document.getElementById('perf-date-end').value = '';
+        document.getElementById('perf-show-all-attempts').checked = false;
         
         // Show modal
         document.getElementById('student-performance-modal').classList.remove('hidden');
@@ -395,74 +401,23 @@
                 submissions = submissionsQuery.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             }
             
-            // Also fetch submissionStatus for aura information
-            const statusQuery = await db.collection("submissionStatus")
-                .where("studentEmail", "==", email)
-                .get();
+            // Transform submissions to include needed fields
+            const rawSubmissions = submissions.map(sub => ({
+                id: sub.id,
+                assignmentId: sub.assignmentId,
+                slideIndex: sub.slideIndex !== undefined ? sub.slideIndex : 0,
+                score: sub.score || 0,
+                timestamp: sub.timestamp?.seconds || 0,
+                auraAwarded: sub.auraAwarded || false,
+                auraAmount: sub.auraAmount || 0,
+                assignmentName: assignmentMap[sub.assignmentId] || "Unknown Assignment"
+            }));
             
-            const statusByAssignment = {};
-            statusQuery.forEach(doc => {
-                const data = doc.data();
-                const assignmentId = data.assignmentId;
-                const currentTimestamp = data.timestamp?.seconds;
-                const existingTimestamp = statusByAssignment[assignmentId]?.timestamp?.seconds;
-                
-                if (!statusByAssignment[assignmentId] || 
-                    (currentTimestamp !== undefined && existingTimestamp !== undefined && currentTimestamp > existingTimestamp) ||
-                    (currentTimestamp !== undefined && existingTimestamp === undefined)) {
-                    statusByAssignment[assignmentId] = data;
-                }
-            });
-            
-            // Group submissions by assignment
-            const submissionsByAssignment = {};
-            submissions.forEach(sub => {
-                const assignmentId = sub.assignmentId;
-                if (!submissionsByAssignment[assignmentId]) {
-                    submissionsByAssignment[assignmentId] = [];
-                }
-                submissionsByAssignment[assignmentId].push(sub);
-            });
-            
-            // Create aggregated performance data
-            const performanceData = Object.keys(submissionsByAssignment).map(assignmentId => {
-                const subs = submissionsByAssignment[assignmentId];
-                
-                // Calculate average score for this assignment
-                const scores = subs.map(s => s.score || 0);
-                const avgScore = scores.length > 0 
-                    ? scores.reduce((a, b) => a + b, 0) / scores.length 
-                    : 0;
-                
-                // Get latest timestamp
-                const timestamps = subs
-                    .map(s => s.timestamp?.seconds || 0)
-                    .filter(t => t > 0);
-                const latestTimestamp = timestamps.length > 0 
-                    ? timestamps.reduce((max, current) => Math.max(max, current), 0)
-                    : 0;
-                
-                // Get aura info from status
-                const status = statusByAssignment[assignmentId];
-                const auraAwarded = status?.auraAwarded || false;
-                const auraAmount = status?.auraAmount || 0;
-                
-                return {
-                    assignmentId,
-                    assignmentName: assignmentMap[assignmentId] || "Unknown Assignment",
-                    avgScore: avgScore.toFixed(1),
-                    timestamp: latestTimestamp,
-                    auraAwarded,
-                    auraAmount,
-                    submissionCount: subs.length
-                };
-            });
-            
-            // Cache the results
-            cachedSubmissions[studentId] = performanceData;
+            // Cache the raw submissions
+            cachedSubmissions[studentId] = rawSubmissions;
             
             // Render the data
-            renderPerformanceData(performanceData, email);
+            renderPerformanceData(rawSubmissions, email);
             
         } catch (error) {
             console.error("Error fetching performance data:", error);
@@ -472,22 +427,46 @@
         }
     }
     
-    function renderPerformanceData(performanceData, email, startDate = null, endDate = null) {
+    function renderPerformanceData(rawSubmissions, email, startDate = null, endDate = null) {
         const tableBody = document.getElementById('perf-submissions-table');
         const noDataMsg = document.getElementById('perf-no-data');
+        const showAllAttempts = document.getElementById('perf-show-all-attempts').checked;
         
         // Apply date filtering if specified
-        let filteredData = performanceData;
+        let filteredData = rawSubmissions;
         if (startDate || endDate) {
             const startTimestamp = startDate ? new Date(startDate).getTime() / 1000 : 0;
             const endTimestamp = endDate ? new Date(endDate).getTime() / 1000 : Infinity;
             
-            filteredData = performanceData.filter(p => 
+            filteredData = rawSubmissions.filter(p => 
                 p.timestamp >= startTimestamp && p.timestamp <= endTimestamp
             );
         }
         
-        if (filteredData.length === 0) {
+        // Apply deduplication if not showing all attempts
+        let workingData = filteredData;
+        if (!showAllAttempts) {
+            // Deduplicate: keep only latest submission per assignmentId + slideIndex
+            const dedupeMap = {};
+            filteredData.forEach(sub => {
+                const key = `${sub.assignmentId}_${sub.slideIndex}`;
+                const existing = dedupeMap[key];
+                
+                if (!existing) {
+                    dedupeMap[key] = sub;
+                } else {
+                    // Compare timestamps, fallback to doc id if timestamps are equal or missing
+                    if (sub.timestamp > existing.timestamp || 
+                        (sub.timestamp === existing.timestamp && sub.id > existing.id)) {
+                        dedupeMap[key] = sub;
+                    }
+                }
+            });
+            
+            workingData = Object.values(dedupeMap);
+        }
+        
+        if (workingData.length === 0) {
             tableBody.innerHTML = '';
             noDataMsg.classList.remove('hidden');
             
@@ -501,15 +480,26 @@
         noDataMsg.classList.add('hidden');
         
         // Sort by timestamp descending (most recent first)
-        filteredData.sort((a, b) => b.timestamp - a.timestamp);
+        workingData.sort((a, b) => {
+            if (b.timestamp !== a.timestamp) {
+                return b.timestamp - a.timestamp;
+            }
+            // Fallback to id if timestamps are equal
+            return b.id > a.id ? 1 : -1;
+        });
         
         // Calculate summary statistics
-        const scores = filteredData.map(p => parseFloat(p.avgScore));
+        const scores = workingData.map(p => p.score);
         const avgScore = scores.length > 0 
-            ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1)
-            : 0;
-        const assignmentsCompleted = filteredData.length;
-        const totalAura = filteredData.reduce((sum, p) => sum + (p.auraAwarded ? p.auraAmount : 0), 0);
+            ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(2)
+            : '0.00';
+        
+        // Count distinct assignmentIds
+        const uniqueAssignments = new Set(workingData.map(p => p.assignmentId));
+        const assignmentsCompleted = uniqueAssignments.size;
+        
+        // Sum aura where auraAwarded is true
+        const totalAura = workingData.reduce((sum, p) => sum + (p.auraAwarded ? p.auraAmount : 0), 0);
         
         // Update summary cards
         document.getElementById('perf-avg-score').textContent = avgScore + '%';
@@ -517,20 +507,21 @@
         document.getElementById('perf-total-aura').textContent = totalAura.toFixed(1) + ' ✧';
         
         // Render table rows
-        tableBody.innerHTML = filteredData.map(p => {
+        tableBody.innerHTML = workingData.map(p => {
             const date = p.timestamp > 0 
                 ? new Date(p.timestamp * 1000).toLocaleDateString()
                 : 'N/A';
             
             const auraText = p.auraAwarded 
                 ? `✅ ${p.auraAmount} ✧`
-                : '—';
+                : 'No';
             
             return `
                 <tr>
                     <td class="p-3 text-sm">${p.assignmentName}</td>
+                    <td class="p-3 text-sm text-gray-400">${p.slideIndex}</td>
                     <td class="p-3 text-sm text-gray-400">${date}</td>
-                    <td class="p-3 text-sm font-mono ${p.avgScore >= 90 ? 'text-green-400' : p.avgScore >= 70 ? 'text-yellow-400' : 'text-orange-400'}">${p.avgScore}%</td>
+                    <td class="p-3 text-sm font-mono ${p.score >= 90 ? 'text-green-400' : p.score >= 70 ? 'text-yellow-400' : 'text-orange-400'}">${p.score}%</td>
                     <td class="p-3 text-sm ${p.auraAwarded ? 'text-yellow-400' : 'text-gray-500'}">${auraText}</td>
                 </tr>
             `;
@@ -545,6 +536,11 @@
             const email = document.getElementById('perf-student-email').textContent;
             renderPerformanceData(cachedSubmissions[currentPerfStudentId], email, startDate, endDate);
         }
+    }
+    
+    function togglePerformanceMode() {
+        // Re-render with current date filters
+        filterPerformanceByDate();
     }
     
     function clearPerformanceFilter() {
