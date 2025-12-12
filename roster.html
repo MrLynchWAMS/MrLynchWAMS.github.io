@@ -88,6 +88,64 @@
 
     <div id="toast-wrapper" class="fixed top-4 right-4 z-[100] space-y-3 w-full max-w-sm"></div>
 
+    <!-- Student Performance Detail Modal -->
+    <div id="student-performance-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
+        <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div class="flex justify-between items-center p-4 border-b border-gray-700">
+                <div>
+                    <h2 id="perf-student-name" class="text-2xl font-bold text-yellow-400"></h2>
+                    <p id="perf-student-email" class="text-sm text-gray-400"></p>
+                    <p id="perf-student-lifetime" class="text-sm text-purple-400"></p>
+                </div>
+                <button onclick="closeStudentPerformance()" class="text-gray-400 hover:text-white text-3xl">&times;</button>
+            </div>
+            
+            <!-- Summary Cards -->
+            <div class="grid grid-cols-3 gap-4 p-4 border-b border-gray-700">
+                <div class="bg-gray-700 rounded-lg p-4 text-center">
+                    <p class="text-sm text-gray-400 mb-1">Average Score</p>
+                    <p id="perf-avg-score" class="text-2xl font-bold text-green-400">--</p>
+                </div>
+                <div class="bg-gray-700 rounded-lg p-4 text-center">
+                    <p class="text-sm text-gray-400 mb-1">Assignments Completed</p>
+                    <p id="perf-assignments-completed" class="text-2xl font-bold text-blue-400">--</p>
+                </div>
+                <div class="bg-gray-700 rounded-lg p-4 text-center">
+                    <p class="text-sm text-gray-400 mb-1">Total Aura Earned</p>
+                    <p id="perf-total-aura" class="text-2xl font-bold text-yellow-400">--</p>
+                </div>
+            </div>
+            
+            <!-- Date Filter -->
+            <div class="p-4 border-b border-gray-700 flex items-center gap-4">
+                <label class="text-sm font-medium text-gray-300">Date Range:</label>
+                <input type="date" id="perf-date-start" class="p-2 bg-gray-700 rounded border border-gray-600 text-sm">
+                <span class="text-gray-400">to</span>
+                <input type="date" id="perf-date-end" class="p-2 bg-gray-700 rounded border border-gray-600 text-sm">
+                <button onclick="filterPerformanceByDate()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Filter</button>
+                <button onclick="clearPerformanceFilter()" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Clear</button>
+            </div>
+            
+            <!-- Submissions Table -->
+            <div class="flex-1 overflow-y-auto p-4">
+                <table class="w-full">
+                    <thead class="bg-gray-700 sticky top-0">
+                        <tr>
+                            <th class="text-left p-3 text-sm font-medium text-gray-300">Assignment</th>
+                            <th class="text-left p-3 text-sm font-medium text-gray-300">Date</th>
+                            <th class="text-left p-3 text-sm font-medium text-gray-300">Score</th>
+                            <th class="text-left p-3 text-sm font-medium text-gray-300">Aura Awarded</th>
+                        </tr>
+                    </thead>
+                    <tbody id="perf-submissions-table" class="divide-y divide-gray-700">
+                        <!-- Rows populated by JavaScript -->
+                    </tbody>
+                </table>
+                <p id="perf-no-data" class="text-center text-gray-400 py-8 hidden">No submissions found for this student.</p>
+            </div>
+        </div>
+    </div>
+
 <script>
     const TEACHER_EMAILS = ["klynch@mtps.us"];
     const firebaseConfig = {
@@ -102,11 +160,17 @@
     const db = firebase.firestore();
     const auth = firebase.auth();
 
+    // Globals for performance modal
+    let assignmentMap = {};
+    let cachedSubmissions = {};
+    let currentPerfStudentId = null;
+
     auth.onAuthStateChanged(user => {
         if (user && TEACHER_EMAILS.map(e => e.toLowerCase()).includes(user.email.toLowerCase())) {
             document.getElementById('pageLoader').classList.add('hidden');
             document.getElementById('rosterContent').classList.remove('hidden');
             loadRoster();
+            prefetchAssignments();
         } else {
             document.getElementById('loading-text').textContent = "Please sign in to continue.";
             document.getElementById('signInButtonContainer').classList.remove('hidden');
@@ -119,6 +183,20 @@
             console.error("Firebase sign-in error", error);
             document.getElementById('auth-error').innerText = "Firebase sign-in failed. Please try again.";
         });
+    }
+
+    async function prefetchAssignments() {
+        try {
+            const snapshot = await db.collection("assignments").get();
+            assignmentMap = {};
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                assignmentMap[doc.id] = data.name || data.title || "Untitled";
+            });
+            console.log("Prefetched assignments:", Object.keys(assignmentMap).length);
+        } catch (error) {
+            console.error("Error prefetching assignments:", error);
+        }
     }
 
     function loadRoster() {
@@ -171,7 +249,9 @@
                 studentListHTML += `
                     <li class="flex justify-between items-center py-2 border-b border-gray-700">
                         <div class="flex-1">
-                            <p class="font-medium">${student.name}</p>
+                            <p class="font-medium">
+                                <span class="text-blue-400 hover:underline cursor-pointer" onclick='openStudentPerformance("${student.id}", "${student.name.replace(/'/g, "\\'")}", "${student.email}", ${lifetime})'>${student.name}</span>
+                            </p>
                             <p class="text-sm text-gray-400">${student.email}</p>
                         </div>
                         <div class="flex items-center gap-4">
@@ -275,6 +355,219 @@
     }
     
     document.getElementById('signOutButton').onclick = () => { auth.signOut(); };
+
+    // Student Performance Modal Functions
+    async function openStudentPerformance(studentId, name, email, auraLifetime) {
+        currentPerfStudentId = studentId;
+        
+        // Populate header
+        document.getElementById('perf-student-name').textContent = name;
+        document.getElementById('perf-student-email').textContent = email;
+        document.getElementById('perf-student-lifetime').textContent = `Lifetime Aura: ${auraLifetime} ✧`;
+        
+        // Clear date filters
+        document.getElementById('perf-date-start').value = '';
+        document.getElementById('perf-date-end').value = '';
+        
+        // Show modal
+        document.getElementById('student-performance-modal').classList.remove('hidden');
+        
+        // Check if submissions are already cached
+        if (cachedSubmissions[studentId]) {
+            renderPerformanceData(cachedSubmissions[studentId], email);
+            return;
+        }
+        
+        // Fetch submissions
+        try {
+            // Try fetching by studentId first
+            let submissionsQuery = await db.collection("submissions")
+                .where("studentId", "==", studentId)
+                .get();
+            
+            let submissions = submissionsQuery.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            
+            // Backward compatibility: if no results, try by studentEmail
+            if (submissions.length === 0) {
+                submissionsQuery = await db.collection("submissions")
+                    .where("studentEmail", "==", email)
+                    .get();
+                submissions = submissionsQuery.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            }
+            
+            // Also fetch submissionStatus for aura information
+            const statusQuery = await db.collection("submissionStatus")
+                .where("studentEmail", "==", email)
+                .get();
+            
+            const statusByAssignment = {};
+            statusQuery.forEach(doc => {
+                const data = doc.data();
+                const assignmentId = data.assignmentId;
+                if (!statusByAssignment[assignmentId] || 
+                    (data.timestamp?.seconds || 0) > (statusByAssignment[assignmentId].timestamp?.seconds || 0)) {
+                    statusByAssignment[assignmentId] = data;
+                }
+            });
+            
+            // Group submissions by assignment
+            const submissionsByAssignment = {};
+            submissions.forEach(sub => {
+                const assignmentId = sub.assignmentId;
+                if (!submissionsByAssignment[assignmentId]) {
+                    submissionsByAssignment[assignmentId] = [];
+                }
+                submissionsByAssignment[assignmentId].push(sub);
+            });
+            
+            // Create aggregated performance data
+            const performanceData = Object.keys(submissionsByAssignment).map(assignmentId => {
+                const subs = submissionsByAssignment[assignmentId];
+                
+                // Calculate average score for this assignment
+                const scores = subs.map(s => s.score || 0);
+                const avgScore = scores.length > 0 
+                    ? scores.reduce((a, b) => a + b, 0) / scores.length 
+                    : 0;
+                
+                // Get latest timestamp
+                const timestamps = subs
+                    .map(s => s.timestamp?.seconds || 0)
+                    .filter(t => t > 0);
+                const latestTimestamp = timestamps.length > 0 
+                    ? Math.max(...timestamps) 
+                    : 0;
+                
+                // Get aura info from status
+                const status = statusByAssignment[assignmentId];
+                const auraAwarded = status?.auraAwarded || false;
+                const auraAmount = status?.auraAmount || 0;
+                
+                return {
+                    assignmentId,
+                    assignmentName: assignmentMap[assignmentId] || "Unknown Assignment",
+                    avgScore: avgScore.toFixed(1),
+                    timestamp: latestTimestamp,
+                    auraAwarded,
+                    auraAmount,
+                    submissionCount: subs.length
+                };
+            });
+            
+            // Cache the results
+            cachedSubmissions[studentId] = performanceData;
+            
+            // Render the data
+            renderPerformanceData(performanceData, email);
+            
+        } catch (error) {
+            console.error("Error fetching performance data:", error);
+            showToast("Error loading performance data. See console for details.", {color: 'red'});
+            document.getElementById('perf-no-data').textContent = "Error loading submissions.";
+            document.getElementById('perf-no-data').classList.remove('hidden');
+        }
+    }
+    
+    function renderPerformanceData(performanceData, email, startDate = null, endDate = null) {
+        const tableBody = document.getElementById('perf-submissions-table');
+        const noDataMsg = document.getElementById('perf-no-data');
+        
+        // Apply date filtering if specified
+        let filteredData = performanceData;
+        if (startDate || endDate) {
+            const startTimestamp = startDate ? new Date(startDate).getTime() / 1000 : 0;
+            const endTimestamp = endDate ? new Date(endDate).getTime() / 1000 : Infinity;
+            
+            filteredData = performanceData.filter(p => 
+                p.timestamp >= startTimestamp && p.timestamp <= endTimestamp
+            );
+        }
+        
+        if (filteredData.length === 0) {
+            tableBody.innerHTML = '';
+            noDataMsg.classList.remove('hidden');
+            
+            // Reset summary cards
+            document.getElementById('perf-avg-score').textContent = '--';
+            document.getElementById('perf-assignments-completed').textContent = '0';
+            document.getElementById('perf-total-aura').textContent = '0';
+            return;
+        }
+        
+        noDataMsg.classList.add('hidden');
+        
+        // Sort by timestamp descending (most recent first)
+        filteredData.sort((a, b) => b.timestamp - a.timestamp);
+        
+        // Calculate summary statistics
+        const scores = filteredData.map(p => parseFloat(p.avgScore));
+        const avgScore = scores.length > 0 
+            ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1)
+            : 0;
+        const assignmentsCompleted = filteredData.length;
+        const totalAura = filteredData.reduce((sum, p) => sum + (p.auraAwarded ? p.auraAmount : 0), 0);
+        
+        // Update summary cards
+        document.getElementById('perf-avg-score').textContent = avgScore + '%';
+        document.getElementById('perf-assignments-completed').textContent = assignmentsCompleted;
+        document.getElementById('perf-total-aura').textContent = totalAura.toFixed(1) + ' ✧';
+        
+        // Render table rows
+        tableBody.innerHTML = filteredData.map(p => {
+            const date = p.timestamp > 0 
+                ? new Date(p.timestamp * 1000).toLocaleDateString()
+                : 'N/A';
+            
+            const auraText = p.auraAwarded 
+                ? `✅ ${p.auraAmount} ✧`
+                : '—';
+            
+            return `
+                <tr>
+                    <td class="p-3 text-sm">${p.assignmentName}</td>
+                    <td class="p-3 text-sm text-gray-400">${date}</td>
+                    <td class="p-3 text-sm font-mono ${p.avgScore >= 90 ? 'text-green-400' : p.avgScore >= 70 ? 'text-yellow-400' : 'text-orange-400'}">${p.avgScore}%</td>
+                    <td class="p-3 text-sm ${p.auraAwarded ? 'text-yellow-400' : 'text-gray-500'}">${auraText}</td>
+                </tr>
+            `;
+        }).join('');
+    }
+    
+    function filterPerformanceByDate() {
+        const startDate = document.getElementById('perf-date-start').value;
+        const endDate = document.getElementById('perf-date-end').value;
+        
+        if (currentPerfStudentId && cachedSubmissions[currentPerfStudentId]) {
+            const email = document.getElementById('perf-student-email').textContent;
+            renderPerformanceData(cachedSubmissions[currentPerfStudentId], email, startDate, endDate);
+        }
+    }
+    
+    function clearPerformanceFilter() {
+        document.getElementById('perf-date-start').value = '';
+        document.getElementById('perf-date-end').value = '';
+        filterPerformanceByDate();
+    }
+    
+    function closeStudentPerformance() {
+        document.getElementById('student-performance-modal').classList.add('hidden');
+        currentPerfStudentId = null;
+    }
+    
+    // Close modal on ESC key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !document.getElementById('student-performance-modal').classList.contains('hidden')) {
+            closeStudentPerformance();
+        }
+    });
+    
+    // Close modal on outside click
+    document.getElementById('student-performance-modal').addEventListener('click', (e) => {
+        if (e.target.id === 'student-performance-modal') {
+            closeStudentPerformance();
+        }
+    });
+
     function showToast(message, options = {}) { const { color = 'default', duration = 3000 } = options; const wrapper = document.getElementById('toast-wrapper'); if (!wrapper) return; const toast = document.createElement('div'); toast.className = 'flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm animate-fade-in-right'; const colors = { default: 'bg-gray-700', green: 'bg-green-600', red: 'bg-red-600', blue: 'bg-blue-600' }; toast.classList.add(colors[color] || colors['default']); const messageSpan = document.createElement('span'); messageSpan.textContent = message; toast.appendChild(messageSpan); const closeButton = document.createElement('button'); closeButton.innerHTML = '&times;'; closeButton.className = 'ml-4 text-2xl font-bold leading-none hover:text-gray-300 focus:outline-none'; let timeoutId = null; const dismiss = () => { if (timeoutId) clearTimeout(timeoutId); toast.classList.remove('animate-fade-in-right'); toast.classList.add('animate-fade-out-right'); toast.addEventListener('animationend', () => toast.remove()); }; closeButton.onclick = dismiss; toast.appendChild(closeButton); wrapper.appendChild(toast); timeoutId = setTimeout(dismiss, duration); }
 </script>
 </body>
