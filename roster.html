@@ -456,6 +456,7 @@
                     dedupeMap[key] = sub;
                 } else {
                     // Compare timestamps, fallback to doc id if timestamps are equal or missing
+                    // Note: Firestore auto-generated IDs are chronologically sortable
                     if (sub.timestamp > existing.timestamp || 
                         (sub.timestamp === existing.timestamp && sub.id > existing.id)) {
                         dedupeMap[key] = sub;
@@ -484,7 +485,7 @@
             if (b.timestamp !== a.timestamp) {
                 return b.timestamp - a.timestamp;
             }
-            // Fallback to id if timestamps are equal
+            // Fallback to id if timestamps are equal (Firestore IDs are chronologically sortable)
             return b.id > a.id ? 1 : -1;
         });
         
