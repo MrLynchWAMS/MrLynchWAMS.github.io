@@ -125,6 +125,10 @@
                 <button onclick="filterPerformanceByDate()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Filter</button>
                 <button onclick="clearPerformanceFilter()" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Clear</button>
                 <div class="flex items-center gap-2 ml-4">
+                    <input type="checkbox" id="perf-show-questions" onchange="togglePerformanceMode()" class="w-4 h-4 bg-gray-700 border-gray-600 rounded">
+                    <label for="perf-show-questions" class="text-sm font-medium text-gray-300">Show individual questions</label>
+                </div>
+                <div class="flex items-center gap-2 ml-4">
                     <input type="checkbox" id="perf-show-all-attempts" onchange="togglePerformanceMode()" class="w-4 h-4 bg-gray-700 border-gray-600 rounded">
                     <label for="perf-show-all-attempts" class="text-sm font-medium text-gray-300">Show all attempts (raw)</label>
                 </div>
@@ -133,10 +137,10 @@
             <!-- Submissions Table -->
             <div class="flex-1 overflow-y-auto p-4">
                 <table class="w-full">
-                    <thead class="bg-gray-700 sticky top-0">
+                    <thead id="perf-table-header" class="bg-gray-700 sticky top-0">
                         <tr>
                             <th class="text-left p-3 text-sm font-medium text-gray-300">Assignment</th>
-                            <th class="text-left p-3 text-sm font-medium text-gray-300">Slide</th>
+                            <th id="perf-slide-header" class="text-left p-3 text-sm font-medium text-gray-300 hidden">Slide</th>
                             <th class="text-left p-3 text-sm font-medium text-gray-300">Date</th>
                             <th class="text-left p-3 text-sm font-medium text-gray-300">Score</th>
                             <th class="text-left p-3 text-sm font-medium text-gray-300">Aura</th>
@@ -373,6 +377,7 @@
         // Clear date filters and checkbox
         document.getElementById('perf-date-start').value = '';
         document.getElementById('perf-date-end').value = '';
+        document.getElementById('perf-show-questions').checked = false;
         document.getElementById('perf-show-all-attempts').checked = false;
         
         // Show modal
@@ -431,6 +436,15 @@
         const tableBody = document.getElementById('perf-submissions-table');
         const noDataMsg = document.getElementById('perf-no-data');
         const showAllAttempts = document.getElementById('perf-show-all-attempts').checked;
+        const showQuestions = document.getElementById('perf-show-questions').checked;
+        const slideHeader = document.getElementById('perf-slide-header');
+        
+        // Show/hide slide column based on view mode
+        if (showQuestions) {
+            slideHeader.classList.remove('hidden');
+        } else {
+            slideHeader.classList.add('hidden');
+        }
         
         // Apply date filtering if specified
         let filteredData = rawSubmissions;
@@ -478,6 +492,57 @@
             workingData = Object.values(dedupeMap);
         }
         
+        // If not showing questions, consolidate by assignment
+        if (!showQuestions) {
+            const assignmentMap = {};
+            workingData.forEach(sub => {
+                const assignmentId = sub.assignmentId;
+                
+                if (!assignmentMap[assignmentId]) {
+                    assignmentMap[assignmentId] = {
+                        assignmentId: assignmentId,
+                        assignmentName: sub.assignmentName,
+                        submissions: [],
+                        latestTimestamp: sub.timestamp,
+                        totalAuraAwarded: 0,
+                        auraAwarded: false
+                    };
+                }
+                
+                assignmentMap[assignmentId].submissions.push(sub);
+                
+                // Track latest timestamp
+                if (sub.timestamp > assignmentMap[assignmentId].latestTimestamp) {
+                    assignmentMap[assignmentId].latestTimestamp = sub.timestamp;
+                }
+                
+                // Sum up aura
+                if (sub.auraAwarded) {
+                    assignmentMap[assignmentId].totalAuraAwarded += sub.auraAmount;
+                    assignmentMap[assignmentId].auraAwarded = true;
+                }
+            });
+            
+            // Convert to array and calculate average scores
+            workingData = Object.values(assignmentMap).map(assignment => {
+                const scores = assignment.submissions.map(s => s.score);
+                const avgScore = scores.length > 0 
+                    ? scores.reduce((a, b) => a + b, 0) / scores.length
+                    : 0;
+                
+                return {
+                    id: assignment.assignmentId,  // For sorting consistency with submission objects
+                    assignmentId: assignment.assignmentId,
+                    assignmentName: assignment.assignmentName,
+                    score: avgScore,
+                    timestamp: assignment.latestTimestamp,
+                    auraAwarded: assignment.auraAwarded,
+                    auraAmount: assignment.totalAuraAwarded,
+                    questionCount: assignment.submissions.length
+                };
+            });
+        }
+        
         if (workingData.length === 0) {
             tableBody.innerHTML = '';
             noDataMsg.classList.remove('hidden');
@@ -496,8 +561,10 @@
             if (b.timestamp !== a.timestamp) {
                 return b.timestamp - a.timestamp;
             }
-            // Fallback to id if timestamps are equal (Firestore IDs are chronologically sortable)
-            return b.id > a.id ? 1 : -1;
+            // Fallback to id if timestamps are equal
+            const aId = a.id || '';
+            const bId = b.id || '';
+            return bId.localeCompare(aId);
         });
         
         // Calculate summary statistics
@@ -528,12 +595,24 @@
                 ? `✅ ${p.auraAmount} ✧`
                 : 'No';
             
+            const scoreDisplay = Math.round(p.score);
+            
+            // Build slide column content - only show if in question view
+            const slideColumn = showQuestions 
+                ? `<td class="p-3 text-sm text-gray-400">${p.slideIndex}</td>`
+                : '';
+            
+            // Add question count to assignment name if in consolidated view
+            const assignmentDisplay = showQuestions 
+                ? p.assignmentName
+                : `${p.assignmentName} <span class="text-gray-500 text-xs">(${p.questionCount} question${p.questionCount !== 1 ? 's' : ''})</span>`;
+            
             return `
                 <tr>
-                    <td class="p-3 text-sm">${p.assignmentName}</td>
-                    <td class="p-3 text-sm text-gray-400">${p.slideIndex}</td>
+                    <td class="p-3 text-sm">${assignmentDisplay}</td>
+                    ${slideColumn}
                     <td class="p-3 text-sm text-gray-400">${date}</td>
-                    <td class="p-3 text-sm font-mono ${p.score >= 90 ? 'text-green-400' : p.score >= 70 ? 'text-yellow-400' : 'text-orange-400'}">${p.score}%</td>
+                    <td class="p-3 text-sm font-mono ${scoreDisplay >= 90 ? 'text-green-400' : scoreDisplay >= 70 ? 'text-yellow-400' : 'text-orange-400'}">${scoreDisplay}%</td>
                     <td class="p-3 text-sm ${p.auraAwarded ? 'text-yellow-400' : 'text-gray-500'}">${auraText}</td>
                 </tr>
             `;
