@@ -1035,23 +1035,22 @@ slideStates.forEach((state, index) => {
                 attemptInfo.isNewAttempt = true;
             }
 
-            // Check if max attempts reached (only count new attempts)
-            if (attemptInfo.isNewAttempt && attemptInfo.attemptCount > attemptInfo.maxAttempts) {
-                if (attemptSettings.lockOnMax) {
-                    attemptInfo.locked = true;
-                    showToast(attemptSettings.lockMessage || "Maximum attempts reached for this question.", {color: 'red', duration: 5000});
-                    
-                    // Lock the question in Firestore
-                    if (questionProgress) {
-                        await db.collection("questionProgress").doc(questionProgress.id).update({
-                            locked: true,
-                            lastAttemptAt: firebase.firestore.FieldValue.serverTimestamp()
-                        });
-                    }
-                    return;
-                } else {
-                    showToast(`You've exceeded the recommended ${attemptInfo.maxAttempts} attempts for this question.`, {color: 'orange', duration: 4000});
-                }
+            // Check if this will be the last allowed attempt or if we're over the limit
+            const isAtMaxAttempt = attemptInfo.isNewAttempt && attemptInfo.attemptCount === attemptInfo.maxAttempts;
+            const isOverMaxAttempt = attemptInfo.isNewAttempt && attemptInfo.attemptCount > attemptInfo.maxAttempts;
+            
+            if (isOverMaxAttempt) {
+                // Already at max, don't allow any more attempts
+                showToast(attemptSettings.lockMessage || "Maximum attempts reached for this question.", {color: 'red', duration: 5000});
+                return;
+            }
+            
+            if (isAtMaxAttempt && attemptSettings.lockOnMax) {
+                // This is the last allowed attempt - we'll save it and then lock
+                attemptInfo.locked = true;
+            } else if (isAtMaxAttempt && !attemptSettings.lockOnMax) {
+                // At max but not locking - just warn
+                showToast(`You've reached ${attemptInfo.maxAttempts} attempts for this question.`, {color: 'orange', duration: 4000});
             }
         }
 
