@@ -451,6 +451,60 @@ function renderEditor() {
           </div>
         </div>
       </div>
+      <div class="mt-4 border-t border-gray-700 pt-4">
+        <div class="flex items-center justify-between mb-3">
+          <h4 class="font-semibold">Attempt Tracking</h4>
+          <label class="flex items-center cursor-pointer">
+            <input type="checkbox" id="attempts-enabled-${index}" ${slidePolicy.attempts?.enabled ? 'checked' : ''} onchange="toggleAttemptSettings(${index})" class="w-4 h-4 text-blue-500 rounded focus:ring-blue-500 bg-gray-700 border-gray-600">
+            <span class="ml-2 text-sm">Enable Attempt Tracking</span>
+          </label>
+        </div>
+        <div id="attempt-settings-${index}" class="${slidePolicy.attempts?.enabled ? '' : 'hidden'} space-y-3">
+          <div class="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <label class="block mb-1">Max Attempts</label>
+              <input type="number" id="attempts-max-${index}" value="${slidePolicy.attempts?.maxAttempts ?? 5}" min="1" max="100" class="w-full p-2 bg-gray-700 rounded border border-gray-600">
+              <p class="text-xs text-gray-500 mt-1">Maximum unique attempts allowed</p>
+            </div>
+            <div>
+              <label class="block mb-1">Deduction per Extra Attempt (%)</label>
+              <input type="number" id="attempts-deduction-${index}" value="${slidePolicy.attempts?.deductionPerAttempt ?? 0}" min="0" max="100" step="1" class="w-full p-2 bg-gray-700 rounded border border-gray-600">
+              <p class="text-xs text-gray-500 mt-1">Points deducted after 1st attempt</p>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <label class="flex items-center cursor-pointer">
+              <input type="checkbox" id="attempts-retain-best-${index}" ${slidePolicy.attempts?.retainBestScore !== false ? 'checked' : ''} class="w-4 h-4 text-blue-500 rounded focus:ring-blue-500 bg-gray-700 border-gray-600">
+              <span class="ml-2 text-sm">Retain Best Score</span>
+            </label>
+            <label class="flex items-center cursor-pointer">
+              <input type="checkbox" id="attempts-lock-${index}" ${slidePolicy.attempts?.lockOnMax ? 'checked' : ''} onchange="toggleLockMessage(${index})" class="w-4 h-4 text-blue-500 rounded focus:ring-blue-500 bg-gray-700 border-gray-600">
+              <span class="ml-2 text-sm">Lock When Max Reached</span>
+            </label>
+          </div>
+          <div id="lock-message-container-${index}" class="${slidePolicy.attempts?.lockOnMax ? '' : 'hidden'}">
+            <label class="block text-sm mb-1">Lock Message</label>
+            <input type="text" id="attempts-lock-message-${index}" value="${slidePolicy.attempts?.lockMessage || 'Maximum attempts reached. This question is now locked.'}" class="w-full p-2 bg-gray-700 rounded border border-gray-600 text-sm" placeholder="Message shown when locked">
+          </div>
+          <div class="grid grid-cols-3 gap-3">
+            <label class="flex items-center cursor-pointer">
+              <input type="checkbox" id="attempts-case-sensitive-${index}" ${slidePolicy.attempts?.caseSensitive ? 'checked' : ''} class="w-4 h-4 text-blue-500 rounded focus:ring-blue-500 bg-gray-700 border-gray-600">
+              <span class="ml-2 text-sm">Case Sensitive</span>
+            </label>
+            <label class="flex items-center cursor-pointer">
+              <input type="checkbox" id="attempts-punct-sensitive-${index}" ${slidePolicy.attempts?.punctuationSensitive ? 'checked' : ''} class="w-4 h-4 text-blue-500 rounded focus:ring-blue-500 bg-gray-700 border-gray-600">
+              <span class="ml-2 text-sm">Punctuation Sensitive</span>
+            </label>
+            <div>
+              <label class="block text-sm mb-1">Show Help After</label>
+              <input type="number" id="attempts-show-help-${index}" value="${slidePolicy.attempts?.showHelpAfter ?? ''}" min="1" max="100" placeholder="N" class="w-full p-1 bg-gray-700 rounded border border-gray-600 text-sm">
+            </div>
+          </div>
+          <p class="text-xs text-gray-400 mt-2">
+            ℹ️ Uniqueness is determined by normalized answer (trimmed, whitespace collapsed). Case/punctuation sensitivity affects whether "Hello" equals "hello" or "Hello!" for attempt counting.
+          </p>
+        </div>
+      </div>
     `;
     const checkerTemplate = document.getElementById('checkerTemplate');
     const checkerFragment = checkerTemplate.content.cloneNode(true);
@@ -1320,6 +1374,26 @@ function getDefaultCheckerCode() {
 }`;
 }
 
+function toggleAttemptSettings(index) {
+  const enabled = document.getElementById(`attempts-enabled-${index}`).checked;
+  const settingsDiv = document.getElementById(`attempt-settings-${index}`);
+  if (enabled) {
+    settingsDiv.classList.remove('hidden');
+  } else {
+    settingsDiv.classList.add('hidden');
+  }
+}
+
+function toggleLockMessage(index) {
+  const lockEnabled = document.getElementById(`attempts-lock-${index}`).checked;
+  const messageContainer = document.getElementById(`lock-message-container-${index}`);
+  if (lockEnabled) {
+    messageContainer.classList.remove('hidden');
+  } else {
+    messageContainer.classList.add('hidden');
+  }
+}
+
 async function saveAssignment() {
   const saveBtn = document.getElementById('saveBtn');
   try {
@@ -1371,10 +1445,25 @@ async function saveAssignment() {
       }
       checkerMeta[funcName] = metaForThis;
 
+      // Read attempt tracking settings
+      const attemptsEnabled = document.getElementById(`attempts-enabled-${index}`).checked;
+      const attemptSettings = attemptsEnabled ? {
+        enabled: true,
+        maxAttempts: parseInt(document.getElementById(`attempts-max-${index}`).value, 10) || 5,
+        deductionPerAttempt: parseInt(document.getElementById(`attempts-deduction-${index}`).value, 10) || 0,
+        retainBestScore: document.getElementById(`attempts-retain-best-${index}`).checked,
+        lockOnMax: document.getElementById(`attempts-lock-${index}`).checked,
+        lockMessage: document.getElementById(`attempts-lock-message-${index}`).value || 'Maximum attempts reached. This question is now locked.',
+        caseSensitive: document.getElementById(`attempts-case-sensitive-${index}`).checked,
+        punctuationSensitive: document.getElementById(`attempts-punct-sensitive-${index}`).checked,
+        showHelpAfter: parseInt(document.getElementById(`attempts-show-help-${index}`).value, 10) || null
+      } : { enabled: false };
+
       deadlinePolicy[`q${qNum}`] = {
         deadlineMinutes: parseInt(document.getElementById(`deadline-minutes-${index}`).value, 10) || 0,
         penaltyType: document.getElementById(`penalty-type-${index}`).value,
         penaltyValue: parseInt(document.getElementById(`penalty-value-${index}`).value, 10) || 0,
+        attempts: attemptSettings
       };
     });
 
