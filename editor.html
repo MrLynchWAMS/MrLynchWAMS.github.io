@@ -451,6 +451,58 @@ function renderEditor() {
           </div>
         </div>
       </div>
+      <div class="mt-4 border-t border-gray-700 pt-4">
+        <div class="flex items-center justify-between mb-3">
+          <h4 class="font-semibold">Attempt Tracking</h4>
+          <label class="flex items-center cursor-pointer">
+            <input type="checkbox" id="attempts-enabled-${index}" ${slidePolicy.attempts?.enabled ? 'checked' : ''} onchange="toggleAttemptOptions(${index})" class="w-4 h-4 text-blue-500 rounded focus:ring-blue-500 bg-gray-700 border-gray-500">
+            <span class="ml-2 text-sm">Enable</span>
+          </label>
+        </div>
+        <div id="attempt-options-${index}" class="${slidePolicy.attempts?.enabled ? '' : 'hidden'} space-y-3 text-sm">
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block mb-1">Max Attempts</label>
+              <input type="number" id="max-attempts-${index}" value="${slidePolicy.attempts?.maxAttempts || 5}" min="1" class="w-full p-2 bg-gray-700 rounded border border-gray-600">
+            </div>
+            <div>
+              <label class="block mb-1">Deduction Per Extra Attempt</label>
+              <input type="number" id="deduction-per-attempt-${index}" value="${slidePolicy.attempts?.deductionPerAttempt || 0}" min="0" step="0.1" class="w-full p-2 bg-gray-700 rounded border border-gray-600">
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <label class="flex items-center cursor-pointer">
+              <input type="checkbox" id="retain-best-${index}" ${slidePolicy.attempts?.retainBestScore !== false ? 'checked' : ''} class="w-4 h-4 text-blue-500 rounded focus:ring-blue-500 bg-gray-700 border-gray-500">
+              <span class="ml-2">Retain Best Score</span>
+            </label>
+            <label class="flex items-center cursor-pointer">
+              <input type="checkbox" id="lock-on-max-${index}" ${slidePolicy.attempts?.lockOnMax ? 'checked' : ''} onchange="toggleLockMessage(${index})" class="w-4 h-4 text-blue-500 rounded focus:ring-blue-500 bg-gray-700 border-gray-500">
+              <span class="ml-2">Lock When Max Reached</span>
+            </label>
+          </div>
+          <div id="lock-message-container-${index}" class="${slidePolicy.attempts?.lockOnMax ? '' : 'hidden'}">
+            <label class="block mb-1">Lock Message</label>
+            <input type="text" id="lock-message-${index}" value="${slidePolicy.attempts?.lockMessage || 'Maximum attempts reached for this question.'}" class="w-full p-2 bg-gray-700 rounded border border-gray-600">
+          </div>
+          <div>
+            <label class="block mb-1">Show Help After N Attempts (optional)</label>
+            <input type="number" id="show-help-after-${index}" value="${slidePolicy.attempts?.showHelpAfter || ''}" min="1" placeholder="Leave empty to disable" class="w-full p-2 bg-gray-700 rounded border border-gray-600">
+          </div>
+          <div class="border-t border-gray-600 pt-3">
+            <p class="text-xs text-gray-400 mb-2">Answer Uniqueness Options:</p>
+            <div class="grid grid-cols-2 gap-3">
+              <label class="flex items-center cursor-pointer">
+                <input type="checkbox" id="case-sensitive-${index}" ${slidePolicy.attempts?.caseSensitive ? 'checked' : ''} class="w-4 h-4 text-blue-500 rounded focus:ring-blue-500 bg-gray-700 border-gray-500">
+                <span class="ml-2">Case-Sensitive</span>
+              </label>
+              <label class="flex items-center cursor-pointer">
+                <input type="checkbox" id="punctuation-sensitive-${index}" ${slidePolicy.attempts?.punctuationSensitive ? 'checked' : ''} class="w-4 h-4 text-blue-500 rounded focus:ring-blue-500 bg-gray-700 border-gray-500">
+                <span class="ml-2">Punctuation-Sensitive</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
     `;
     const checkerTemplate = document.getElementById('checkerTemplate');
     const checkerFragment = checkerTemplate.content.cloneNode(true);
@@ -1320,6 +1372,26 @@ function getDefaultCheckerCode() {
 }`;
 }
 
+function toggleAttemptOptions(index) {
+  const checkbox = document.getElementById(`attempts-enabled-${index}`);
+  const optionsDiv = document.getElementById(`attempt-options-${index}`);
+  if (checkbox.checked) {
+    optionsDiv.classList.remove('hidden');
+  } else {
+    optionsDiv.classList.add('hidden');
+  }
+}
+
+function toggleLockMessage(index) {
+  const checkbox = document.getElementById(`lock-on-max-${index}`);
+  const messageContainer = document.getElementById(`lock-message-container-${index}`);
+  if (checkbox.checked) {
+    messageContainer.classList.remove('hidden');
+  } else {
+    messageContainer.classList.add('hidden');
+  }
+}
+
 async function saveAssignment() {
   const saveBtn = document.getElementById('saveBtn');
   try {
@@ -1376,6 +1448,27 @@ async function saveAssignment() {
         penaltyType: document.getElementById(`penalty-type-${index}`).value,
         penaltyValue: parseInt(document.getElementById(`penalty-value-${index}`).value, 10) || 0,
       };
+
+      // Save attempt tracking settings
+      const attemptsEnabled = document.getElementById(`attempts-enabled-${index}`).checked;
+      if (attemptsEnabled) {
+        const showHelpAfterValue = document.getElementById(`show-help-after-${index}`).value;
+        deadlinePolicy[`q${qNum}`].attempts = {
+          enabled: true,
+          maxAttempts: parseInt(document.getElementById(`max-attempts-${index}`).value, 10) || 5,
+          deductionPerAttempt: parseFloat(document.getElementById(`deduction-per-attempt-${index}`).value) || 0,
+          retainBestScore: document.getElementById(`retain-best-${index}`).checked,
+          lockOnMax: document.getElementById(`lock-on-max-${index}`).checked,
+          lockMessage: document.getElementById(`lock-message-${index}`).value || 'Maximum attempts reached for this question.',
+          showHelpAfter: showHelpAfterValue ? parseInt(showHelpAfterValue, 10) : null,
+          caseSensitive: document.getElementById(`case-sensitive-${index}`).checked,
+          punctuationSensitive: document.getElementById(`punctuation-sensitive-${index}`).checked
+        };
+      } else {
+        deadlinePolicy[`q${qNum}`].attempts = {
+          enabled: false
+        };
+      }
     });
 
     const postSubmissionRule = document.getElementById('postSubmissionRule').value;
