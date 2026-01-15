@@ -1119,9 +1119,9 @@ slideStates.forEach((state, index) => {
                 studentEmail: userProfile.email, 
                 assignmentId: assignmentData.id, 
                 slideIndex: currentSlideIndex, 
-                answer: studentAnswer, 
-                score: finalScore,  // Store actual score with penalties
-                rawScore: rawScore, // Store score before attempt deductions
+                answer: studentAnswer,
+                score: finalScore, // Actual score with all penalties
+                rawScore: rawScore, // Score before attempt deductions
                 timestamp: firebase.firestore.FieldValue.serverTimestamp()
             };
             
@@ -1209,8 +1209,9 @@ slideStates.forEach((state, index) => {
         
         // Handle punctuation sensitivity
         if (!punctuationSensitive) {
-            // Remove all punctuation
-            normalized = normalized.replace(/[^\w\s]/g, '');
+            // Remove common punctuation marks
+            // Preserves accents and non-English characters
+            normalized = normalized.replace(/[.,!?;:'"()[\]{}\/\\|<>@#$%^&*+=`~-]/g, '');
         }
         
         return normalized;

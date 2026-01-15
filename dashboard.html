@@ -1000,7 +1000,7 @@ function setupLiveStudentData() {
                 
                 // Unlock button (only if attempts are enabled and we have student email and slide index)
                 let unlockButton = '';
-                if (sub.attemptsEnabled && sub.locked && sub.studentEmail !== undefined && sub.slideIndex !== undefined) {
+                if (sub.attemptsEnabled && sub.locked && sub.studentEmail != null && sub.slideIndex != null) {
                     unlockButton = `<button onclick="unlockQuestion('${escapeHtml(sub.studentEmail)}', ${sub.slideIndex})" class="bg-orange-600 hover:bg-orange-700 text-white font-bold py-1 px-3 rounded-lg text-sm">Unlock</button>`;
                 }
                 
@@ -1043,7 +1043,11 @@ function setupLiveStudentData() {
             const doc = await docRef.get();
             
             if (doc.exists) {
-                await docRef.update({ locked: false });
+                await docRef.update({ 
+                    locked: false,
+                    lastUnlockedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    unlockedBy: auth.currentUser.email
+                });
                 showToast(`Question ${slideIndex + 1} unlocked successfully!`, { color: 'green' });
                 
                 // Refresh modal if it's currently showing this student/question
