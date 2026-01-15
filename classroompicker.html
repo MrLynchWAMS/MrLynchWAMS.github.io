@@ -171,6 +171,9 @@
     const db = firebase.firestore();
     const auth = firebase.auth();
 
+    // Constants
+    const MAX_NORMALIZED_ANSWERS_STORED = 50; // Cap for normalized answer history
+
     let assignmentData = null;
     let currentSlideIndex = 0;
     let userProfile = null;
@@ -1083,10 +1086,22 @@ slideStates.forEach((state, index) => {
                     isOnTime = false;
                     const minutesLate = Math.ceil((now - deadline) / 60000);
                     switch (qPolicy.penaltyType) {
-                        case 'zero': finalScore = 0; showToast(`Submitted ${minutesLate} mins late. Score is 0.`, {color: 'red', duration: 7000}); break;
-                        case 'deduction': const deduction = finalScore * (qPolicy.penaltyValue / 100); finalScore = Math.round(finalScore - deduction); showToast(`-${qPolicy.penaltyValue}% for being ${minutesLate} mins late.`, {color: 'red', duration: 7000}); break;
-                        case 'incremental': const pointsOff = minutesLate * qPolicy.penaltyValue; finalScore = finalScore - pointsOff; showToast(`-${pointsOff} points for being ${minutesLate} mins late.`, {color: 'red', duration: 7000}); break;
-                        default: break;
+                        case 'zero': 
+                            finalScore = 0; 
+                            showToast(`Submitted ${minutesLate} mins late. Score is 0.`, {color: 'red', duration: 7000}); 
+                            break;
+                        case 'deduction': 
+                            const deduction = finalScore * (qPolicy.penaltyValue / 100); 
+                            finalScore = Math.round(finalScore - deduction); 
+                            showToast(`-${qPolicy.penaltyValue}% for being ${minutesLate} mins late.`, {color: 'red', duration: 7000}); 
+                            break;
+                        case 'incremental': 
+                            const pointsOff = minutesLate * qPolicy.penaltyValue; 
+                            finalScore = finalScore - pointsOff; 
+                            showToast(`-${pointsOff} points for being ${minutesLate} mins late.`, {color: 'red', duration: 7000}); 
+                            break;
+                        default: 
+                            break;
                     }
                     finalScore = Math.max(0, finalScore);
                 }
@@ -1145,7 +1160,7 @@ slideStates.forEach((state, index) => {
                     bestScore: bestScoreToDate,
                     bestAnswer: studentAnswer,
                     normalizedAnswers: questionProgress 
-                        ? [...new Set([...questionProgress.normalizedAnswers || [], normalizedAnswer])].slice(-50) // Cap at 50
+                        ? [...new Set([...questionProgress.normalizedAnswers || [], normalizedAnswer])].slice(-MAX_NORMALIZED_ANSWERS_STORED)
                         : [normalizedAnswer],
                     locked: attemptInfo.locked,
                     lastAttemptAt: firebase.firestore.FieldValue.serverTimestamp()
