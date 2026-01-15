@@ -71,6 +71,7 @@
                         <label class="flex items-center"><input type="checkbox" id="showScores" onchange="toggleDisplayOptions()" class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"><span class="ml-2">Show Scores</span></label>
                         <label class="flex items-center"><input type="checkbox" id="blackoutMode" onchange="toggleDisplayOptions()" class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"><span class="ml-2">Blackout Mode</span></label>
                         <label class="flex items-center"><input type="checkbox" id="showBehaviorToggle" checked onchange="toggleDisplayOptions()" class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"><span class="ml-2">Show Aura & Violations</span></label>
+                        <label class="flex items-center"><input type="checkbox" id="showAttempts" onchange="toggleDisplayOptions()" class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"><span class="ml-2">Show Attempts</span></label>
                     </div>
                     <div class="h-6 border-l border-gray-600 hidden md:block"></div>
                     <div class="flex items-center gap-4">
@@ -130,16 +131,21 @@
     let showScores = false;
     let blackoutMode = false;
     let showBehavior = true;
+    let showAttempts = false;
     let sortMode = 'lastName';
     let staticRandomOrder = [];
     let showAllAttempts = localStorage.getItem('dashboardShowAllAttempts') === 'true';
     let currentModalView = null;
+
+    // Question progress data - per student, per question
+    let questionProgressByStudent = new Map(); // Key: studentEmail, Value: Map of slideIndex -> progressData
 
     // --- Firestore live listener handles ---
     let unsubscribeStudents = null;
     let unsubscribeSubmissions = null;
     let unsubscribeStatus = null;
     let unsubscribeViolations = null;
+    let unsubscribeQuestionProgress = null;
 
     window.onload = function() {
         const urlParams = new URLSearchParams(window.location.search);
@@ -297,16 +303,36 @@ function setupLiveStudentData() {
             rebuildAllStudentData();
         });
 
+    // Listener 5: Question progress (attempt tracking) for this assignment
+    unsubscribeQuestionProgress = db.collection("questionProgress")
+        .where("assignmentId", "==", assignmentId)
+        .onSnapshot(progressSnapshot => {
+            questionProgressByStudent.clear();
+            progressSnapshot.forEach(doc => {
+                const progress = { id: doc.id, ...doc.data() };
+                const studentEmail = progress.studentEmail;
+                const slideIndex = progress.slideIndex;
+                
+                if (!questionProgressByStudent.has(studentEmail)) {
+                    questionProgressByStudent.set(studentEmail, new Map());
+                }
+                questionProgressByStudent.get(studentEmail).set(slideIndex, progress);
+            });
+            rebuildAllStudentData();
+        });
+
     function rebuildAllStudentData() {
         allStudentData = Array.from(studentsMap.values()).map(student => {
             const auraData = auraByStudent.get(student.email) || { auraAwarded: false, auraAmount: 0 };
+            const questionProgress = questionProgressByStudent.get(student.email) || new Map();
             return {
                 ...student,
                 submissions: submissionsByStudent.get(student.email) || [],
                 isSubmitted: submittedEmails.has(student.email),
                 violations: violationsByStudent.get(student.email) || [],
                 auraAwarded: auraData.auraAwarded,
-                auraAmount: auraData.auraAmount
+                auraAmount: auraData.auraAmount,
+                questionProgress
             };
         });
 
@@ -329,6 +355,7 @@ function setupLiveStudentData() {
         if (unsubscribeSubmissions) unsubscribeSubmissions();
         if (unsubscribeStatus) unsubscribeStatus();
         if (unsubscribeViolations) unsubscribeViolations();
+        if (unsubscribeQuestionProgress) unsubscribeQuestionProgress();
     }
     window.addEventListener("beforeunload", cleanupListeners);
 
@@ -451,6 +478,7 @@ function setupLiveStudentData() {
         showScores = document.getElementById('showScores').checked;
         blackoutMode = document.getElementById('blackoutMode').checked;
         showBehavior = document.getElementById('showBehaviorToggle').checked;
+        showAttempts = document.getElementById('showAttempts').checked;
         const avgEl = document.getElementById('activeClassAvg');
         if (avgEl) avgEl.classList.toggle('hidden', !showScores);
         displayStudentData();
@@ -558,6 +586,9 @@ function setupLiveStudentData() {
             
             for (let i = 0; i < numQuestions; i++) {
                 const latestSubmission = student.submissions.filter(s => s.slideIndex === i).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
+                const questionProgress = student.questionProgress?.get(i);
+                const attemptCount = questionProgress?.attemptCount || 0;
+                const isLocked = questionProgress?.locked || false;
                 
                 if (blackoutMode) {
                     if (latestSubmission) {
@@ -570,9 +601,15 @@ function setupLiveStudentData() {
                         const score = latestSubmission.score;
                         const color = score >= 90 ? 'bg-green-500' : score >= 70 ? 'bg-yellow-500' : 'bg-red-500';
                         const scoreDisplay = showScores ? score : '';
+                        let attemptDisplay = '';
+                        if (showAttempts && attemptCount > 0) {
+                            attemptDisplay = `<span class="text-xs text-gray-300 ml-1">(${attemptCount}${isLocked ? '🔒' : ''})</span>`;
+                        } else if (showAttempts && isLocked) {
+                            attemptDisplay = `<span class="text-xs text-red-400 ml-1">🔒</span>`;
+                        }
                         tableHtml += `<td class="px-2 py-4 whitespace-nowrap text-sm font-semibold cursor-pointer" onclick="showSubmissions('${escapedEmail}', ${i})">
                             <div class="w-full bg-gray-600 rounded-full h-6 relative">
-                                <div class="${color} h-6 rounded-full text-center text-white text-xs flex items-center justify-center" style="width: ${score}%">${scoreDisplay}</div>
+                                <div class="${color} h-6 rounded-full text-center text-white text-xs flex items-center justify-center" style="width: ${score}%">${scoreDisplay}${attemptDisplay}</div>
                             </div></td>`;
                     } else {
                         tableHtml += `<td class="px-2 py-4"><div class="bg-gray-700 h-6 rounded-full flex items-center justify-center text-gray-500 text-xs">-</div></td>`;
@@ -924,15 +961,34 @@ function setupLiveStudentData() {
                 const displayName = nameMap && hideNames ? nameMap.get(sub.studentEmail) : sub.studentName;
                 const headerText = nameMap ? `${displayName}` : `Question ${sub.slideIndex + 1}`;
                 const date = sub.timestamp ? new Date(sub.timestamp.seconds * 1000).toLocaleString() : 'N/A';
+                
+                // Show attempt info if available
+                let attemptInfo = '';
+                if (sub.attemptIndex) {
+                    attemptInfo = `<span class="text-xs text-blue-400 ml-2">(Attempt #${sub.attemptIndex})</span>`;
+                }
+                if (sub.locked) {
+                    attemptInfo += `<span class="text-xs text-red-400 ml-2">🔒 Locked</span>`;
+                }
+                
+                // Add unlock button if question is locked
+                let unlockButton = '';
+                if (sub.locked && sub.attemptsEnabled) {
+                    unlockButton = `<button onclick="unlockQuestion('${sub.studentEmail}', ${sub.slideIndex}, event)" class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-1 px-3 rounded-lg text-sm">🔓 Unlock</button>`;
+                }
+                
                 contentHtml += `<div class="bg-gray-700 p-4 rounded-lg">
                     <div class="flex justify-between items-center mb-2">
-                        <p class="font-bold text-lg">${headerText}</p>
+                        <p class="font-bold text-lg">${headerText}${attemptInfo}</p>
                         <p class="text-sm text-gray-400">${date}</p>
                     </div>
                     <textarea id="answer-${sub.id}" class="w-full bg-gray-900 p-3 rounded font-mono text-white border border-gray-600">${sub.answer}</textarea>
-                    <div class="flex items-center justify-end gap-4 mt-2">
-                        <button onclick="saveAnswer('${sub.id}', event)" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded-lg text-sm">Save Answer</button>
+                    <div class="flex items-center justify-between mt-2">
                         <div class="flex items-center gap-2">
+                            ${unlockButton}
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="saveAnswer('${sub.id}', event)" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded-lg text-sm">Save Answer</button>
                             <label for="score-${sub.id}" class="text-sm">Score:</label>
                             <input type="number" id="score-${sub.id}" value="${sub.score}" min="0" max="100" class="w-20 bg-gray-900 border border-gray-600 rounded p-1 text-center">
                             <button onclick="setScore('${sub.id}', event)" class="bg-green-600 hover:bg-green-700 text-white font-bold py-1 px-3 rounded-lg text-sm">Set Score</button>
@@ -949,6 +1005,33 @@ function setupLiveStudentData() {
     function closeModal() { 
         document.getElementById('submissionModal').classList.add('hidden'); 
         currentModalView = null; 
+    }
+    
+    async function unlockQuestion(studentEmail, slideIndex, event) {
+        const button = event.target;
+        button.disabled = true;
+        
+        try {
+            const progressKey = `${assignmentId}_${studentEmail}_${slideIndex}`;
+            await db.collection("questionProgress").doc(progressKey).update({ 
+                locked: false 
+            });
+            
+            showToast(`Question ${slideIndex + 1} unlocked for student.`, { color: 'green' });
+            
+            // Refresh modal if it's still open
+            if (currentModalView) {
+                if (currentModalView.type === 'student') {
+                    showStudentSubmissions(currentModalView.email, currentModalView.slide);
+                } else if (currentModalView.type === 'question') {
+                    showQuestionSubmissions(currentModalView.slide);
+                }
+            }
+        } catch (error) {
+            console.error("Error unlocking question:", error);
+            showToast("Failed to unlock question.", { color: 'red' });
+            button.disabled = false;
+        }
     }
     
     function showViolations(studentEmail) {
