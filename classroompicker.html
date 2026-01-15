@@ -936,15 +936,89 @@ slideStates.forEach((state, index) => {
             showToast("Please enter your answer first!", {color: 'red'});
             return;
         }
-        let baseScore = checkCurrentSlideAnswer(studentAnswer);
-        let finalScore = baseScore;
+        
         const policy = assignmentData.deadlinePolicy;
-
-        // Determine if on time for Aura purposes
+        const qNum = currentSlideIndex + 1;
+        const qPolicy = policy?.[`q${qNum}`];
+        const attemptSettings = qPolicy?.attempts || { enabled: false };
+        
+        // === ATTEMPT TRACKING LOGIC ===
+        let attemptInfo = null;
+        let progressData = null;
+        let progressRef = null;
+        let isNewAttempt = false;
+        let bestScoreToDate = 0;
+        let deductionApplied = 0;
+        
+        if (attemptSettings.enabled && userProfile.class !== 'Teacher') {
+            // Get question progress
+            const progress = await getQuestionProgress(userProfile.email, assignmentData.id, currentSlideIndex);
+            progressRef = progress.docRef;
+            progressData = progress.data;
+            
+            // Check if question is locked
+            if (progressData.locked && attemptSettings.lockOnMax) {
+                const lockMessage = attemptSettings.lockMessage || 'Maximum attempts reached. This question is now locked.';
+                showToast(lockMessage, {color: 'red', duration: 5000});
+                return;
+            }
+            
+            // Normalize the answer
+            const normalizedAnswer = normalizeAnswer(
+                studentAnswer, 
+                attemptSettings.caseSensitive, 
+                attemptSettings.punctuationSensitive
+            );
+            
+            // Check if this is a unique attempt
+            const previousNormalizedAnswers = progressData.normalizedAnswers || [];
+            isNewAttempt = isUniqueAnswer(normalizedAnswer, previousNormalizedAnswers);
+            
+            // Build attempt info for checker
+            attemptInfo = buildAttemptInfo(progressData, attemptSettings, isNewAttempt);
+            
+            // Check if we've exceeded max attempts
+            if (isNewAttempt && progressData.attemptCount >= attemptSettings.maxAttempts) {
+                if (attemptSettings.lockOnMax) {
+                    // Lock the question
+                    await progressRef.update({ locked: true });
+                    const lockMessage = attemptSettings.lockMessage || 'Maximum attempts reached. This question is now locked.';
+                    showToast(lockMessage, {color: 'red', duration: 5000});
+                    return;
+                } else {
+                    showToast(`You have reached the maximum of ${attemptSettings.maxAttempts} attempts for this question.`, {color: 'yellow', duration: 5000});
+                }
+            }
+            
+            bestScoreToDate = progressData.bestScore || 0;
+        }
+        
+        // === RUN CHECKER WITH ATTEMPT INFO ===
+        let baseScore = checkCurrentSlideAnswer(studentAnswer, attemptInfo);
+        let rawScore = baseScore; // Score before deductions
+        
+        // === APPLY ATTEMPT DEDUCTIONS ===
+        if (attemptSettings.enabled && isNewAttempt && userProfile.class !== 'Teacher') {
+            const currentAttemptIndex = (progressData.attemptCount || 0) + 1;
+            
+            // Apply deduction for attempts after the first
+            if (currentAttemptIndex > 1 && attemptSettings.deductionPerAttempt > 0) {
+                const extraAttempts = currentAttemptIndex - 1;
+                deductionApplied = extraAttempts * attemptSettings.deductionPerAttempt;
+                baseScore = Math.max(0, baseScore - deductionApplied);
+                
+                showToast(`Attempt ${currentAttemptIndex}: -${deductionApplied} points for ${extraAttempts} extra attempt(s)`, {
+                    color: 'yellow', 
+                    duration: 4000
+                });
+            }
+        }
+        
+        // === APPLY DEADLINE PENALTIES ===
+        let finalScore = baseScore;
         let isOnTime = true;
         
         if (policy && userProfile.class !== 'Teacher') {
-            const qPolicy = policy[`q${currentSlideIndex + 1}`];
             const classStartTimeStr = policy.classStartTimes?.[userProfile.class];
 
             if (qPolicy && qPolicy.deadlineMinutes > 0 && classStartTimeStr) {
@@ -958,33 +1032,109 @@ slideStates.forEach((state, index) => {
                     isOnTime = false;
                     const minutesLate = Math.ceil((now - deadline) / 60000);
                     switch (qPolicy.penaltyType) {
-                        case 'zero': finalScore = 0; showToast(`Submitted ${minutesLate} mins late. Score is 0.`, {color: 'red', duration: 7000}); break;
-                        case 'deduction': const deduction = baseScore * (qPolicy.penaltyValue / 100); finalScore = Math.round(baseScore - deduction); showToast(`-${qPolicy.penaltyValue}% for being ${minutesLate} mins late.`, {color: 'red', duration: 7000}); break;
-                        case 'incremental': const pointsOff = minutesLate * qPolicy.penaltyValue; finalScore = baseScore - pointsOff; showToast(`-${pointsOff} points for being ${minutesLate} mins late.`, {color: 'red', duration: 7000}); break;
-                        default: finalScore = baseScore; break;
+                        case 'zero': 
+                            finalScore = 0; 
+                            showToast(`Submitted ${minutesLate} mins late. Score is 0.`, {color: 'red', duration: 7000}); 
+                            break;
+                        case 'deduction': 
+                            const deduction = baseScore * (qPolicy.penaltyValue / 100); 
+                            finalScore = Math.round(baseScore - deduction); 
+                            showToast(`-${qPolicy.penaltyValue}% for being ${minutesLate} mins late.`, {color: 'red', duration: 7000}); 
+                            break;
+                        case 'incremental': 
+                            const pointsOff = minutesLate * qPolicy.penaltyValue; 
+                            finalScore = baseScore - pointsOff; 
+                            showToast(`-${pointsOff} points for being ${minutesLate} mins late.`, {color: 'red', duration: 7000}); 
+                            break;
+                        default: 
+                            finalScore = baseScore; 
+                            break;
                     }
                     finalScore = Math.max(0, finalScore);
                 }
             }
         }
-        resultElement.innerHTML = "Your Score: " + finalScore;
-        resultElement.style.color = finalScore >= 90 ? "lightgreen" : "orange";
-        slideStates[currentSlideIndex] = { answer: studentAnswer, score: finalScore };
+        
+        // === APPLY RETAIN BEST SCORE ===
+        let displayScore = finalScore;
+        if (attemptSettings.enabled && attemptSettings.retainBestScore && userProfile.class !== 'Teacher') {
+            if (finalScore < bestScoreToDate) {
+                // Don't let score go down
+                displayScore = bestScoreToDate;
+                showToast(`Score retained at ${bestScoreToDate} (best so far)`, {color: 'blue', duration: 3000});
+            } else if (finalScore > bestScoreToDate) {
+                // New best score!
+                bestScoreToDate = finalScore;
+            }
+        } else {
+            bestScoreToDate = finalScore;
+        }
+        
+        // === UPDATE UI ===
+        resultElement.innerHTML = "Your Score: " + displayScore;
+        resultElement.style.color = displayScore >= 90 ? "lightgreen" : "orange";
+        slideStates[currentSlideIndex] = { answer: studentAnswer, score: displayScore };
+        
         if (!userProfile) {
             showToast("Error: User not signed in. Cannot save work.", {color: 'red'});
             return;
         }
+        
         try {
-            // Save the submission (Aura is awarded at assignment submit time, not per-question)
+            // === UPDATE QUESTION PROGRESS ===
+            if (attemptSettings.enabled && isNewAttempt && progressRef && userProfile.class !== 'Teacher') {
+                const newAttemptCount = (progressData.attemptCount || 0) + 1;
+                const normalizedAnswer = normalizeAnswer(
+                    studentAnswer, 
+                    attemptSettings.caseSensitive, 
+                    attemptSettings.punctuationSensitive
+                );
+                
+                // Update normalized answers array (cap at maxAttempts + 5)
+                const updatedNormalizedAnswers = [...(progressData.normalizedAnswers || []), normalizedAnswer];
+                const maxCap = attemptSettings.maxAttempts + 5;
+                if (updatedNormalizedAnswers.length > maxCap) {
+                    updatedNormalizedAnswers.splice(0, updatedNormalizedAnswers.length - maxCap);
+                }
+                
+                const progressUpdate = {
+                    attemptCount: newAttemptCount,
+                    bestScore: Math.max(bestScoreToDate, progressData.bestScore || 0),
+                    bestAnswer: finalScore >= (progressData.bestScore || 0) ? studentAnswer : (progressData.bestAnswer || studentAnswer),
+                    normalizedAnswers: updatedNormalizedAnswers,
+                    lastAttemptAt: firebase.firestore.FieldValue.serverTimestamp()
+                };
+                
+                // Lock if we've hit max and lockOnMax is enabled
+                if (newAttemptCount >= attemptSettings.maxAttempts && attemptSettings.lockOnMax) {
+                    progressUpdate.locked = true;
+                }
+                
+                await progressRef.update(progressUpdate);
+            }
+            
+            // === SAVE SUBMISSION ===
             const submission = { 
                 studentName: userProfile.name, 
                 studentEmail: userProfile.email, 
                 assignmentId: assignmentData.id, 
                 slideIndex: currentSlideIndex, 
                 answer: studentAnswer, 
-                score: finalScore, 
+                score: finalScore,  // Store actual score with penalties
+                rawScore: rawScore, // Store score before attempt deductions
                 timestamp: firebase.firestore.FieldValue.serverTimestamp()
             };
+            
+            // Add attempt tracking metadata if enabled
+            if (attemptSettings.enabled && userProfile.class !== 'Teacher') {
+                submission.attemptsEnabled = true;
+                submission.attemptIndex = attemptInfo ? attemptInfo.attemptIndex : 1;
+                submission.isNewAttempt = isNewAttempt;
+                submission.bestScoreToDate = bestScoreToDate;
+                submission.deductionApplied = deductionApplied;
+                submission.locked = progressData?.locked || false;
+            }
+            
             await db.collection("submissions").add(submission);
             
             showToast("Answer saved!", { color: 'blue', position: 'bottom-right', duration: 2000 });
@@ -1035,7 +1185,95 @@ slideStates.forEach((state, index) => {
         timeoutId = setTimeout(dismiss, duration);
     }
     
-    function checkCurrentSlideAnswer(answer) {
+    // ===============================
+    // ATTEMPT TRACKING FUNCTIONS
+    // ===============================
+    
+    /**
+     * Normalize answer for uniqueness comparison
+     * @param {string} answer - The raw answer string
+     * @param {boolean} caseSensitive - Whether to preserve case
+     * @param {boolean} punctuationSensitive - Whether to preserve punctuation
+     * @returns {string} - Normalized answer
+     */
+    function normalizeAnswer(answer, caseSensitive = false, punctuationSensitive = false) {
+        let normalized = String(answer);
+        
+        // Always trim and collapse whitespace
+        normalized = normalized.trim().replace(/\s+/g, ' ');
+        
+        // Handle case sensitivity
+        if (!caseSensitive) {
+            normalized = normalized.toLowerCase();
+        }
+        
+        // Handle punctuation sensitivity
+        if (!punctuationSensitive) {
+            // Remove all punctuation
+            normalized = normalized.replace(/[^\w\s]/g, '');
+        }
+        
+        return normalized;
+    }
+    
+    /**
+     * Get or create questionProgress document for tracking attempts
+     */
+    async function getQuestionProgress(studentEmail, assignmentId, slideIndex) {
+        const docId = `${assignmentId}_${studentEmail}_${slideIndex}`;
+        const docRef = db.collection('questionProgress').doc(docId);
+        const doc = await docRef.get();
+        
+        if (doc.exists) {
+            return { docRef, data: doc.data() };
+        } else {
+            // Initialize new progress document
+            const initialData = {
+                studentEmail: studentEmail,
+                assignmentId: assignmentId,
+                slideIndex: slideIndex,
+                attemptCount: 0,
+                bestScore: 0,
+                bestAnswer: '',
+                normalizedAnswers: [],
+                locked: false,
+                lastAttemptAt: null,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            };
+            await docRef.set(initialData);
+            return { docRef, data: initialData };
+        }
+    }
+    
+    /**
+     * Check if answer is unique (not previously submitted)
+     */
+    function isUniqueAnswer(normalizedAnswer, previousNormalizedAnswers) {
+        return !previousNormalizedAnswers.includes(normalizedAnswer);
+    }
+    
+    /**
+     * Calculate attempt info for checker function
+     */
+    function buildAttemptInfo(progressData, attemptSettings, isNewAttempt) {
+        return {
+            attemptCount: progressData.attemptCount || 0,
+            attemptIndex: (progressData.attemptCount || 0) + (isNewAttempt ? 1 : 0),
+            isNewAttempt: isNewAttempt,
+            maxAttempts: attemptSettings.maxAttempts || 5,
+            lockOnMax: attemptSettings.lockOnMax || false,
+            locked: progressData.locked || false,
+            showHelpAfter: attemptSettings.showHelpAfter || null,
+            caseSensitive: attemptSettings.caseSensitive || false,
+            punctuationSensitive: attemptSettings.punctuationSensitive || false
+        };
+    }
+    
+    // ===============================
+    // END ATTEMPT TRACKING FUNCTIONS
+    // ===============================
+    
+    function checkCurrentSlideAnswer(answer, attemptInfo = null) {
         const funcNameKey = `calc${currentSlideIndex + 1}`;
         const funcString = checkerFunctionStrings[funcNameKey];
         if (funcString) {
@@ -1045,15 +1283,15 @@ slideStates.forEach((state, index) => {
                     throw new Error("Could not find a valid function definition (e.g., 'function calc1(...)') in the checker code.");
                 }
                 const funcNameToRun = funcNameMatch[1];
-                const runner = new Function('studentAnswer', 'showToast', 'userProfile', `
+                const runner = new Function('studentAnswer', 'showToast', 'userProfile', 'attemptInfo', `
                     ${funcString}
                     if (typeof ${funcNameToRun} === 'function') {
-                        return ${funcNameToRun}(studentAnswer, showToast, userProfile);
+                        return ${funcNameToRun}(studentAnswer, showToast, userProfile, attemptInfo);
                     } else {
                         throw new Error("The function '${funcNameToRun}' defined in your code could not be executed.");
                     }
                 `);
-                return runner(answer, showToast, userProfile);
+                return runner(answer, showToast, userProfile, attemptInfo);
             } catch (e) {
                 console.error(`Error executing checker function ${funcNameKey}:`, e);
                 showToast(`Error in checking logic: ${e.message}`, {color: 'red'});
