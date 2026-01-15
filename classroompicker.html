@@ -181,6 +181,9 @@
     let confirmCallback = null;
     let assignmentAuraEarned = 0; // Aura from THIS assignment only for the current student
     
+    // Question progress tracking - per-question attempt data
+    let questionProgressData = {}; // Key: slideIndex, Value: {attemptCount, bestScore, locked, etc.}
+    
     // Aura display state - session-only, no persistence needed
     // Tracks whether user has opened the aura popup at least once this session
     let hasOpenedAuraPopup = false;
@@ -753,12 +756,26 @@
         const resultElement = document.getElementById('result');
         const checkButton = document.getElementById('btn');
 
-        if (shouldLock) {
+        // Check for attempt-based lock
+        const policy = assignmentData.deadlinePolicy;
+        const qNum = currentSlideIndex + 1;
+        const qPolicy = policy?.[`q${qNum}`] || {};
+        const attemptsConfig = qPolicy.attempts || { enabled: false };
+        const questionProgress = questionProgressData[currentSlideIndex];
+        const isAttemptLocked = attemptsConfig.enabled && questionProgress?.locked;
+
+        if (shouldLock || isAttemptLocked) {
             inputBox.disabled = true;
             inputBox.classList.add('opacity-50', 'cursor-not-allowed');
             checkButton.disabled = true;
             checkButton.classList.add('opacity-50', 'cursor-not-allowed');
-            checkButton.textContent = 'Assignment Submitted';
+            
+            if (isAttemptLocked) {
+                const lockMsg = attemptsConfig.lockMessage || "Max attempts reached";
+                checkButton.textContent = `🔒 ${lockMsg}`;
+            } else {
+                checkButton.textContent = 'Assignment Submitted';
+            }
         } else {
             inputBox.disabled = false;
             inputBox.classList.remove('opacity-50', 'cursor-not-allowed');
@@ -806,6 +823,22 @@
                 errorState.classList.remove('hidden');
             }
         };
+
+        // Load question progress from Firestore if not already loaded
+        if (attemptsConfig.enabled && userProfile && !questionProgressData[currentSlideIndex]) {
+            const progressKey = `${assignmentData.id}_${userProfile.email}_${currentSlideIndex}`;
+            db.collection("questionProgress").doc(progressKey).get()
+                .then(doc => {
+                    if (doc.exists) {
+                        questionProgressData[currentSlideIndex] = doc.data();
+                        // Re-check lock status after loading
+                        if (doc.data().locked) {
+                            updateSlideDisplay(retryCount);
+                        }
+                    }
+                })
+                .catch(err => console.error("Error loading question progress:", err));
+        }
     }
 
     function handleSignOut() {
@@ -924,6 +957,27 @@ slideStates.forEach((state, index) => {
         }
     }
 
+    // Normalize answer for uniqueness checking
+    function normalizeAnswer(answer, caseSensitive = false, punctuationSensitive = false) {
+        let normalized = answer;
+        
+        // Always trim and collapse whitespace
+        normalized = normalized.trim().replace(/\s+/g, ' ');
+        
+        // Case normalization (unless case-sensitive)
+        if (!caseSensitive) {
+            normalized = normalized.toLowerCase();
+        }
+        
+        // Punctuation normalization (unless punctuation-sensitive)
+        if (!punctuationSensitive) {
+            // Remove all punctuation
+            normalized = normalized.replace(/[^\w\s]/g, '');
+        }
+        
+        return normalized;
+    }
+
     async function myfunction() {
         if (isSubmitted && (assignmentData.postSubmissionRule === 'lock' || assignmentData.postSubmissionRule === 'hide')) {
             showToast("Assignment has been submitted and is locked.", {color: 'red'});
@@ -936,15 +990,92 @@ slideStates.forEach((state, index) => {
             showToast("Please enter your answer first!", {color: 'red'});
             return;
         }
-        let baseScore = checkCurrentSlideAnswer(studentAnswer);
-        let finalScore = baseScore;
-        const policy = assignmentData.deadlinePolicy;
 
-        // Determine if on time for Aura purposes
+        if (!userProfile) {
+            showToast("Error: User not signed in. Cannot save work.", {color: 'red'});
+            return;
+        }
+
+        const policy = assignmentData.deadlinePolicy;
+        const qNum = currentSlideIndex + 1;
+        const qPolicy = policy?.[`q${qNum}`] || {};
+        const attemptsConfig = qPolicy.attempts || { enabled: false };
+
+        // Check if question is locked
+        const progressKey = `${assignmentData.id}_${userProfile.email}_${currentSlideIndex}`;
+        let questionProgress = questionProgressData[currentSlideIndex] || null;
+
+        // Load from Firestore if not in memory
+        if (!questionProgress) {
+            try {
+                const progressDoc = await db.collection("questionProgress").doc(progressKey).get();
+                if (progressDoc.exists) {
+                    questionProgress = progressDoc.data();
+                    questionProgressData[currentSlideIndex] = questionProgress;
+                }
+            } catch (error) {
+                console.error("Error loading question progress:", error);
+            }
+        }
+
+        if (attemptsConfig.enabled && questionProgress?.locked) {
+            const lockMsg = attemptsConfig.lockMessage || "This question is locked. You have reached the maximum number of attempts.";
+            showToast(lockMsg, {color: 'red', duration: 5000});
+            return;
+        }
+
+        // Normalize answer for uniqueness check
+        const normalizedAnswer = normalizeAnswer(
+            studentAnswer,
+            attemptsConfig.caseSensitive,
+            attemptsConfig.punctuationSensitive
+        );
+
+        // Check uniqueness and determine if this is a new attempt
+        let isNewAttempt = true;
+        let attemptCount = questionProgress?.attemptCount || 0;
+        const normalizedAnswers = questionProgress?.normalizedAnswers || [];
+
+        if (attemptsConfig.enabled) {
+            isNewAttempt = !normalizedAnswers.includes(normalizedAnswer);
+            
+            if (isNewAttempt) {
+                attemptCount++;
+            }
+        }
+
+        // Build attemptInfo for checker
+        const attemptInfo = {
+            attemptCount: attemptsConfig.enabled ? attemptCount : 0,
+            attemptIndex: attemptsConfig.enabled ? attemptCount : 0,
+            isNewAttempt: attemptsConfig.enabled ? isNewAttempt : true,
+            maxAttempts: attemptsConfig.maxAttempts || 0,
+            lockOnMax: attemptsConfig.lockOnMax || false,
+            locked: false,
+            showHelpAfter: attemptsConfig.showHelpAfter || null,
+            caseSensitive: attemptsConfig.caseSensitive || false,
+            punctuationSensitive: attemptsConfig.punctuationSensitive || false
+        };
+
+        // Calculate base score from checker
+        let baseScore = checkCurrentSlideAnswer(studentAnswer, attemptInfo);
+        let finalScore = baseScore;
+
+        // Apply attempt deduction (only for new attempts beyond the first)
+        if (attemptsConfig.enabled && isNewAttempt && attemptCount > 1) {
+            const extraAttempts = attemptCount - 1;
+            const deduction = extraAttempts * (attemptsConfig.deduction || 0);
+            finalScore = Math.max(0, baseScore - deduction);
+            
+            if (deduction > 0) {
+                showToast(`-${deduction} points for ${extraAttempts} extra attempt(s).`, {color: 'orange', duration: 4000});
+            }
+        }
+
+        // Apply deadline penalties
         let isOnTime = true;
         
         if (policy && userProfile.class !== 'Teacher') {
-            const qPolicy = policy[`q${currentSlideIndex + 1}`];
             const classStartTimeStr = policy.classStartTimes?.[userProfile.class];
 
             if (qPolicy && qPolicy.deadlineMinutes > 0 && classStartTimeStr) {
@@ -967,27 +1098,93 @@ slideStates.forEach((state, index) => {
                 }
             }
         }
-        resultElement.innerHTML = "Your Score: " + finalScore;
-        resultElement.style.color = finalScore >= 90 ? "lightgreen" : "orange";
-        slideStates[currentSlideIndex] = { answer: studentAnswer, score: finalScore };
-        if (!userProfile) {
-            showToast("Error: User not signed in. Cannot save work.", {color: 'red'});
-            return;
+
+        // Retain best score logic
+        let scoreToPersist = finalScore;
+        let bestScore = questionProgress?.bestScore || 0;
+        let bestAnswer = questionProgress?.bestAnswer || null;
+
+        if (attemptsConfig.enabled && attemptsConfig.retainBestScore !== false) {
+            if (finalScore > bestScore) {
+                bestScore = finalScore;
+                bestAnswer = studentAnswer;
+            } else {
+                scoreToPersist = bestScore; // Keep best score
+            }
+        } else {
+            // Not retaining best, so current score becomes the best
+            bestScore = finalScore;
+            bestAnswer = studentAnswer;
         }
+
+        // Check if should lock
+        let shouldLock = false;
+        if (attemptsConfig.enabled && attemptsConfig.lockOnMax && attemptCount >= attemptsConfig.maxAttempts) {
+            shouldLock = true;
+        }
+
+        // Show help after N attempts
+        if (attemptsConfig.enabled && attemptsConfig.showHelpAfter && attemptCount >= attemptsConfig.showHelpAfter) {
+            // Just a notification - teachers can use this to trigger help content
+            showToast(`You've made ${attemptCount} attempts. Consider reviewing the material.`, {color: 'blue', duration: 6000});
+        }
+
+        // Update UI
+        resultElement.innerHTML = "Your Score: " + scoreToPersist;
+        resultElement.style.color = scoreToPersist >= 90 ? "lightgreen" : "orange";
+        slideStates[currentSlideIndex] = { answer: studentAnswer, score: scoreToPersist };
+
         try {
-            // Save the submission (Aura is awarded at assignment submit time, not per-question)
+            // Update questionProgress document
+            if (attemptsConfig.enabled) {
+                const updatedNormalizedAnswers = isNewAttempt 
+                    ? [...normalizedAnswers, normalizedAnswer].slice(-100) // Cap at 100
+                    : normalizedAnswers;
+
+                const progressUpdate = {
+                    assignmentId: assignmentData.id,
+                    studentEmail: userProfile.email,
+                    studentName: userProfile.name,
+                    slideIndex: currentSlideIndex,
+                    attemptCount,
+                    bestScore,
+                    bestAnswer,
+                    normalizedAnswers: updatedNormalizedAnswers,
+                    locked: shouldLock,
+                    lastAttemptAt: firebase.firestore.FieldValue.serverTimestamp()
+                };
+
+                await db.collection("questionProgress").doc(progressKey).set(progressUpdate, { merge: true });
+                
+                // Update local cache
+                questionProgressData[currentSlideIndex] = progressUpdate;
+
+                if (shouldLock) {
+                    showToast("Maximum attempts reached. Question is now locked.", {color: 'red', duration: 5000});
+                }
+            }
+
+            // Save the submission
             const submission = { 
                 studentName: userProfile.name, 
                 studentEmail: userProfile.email, 
                 assignmentId: assignmentData.id, 
                 slideIndex: currentSlideIndex, 
                 answer: studentAnswer, 
-                score: finalScore, 
-                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                score: scoreToPersist, 
+                timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                attemptIndex: attemptsConfig.enabled ? attemptCount : undefined,
+                bestScoreToDate: attemptsConfig.enabled ? bestScore : undefined,
+                attemptsEnabled: attemptsConfig.enabled || false,
+                locked: shouldLock
             };
             await db.collection("submissions").add(submission);
             
-            showToast("Answer saved!", { color: 'blue', position: 'bottom-right', duration: 2000 });
+            let saveMsg = "Answer saved!";
+            if (attemptsConfig.enabled) {
+                saveMsg += ` (Attempt ${attemptCount}${attemptsConfig.maxAttempts ? `/${attemptsConfig.maxAttempts}` : ''})`;
+            }
+            showToast(saveMsg, { color: 'blue', position: 'bottom-right', duration: 2000 });
         } catch (error) {
             console.error("Error saving to Firestore:", error);
             showToast("Could not save answer. See console for details.", {color: 'red'});
@@ -1035,7 +1232,7 @@ slideStates.forEach((state, index) => {
         timeoutId = setTimeout(dismiss, duration);
     }
     
-    function checkCurrentSlideAnswer(answer) {
+    function checkCurrentSlideAnswer(answer, attemptInfo = null) {
         const funcNameKey = `calc${currentSlideIndex + 1}`;
         const funcString = checkerFunctionStrings[funcNameKey];
         if (funcString) {
@@ -1045,15 +1242,15 @@ slideStates.forEach((state, index) => {
                     throw new Error("Could not find a valid function definition (e.g., 'function calc1(...)') in the checker code.");
                 }
                 const funcNameToRun = funcNameMatch[1];
-                const runner = new Function('studentAnswer', 'showToast', 'userProfile', `
+                const runner = new Function('studentAnswer', 'showToast', 'userProfile', 'attemptInfo', `
                     ${funcString}
                     if (typeof ${funcNameToRun} === 'function') {
-                        return ${funcNameToRun}(studentAnswer, showToast, userProfile);
+                        return ${funcNameToRun}(studentAnswer, showToast, userProfile, attemptInfo);
                     } else {
                         throw new Error("The function '${funcNameToRun}' defined in your code could not be executed.");
                     }
                 `);
-                return runner(answer, showToast, userProfile);
+                return runner(answer, showToast, userProfile, attemptInfo);
             } catch (e) {
                 console.error(`Error executing checker function ${funcNameKey}:`, e);
                 showToast(`Error in checking logic: ${e.message}`, {color: 'red'});
