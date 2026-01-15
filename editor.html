@@ -451,6 +451,60 @@ function renderEditor() {
           </div>
         </div>
       </div>
+      <div class="mt-4 border-t border-gray-700 pt-4">
+        <div class="flex items-center justify-between mb-3">
+          <h4 class="font-semibold">Attempt Tracking</h4>
+          <label class="flex items-center cursor-pointer">
+            <input type="checkbox" id="attempts-enabled-${index}" ${slidePolicy.attempts?.enabled ? 'checked' : ''} class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500" onchange="toggleAttemptSection(${index})">
+            <span class="ml-2 text-sm">Enable</span>
+          </label>
+        </div>
+        <div id="attempt-config-${index}" class="${slidePolicy.attempts?.enabled ? '' : 'hidden'} space-y-3">
+          <div class="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <label>Max Attempts</label>
+              <input type="number" id="attempts-max-${index}" value="${slidePolicy.attempts?.maxAttempts || 5}" min="1" class="w-full mt-1 p-2 bg-gray-700 rounded border border-gray-600">
+            </div>
+            <div>
+              <label>Deduction per Extra Attempt</label>
+              <input type="number" id="attempts-deduction-${index}" value="${slidePolicy.attempts?.deduction || 0}" min="0" class="w-full mt-1 p-2 bg-gray-700 rounded border border-gray-600">
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-3 text-sm">
+            <label class="flex items-center cursor-pointer">
+              <input type="checkbox" id="attempts-retain-best-${index}" ${slidePolicy.attempts?.retainBestScore !== false ? 'checked' : ''} class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500">
+              <span class="ml-2">Retain Best Score</span>
+            </label>
+            <label class="flex items-center cursor-pointer">
+              <input type="checkbox" id="attempts-lock-${index}" ${slidePolicy.attempts?.lockOnMax ? 'checked' : ''} class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500">
+              <span class="ml-2">Lock When Max Reached</span>
+            </label>
+          </div>
+          <div>
+            <label class="text-sm">Lock Message (optional)</label>
+            <textarea id="attempts-lock-msg-${index}" rows="2" placeholder="Message shown when locked..." class="w-full mt-1 p-2 bg-gray-700 rounded border border-gray-600 text-sm">${slidePolicy.attempts?.lockMessage || ''}</textarea>
+          </div>
+          <div class="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <label>Show Help After (attempts)</label>
+              <input type="number" id="attempts-show-help-${index}" value="${slidePolicy.attempts?.showHelpAfter || ''}" min="0" placeholder="Optional" class="w-full mt-1 p-2 bg-gray-700 rounded border border-gray-600">
+            </div>
+          </div>
+          <div class="border-t border-gray-600 pt-3 mt-3">
+            <h5 class="text-sm font-semibold mb-2">Uniqueness Options</h5>
+            <div class="grid grid-cols-2 gap-3 text-sm">
+              <label class="flex items-center cursor-pointer">
+                <input type="checkbox" id="attempts-case-sensitive-${index}" ${slidePolicy.attempts?.caseSensitive ? 'checked' : ''} class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500">
+                <span class="ml-2">Case-Sensitive</span>
+              </label>
+              <label class="flex items-center cursor-pointer">
+                <input type="checkbox" id="attempts-punctuation-sensitive-${index}" ${slidePolicy.attempts?.punctuationSensitive ? 'checked' : ''} class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500">
+                <span class="ml-2">Punctuation-Sensitive</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
     `;
     const checkerTemplate = document.getElementById('checkerTemplate');
     const checkerFragment = checkerTemplate.content.cloneNode(true);
@@ -1376,6 +1430,33 @@ async function saveAssignment() {
         penaltyType: document.getElementById(`penalty-type-${index}`).value,
         penaltyValue: parseInt(document.getElementById(`penalty-value-${index}`).value, 10) || 0,
       };
+
+      // Read attempt tracking settings
+      const attemptsEnabled = document.getElementById(`attempts-enabled-${index}`).checked;
+      if (attemptsEnabled) {
+        const maxAttempts = parseInt(document.getElementById(`attempts-max-${index}`).value, 10) || 5;
+        const deduction = parseInt(document.getElementById(`attempts-deduction-${index}`).value, 10) || 0;
+        const retainBestScore = document.getElementById(`attempts-retain-best-${index}`).checked;
+        const lockOnMax = document.getElementById(`attempts-lock-${index}`).checked;
+        const lockMessage = document.getElementById(`attempts-lock-msg-${index}`).value.trim();
+        const showHelpAfter = parseInt(document.getElementById(`attempts-show-help-${index}`).value, 10) || undefined;
+        const caseSensitive = document.getElementById(`attempts-case-sensitive-${index}`).checked;
+        const punctuationSensitive = document.getElementById(`attempts-punctuation-sensitive-${index}`).checked;
+
+        deadlinePolicy[`q${qNum}`].attempts = {
+          enabled: true,
+          maxAttempts,
+          deduction,
+          retainBestScore,
+          lockOnMax,
+          lockMessage: lockMessage || undefined,
+          showHelpAfter,
+          caseSensitive,
+          punctuationSensitive
+        };
+      } else {
+        deadlinePolicy[`q${qNum}`].attempts = { enabled: false };
+      }
     });
 
     const postSubmissionRule = document.getElementById('postSubmissionRule').value;
@@ -1539,6 +1620,16 @@ function toggleDeadlineSection() {
   } else {
     content.style.maxHeight = content.scrollHeight + 'px';
     chevron.style.transform = 'rotate(90deg)';
+  }
+}
+
+function toggleAttemptSection(index) {
+  const checkbox = document.getElementById(`attempts-enabled-${index}`);
+  const config = document.getElementById(`attempt-config-${index}`);
+  if (checkbox.checked) {
+    config.classList.remove('hidden');
+  } else {
+    config.classList.add('hidden');
   }
 }
 
