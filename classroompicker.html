@@ -1057,20 +1057,9 @@ slideStates.forEach((state, index) => {
 
         // Pass attemptInfo as 4th argument to checker
         let baseScore = checkCurrentSlideAnswer(studentAnswer, attemptInfo);
-        let finalScore = baseScore;
+        let scoreAfterDeadline = baseScore;
 
-        // Apply attempt deduction (only for new attempts after the first)
-        if (attemptSettings.enabled && attemptInfo.isNewAttempt && attemptInfo.attemptCount > 1) {
-            const extraAttempts = attemptInfo.attemptCount - 1;
-            const deduction = extraAttempts * (attemptSettings.deductionPerAttempt || 0);
-            finalScore = Math.max(0, baseScore - deduction);
-            
-            if (deduction > 0) {
-                showToast(`-${deduction.toFixed(1)} points for ${extraAttempts} extra attempt(s).`, {color: 'orange', duration: 3000});
-            }
-        }
-
-        // Apply deadline penalties
+        // Apply deadline penalties first (to base score)
         let isOnTime = true;
         if (policy && userProfile.class !== 'Teacher') {
             const classStartTimeStr = policy.classStartTimes?.[userProfile.class];
@@ -1087,24 +1076,36 @@ slideStates.forEach((state, index) => {
                     const minutesLate = Math.ceil((now - deadline) / 60000);
                     switch (qPolicy.penaltyType) {
                         case 'zero': 
-                            finalScore = 0; 
+                            scoreAfterDeadline = 0; 
                             showToast(`Submitted ${minutesLate} mins late. Score is 0.`, {color: 'red', duration: 7000}); 
                             break;
                         case 'deduction': 
-                            const deduction = finalScore * (qPolicy.penaltyValue / 100); 
-                            finalScore = Math.round(finalScore - deduction); 
+                            const deduction = baseScore * (qPolicy.penaltyValue / 100); 
+                            scoreAfterDeadline = Math.round(baseScore - deduction); 
                             showToast(`-${qPolicy.penaltyValue}% for being ${minutesLate} mins late.`, {color: 'red', duration: 7000}); 
                             break;
                         case 'incremental': 
                             const pointsOff = minutesLate * qPolicy.penaltyValue; 
-                            finalScore = finalScore - pointsOff; 
+                            scoreAfterDeadline = baseScore - pointsOff; 
                             showToast(`-${pointsOff} points for being ${minutesLate} mins late.`, {color: 'red', duration: 7000}); 
                             break;
                         default: 
                             break;
                     }
-                    finalScore = Math.max(0, finalScore);
+                    scoreAfterDeadline = Math.max(0, scoreAfterDeadline);
                 }
+            }
+        }
+
+        // Apply attempt deduction (only for new attempts after the first)
+        let finalScore = scoreAfterDeadline;
+        if (attemptSettings.enabled && attemptInfo.isNewAttempt && attemptInfo.attemptCount > 1) {
+            const extraAttempts = attemptInfo.attemptCount - 1;
+            const deduction = extraAttempts * (attemptSettings.deductionPerAttempt || 0);
+            finalScore = Math.max(0, scoreAfterDeadline - deduction);
+            
+            if (deduction > 0) {
+                showToast(`-${deduction.toFixed(1)} points for ${extraAttempts} extra attempt(s).`, {color: 'orange', duration: 3000});
             }
         }
 
@@ -1151,6 +1152,20 @@ slideStates.forEach((state, index) => {
 
             // Update questionProgress collection
             if (attemptSettings.enabled) {
+                // Efficiently build normalized answers array
+                let updatedNormalizedAnswers;
+                if (questionProgress) {
+                    const existingAnswers = questionProgress.normalizedAnswers || [];
+                    // Only add if not already present
+                    if (!existingAnswers.includes(normalizedAnswer)) {
+                        updatedNormalizedAnswers = [...existingAnswers, normalizedAnswer].slice(-MAX_NORMALIZED_ANSWERS_STORED);
+                    } else {
+                        updatedNormalizedAnswers = existingAnswers;
+                    }
+                } else {
+                    updatedNormalizedAnswers = [normalizedAnswer];
+                }
+                
                 const progressData = {
                     assignmentId: assignmentData.id,
                     studentEmail: userProfile.email,
@@ -1159,9 +1174,7 @@ slideStates.forEach((state, index) => {
                     attemptCount: attemptInfo.attemptCount,
                     bestScore: bestScoreToDate,
                     bestAnswer: studentAnswer,
-                    normalizedAnswers: questionProgress 
-                        ? [...new Set([...questionProgress.normalizedAnswers || [], normalizedAnswer])].slice(-MAX_NORMALIZED_ANSWERS_STORED)
-                        : [normalizedAnswer],
+                    normalizedAnswers: updatedNormalizedAnswers,
                     locked: attemptInfo.locked,
                     lastAttemptAt: firebase.firestore.FieldValue.serverTimestamp()
                 };
@@ -1237,6 +1250,8 @@ slideStates.forEach((state, index) => {
                     throw new Error("Could not find a valid function definition (e.g., 'function calc1(...)') in the checker code.");
                 }
                 const funcNameToRun = funcNameMatch[1];
+                // Note: attemptInfo is passed as 4th parameter for checker functions that want to use it.
+                // This is backwards-compatible: existing checkers expecting 3 params will simply ignore the 4th.
                 const runner = new Function('studentAnswer', 'showToast', 'userProfile', 'attemptInfo', `
                     ${funcString}
                     if (typeof ${funcNameToRun} === 'function') {

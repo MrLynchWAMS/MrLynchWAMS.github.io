@@ -962,7 +962,7 @@ function setupLiveStudentData() {
                 
                 // Display attempt information if available
                 let attemptInfo = '';
-                if (sub.attemptIndex) {
+                if (sub.attemptIndex !== undefined && sub.attemptIndex !== null) {
                     attemptInfo = `<span class="text-xs text-blue-400 ml-4">Attempt: ${sub.attemptIndex}</span>`;
                 }
                 if (sub.bestScoreToDate !== undefined && sub.bestScoreToDate !== sub.score) {
