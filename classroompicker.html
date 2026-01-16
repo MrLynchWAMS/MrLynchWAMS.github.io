@@ -1030,20 +1030,20 @@ slideStates.forEach((state, index) => {
                     
                     let derivedAttemptCount = 0;
                     let derivedBestScore = 0;
-                    let derivedNormalizedAnswers = [];
+                    let derivedNormalizedAnswersSet = new Set();
                     
                     submissionsQuery.docs.forEach(doc => {
                         const sub = doc.data();
                         if (sub.normalizedAnswer) {
-                            if (!derivedNormalizedAnswers.includes(sub.normalizedAnswer)) {
-                                derivedNormalizedAnswers.push(sub.normalizedAnswer);
-                                derivedAttemptCount++;
-                            }
+                            derivedNormalizedAnswersSet.add(sub.normalizedAnswer);
                         }
                         if (typeof sub.score === 'number' && sub.score > derivedBestScore) {
                             derivedBestScore = sub.score;
                         }
                     });
+                    
+                    derivedAttemptCount = derivedNormalizedAnswersSet.size;
+                    const derivedNormalizedAnswers = Array.from(derivedNormalizedAnswersSet);
                     
                     questionProgress = {
                         attemptCount: derivedAttemptCount,
