@@ -159,6 +159,8 @@
 
 <script>
     const TEACHER_EMAILS = ["klynch@mtps.us", "mstuart@mtps.us", "cfiori@mtps.us", "mlock@mtps.us", "cheine@mtps.us", "kgray@mtps.us"];
+    const MAX_NORMALIZED_ANSWERS = 100; // Cap for normalized answer history to prevent unbounded growth
+    
     const firebaseConfig = {
       apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
       authDomain: "mrlynch-slides-app.firebaseapp.com",
@@ -837,7 +839,10 @@
                         }
                     }
                 })
-                .catch(err => console.error("Error loading question progress:", err));
+                .catch(err => {
+                    console.error("Error loading question progress:", err);
+                    // Don't block - will fallback to submissions in myfunction if needed
+                });
         }
     }
 
@@ -1004,9 +1009,10 @@ slideStates.forEach((state, index) => {
         // Check if question is locked
         const progressKey = `${assignmentData.id}_${userProfile.email}_${currentSlideIndex}`;
         let questionProgress = questionProgressData[currentSlideIndex] || null;
+        let questionProgressLoadFailed = false;
 
-        // Load from Firestore if not in memory
-        if (!questionProgress) {
+        // Load from Firestore if not in memory and attempts are enabled
+        if (!questionProgress && attemptsConfig.enabled) {
             try {
                 const progressDoc = await db.collection("questionProgress").doc(progressKey).get();
                 if (progressDoc.exists) {
@@ -1015,6 +1021,42 @@ slideStates.forEach((state, index) => {
                 }
             } catch (error) {
                 console.error("Error loading question progress:", error);
+                questionProgressLoadFailed = true;
+                // Fallback: derive from submissions if questionProgress fails
+                try {
+                    const submissionsQuery = await db.collection("submissions")
+                        .where("studentEmail", "==", userProfile.email)
+                        .where("assignmentId", "==", assignmentData.id)
+                        .where("slideIndex", "==", currentSlideIndex)
+                        .get();
+                    
+                    let derivedAttemptCount = 0;
+                    let derivedBestScore = 0;
+                    let derivedNormalizedAnswersSet = new Set();
+                    
+                    submissionsQuery.docs.forEach(doc => {
+                        const sub = doc.data();
+                        if (sub.normalizedAnswer && derivedNormalizedAnswersSet.size < MAX_NORMALIZED_ANSWERS) {
+                            derivedNormalizedAnswersSet.add(sub.normalizedAnswer);
+                        }
+                        if (typeof sub.score === 'number' && sub.score > derivedBestScore) {
+                            derivedBestScore = sub.score;
+                        }
+                    });
+                    
+                    derivedAttemptCount = derivedNormalizedAnswersSet.size;
+                    const derivedNormalizedAnswers = Array.from(derivedNormalizedAnswersSet).slice(-MAX_NORMALIZED_ANSWERS);
+                    
+                    questionProgress = {
+                        attemptCount: derivedAttemptCount,
+                        bestScore: derivedBestScore,
+                        normalizedAnswers: derivedNormalizedAnswers,
+                        locked: false
+                    };
+                    questionProgressData[currentSlideIndex] = questionProgress;
+                } catch (fallbackError) {
+                    console.error("Error loading from submissions fallback:", fallbackError);
+                }
             }
         }
 
@@ -1027,8 +1069,8 @@ slideStates.forEach((state, index) => {
         // Normalize answer for uniqueness check
         const normalizedAnswer = normalizeAnswer(
             studentAnswer,
-            attemptsConfig.caseSensitive,
-            attemptsConfig.punctuationSensitive
+            attemptsConfig.caseSensitive || false,
+            attemptsConfig.punctuationSensitive || false
         );
 
         // Check uniqueness and determine if this is a new attempt
@@ -1037,17 +1079,22 @@ slideStates.forEach((state, index) => {
         const normalizedAnswers = questionProgress?.normalizedAnswers || [];
 
         if (attemptsConfig.enabled) {
-            isNewAttempt = !normalizedAnswers.includes(normalizedAnswer);
+            // Use Set for O(1) uniqueness check instead of O(n) array search
+            const normalizedAnswersSet = new Set(normalizedAnswers);
+            isNewAttempt = !normalizedAnswersSet.has(normalizedAnswer);
             
             if (isNewAttempt) {
                 attemptCount++;
             }
+        } else {
+            // For attempts disabled, always use attemptIndex = 1
+            attemptCount = 1;
         }
 
         // Build attemptInfo for checker
         const attemptInfo = {
             attemptCount: attemptsConfig.enabled ? attemptCount : 0,
-            attemptIndex: attemptsConfig.enabled ? attemptCount : 0,
+            attemptIndex: attemptsConfig.enabled ? attemptCount : 1,
             isNewAttempt: attemptsConfig.enabled ? isNewAttempt : true,
             maxAttempts: attemptsConfig.maxAttempts || 0,
             lockOnMax: attemptsConfig.lockOnMax || false,
@@ -1135,10 +1182,10 @@ slideStates.forEach((state, index) => {
         slideStates[currentSlideIndex] = { answer: studentAnswer, score: scoreToPersist };
 
         try {
-            // Update questionProgress document
-            if (attemptsConfig.enabled) {
+            // Update questionProgress document (only if attempts are enabled)
+            if (attemptsConfig.enabled && !questionProgressLoadFailed) {
                 const updatedNormalizedAnswers = isNewAttempt 
-                    ? [...normalizedAnswers, normalizedAnswer].slice(-100) // Cap at 100
+                    ? [...normalizedAnswers, normalizedAnswer].slice(-MAX_NORMALIZED_ANSWERS)
                     : normalizedAnswers;
 
                 const progressUpdate = {
@@ -1146,25 +1193,35 @@ slideStates.forEach((state, index) => {
                     studentEmail: userProfile.email,
                     studentName: userProfile.name,
                     slideIndex: currentSlideIndex,
-                    attemptCount,
-                    bestScore,
-                    bestAnswer,
+                    attemptCount: attemptCount,
+                    bestScore: bestScore,
+                    bestAnswer: bestAnswer,
                     normalizedAnswers: updatedNormalizedAnswers,
                     locked: shouldLock,
                     lastAttemptAt: firebase.firestore.FieldValue.serverTimestamp()
                 };
 
-                await db.collection("questionProgress").doc(progressKey).set(progressUpdate, { merge: true });
-                
-                // Update local cache
-                questionProgressData[currentSlideIndex] = progressUpdate;
+                try {
+                    await db.collection("questionProgress").doc(progressKey).set(progressUpdate, { merge: true });
+                    
+                    // Update local cache
+                    questionProgressData[currentSlideIndex] = progressUpdate;
 
-                if (shouldLock) {
-                    showToast("Maximum attempts reached. Question is now locked.", {color: 'red', duration: 5000});
+                    if (shouldLock) {
+                        showToast("Maximum attempts reached. Question is now locked.", {color: 'red', duration: 5000});
+                    }
+                } catch (progressWriteError) {
+                    console.error("Error writing question progress:", progressWriteError);
+                    showToast("Progress tracking unavailable, but answer saved.", {color: 'orange', duration: 3000});
+                    // Still update local cache for session lock
+                    if (shouldLock) {
+                        questionProgressData[currentSlideIndex] = { ...progressUpdate, locked: true };
+                        showToast("Maximum attempts reached. Question is now locked locally.", {color: 'red', duration: 5000});
+                    }
                 }
             }
 
-            // Save the submission
+            // Save the submission - always include attemptIndex and normalizedAnswer
             const submission = { 
                 studentName: userProfile.name, 
                 studentEmail: userProfile.email, 
@@ -1173,10 +1230,11 @@ slideStates.forEach((state, index) => {
                 answer: studentAnswer, 
                 score: scoreToPersist, 
                 timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-                attemptIndex: attemptsConfig.enabled ? attemptCount : undefined,
-                bestScoreToDate: attemptsConfig.enabled ? bestScore : undefined,
+                attemptIndex: attemptsConfig.enabled ? attemptCount : 1,
+                normalizedAnswer: normalizedAnswer,
+                bestScoreToDate: attemptsConfig.enabled ? bestScore : scoreToPersist,
                 attemptsEnabled: attemptsConfig.enabled || false,
-                locked: shouldLock
+                locked: shouldLock || false
             };
             await db.collection("submissions").add(submission);
             
