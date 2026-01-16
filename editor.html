@@ -1444,17 +1444,24 @@ async function saveAssignment() {
         const caseSensitive = document.getElementById(`attempts-case-sensitive-${index}`).checked || false;
         const punctuationSensitive = document.getElementById(`attempts-punctuation-sensitive-${index}`).checked || false;
 
-        deadlinePolicy[`q${qNum}`].attempts = {
+        // Build attempts object, excluding undefined/null fields to prevent Firestore errors
+        const attemptsConfig = {
           enabled: true,
           maxAttempts: maxAttempts,
           deduction: deduction,
           retainBestScore: retainBestScore,
           lockOnMax: lockOnMax,
           lockMessage: lockMessage || '',
-          showHelpAfter: showHelpAfter,
           caseSensitive: caseSensitive,
           punctuationSensitive: punctuationSensitive
         };
+        
+        // Only include showHelpAfter if it has a valid value
+        if (showHelpAfter !== null && showHelpAfter > 0) {
+          attemptsConfig.showHelpAfter = showHelpAfter;
+        }
+        
+        deadlinePolicy[`q${qNum}`].attempts = attemptsConfig;
       } else {
         deadlinePolicy[`q${qNum}`].attempts = { enabled: false };
       }

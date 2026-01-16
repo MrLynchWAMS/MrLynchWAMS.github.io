@@ -185,6 +185,7 @@
     
     // Question progress tracking - per-question attempt data
     let questionProgressData = {}; // Key: slideIndex, Value: {attemptCount, bestScore, locked, etc.}
+    let progressPermissionDenied = false; // Flag to prevent repeated permission error toasts
     
     // Aura display state - session-only, no persistence needed
     // Tracks whether user has opened the aura popup at least once this session
@@ -1022,6 +1023,10 @@ slideStates.forEach((state, index) => {
             } catch (error) {
                 console.error("Error loading question progress:", error);
                 questionProgressLoadFailed = true;
+                // Mark permission denied to prevent repeated toasts on writes
+                if (error.code === 'permission-denied') {
+                    progressPermissionDenied = true;
+                }
                 // Fallback: derive from submissions if questionProgress fails
                 try {
                     const submissionsQuery = await db.collection("submissions")
@@ -1183,11 +1188,12 @@ slideStates.forEach((state, index) => {
 
         try {
             // Update questionProgress document (only if attempts are enabled)
-            if (attemptsConfig.enabled && !questionProgressLoadFailed) {
+            if (attemptsConfig.enabled && !questionProgressLoadFailed && !progressPermissionDenied) {
                 const updatedNormalizedAnswers = isNewAttempt 
                     ? [...normalizedAnswers, normalizedAnswer].slice(-MAX_NORMALIZED_ANSWERS)
                     : normalizedAnswers;
 
+                // Build progress update, filtering out null/undefined values
                 const progressUpdate = {
                     assignmentId: assignmentData.id,
                     studentEmail: userProfile.email,
@@ -1195,11 +1201,15 @@ slideStates.forEach((state, index) => {
                     slideIndex: currentSlideIndex,
                     attemptCount: attemptCount,
                     bestScore: bestScore,
-                    bestAnswer: bestAnswer,
                     normalizedAnswers: updatedNormalizedAnswers,
                     locked: shouldLock,
                     lastAttemptAt: firebase.firestore.FieldValue.serverTimestamp()
                 };
+                
+                // Only include bestAnswer if it's not null/undefined
+                if (bestAnswer != null) {
+                    progressUpdate.bestAnswer = bestAnswer;
+                }
 
                 try {
                     await db.collection("questionProgress").doc(progressKey).set(progressUpdate, { merge: true });
@@ -1212,7 +1222,14 @@ slideStates.forEach((state, index) => {
                     }
                 } catch (progressWriteError) {
                     console.error("Error writing question progress:", progressWriteError);
-                    showToast("Progress tracking unavailable, but answer saved.", {color: 'orange', duration: 3000});
+                    // Mark that we've encountered a permission error to avoid repeated toasts
+                    if (progressWriteError.code === 'permission-denied') {
+                        progressPermissionDenied = true;
+                    }
+                    // Only show toast if we haven't already shown a permission error
+                    if (!progressPermissionDenied || progressWriteError.code !== 'permission-denied') {
+                        showToast("Progress tracking unavailable, but answer saved.", {color: 'orange', duration: 3000});
+                    }
                     // Still update local cache for session lock
                     if (shouldLock) {
                         questionProgressData[currentSlideIndex] = { ...progressUpdate, locked: true };
@@ -1222,6 +1239,8 @@ slideStates.forEach((state, index) => {
             }
 
             // Save the submission - always include attemptIndex and normalizedAnswer
+            // Ensure attemptIndex is never undefined by using explicit fallback
+            const attemptIndex = attemptsConfig.enabled ? (attemptCount || 1) : 1;
             const submission = { 
                 studentName: userProfile.name, 
                 studentEmail: userProfile.email, 
@@ -1230,7 +1249,7 @@ slideStates.forEach((state, index) => {
                 answer: studentAnswer, 
                 score: scoreToPersist, 
                 timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-                attemptIndex: attemptsConfig.enabled ? attemptCount : 1,
+                attemptIndex: attemptIndex,
                 normalizedAnswer: normalizedAnswer,
                 bestScoreToDate: attemptsConfig.enabled ? bestScore : scoreToPersist,
                 attemptsEnabled: attemptsConfig.enabled || false,
