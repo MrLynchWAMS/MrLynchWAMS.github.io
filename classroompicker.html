@@ -1079,7 +1079,9 @@ slideStates.forEach((state, index) => {
         const normalizedAnswers = questionProgress?.normalizedAnswers || [];
 
         if (attemptsConfig.enabled) {
-            isNewAttempt = !normalizedAnswers.includes(normalizedAnswer);
+            // Use Set for O(1) uniqueness check instead of O(n) array search
+            const normalizedAnswersSet = new Set(normalizedAnswers);
+            isNewAttempt = !normalizedAnswersSet.has(normalizedAnswer);
             
             if (isNewAttempt) {
                 attemptCount++;
