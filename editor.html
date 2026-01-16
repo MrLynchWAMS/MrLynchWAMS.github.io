@@ -1439,20 +1439,21 @@ async function saveAssignment() {
         const retainBestScore = document.getElementById(`attempts-retain-best-${index}`).checked;
         const lockOnMax = document.getElementById(`attempts-lock-${index}`).checked;
         const lockMessage = document.getElementById(`attempts-lock-msg-${index}`).value.trim();
-        const showHelpAfter = parseInt(document.getElementById(`attempts-show-help-${index}`).value, 10) || undefined;
-        const caseSensitive = document.getElementById(`attempts-case-sensitive-${index}`).checked;
-        const punctuationSensitive = document.getElementById(`attempts-punctuation-sensitive-${index}`).checked;
+        const showHelpAfterInput = document.getElementById(`attempts-show-help-${index}`).value.trim();
+        const showHelpAfter = showHelpAfterInput ? parseInt(showHelpAfterInput, 10) : null;
+        const caseSensitive = document.getElementById(`attempts-case-sensitive-${index}`).checked || false;
+        const punctuationSensitive = document.getElementById(`attempts-punctuation-sensitive-${index}`).checked || false;
 
         deadlinePolicy[`q${qNum}`].attempts = {
           enabled: true,
-          maxAttempts,
-          deduction,
-          retainBestScore,
-          lockOnMax,
-          lockMessage: lockMessage || undefined,
-          showHelpAfter,
-          caseSensitive,
-          punctuationSensitive
+          maxAttempts: maxAttempts,
+          deduction: deduction,
+          retainBestScore: retainBestScore,
+          lockOnMax: lockOnMax,
+          lockMessage: lockMessage || '',
+          showHelpAfter: showHelpAfter,
+          caseSensitive: caseSensitive,
+          punctuationSensitive: punctuationSensitive
         };
       } else {
         deadlinePolicy[`q${qNum}`].attempts = { enabled: false };
