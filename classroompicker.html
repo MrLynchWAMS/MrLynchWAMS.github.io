@@ -159,6 +159,8 @@
 
 <script>
     const TEACHER_EMAILS = ["klynch@mtps.us", "mstuart@mtps.us", "cfiori@mtps.us", "mlock@mtps.us", "cheine@mtps.us", "kgray@mtps.us"];
+    const MAX_NORMALIZED_ANSWERS = 100; // Cap for normalized answer history to prevent unbounded growth
+    
     const firebaseConfig = {
       apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
       authDomain: "mrlynch-slides-app.firebaseapp.com",
@@ -1034,7 +1036,7 @@ slideStates.forEach((state, index) => {
                     
                     submissionsQuery.docs.forEach(doc => {
                         const sub = doc.data();
-                        if (sub.normalizedAnswer) {
+                        if (sub.normalizedAnswer && derivedNormalizedAnswersSet.size < MAX_NORMALIZED_ANSWERS) {
                             derivedNormalizedAnswersSet.add(sub.normalizedAnswer);
                         }
                         if (typeof sub.score === 'number' && sub.score > derivedBestScore) {
@@ -1043,7 +1045,7 @@ slideStates.forEach((state, index) => {
                     });
                     
                     derivedAttemptCount = derivedNormalizedAnswersSet.size;
-                    const derivedNormalizedAnswers = Array.from(derivedNormalizedAnswersSet);
+                    const derivedNormalizedAnswers = Array.from(derivedNormalizedAnswersSet).slice(-MAX_NORMALIZED_ANSWERS);
                     
                     questionProgress = {
                         attemptCount: derivedAttemptCount,
@@ -1181,7 +1183,7 @@ slideStates.forEach((state, index) => {
             // Update questionProgress document (only if attempts are enabled)
             if (attemptsConfig.enabled && !questionProgressLoadFailed) {
                 const updatedNormalizedAnswers = isNewAttempt 
-                    ? [...normalizedAnswers, normalizedAnswer].slice(-100) // Cap at 100
+                    ? [...normalizedAnswers, normalizedAnswer].slice(-MAX_NORMALIZED_ANSWERS)
                     : normalizedAnswers;
 
                 const progressUpdate = {
