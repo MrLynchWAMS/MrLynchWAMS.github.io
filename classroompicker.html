@@ -1222,9 +1222,9 @@ slideStates.forEach((state, index) => {
                     }
                 } catch (progressWriteError) {
                     console.error("Error writing question progress:", progressWriteError);
-                    // Only show toast if this is the first permission error
                     const isPermissionError = progressWriteError.code === 'permission-denied';
-                    if (!progressPermissionDenied || !isPermissionError) {
+                    // Show toast for non-permission errors OR for the first permission error
+                    if (!isPermissionError || !progressPermissionDenied) {
                         showToast("Progress tracking unavailable, but answer saved.", {color: 'orange', duration: 3000});
                     }
                     // Mark that we've encountered a permission error to avoid repeated toasts
@@ -1241,7 +1241,7 @@ slideStates.forEach((state, index) => {
 
             // Save the submission - always include attemptIndex and normalizedAnswer
             // Ensure attemptIndex is never undefined by using explicit fallback
-            const attemptIndex = attemptsConfig.enabled ? (attemptCount || 1) : 1;
+            const attemptIndex = attemptsConfig.enabled ? (attemptCount ?? 1) : 1;
             const submission = { 
                 studentName: userProfile.name, 
                 studentEmail: userProfile.email, 
