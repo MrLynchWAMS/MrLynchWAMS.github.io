@@ -1222,13 +1222,14 @@ slideStates.forEach((state, index) => {
                     }
                 } catch (progressWriteError) {
                     console.error("Error writing question progress:", progressWriteError);
-                    // Mark that we've encountered a permission error to avoid repeated toasts
-                    if (progressWriteError.code === 'permission-denied') {
-                        progressPermissionDenied = true;
-                    }
-                    // Only show toast if we haven't already shown a permission error
-                    if (!progressPermissionDenied || progressWriteError.code !== 'permission-denied') {
+                    // Only show toast if this is the first permission error
+                    const isPermissionError = progressWriteError.code === 'permission-denied';
+                    if (!progressPermissionDenied || !isPermissionError) {
                         showToast("Progress tracking unavailable, but answer saved.", {color: 'orange', duration: 3000});
+                    }
+                    // Mark that we've encountered a permission error to avoid repeated toasts
+                    if (isPermissionError) {
+                        progressPermissionDenied = true;
                     }
                     // Still update local cache for session lock
                     if (shouldLock) {
