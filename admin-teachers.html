@@ -181,51 +181,90 @@
     }
 
 async function handleSaveTeacher() {
-    const id = document.getElementById('teacherId').value;
-    const email = document.getElementById('teacherEmail').value.trim().toLowerCase();
-    const isAdmin = document.getElementById('teacherIsAdmin').checked;
-    const coTeachingForText = document.getElementById('teacherCoTeachingFor').value.trim();
-    const errorElement = document.getElementById('modal-error');
+    const id = document.getElementById('teacherId').value; // The OLD email (if editing)
+    const newEmail = document.getElementById('teacherEmail').value.trim().toLowerCase();
 
-    errorElement.innerText = '';
+    // --- 1. GET MISSING VALUES ---
+    
+    // Get Admin status (Assumes a checkbox with ID 'teacherIsAdmin')
+    // If you don't have this checkbox, set this to false or remove it
+    const adminCheckbox = document.getElementById('teacherIsAdmin');
+    const isAdmin = adminCheckbox ? adminCheckbox.checked : false;
 
-    if (!email) {
-        errorElement.innerText = "Email is required.";
+    // Get Co-Teaching list (Assumes an input with ID 'teacherCoTeaching')
+    // Splitting comma-separated string into an array
+    const coTeachInput = document.getElementById('teacherCoTeaching');
+    let coTeachingFor = [];
+    if (coTeachInput && coTeachInput.value) {
+        coTeachingFor = coTeachInput.value.split(',').map(s => s.trim()).filter(s => s !== "");
+    }
+
+    // Basic validation
+    if (!newEmail) {
+        alert("Teacher email is required.");
         return;
     }
 
-    // Parse co-teaching list
-    const coTeachingFor = coTeachingForText
-        .split(',')
-        .map(e => e.trim().toLowerCase())
-        .filter(e => e.length > 0);
-
     const teacherData = {
-        email: email,
+        email: newEmail,
         isAdmin: isAdmin,
         coTeachingFor: coTeachingFor
     };
 
+    const btn = document.getElementById('saveTeacherBtn');
+    // Save original text to restore it later
+    const originalBtnText = btn.textContent; 
+
     try {
-        const btn = document.getElementById('saveTeacherBtn');
         btn.disabled = true;
         btn.textContent = 'Saving...';
 
-        // Always use email as document ID
-        await db.collection("teachers").doc(email).set(teacherData, { merge: true });
-        showToast("Teacher saved successfully!", { color: 'green' });
+        const batch = db.batch();
 
-        closeTeacherModal();
+        // 2. HANDLE ID CHANGE vs STANDARD SAVE
+        // If we are editing and the email CHANGED, we must delete the old doc and create a new one
+        if (id && id !== newEmail) {
+            const oldDocRef = db.collection("teachers").doc(id);
+            const newDocRef = db.collection("teachers").doc(newEmail);
+            
+            // Atomic swap: Delete old, Set new
+            batch.delete(oldDocRef);
+            batch.set(newDocRef, teacherData); 
+        } else {
+            // Standard save (create new OR update existing with same email)
+            const docRef = db.collection("teachers").doc(newEmail);
+            batch.set(docRef, teacherData, { merge: true });
+        }
+
+        await batch.commit(); // Commit all changes atomically
+        
+        showToast("Teacher saved successfully!", { color: 'green' });
+        
+        // Ensure this function exists in your scope
+        if (typeof closeTeacherModal === 'function') {
+            closeTeacherModal();
+        }
+
     } catch (error) {
         console.error("Error saving teacher:", error);
-        errorElement.innerText = "Could not save teacher. See console for details.";
+        
+        // Display error in the modal if an error div exists
+        const errorDiv = document.getElementById('modal-error');
+        if (errorDiv) {
+            errorDiv.innerText = "Error: " + error.message;
+        } else {
+            alert("Error saving: " + error.message);
+        }
+
     } finally {
-        const btn = document.getElementById('saveTeacherBtn');
-        btn.disabled = false;
-        btn.textContent = 'Save Teacher';
+        // --- 3. CLEANUP ---
+        // Always re-enable the button, even if it failed
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = originalBtnText;
+        }
     }
 }
-
     async function handleDeleteTeacher(id, email) {
         if (confirm(`Are you sure you want to delete teacher ${email}? This action cannot be undone.`)) {
             try {
