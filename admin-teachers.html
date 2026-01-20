@@ -180,55 +180,51 @@
         document.getElementById('teacherModal').classList.add('hidden');
     }
 
-    async function handleSaveTeacher() {
-        const id = document.getElementById('teacherId').value;
-        const email = document.getElementById('teacherEmail').value.trim().toLowerCase();
-        const isAdmin = document.getElementById('teacherIsAdmin').checked;
-        const coTeachingForText = document.getElementById('teacherCoTeachingFor').value.trim();
-        const errorElement = document.getElementById('modal-error');
+async function handleSaveTeacher() {
+    const id = document.getElementById('teacherId').value;
+    const email = document.getElementById('teacherEmail').value.trim().toLowerCase();
+    const isAdmin = document.getElementById('teacherIsAdmin').checked;
+    const coTeachingForText = document.getElementById('teacherCoTeachingFor').value.trim();
+    const errorElement = document.getElementById('modal-error');
 
-        errorElement.innerText = '';
+    errorElement.innerText = '';
 
-        if (!email) {
-            errorElement.innerText = "Email is required.";
-            return;
-        }
-
-        // Parse co-teaching list
-        const coTeachingFor = coTeachingForText
-            .split(',')
-            .map(e => e.trim().toLowerCase())
-            .filter(e => e.length > 0);
-
-        const teacherData = {
-            email: email,
-            isAdmin: isAdmin,
-            coTeachingFor: coTeachingFor
-        };
-
-        try {
-            const btn = document.getElementById('saveTeacherBtn');
-            btn.disabled = true;
-            btn.textContent = 'Saving...';
-
-            if (id) {
-                await db.collection("teachers").doc(id).update(teacherData);
-                showToast("Teacher updated successfully!", { color: 'green' });
-            } else {
-                await db.collection("teachers").add(teacherData);
-                showToast("Teacher added successfully!", { color: 'green' });
-            }
-
-            closeTeacherModal();
-        } catch (error) {
-            console.error("Error saving teacher:", error);
-            errorElement.innerText = "Could not save teacher. See console for details.";
-        } finally {
-            const btn = document.getElementById('saveTeacherBtn');
-            btn.disabled = false;
-            btn.textContent = 'Save Teacher';
-        }
+    if (!email) {
+        errorElement.innerText = "Email is required.";
+        return;
     }
+
+    // Parse co-teaching list
+    const coTeachingFor = coTeachingForText
+        .split(',')
+        .map(e => e.trim().toLowerCase())
+        .filter(e => e.length > 0);
+
+    const teacherData = {
+        email: email,
+        isAdmin: isAdmin,
+        coTeachingFor: coTeachingFor
+    };
+
+    try {
+        const btn = document.getElementById('saveTeacherBtn');
+        btn.disabled = true;
+        btn.textContent = 'Saving...';
+
+        // Always use email as document ID
+        await db.collection("teachers").doc(email).set(teacherData, { merge: true });
+        showToast("Teacher saved successfully!", { color: 'green' });
+
+        closeTeacherModal();
+    } catch (error) {
+        console.error("Error saving teacher:", error);
+        errorElement.innerText = "Could not save teacher. See console for details.";
+    } finally {
+        const btn = document.getElementById('saveTeacherBtn');
+        btn.disabled = false;
+        btn.textContent = 'Save Teacher';
+    }
+}
 
     async function handleDeleteTeacher(id, email) {
         if (confirm(`Are you sure you want to delete teacher ${email}? This action cannot be undone.`)) {
