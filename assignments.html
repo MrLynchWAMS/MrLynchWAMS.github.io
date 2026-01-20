@@ -147,6 +147,7 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
     const auth = firebase.auth();
+    const DEFAULT_TEACHER_EMAIL = "klynch@mtps.us"; // Default for migrating existing assignments
     let activeAssignmentId = null;
     let allClassNames = [];
     let allAssignments = [];
@@ -199,7 +200,7 @@
             const batch = db.batch();
             docsToMigrate.forEach(doc => {
                 batch.update(doc.ref, { 
-                    teacherEmail: "klynch@mtps.us",
+                    teacherEmail: DEFAULT_TEACHER_EMAIL,
                     coTeachers: [],
                     isPublic: false
                 });
