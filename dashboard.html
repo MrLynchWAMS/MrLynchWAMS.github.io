@@ -203,12 +203,19 @@ function setupLiveStudentData() {
 
     // Listener 1: Students collection (filtered by roster)
     unsubscribeStudents = db.collection("students")
-        .where("teacherEmail", "==", assignmentData.teacherEmail)
         .onSnapshot(studentSnapshot => {
+            const assignmentTeacher = assignmentData.teacherEmail ? assignmentData.teacherEmail.toLowerCase() : 'klynch@mtps.us';
+            
             studentSnapshot.docChanges().forEach(change => {
                 const studentData = change.doc.data();
+                const studentTeacher = studentData.teacherEmail ? studentData.teacherEmail.toLowerCase() : 'klynch@mtps.us';
+                
                 if (change.type === "added" || change.type === "modified") {
-                    studentsMap.set(studentData.email, studentData);
+                    if (studentTeacher === assignmentTeacher) {
+                        studentsMap.set(studentData.email, studentData);
+                    } else {
+                        studentsMap.delete(studentData.email);
+                    }
                 } else if (change.type === "removed") {
                     studentsMap.delete(studentData.email);
                 }
