@@ -191,15 +191,22 @@
 
     async function runMigration() {
         try {
-            const snapshot = await db.collection("assignments").where("teacherEmail", "==", null).get();
-            if (snapshot.empty) return;
+            const snapshot = await db.collection("assignments").get();
+            const docsToMigrate = snapshot.docs.filter(doc => !doc.data().teacherEmail);
+            
+            if (docsToMigrate.length === 0) return;
             
             const batch = db.batch();
-            snapshot.docs.forEach(doc => {
-                batch.update(doc.ref, { teacherEmail: "klynch@mtps.us" });
+            docsToMigrate.forEach(doc => {
+                batch.update(doc.ref, { 
+                    teacherEmail: "klynch@mtps.us",
+                    coTeachers: [],
+                    isPublic: false
+                });
+            });
             });
             await batch.commit();
-            console.log(`Migrated ${snapshot.docs.length} assignments to have teacherEmail field`);
+            console.log(`Migrated ${docsToMigrate.length} assignments to have teacherEmail field`);
         } catch (error) {
             console.error("Migration error:", error);
         }
@@ -251,6 +258,12 @@
         document.getElementById('loadingState').innerText = "Error loading data. See console for details.";
     }
     
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
     function displayFilteredAssignments() {
         const listContainer = document.getElementById('assignmentsList');
         const loadingState = document.getElementById('loadingState');
@@ -295,9 +308,11 @@
             }
             statusHTML += '</div>';
 
+            const escapedName = escapeHtml(assignment.name);
+            
             card.innerHTML = `
                 <div>
-                    <h3 class="text-2xl font-bold text-yellow-400 mb-2">${assignment.name}</h3>
+                    <h3 class="text-2xl font-bold text-yellow-400 mb-2">${escapedName}</h3>
                     <div class="mb-2">${statusHTML}</div>
                     <p class="text-gray-500 text-xs mt-2">Created: ${date}</p>
                     ${assignment.isPublic ? '<p class="text-purple-400 text-xs">🌐 Public</p>' : ''}
@@ -309,7 +324,7 @@
                     </div>
                     <div class="flex justify-between gap-2">
                          <button onclick="openStatusModal('${assignment.id}')" class="flex-1 text-center bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-3 rounded-lg btn-action">Assign & Schedule</button>
-                         <button onclick="deleteAssignment('${assignment.id}', '${assignment.name.replace(/'/g, "\\'")}')" class="flex-1 text-center bg-red-700 hover:bg-red-800 text-white font-bold py-2 px-3 rounded-lg btn-action">Delete</button>
+                         <button onclick="deleteAssignment('${assignment.id}', '${escapedName}')" class="flex-1 text-center bg-red-700 hover:bg-red-800 text-white font-bold py-2 px-3 rounded-lg btn-action">Delete</button>
                     </div>
                     <div class="flex justify-between gap-2">
                         <button onclick="openCoTeacherModal('${assignment.id}')" class="flex-1 text-center bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold py-2 px-2 rounded-lg btn-action">Co-Teachers</button>
