@@ -246,7 +246,7 @@
             }
             
             // Not a teacher, check if student
-            const studentQuery = await db.collection("students").where("email", "==", profile.email).get();
+            const studentQuery = await db.collection("students").where("email", "==", profile.email.toLowerCase()).get();
             if (studentQuery.empty) {
                 loader.classList.remove('hidden');
                 errorP.textContent = "Access Denied: Your email is not on the class roster.";
@@ -258,10 +258,11 @@
             const studentDoc = studentQuery.docs[0];
             const studentData = studentDoc.data();
             const studentClass = String(studentData.class);
-            const studentTeacherEmail = studentData.teacherEmail;
+            const studentTeacherEmail = studentData.teacherEmail ? studentData.teacherEmail.toLowerCase() : 'klynch@mtps.us';
+            const assignmentTeacherEmail = assignmentData.teacherEmail ? assignmentData.teacherEmail.toLowerCase() : 'klynch@mtps.us';
             
             // Check if student's teacherEmail matches assignment's teacherEmail (roster isolation)
-            if (studentTeacherEmail !== assignmentData.teacherEmail) {
+            if (studentTeacherEmail !== assignmentTeacherEmail) {
                 loader.classList.remove('hidden');
                 errorP.textContent = "Access Denied: This assignment is not from your teacher.";
                 document.getElementById('loginContainer').classList.add('hidden');

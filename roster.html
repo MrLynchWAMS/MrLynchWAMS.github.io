@@ -234,9 +234,15 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
         const loadingState = document.getElementById('loadingState');
         
         db.collection("students")
-            .where("teacherEmail", "==", currentUserEmail)
             .onSnapshot(snapshot => {
-                if (snapshot.empty) {
+                // Filter client-side to include those with matching teacherEmail OR no teacherEmail (legacy data defaults to klynch@mtps.us)
+                const allStudents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                const students = allStudents.filter(student => {
+                    const studentTeacher = student.teacherEmail ? student.teacherEmail.toLowerCase() : 'klynch@mtps.us';
+                    return studentTeacher === currentUserEmail;
+                });
+                
+                if (students.length === 0) {
                     loadingState.innerText = "No students found. Click '+ Add Student' to build your roster.";
                     loadingState.classList.remove('hidden');
                     rosterContainer.innerHTML = '';
@@ -244,7 +250,6 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
                 }
                 
                 loadingState.classList.add('hidden');
-                const students = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
                 const classData = {};
                 students.forEach(student => {
