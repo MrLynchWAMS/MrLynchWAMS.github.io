@@ -120,41 +120,42 @@
         });
     }
 
-    function loadTeachers() {
-        db.collection("teachers").onSnapshot(snapshot => {
-            const teachersList = document.getElementById('teachersList');
-            
-            if (snapshot.empty) {
-                teachersList.innerHTML = '<p class="text-gray-400">No teachers found. Click "+ Add Teacher" to add one.</p>';
-                return;
-            }
+   function loadTeachers() {
+    db.collection("teachers").onSnapshot(snapshot => {
+        const teachersList = document.getElementById('teachersList');
+        
+        if (snapshot.empty) {
+            teachersList.innerHTML = '<p class="text-gray-400">No teachers found. Click "+ Add Teacher" to add one.</p>';
+            return;
+        }
 
-            const teachers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            teachers.sort((a, b) => a.email.localeCompare(b.email));
+        const teachers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+            .filter(teacher => teacher.email); // Filter out any docs without email
+        
+        teachers.sort((a, b) => a.email.localeCompare(b.email));
 
-            teachersList.innerHTML = teachers.map(teacher => `
-                <div class="bg-gray-700 rounded-lg p-4 flex justify-between items-center">
-                    <div class="flex-1">
-                        <div class="flex items-center gap-3">
-                            <span class="font-medium text-white">${escapeHtml(teacher.email)}</span>
-                            ${teacher.isAdmin ? '<span class="bg-yellow-600 text-white text-xs px-2 py-1 rounded">Admin</span>' : ''}
-                        </div>
-                        ${teacher.coTeachingFor && teacher.coTeachingFor.length > 0 ? `
-                            <p class="text-xs text-gray-400 mt-1">Co-teaching for: ${escapeHtml(teacher.coTeachingFor.join(', '))}</p>
-                        ` : ''}
+        teachersList.innerHTML = teachers.map(teacher => `
+            <div class="bg-gray-700 rounded-lg p-4 flex justify-between items-center">
+                <div class="flex-1">
+                    <div class="flex items-center gap-3">
+                        <span class="font-medium text-white">${escapeHtml(teacher.email)}</span>
+                        ${teacher.isAdmin ? '<span class="bg-yellow-600 text-white text-xs px-2 py-1 rounded">Admin</span>' : ''}
                     </div>
-                    <div class="flex gap-2">
-                        <button onclick='openTeacherModal(${JSON.stringify(teacher)})' class="text-blue-400 hover:text-blue-300 text-sm">Edit</button>
-                        <button onclick="handleDeleteTeacher('${teacher.id}', '${escapeHtml(teacher.email)}')" class="text-red-400 hover:text-red-300 text-sm">Delete</button>
-                    </div>
+                    ${teacher.coTeachingFor && teacher.coTeachingFor.length > 0 ? `
+                        <p class="text-xs text-gray-400 mt-1">Co-teaching for: ${escapeHtml(teacher.coTeachingFor.join(', '))}</p>
+                    ` : ''}
                 </div>
-            `).join('');
-        }, error => {
-            console.error("Error loading teachers:", error);
-            showToast("Error loading teachers. See console for details.", { color: 'red' });
-        });
-    }
-
+                <div class="flex gap-2">
+                    <button onclick='openTeacherModal(${JSON.stringify(teacher)})' class="text-blue-400 hover:text-blue-300 text-sm">Edit</button>
+                    <button onclick="handleDeleteTeacher('${teacher.id}', '${escapeHtml(teacher.email)}')" class="text-red-400 hover:text-red-300 text-sm">Delete</button>
+                </div>
+            </div>
+        `).join('');
+    }, error => {
+        console.error("Error loading teachers:", error);
+        showToast("Error loading teachers. See console for details.", { color: 'red' });
+    });
+}
     function openTeacherModal(teacher = null) {
         document.getElementById('teacherId').value = '';
         document.getElementById('teacherEmail').value = '';
