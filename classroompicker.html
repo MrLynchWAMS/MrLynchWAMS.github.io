@@ -158,7 +158,6 @@
     <div id="toast-wrapper-bottom-right" class="toast-wrapper bottom-right flex-col-reverse space-y-3"></div>
 
 <script>
-    const TEACHER_EMAILS = ["klynch@mtps.us", "mstuart@mtps.us", "cfiori@mtps.us", "mlock@mtps.us", "cheine@mtps.us", "kgray@mtps.us"];
     const MAX_NORMALIZED_ANSWERS = 100; // Cap for normalized answer history to prevent unbounded growth
     
     const firebaseConfig = {
@@ -236,12 +235,17 @@
     async function authorizeAndStart(profile) {
         const errorP = document.getElementById('loadingError');
         const loader = document.getElementById('pageLoader');
-        if (TEACHER_EMAILS.map(e => e.toLowerCase()).includes(profile.email.toLowerCase())) {
-            userProfile = { name: profile.name, email: profile.email, class: 'Teacher', auraLifetime: 0, auraBalance: 0 };
-            initializeStudentSession();
-            return;
-        }
+        
         try {
+            // Check if user is a teacher (using teachers collection)
+            const teacherQuery = await db.collection("teachers").where("email", "==", profile.email.toLowerCase()).get();
+            if (!teacherQuery.empty) {
+                userProfile = { name: profile.name, email: profile.email, class: 'Teacher', auraLifetime: 0, auraBalance: 0 };
+                initializeStudentSession();
+                return;
+            }
+            
+            // Not a teacher, check if student
             const studentQuery = await db.collection("students").where("email", "==", profile.email).get();
             if (studentQuery.empty) {
                 loader.classList.remove('hidden');
@@ -250,13 +254,26 @@
                 auth.signOut();
                 return;
             }
+            
             const studentDoc = studentQuery.docs[0];
             const studentData = studentDoc.data();
             const studentClass = String(studentData.class);
+            const studentTeacherEmail = studentData.teacherEmail;
+            
+            // Check if student's teacherEmail matches assignment's teacherEmail (roster isolation)
+            if (studentTeacherEmail !== assignmentData.teacherEmail) {
+                loader.classList.remove('hidden');
+                errorP.textContent = "Access Denied: This assignment is not from your teacher.";
+                document.getElementById('loginContainer').classList.add('hidden');
+                auth.signOut();
+                return;
+            }
+            
             profile.class = studentClass;
             profile.auraLifetime = studentData.auraLifetime || 0;
             profile.auraBalance = studentData.auraBalance || 0;
             profile.studentDocId = studentDoc.id;
+            
             const assignedClasses = assignmentData.assignedClasses || [];
             if (!assignedClasses.includes(studentClass)) {
                 loader.classList.remove('hidden');
@@ -351,7 +368,7 @@
         updateUserHeader();
         
         // Initialize Focus Mode if enabled (only for non-teacher accounts)
-        if (assignmentData.focusModeEnabled && !TEACHER_EMAILS.map(e => e.toLowerCase()).includes(userProfile.email.toLowerCase())) {
+        if (assignmentData.focusModeEnabled && userProfile.class !== 'Teacher') {
             initializeFocusMode();
         }
         

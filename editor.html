@@ -222,7 +222,6 @@
   </template>
   <div id="toast-wrapper"></div>
 <script>
-const TEACHER_EMAILS = ["klynch@mtps.us", "mstuart@mtps.us", "cfiori@mtps.us", "mlock@mtps.us", "cheine@mtps.us"];
 const CLIENT_ID = "1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com";
 const SCOPES = "https://www.googleapis.com/auth/presentations.readonly";
 const firebaseConfig = {
@@ -243,9 +242,23 @@ let tokenClient;
 let allClassNames = [];
 let teacherDefaults = {};
 
-auth.onAuthStateChanged(user => {
-  if (user && TEACHER_EMAILS.map(e => e.toLowerCase()).includes(user.email.toLowerCase())) {
-    authorizeGapi();
+auth.onAuthStateChanged(async user => {
+  if (user) {
+    // Check if user exists in teachers collection
+    try {
+      const teacherDoc = await db.collection("teachers").doc(user.email).get();
+      if (teacherDoc.exists) {
+        authorizeGapi();
+      } else {
+        document.getElementById('loading-text').textContent = "Access denied: You are not registered as a teacher.";
+        document.getElementById('auth-error').innerText = "Please contact an administrator for teacher access.";
+        document.getElementById('signInButtonContainer').classList.add('hidden');
+      }
+    } catch (error) {
+      console.error("Error checking teacher status:", error);
+      document.getElementById('loading-text').textContent = "Error verifying access.";
+      document.getElementById('signInButtonContainer').classList.add('hidden');
+    }
   } else {
     document.getElementById('loading-text').textContent = "Please sign in to continue.";
     document.getElementById('signInButtonContainer').classList.remove('hidden');
@@ -295,11 +308,28 @@ async function loadAssignment() {
   const loadingText = document.getElementById('loading-text');
   try {
     loadingText.textContent = "Loading assignment data...";
-    const teacherDefaultsDoc = await db.collection("teachers").doc(auth.currentUser.email).get();
+    const currentUserEmail = auth.currentUser.email;
+    
+    // Load teacher defaults and check admin status
+    const teacherDefaultsDoc = await db.collection("teachers").doc(currentUserEmail).get();
     if(teacherDefaultsDoc.exists) { teacherDefaults = teacherDefaultsDoc.data(); }
+    const isAdmin = teacherDefaults.isAdmin || false;
+    
+    // Load assignment
     const assignmentDoc = await db.collection("assignments").doc(assignmentId).get();
     if (!assignmentDoc.exists) { loadingText.textContent = "Error: Assignment not found."; return; }
     assignmentData = { id: assignmentDoc.id, ...assignmentDoc.data() };
+    
+    // Check access control
+    const isOwner = assignmentData.teacherEmail === currentUserEmail;
+    const isCoTeacher = (assignmentData.coTeachers || []).includes(currentUserEmail);
+    const hasAccess = isOwner || isCoTeacher || isAdmin;
+    
+    if (!hasAccess) {
+      loadingText.textContent = "Access Denied: You do not have permission to edit this assignment.";
+      document.getElementById('auth-error').innerText = "Only the assignment owner, co-teachers, or administrators can edit this assignment.";
+      return;
+    }
     const studentSnapshot = await db.collection("students").get();
     const students = studentSnapshot.docs.map(doc => doc.data());
     allClassNames = [...new Set(students.map(s => String(s.class)))].sort();

@@ -106,7 +106,6 @@
     </div>
     <div id="toast-wrapper-top-right" class="toast-wrapper top-right space-y-3"></div>
 <script>
-    const TEACHER_EMAILS = ["klynch@mtps.us", "mstuart@mtps.us", "cfiori@mtps.us", "mlock@mtps.us", "cheine@mtps.us", "kgray@mtps.us"];
     const firebaseConfig = {
       apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
       authDomain: "mrlynch-slides-app.firebaseapp.com",
@@ -154,13 +153,22 @@
             document.getElementById('loadingError').textContent = "Error: No assignment ID provided in the URL.";
             return;
         }
-        auth.onAuthStateChanged(user => {
+        auth.onAuthStateChanged(async user => {
             if (user) {
-                if (TEACHER_EMAILS.includes(user.email)) { loadDashboard(); } 
-                else {
+                try {
+                    // Check if user is a teacher in the teachers collection
+                    const teacherDoc = await db.collection("teachers").doc(user.email.toLowerCase()).get();
+                    if (!teacherDoc.exists) {
+                        document.getElementById('pageLoader').classList.add('hidden');
+                        document.getElementById('loadingError').textContent = "Access Denied: You are not authorized to view this page.";
+                        auth.signOut();
+                        return;
+                    }
+                    loadDashboard();
+                } catch (error) {
+                    console.error("Error checking teacher authorization:", error);
                     document.getElementById('pageLoader').classList.add('hidden');
-                    document.getElementById('loadingError').textContent = "Access Denied: You are not authorized to view this page.";
-                    auth.signOut();
+                    document.getElementById('loadingError').textContent = "An error occurred during authentication.";
                 }
             } else {
                 document.getElementById('pageLoader').classList.add('hidden');
@@ -193,18 +201,20 @@ function setupLiveStudentData() {
     const violationsByStudent = new Map();
     const auraByStudent = new Map();
 
-    // Listener 1: Students collection
-    unsubscribeStudents = db.collection("students").onSnapshot(studentSnapshot => {
-        studentSnapshot.docChanges().forEach(change => {
-            const studentData = change.doc.data();
-            if (change.type === "added" || change.type === "modified") {
-                studentsMap.set(studentData.email, studentData);
-            } else if (change.type === "removed") {
-                studentsMap.delete(studentData.email);
-            }
+    // Listener 1: Students collection (filtered by roster)
+    unsubscribeStudents = db.collection("students")
+        .where("teacherEmail", "==", assignmentData.teacherEmail)
+        .onSnapshot(studentSnapshot => {
+            studentSnapshot.docChanges().forEach(change => {
+                const studentData = change.doc.data();
+                if (change.type === "added" || change.type === "modified") {
+                    studentsMap.set(studentData.email, studentData);
+                } else if (change.type === "removed") {
+                    studentsMap.delete(studentData.email);
+                }
+            });
+            rebuildAllStudentData();
         });
-        rebuildAllStudentData();
-    });
 
     // Listener 2: Submissions for this assignment
     unsubscribeSubmissions = db.collection("submissions")
@@ -362,12 +372,29 @@ function setupLiveStudentData() {
     // --- DASHBOARD LOAD ---
     async function loadDashboard() {
         try {
+            // Get assignment document first
             const doc = await db.collection("assignments").doc(assignmentId).get();
             if (!doc.exists) {
                 document.getElementById('loadingError').textContent = "Error: This assignment could not be found.";
                 return;
             }
             assignmentData = { id: doc.id, ...doc.data() };
+            
+            // Get current user's email and teacher profile
+            const currentUserEmail = auth.currentUser.email.toLowerCase();
+            const teacherDoc = await db.collection("teachers").doc(currentUserEmail).get();
+            const teacherProfile = teacherDoc.data();
+            
+            // Check if user has permission to view this assignment
+            const isOwner = assignmentData.teacherEmail === currentUserEmail;
+            const isCoTeacher = (assignmentData.coTeachers || []).includes(currentUserEmail);
+            const isAdmin = teacherProfile?.isAdmin === true;
+            
+            if (!isOwner && !isCoTeacher && !isAdmin) {
+                document.getElementById('loadingError').textContent = "Access Denied: You do not have permission to view this assignment.";
+                return;
+            }
+            
             document.title = assignmentData.name + " - Dashboard";
             document.getElementById('dashboardTitle').textContent = `Dashboard for: ${assignmentData.name}`;
             
