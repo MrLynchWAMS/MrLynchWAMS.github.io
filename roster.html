@@ -164,7 +164,6 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
     </div>
 
 <script>
-    const TEACHER_EMAILS = ["klynch@mtps.us", "cheine@mtps.us"];
     const firebaseConfig = {
       apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
       authDomain: "mrlynch-slides-app.firebaseapp.com",
@@ -181,13 +180,27 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
     let assignmentMap = {};
     let cachedSubmissions = {};
     let currentPerfStudentId = null;
+    let currentUserEmail = null;
 
-    auth.onAuthStateChanged(user => {
-        if (user && TEACHER_EMAILS.map(e => e.toLowerCase()).includes(user.email.toLowerCase())) {
-            document.getElementById('pageLoader').classList.add('hidden');
-            document.getElementById('rosterContent').classList.remove('hidden');
-            loadRoster();
-            prefetchAssignments();
+    auth.onAuthStateChanged(async user => {
+        if (user) {
+            try {
+                const teacherDoc = await db.collection("teachers").doc(user.email.toLowerCase()).get();
+                if (teacherDoc.exists) {
+                    currentUserEmail = user.email.toLowerCase();
+                    document.getElementById('pageLoader').classList.add('hidden');
+                    document.getElementById('rosterContent').classList.remove('hidden');
+                    loadRoster();
+                    prefetchAssignments();
+                } else {
+                    document.getElementById('loading-text').textContent = "Access denied. Please contact an administrator.";
+                    document.getElementById('signInButtonContainer').classList.add('hidden');
+                    document.getElementById('auth-error').innerText = "You are not authorized to access this page.";
+                }
+            } catch (error) {
+                console.error("Error checking teacher authorization:", error);
+                document.getElementById('auth-error').innerText = "Error checking authorization. Please try again.";
+            }
         } else {
             document.getElementById('loading-text').textContent = "Please sign in to continue.";
             document.getElementById('signInButtonContainer').classList.remove('hidden');
@@ -220,32 +233,34 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
         const rosterContainer = document.getElementById('rosterContainer');
         const loadingState = document.getElementById('loadingState');
         
-        db.collection("students").onSnapshot(snapshot => {
-            if (snapshot.empty) {
-                loadingState.innerText = "No students found. Click '+ Add Student' to build your roster.";
-                loadingState.classList.remove('hidden');
-                rosterContainer.innerHTML = '';
-                return;
-            }
-            
-            loadingState.classList.add('hidden');
-            const students = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-            const classData = {};
-            students.forEach(student => {
-                const className = student.class || 'Unassigned';
-                if (!classData[className]) {
-                    classData[className] = [];
+        db.collection("students")
+            .where("teacherEmail", "==", currentUserEmail)
+            .onSnapshot(snapshot => {
+                if (snapshot.empty) {
+                    loadingState.innerText = "No students found. Click '+ Add Student' to build your roster.";
+                    loadingState.classList.remove('hidden');
+                    rosterContainer.innerHTML = '';
+                    return;
                 }
-                classData[className].push(student);
+                
+                loadingState.classList.add('hidden');
+                const students = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+                const classData = {};
+                students.forEach(student => {
+                    const className = student.class || 'Unassigned';
+                    if (!classData[className]) {
+                        classData[className] = [];
+                    }
+                    classData[className].push(student);
+                });
+
+                renderRoster(classData);
+
+            }, error => {
+                console.error("Error fetching roster:", error);
+                loadingState.innerText = "Error loading roster. See console for details.";
             });
-
-            renderRoster(classData);
-
-        }, error => {
-            console.error("Error fetching roster:", error);
-            loadingState.innerText = "Error loading roster. See console for details.";
-        });
     }
 
     function renderRoster(classData) {
@@ -366,7 +381,8 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
                     passcode: passcode,
                     class: className,
                     auraLifetime: 0,
-                    auraBalance: 0
+                    auraBalance: 0,
+                    teacherEmail: currentUserEmail
                 });
             });
 
@@ -398,7 +414,8 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
             passcode: parseInt(document.getElementById('studentPasscode').value.trim(), 10),
             class: document.getElementById('studentClass').value.trim(),
             auraLifetime: parseFloat(document.getElementById('studentAuraLifetime').value) || 0,
-            auraBalance: parseFloat(document.getElementById('studentAuraBalance').value) || 0
+            auraBalance: parseFloat(document.getElementById('studentAuraBalance').value) || 0,
+            teacherEmail: currentUserEmail
         };
 
         if (!student.name || !student.email || !student.passcode || !student.class) {
