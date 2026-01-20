@@ -157,7 +157,7 @@
             if (user) {
                 try {
                     // Check if user is a teacher in the teachers collection
-                    const teacherDoc = await db.collection("teachers").doc(user.email).get();
+                    const teacherDoc = await db.collection("teachers").doc(user.email.toLowerCase()).get();
                     if (!teacherDoc.exists) {
                         document.getElementById('pageLoader').classList.add('hidden');
                         document.getElementById('loadingError').textContent = "Access Denied: You are not authorized to view this page.";
@@ -381,7 +381,7 @@ function setupLiveStudentData() {
             assignmentData = { id: doc.id, ...doc.data() };
             
             // Get current user's email and teacher profile
-            const currentUserEmail = auth.currentUser.email;
+            const currentUserEmail = auth.currentUser.email.toLowerCase();
             const teacherDoc = await db.collection("teachers").doc(currentUserEmail).get();
             const teacherProfile = teacherDoc.data();
             
