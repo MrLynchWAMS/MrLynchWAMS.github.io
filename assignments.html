@@ -205,7 +205,6 @@
                     isPublic: false
                 });
             });
-            });
             await batch.commit();
             console.log(`Migrated ${docsToMigrate.length} assignments to have teacherEmail field`);
         } catch (error) {
