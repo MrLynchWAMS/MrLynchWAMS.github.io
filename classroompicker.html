@@ -707,6 +707,10 @@
         const passcodeNumber = parseInt(passcodeString, 10);
         if (isNaN(passcodeNumber)) { errorP.textContent = "Passcode must be a number."; return; }
         try {
+            // Sign in anonymously if not already authenticated to allow Firestore reads
+            if (!auth.currentUser) {
+                await auth.signInAnonymously();
+            }
             const q = db.collection("students").where("email", "==", email).where("passcode", "==", passcodeNumber);
             const querySnapshot = await q.get();
             if (querySnapshot.empty) {
