@@ -51,6 +51,7 @@
     <div id="toast-wrapper" class="fixed top-4 right-4 z-[100] space-y-3 w-full max-w-sm"></div>
 
 <script>
+    const ADMIN_EMAIL = "klynch@mtps.us";
     const firebaseConfig = {
       apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
       authDomain: "mrlynch-slides-app.firebaseapp.com",
@@ -71,20 +72,34 @@
         if (user) {
             currentUserEmail = user.email.toLowerCase();
             
-            // Check if user is a teacher
-            const teacherDoc = await db.collection("teachers").where("email", "==", currentUserEmail).get();
+            // 1. Check if user is the Admin (Always allow)
+            const isAdmin = currentUserEmail === ADMIN_EMAIL.toLowerCase();
             
-            if (teacherDoc.empty) {
-                document.getElementById('loading-text').textContent = "Access Denied: Only teachers can access the public library.";
-                document.getElementById('auth-error').textContent = "Please sign in with a teacher account.";
-                auth.signOut();
+            if (isAdmin) {
+                // Admin Access Granted
+                document.getElementById('pageLoader').classList.add('hidden');
+                document.getElementById('contentContainer').classList.remove('hidden');
+                await loadTeachersMap();
+                loadPublicAssignments();
                 return;
             }
 
-            document.getElementById('pageLoader').classList.add('hidden');
-            document.getElementById('contentContainer').classList.remove('hidden');
-            await loadTeachersMap();
-            loadPublicAssignments();
+            // 2. If not admin, check if user is in the 'teachers' collection
+            const teacherDoc = await db.collection("teachers").where("email", "==", currentUserEmail).get();
+            
+            if (!teacherDoc.empty) {
+                // Teacher Access Granted
+                document.getElementById('pageLoader').classList.add('hidden');
+                document.getElementById('contentContainer').classList.remove('hidden');
+                await loadTeachersMap();
+                loadPublicAssignments();
+            } else {
+                // Access Denied
+                document.getElementById('loading-text').textContent = "Access Denied: Only teachers can access the public library.";
+                document.getElementById('auth-error').textContent = "Please sign in with a teacher account.";
+                auth.signOut();
+            }
+
         } else {
             document.getElementById('loading-text').textContent = "Please sign in to continue.";
             document.getElementById('signInButtonContainer').classList.remove('hidden');
@@ -105,7 +120,9 @@
             teachersMap = {};
             snapshot.forEach(doc => {
                 const data = doc.data();
-                teachersMap[data.email] = data;
+                if(data.email) {
+                    teachersMap[data.email.toLowerCase()] = data;
+                }
             });
         } catch (error) {
             console.error("Error loading teachers:", error);
