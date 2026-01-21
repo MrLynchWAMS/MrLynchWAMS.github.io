@@ -499,7 +499,8 @@
           document.getElementById('auth-error').innerText = "Only the assignment owner, co-teachers, or administrators can edit this assignment.";
           return;
         }
-        const studentSnapshot = await db.collection("students").get();
+        // Filter students by current teacher to ensure Class Times logic only shows THEIR classes
+        const studentSnapshot = await db.collection("students").where("teacherEmail", "==", currentUserEmail).get();
         const students = studentSnapshot.docs.map(doc => doc.data());
         allClassNames = [...new Set(students.map(s => String(s.class)))].sort();
         loadingText.textContent = "Fetching slide information from Google...";
