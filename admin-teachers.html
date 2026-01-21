@@ -55,6 +55,20 @@
             </div>
         </div>
 
+        <!-- Manual Impersonation -->
+        <div class="bg-gray-800 rounded-lg shadow-lg p-6 mb-6 border border-yellow-600/30">
+            <h2 class="text-xl font-bold text-yellow-400 mb-4">Troubleshooting Tool: Manual Impersonation</h2>
+            <p class="text-gray-400 mb-3 text-sm">Enter any email below to see the app exactly as that user would see
+                it. Useful for testing co-teachers who may not be in the list below.</p>
+            <div class="flex gap-4">
+                <input type="email" id="manualImpersonateEmail" placeholder="e.g. coteacher@mtps.us"
+                    class="flex-1 p-2 bg-gray-700 rounded border border-gray-600 text-white focus:outline-none focus:border-yellow-400">
+                <button onclick="handleManualImpersonate()"
+                    class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-6 rounded-lg whitespace-nowrap">Impersonate
+                    User</button>
+            </div>
+        </div>
+
         <div class="bg-gray-800 rounded-lg shadow-lg p-6">
             <h2 class="text-xl font-bold text-yellow-400 mb-4">Active Teachers</h2>
             <div id="teachersList" class="space-y-3">
@@ -360,6 +374,20 @@
             location.reload();
             wrapper.appendChild(toast);
             setTimeout(() => toast.remove(), duration);
+        }
+
+        function handleManualImpersonate() {
+            const emailInput = document.getElementById('manualImpersonateEmail');
+            const email = emailInput.value.trim().toLowerCase();
+            if (!email) {
+                alert("Please enter an email address.");
+                return;
+            }
+            if (!email.includes('@')) {
+                alert("Please enter a valid email address.");
+                return;
+            }
+            impersonateUser(email);
         }
 
         function impersonateUser(email) {
