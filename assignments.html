@@ -393,36 +393,43 @@
                 showToast("Error: Could not load class roster.", { color: 'red' });
             }
 
-            // Assignment Fetching Strategy:
-            // 1. My owned assignments (teacherEmail == me)
-            // 2. Assignments where I am a specific co-teacher (coTeachers array-contains me)
-            // 3. Assignments owned by my "Parents" (teachers who list me in coTeachingFor)
+            // --- FIXED ASSIGNMENT LOADING STRATEGY ---
 
-            // Firestore can't do OR across all these easily.
-            // We will set up multiple listeners if needed.
+            // Strategy for Admin:
+            // Use the legacy "Fetch All" listener. This ensures admins see everything.
+            // Also avoids fragmented listeners which might miss orphan documents.
+            if (currentUserIsAdmin) {
+                db.collection("assignments").orderBy("createdAt", "desc").onSnapshot(snapshot => handleAssignmentsUpdate(snapshot, 'adminAll'), handleError);
+            } else {
+                // Strategy for Non-Admin (Teachers/Co-Teachers/Impersonators):
+                // 1. My owned assignments (teacherEmail == me)
+                // 2. Assignments where I am a specific co-teacher (coTeachers array-contains me)
+                // 3. Assignments owned by my "Parents" (teachers who list me in coTeachingFor)
 
-            // Listener 1: Owned by me OR Co-Teacher specific (requires composite index usually, or separate queries)
-            // Simpler: Just fetch owned by me.
-            db.collection("assignments").where("teacherEmail", "==", currentUserEmail)
-                .orderBy("createdAt", "desc")
-                .onSnapshot(snapshot => handleAssignmentsUpdate(snapshot, 'owned'), handleError);
+                // NOTE: We REMOVED .orderBy("createdAt", "desc") from these filtered queries because
+                // Firestore requires compound indexes for where() + orderBy().
+                // We will sort client-side in handleAssignmentsUpdate to be safe.
 
-            // Listener 2: Explicit Co-Teacher (array-contains)
-            db.collection("assignments").where("coTeachers", "array-contains", currentUserEmail)
-                .onSnapshot(snapshot => handleAssignmentsUpdate(snapshot, 'coTaught'), handleError);
+                // Listener 1: Owned by me
+                db.collection("assignments").where("teacherEmail", "==", currentUserEmail)
+                    .onSnapshot(snapshot => handleAssignmentsUpdate(snapshot, 'owned'), handleError);
 
-            // Listener 3: Implicit "Parent" Assignments
-            // First, find who my parents are
-            try {
-                const parentsSnapshot = await db.collection("teachers").where("coTeachingFor", "array-contains", currentUserEmail).get();
-                parentsSnapshot.docs.forEach(doc => {
-                    const parentEmail = doc.id; // teacher email is doc ID
-                    // Listen to their assignments
-                    db.collection("assignments").where("teacherEmail", "==", parentEmail)
-                        .onSnapshot(snapshot => handleAssignmentsUpdate(snapshot, `parent-${parentEmail}`), handleError);
-                });
-            } catch (e) {
-                console.error("Error fetching parent teachers for co-teaching:", e);
+                // Listener 2: Explicit Co-Teacher (array-contains)
+                db.collection("assignments").where("coTeachers", "array-contains", currentUserEmail)
+                    .onSnapshot(snapshot => handleAssignmentsUpdate(snapshot, 'coTaught'), handleError);
+
+                // Listener 3: Implicit "Parent" Assignments
+                try {
+                    const parentsSnapshot = await db.collection("teachers").where("coTeachingFor", "array-contains", currentUserEmail).get();
+                    parentsSnapshot.docs.forEach(doc => {
+                        const parentEmail = doc.id;
+                        // Listen to their assignments (unordered to avoid index issues)
+                        db.collection("assignments").where("teacherEmail", "==", parentEmail)
+                            .onSnapshot(snapshot => handleAssignmentsUpdate(snapshot, `parent-${parentEmail}`), handleError);
+                    });
+                } catch (e) {
+                    console.error("Error fetching parent teachers for co-teaching:", e);
+                }
             }
 
             db.collection("submissionStatus").onSnapshot(handleStatusUpdate, handleError);
@@ -442,14 +449,19 @@
             }
             allAssignments = Array.from(combinedAssignments.values());
 
-            // Filter assignments based on permissions
-            if (!currentUserIsAdmin) {
-                allAssignments = allAssignments.filter(assignment => {
-                    const teacherEmail = assignment.teacherEmail?.toLowerCase();
-                    const coTeachers = (assignment.coTeachers || []).map(e => e.toLowerCase());
-                    return teacherEmail === currentUserEmail || coTeachers.includes(currentUserEmail);
-                });
-            }
+            // Client-side Sort (descending by createdAt)
+            // Needed because we removed orderBy from some Firestore queries
+            allAssignments.sort((a, b) => {
+                const ta = a.createdAt ? (a.createdAt.seconds || 0) : 0;
+                const tb = b.createdAt ? (b.createdAt.seconds || 0) : 0;
+                return tb - ta;
+            });
+
+            // Filter assignments based on permissions (Double check for Admin view)
+            // If Admin, show all (no filter needed)
+            // If Non-Admin, the listeners already filtered by source, but we can double check logic.
+            // Actually, for implicit Co-teachers, we are fetching ALL of parent's assignments.
+            // That is correct behavior (co-teacher sees everything of parent).
 
             displayFilteredAssignments();
         }
