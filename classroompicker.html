@@ -400,7 +400,7 @@
             }
 
             if (isAuthorizedTeacher) {
-                userProfile = { name: profile.name, email: email, class: 'Teacher', auraLifetime: 0, auraBalance: 0 };
+                userProfile = { name: profile.name, email: email, class: 'Teacher', auraLifetime: 0, auraBalance: 0, teacherEmail: email };
                 initializeStudentSession();
                 return;
             }
@@ -426,6 +426,8 @@
                 profile.auraLifetime = studentData.auraLifetime || 0;
                 profile.auraBalance = studentData.auraBalance || 0;
                 profile.studentDocId = studentDoc.id;
+                profile.teacherEmail = studentData.teacherEmail || assignmentData.teacherEmail;
+
                 const assignedClasses = assignmentData.assignedClasses || [];
                 if (!assignedClasses.includes(studentClass)) {
                     loader.classList.remove('hidden');
@@ -1117,9 +1119,39 @@
             document.getElementById('overallScore').innerHTML = `<span class="${overallColor}">${overallAverage}%</span>`;
             document.getElementById('perQuestionScores').innerHTML = perQuestionHTML;
 
-            // Display Aura earned from this assignment
-            const auraThisAssignment = assignmentAuraEarned || 0;
-            document.getElementById('overallAura').innerHTML = `${auraThisAssignment} ✧`;
+            // --- AURA DISPLAY LOGIC ---
+            const auraContainer = document.getElementById('overallAura');
+            const summaryAuraLabel = document.querySelector('p[id="overallAura"]')?.previousElementSibling || { innerHTML: "Aura" };
+
+            if (isSubmitted) {
+                summaryAuraLabel.textContent = "Aura Earned";
+                auraContainer.innerHTML = `${assignmentAuraEarned || 0} ✧`;
+            } else {
+                // Potential Aura Calculation (Pre-submission)
+                const auraAmount = parseFloat(assignmentData.auraAmount) || 0;
+                const auraMinScore = parseFloat(assignmentData.auraMinScore) || 0;
+                const auraOnTime = assignmentData.auraOnTime || false;
+                const auraDueAt = assignmentData.auraDueAt;
+
+                let isMeetingScore = parseFloat(overallAverage) >= auraMinScore;
+                let isMeetingTime = true;
+                if (auraOnTime && auraDueAt) {
+                    const now = new Date();
+                    const dueAt = auraDueAt.toDate ? auraDueAt.toDate() : new Date(auraDueAt);
+                    isMeetingTime = now <= dueAt;
+                }
+
+                summaryAuraLabel.textContent = "Potential Aura";
+
+                if (auraAmount <= 0) {
+                    auraContainer.innerHTML = `<span class="text-gray-500">None ✧</span>`;
+                } else if (isMeetingScore && isMeetingTime) {
+                    auraContainer.innerHTML = `<span class="text-yellow-400 animate-pulse">${auraAmount} ✧</span><div class="text-[10px] text-green-400 mt-1">Goal Met!</div>`;
+                } else {
+                    let reason = !isMeetingScore ? `Score below ${auraMinScore}%` : "Past deadline";
+                    auraContainer.innerHTML = `<span class="text-gray-500">${auraAmount} ✧</span><div class="text-[10px] text-red-400 mt-1">${reason}</div>`;
+                }
+            }
         }
 
         function hideSummary() {
@@ -1728,10 +1760,17 @@
             const container = document.getElementById('aura-content');
             container.innerHTML = '<div class="text-center text-gray-400">Loading...</div>';
 
-            // Query logic: Filter by class if available, sort by Lifetime Aura
+            // Query logic: Filter by class if available, and ALWAYS by teacherEmail
             // Leaderboard uses auraLifetime for ranking (not spendable balance)
-            let query = db.collection('students');
-            if (userProfile.class && userProfile.class !== 'Teacher') query = query.where('class', '==', userProfile.class);
+            const targetTeacherEmail = userProfile.class === 'Teacher'
+                ? userProfile.teacherEmail
+                : (userProfile.teacherEmail || assignmentData.teacherEmail);
+
+            let query = db.collection('students').where('teacherEmail', '==', targetTeacherEmail);
+
+            if (userProfile.class && userProfile.class !== 'Teacher') {
+                query = query.where('class', '==', userProfile.class);
+            }
 
             query.get().then(snapshot => {
                 let students = [];
@@ -1739,7 +1778,7 @@
                     const d = doc.data();
                     students.push({
                         name: d.name || "Anonymous",
-                        score: d.auraLifetime || 0,
+                        score: parseFloat(d.auraLifetime) || 0,
                         isMe: d.email === userProfile.email
                     });
                 });
