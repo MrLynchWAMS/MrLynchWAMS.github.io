@@ -197,24 +197,61 @@
 
                 teachers.sort((a, b) => a.email.localeCompare(b.email));
 
-                teachersList.innerHTML = teachers.map(teacher => `
-            <div class="bg-gray-700 rounded-lg p-4 flex justify-between items-center">
-                <div class="flex-1">
-                    <div class="flex items-center gap-3">
-                        <span class="font-medium text-white">${escapeHtml(teacher.email)}</span>
-                        ${teacher.isAdmin ? '<span class="bg-yellow-600 text-white text-xs px-2 py-1 rounded">Admin</span>' : ''}
+                // Find "Implicit" Co-Teachers (people listed in coTeachingFor who don't have a doc)
+                const registeredEmails = new Set(teachers.map(t => t.email.toLowerCase()));
+                const implicitCoTeachers = []; // Array of { email, parentTeacherEmail }
+
+                teachers.forEach(t => {
+                    if (t.coTeachingFor && Array.isArray(t.coTeachingFor)) {
+                        t.coTeachingFor.forEach(ctEmail => {
+                            const lower = ctEmail.trim().toLowerCase();
+                            if (!registeredEmails.has(lower)) {
+                                implicitCoTeachers.push({ email: lower, parentEmail: t.email });
+                            }
+                        });
+                    }
+                });
+
+                let html = '';
+
+                teachers.forEach(teacher => {
+                    // Find any implicit co-teachers associated with THIS teacher
+                    const myImplicit = implicitCoTeachers.filter(i => i.parentEmail === teacher.email);
+
+                    html += `
+            <div class="bg-gray-700 rounded-lg p-4 mb-3">
+                <div class="flex justify-between items-center mb-2">
+                    <div class="flex-1">
+                        <div class="flex items-center gap-3">
+                            <span class="font-medium text-white">${escapeHtml(teacher.email)}</span>
+                            ${teacher.isAdmin ? '<span class="bg-yellow-600 text-white text-xs px-2 py-1 rounded">Admin</span>' : ''}
+                        </div>
                     </div>
-                    ${teacher.coTeachingFor && teacher.coTeachingFor.length > 0 ? `
-                        <p class="text-xs text-gray-400 mt-1">Co-teaching for: ${escapeHtml(teacher.coTeachingFor.join(', '))}</p>
-                    ` : ''}
+                    <div class="flex gap-2 items-center">
+                        <button onclick="impersonateUser('${escapeHtml(teacher.email)}')" class="text-yellow-400 hover:text-yellow-300 text-sm mr-2 border border-yellow-600 px-2 py-1 rounded">Impersonate</button>
+                        <button onclick='openTeacherModal(${JSON.stringify(teacher)})' class="text-blue-400 hover:text-blue-300 text-sm">Edit</button>
+                        <button onclick="handleDeleteTeacher('${teacher.id}', '${escapeHtml(teacher.email)}')" class="text-red-400 hover:text-red-300 text-sm">Delete</button>
+                    </div>
                 </div>
-                <div class="flex gap-2 items-center">
-                    <button onclick="impersonateUser('${escapeHtml(teacher.email)}')" class="text-yellow-400 hover:text-yellow-300 text-sm mr-2 border border-yellow-600 px-2 py-1 rounded">Impersonate</button>
-                    <button onclick='openTeacherModal(${JSON.stringify(teacher)})' class="text-blue-400 hover:text-blue-300 text-sm">Edit</button>
-                    <button onclick="handleDeleteTeacher('${teacher.id}', '${escapeHtml(teacher.email)}')" class="text-red-400 hover:text-red-300 text-sm">Delete</button>
-                </div>
-            </div>
-        `).join('');
+                ${myImplicit.length > 0 ? `
+                    <div class="mt-2 pl-4 border-l-2 border-gray-600">
+                        <p class="text-xs text-gray-400 mb-1">Co-Teachers (Implicit / No Account):</p>
+                        ${myImplicit.map(imp => `
+                            <div class="flex justify-between items-center bg-gray-600/50 p-2 rounded text-sm mb-1">
+                                <span class="text-gray-300">${escapeHtml(imp.email)}</span>
+                                <button onclick="impersonateUser('${escapeHtml(imp.email)}')" class="text-yellow-400 hover:text-yellow-300 text-xs border border-yellow-600 px-2 py-0.5 rounded">Impersonate</button>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : ''}
+                ${teacher.coTeachingFor && teacher.coTeachingFor.length > 0 ? `
+                        <p class="text-xs text-gray-400 mt-2">Explicit "Co-Teaching For" List: ${escapeHtml(teacher.coTeachingFor.join(', '))}</p>
+                ` : ''}
+            </div>`;
+                });
+
+                teachersList.innerHTML = html;
+
             }, error => {
                 console.error("Error loading teachers:", error);
                 showToast("Error loading teachers. See console for details.", { color: 'red' });
