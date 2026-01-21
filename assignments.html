@@ -395,41 +395,34 @@
 
             // --- FIXED ASSIGNMENT LOADING STRATEGY ---
 
-            // Strategy for Admin:
-            // Use the legacy "Fetch All" listener. This ensures admins see everything.
-            // Also avoids fragmented listeners which might miss orphan documents.
-            if (currentUserIsAdmin) {
-                db.collection("assignments").orderBy("createdAt", "desc").onSnapshot(snapshot => handleAssignmentsUpdate(snapshot, 'adminAll'), handleError);
-            } else {
-                // Strategy for Non-Admin (Teachers/Co-Teachers/Impersonators):
-                // 1. My owned assignments (teacherEmail == me)
-                // 2. Assignments where I am a specific co-teacher (coTeachers array-contains me)
-                // 3. Assignments owned by my "Parents" (teachers who list me in coTeachingFor)
+            // Strategy:
+            // EVERYONE (Admin, Teacher, Co-Teacher) sees only:
+            // 1. Assignments they own (teacherEmail == currentUserEmail)
+            // 2. Assignments they co-teach (coTeachers contains currentUserEmail)
+            // 3. Assignments from their "Parent" teachers (if they are implicit co-teachers)
 
-                // NOTE: We REMOVED .orderBy("createdAt", "desc") from these filtered queries because
-                // Firestore requires compound indexes for where() + orderBy().
-                // We will sort client-side in handleAssignmentsUpdate to be safe.
+            // This ensures Admins don't see a cluttered list of EVERY assignment in the system
+            // unless they explicit impersonate a specific user.
 
-                // Listener 1: Owned by me
-                db.collection("assignments").where("teacherEmail", "==", currentUserEmail)
-                    .onSnapshot(snapshot => handleAssignmentsUpdate(snapshot, 'owned'), handleError);
+            // Listener 1: Owned by me
+            db.collection("assignments").where("teacherEmail", "==", currentUserEmail)
+                .onSnapshot(snapshot => handleAssignmentsUpdate(snapshot, 'owned'), handleError);
 
-                // Listener 2: Explicit Co-Teacher (array-contains)
-                db.collection("assignments").where("coTeachers", "array-contains", currentUserEmail)
-                    .onSnapshot(snapshot => handleAssignmentsUpdate(snapshot, 'coTaught'), handleError);
+            // Listener 2: Explicit Co-Teacher (array-contains)
+            db.collection("assignments").where("coTeachers", "array-contains", currentUserEmail)
+                .onSnapshot(snapshot => handleAssignmentsUpdate(snapshot, 'coTaught'), handleError);
 
-                // Listener 3: Implicit "Parent" Assignments
-                try {
-                    const parentsSnapshot = await db.collection("teachers").where("coTeachingFor", "array-contains", currentUserEmail).get();
-                    parentsSnapshot.docs.forEach(doc => {
-                        const parentEmail = doc.id;
-                        // Listen to their assignments (unordered to avoid index issues)
-                        db.collection("assignments").where("teacherEmail", "==", parentEmail)
-                            .onSnapshot(snapshot => handleAssignmentsUpdate(snapshot, `parent-${parentEmail}`), handleError);
-                    });
-                } catch (e) {
-                    console.error("Error fetching parent teachers for co-teaching:", e);
-                }
+            // Listener 3: Implicit "Parent" Assignments
+            try {
+                const parentsSnapshot = await db.collection("teachers").where("coTeachingFor", "array-contains", currentUserEmail).get();
+                parentsSnapshot.docs.forEach(doc => {
+                    const parentEmail = doc.id;
+                    // Listen to their assignments (unordered to avoid index issues)
+                    db.collection("assignments").where("teacherEmail", "==", parentEmail)
+                        .onSnapshot(snapshot => handleAssignmentsUpdate(snapshot, `parent-${parentEmail}`), handleError);
+                });
+            } catch (e) {
+                console.error("Error fetching parent teachers for co-teaching:", e);
             }
 
             db.collection("submissionStatus").onSnapshot(handleStatusUpdate, handleError);
