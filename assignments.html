@@ -537,8 +537,9 @@
                 </div>
                 <div class="mt-4 pt-4 border-t border-gray-700 flex flex-col gap-2">
                     <div class="flex justify-between gap-2">
-                        <a href="./dashboard.html?assignmentId=${assignment.id}" class="flex-1 text-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-3 rounded-lg btn-action">View Results</a>
-                        <a href="./editor.html?id=${assignment.id}" class="flex-1 text-center bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded-lg btn-action">Edit</a>
+                        <a href="./dashboard.html?assignmentId=${assignment.id}" class="flex-1 text-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-2 rounded-lg btn-action text-sm">Dashboard</a>
+                        <a href="./editor.html?id=${assignment.id}" class="flex-1 text-center bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-2 rounded-lg btn-action text-sm">Edit</a>
+                        <a href="./classroompicker.html?assignmentId=${assignment.id}" target="_blank" class="flex-1 text-center bg-green-700 hover:bg-green-800 text-white font-bold py-2 px-2 rounded-lg btn-action text-sm">Student View</a>
                     </div>
                     <div class="flex justify-between gap-2">
                          <button onclick="openStatusModal('${assignment.id}')" class="flex-1 text-center bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-3 rounded-lg btn-action">Assign & Schedule</button>
