@@ -79,6 +79,9 @@
                 <a href="./assignments.html"
                     class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg btn-action">&larr;
                     All Assignments</a>
+                <button onclick="openAddClassModal()"
+                    class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg btn-action">+ Add
+                    Class</button>
                 <button onclick="openStudentModal()"
                     class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg btn-action">+ Add
                     Student</button>
@@ -94,6 +97,48 @@
 
         <div id="rosterContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <!-- Class roster cards will be dynamically added here -->
+        </div>
+    </div>
+
+    <!-- Add Class Modal (Bulk Import) -->
+    <div id="addClassModal"
+        class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
+        <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-2xl">
+            <div class="flex justify-between items-center p-4 border-b border-gray-700">
+                <h2 class="text-2xl font-bold text-yellow-400">Add Class (Bulk Import)</h2>
+                <button onclick="closeAddClassModal()" class="text-gray-400 hover:text-white text-3xl">&times;</button>
+            </div>
+            <div class="p-6 space-y-4">
+                <p class="text-gray-300 text-sm">Paste your student list below. Supported formats: CSV (comma-separated)
+                    or Excel (tab-separated).</p>
+                <p class="text-gray-400 text-xs italic">Order: Name, Email, Passcode, Class (optional)</p>
+                <p class="text-gray-400 text-xs italic">Example: "Doe, John", john@example.com, 1234, Period 1</p>
+
+                <textarea id="bulkClassInput" rows="10"
+                    class="w-full p-3 bg-gray-700 rounded border border-gray-600 font-mono text-sm" placeholder="Name, Email, Passcode, Class
+John Doe, john@school.edu, 1001, Period 1
+&quot;Smith, Jane&quot;, jane@school.edu, 1002, Period 1"></textarea>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="defaultClassTarget" class="block text-sm font-medium text-gray-300 mb-1">Default
+                            Class Name</label>
+                        <input type="text" id="defaultClassTarget"
+                            class="w-full p-2 bg-gray-700 rounded border border-gray-600 text-white"
+                            placeholder="e.g. Period 1">
+                        <p class="text-xs text-gray-500 mt-1">Used if class is missing in a row.</p>
+                    </div>
+                </div>
+
+                <p id="class-modal-error" class="text-red-500 text-sm"></p>
+                <div class="flex gap-4 pt-2">
+                    <button onclick="closeAddClassModal()"
+                        class="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 rounded-lg btn-action">Cancel</button>
+                    <button onclick="handleBulkSave()"
+                        class="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-lg btn-action">Import
+                        Students</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -297,11 +342,19 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
         }
 
         // One-time migration: assign all students without teacherEmail to klynch@mtps.us
+        // AND fix the typo "klynch@mtps. us"
         async function migrateStudentsWithoutTeacher() {
             const DEFAULT_TEACHER = 'klynch@mtps.us';
+            const TYPO_TEACHER = 'klynch@mtps. us';
+
             try {
                 const snapshot = await db.collection("students").get();
-                const studentsToMigrate = snapshot.docs.filter(doc => !doc.data().teacherEmail);
+
+                // Find students with NO teacher OR with the specific typo
+                const studentsToMigrate = snapshot.docs.filter(doc => {
+                    const data = doc.data();
+                    return !data.teacherEmail || data.teacherEmail === TYPO_TEACHER;
+                });
 
                 if (studentsToMigrate.length === 0) {
                     console.log("No students need teacherEmail migration.");
@@ -430,7 +483,6 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
             document.getElementById('studentClass').value = '';
             document.getElementById('studentAuraLifetime').value = '0';
             document.getElementById('studentAuraBalance').value = '0';
-            document.getElementById('bulkStudentInput').value = '';
             document.getElementById('modal-error').innerText = '';
 
             if (student) {
@@ -453,71 +505,6 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
 
         async function handleSaveStudent() {
             const id = document.getElementById('studentId').value;
-            const bulkInput = document.getElementById('bulkStudentInput').value.trim();
-
-            // Bulk add path (only when creating new, not editing)
-            if (bulkInput) {
-                if (id) {
-                    document.getElementById('modal-error').innerText = "Bulk paste is only for adding new students, not editing.";
-                    return;
-                }
-
-                const defaultClass = document.getElementById('studentClass').value.trim();
-                const lines = bulkInput.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-                const studentsToAdd = [];
-                const errors = [];
-
-                lines.forEach((line, idx) => {
-                    const parts = line.split(/[\,\t]/).map(p => p.trim()).filter(Boolean);
-                    if (parts.length < 3) {
-                        errors.push(`Line ${idx + 1}: expected at least Name, Email, Passcode.`);
-                        return;
-                    }
-                    const [name, emailRaw, passcodeRaw, classFromLine] = parts;
-                    const passcode = parseInt(passcodeRaw, 10);
-                    const email = (emailRaw || '').toLowerCase();
-                    const className = classFromLine || defaultClass;
-
-                    if (!name || !email || isNaN(passcode)) {
-                        errors.push(`Line ${idx + 1}: invalid data (check name/email/passcode).`);
-                        return;
-                    }
-                    if (!className) {
-                        errors.push(`Line ${idx + 1}: missing class (add in line or Class field above).`);
-                        return;
-                    }
-
-                    studentsToAdd.push({
-                        name: name,
-                        email: email,
-                        passcode: passcode,
-                        class: className,
-                        auraLifetime: 0,
-                        auraBalance: 0,
-                        teacherEmail: currentUserEmail
-                    });
-                });
-
-                if (errors.length) {
-                    document.getElementById('modal-error').innerText = errors.join(' ');
-                    return;
-                }
-
-                try {
-                    const batch = db.batch();
-                    studentsToAdd.forEach(stu => {
-                        const docRef = db.collection("students").doc();
-                        batch.set(docRef, stu);
-                    });
-                    await batch.commit();
-                    showToast(`Added ${studentsToAdd.length} students.`, { color: 'green' });
-                    closeStudentModal();
-                } catch (error) {
-                    console.error("Error saving students:", error);
-                    document.getElementById('modal-error').innerText = "Could not save students. See console for details.";
-                }
-                return;
-            }
 
             // Single add/update path
             const student = {
@@ -527,7 +514,7 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
                 class: document.getElementById('studentClass').value.trim(),
                 auraLifetime: parseFloat(document.getElementById('studentAuraLifetime').value) || 0,
                 auraBalance: parseFloat(document.getElementById('studentAuraBalance').value) || 0,
-                teacherEmail: currentUserEmail
+                teacherEmail: currentUserEmail || 'klynch@mtps.us'
             };
 
             if (!student.name || !student.email || !student.passcode || !student.class) {
@@ -563,6 +550,132 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
                     console.error("Error deleting student:", error);
                     showToast("Could not delete student.", { color: 'red' });
                 }
+            }
+        }
+
+        // --- Add Class (Bulk Import) Logic ---
+
+        function openAddClassModal() {
+            document.getElementById('bulkClassInput').value = '';
+            document.getElementById('defaultClassTarget').value = '';
+            document.getElementById('class-modal-error').innerText = '';
+            document.getElementById('addClassModal').classList.remove('hidden');
+        }
+
+        function closeAddClassModal() {
+            document.getElementById('addClassModal').classList.add('hidden');
+        }
+
+        // Robust CSV parser that handles quoted strings (e.g. "Doe, John")
+        function parseCSVLine(text) {
+            const result = [];
+            let cell = '';
+            let inQuote = false;
+
+            for (let i = 0; i < text.length; i++) {
+                const char = text[i];
+
+                if (inQuote) {
+                    if (char === '"') {
+                        if (i + 1 < text.length && text[i + 1] === '"') {
+                            cell += '"'; // Escaped quote
+                            i++;
+                        } else {
+                            inQuote = false; // End of quote
+                        }
+                    } else {
+                        cell += char;
+                    }
+                } else {
+                    if (char === '"') {
+                        inQuote = true;
+                    } else if (char === ',') {
+                        result.push(cell.trim());
+                        cell = '';
+                    } else {
+                        cell += char;
+                    }
+                }
+            }
+            result.push(cell.trim());
+            return result;
+        }
+
+        async function handleBulkSave() {
+            const bulkInput = document.getElementById('bulkClassInput').value.trim();
+            const defaultClass = document.getElementById('defaultClassTarget').value.trim();
+            const errorP = document.getElementById('class-modal-error');
+            errorP.innerText = '';
+
+            if (!bulkInput) {
+                errorP.innerText = "Please paste student data.";
+                return;
+            }
+
+            const lines = bulkInput.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+            const studentsToAdd = [];
+            const errors = [];
+
+            lines.forEach((line, idx) => {
+                let parts;
+                // Detect delimiter: if line has tabs, assume TSV. Otherwise use CSV parser.
+                if (line.includes('\t')) {
+                    parts = line.split('\t').map(p => p.trim());
+                } else {
+                    parts = parseCSVLine(line).filter(p => p !== ""); // Filter empty from trailing commas
+                }
+
+                // Remove empty parts if any
+                parts = parts.filter(Boolean);
+
+                if (parts.length < 3) {
+                    errors.push(`Line ${idx + 1}: expected at least Name, Email, Passcode.`);
+                    return;
+                }
+
+                const [name, emailRaw, passcodeRaw, classFromLine] = parts;
+                const passcode = parseInt(passcodeRaw, 10);
+                const email = (emailRaw || '').toLowerCase();
+                const className = classFromLine || defaultClass;
+
+                if (!name || !email || isNaN(passcode)) {
+                    errors.push(`Line ${idx + 1}: Check format (Name, Email, Passcode).`);
+                    return;
+                }
+                if (!className) {
+                    errors.push(`Line ${idx + 1}: Class name missing (provide in line or set default).`);
+                    return;
+                }
+
+                studentsToAdd.push({
+                    name: name,
+                    email: email,
+                    passcode: passcode,
+                    class: className,
+                    auraLifetime: 0,
+                    auraBalance: 0,
+                    teacherEmail: currentUserEmail || 'klynch@mtps.us'
+                });
+            });
+
+            if (errors.length) {
+                // Show first 3 errors to avoid overflow
+                errorP.innerHTML = errors.slice(0, 3).join('<br>') + (errors.length > 3 ? '<br>...and more.' : '');
+                return;
+            }
+
+            try {
+                const batch = db.batch();
+                studentsToAdd.forEach(stu => {
+                    const docRef = db.collection("students").doc();
+                    batch.set(docRef, stu);
+                });
+                await batch.commit();
+                showToast(`Successfully added ${studentsToAdd.length} students.`, { color: 'green' });
+                closeAddClassModal();
+            } catch (error) {
+                console.error("Error bulk saving:", error);
+                errorP.innerText = "Error saving to database. See console.";
             }
         }
 
