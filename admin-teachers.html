@@ -137,7 +137,7 @@
 
         // --- Impersonation Logic ---
         function checkImpersonation() {
-            const impersonatedEmail = sessionStorage.getItem('impersonatedUserEmail');
+            const impersonatedEmail = localStorage.getItem('impersonatedUserEmail');
             if (impersonatedEmail) {
                 const banner = document.createElement('div');
                 banner.className = 'bg-red-600 text-white text-center p-2 font-bold fixed top-0 w-full z-[200] flex justify-center items-center gap-4';
@@ -149,7 +149,7 @@
             return null;
         }
         function stopImpersonating() {
-            sessionStorage.removeItem('impersonatedUserEmail');
+            localStorage.removeItem('impersonatedUserEmail');
             window.location.reload();
         }
         // ---------------------------
@@ -429,7 +429,7 @@
 
         function impersonateUser(email) {
             if (confirm(`Are you sure you want to impersonate ${email}? You will see the app as they see it.`)) {
-                sessionStorage.setItem('impersonatedUserEmail', email);
+                localStorage.setItem('impersonatedUserEmail', email);
                 window.location.href = './assignments.html';
             }
         }
