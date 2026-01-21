@@ -307,9 +307,12 @@
             if (!email) return 'klynch@mtps.us';
             // Remove all spaces and convert to lowercase
             const normalized = email.toLowerCase().replace(/\s+/g, '').trim();
-            // Handle specific typo variant if needed
-            if (normalized === 'klynch@mtps.us' || normalized === 'klynch@mtps.us') return 'klynch@mtps.us';
             return normalized;
+        }
+
+        function normalizeClassName(cls) {
+            if (!cls) return 'unassigned';
+            return String(cls).toLowerCase().trim();
         }
 
         // --- Impersonation Logic ---
@@ -1770,23 +1773,21 @@
             const container = document.getElementById('aura-content');
             container.innerHTML = '<div class="text-center text-gray-400">Loading...</div>';
 
-            // Query logic: Handle missing teacherEmail fields (legacy data) by using more inclusive queries
-            // Leaderboard uses auraLifetime for ranking (not spendable balance)
+            // Query logic: Fetch all students for the teacher to ensure we don't miss legacy/typo data
+            // We then filter client-side to handle whitespace and casing inconsistencies
             const targetTeacherEmail = normalizeTeacherEmail(userProfile.class === 'Teacher'
                 ? userProfile.teacherEmail
                 : (userProfile.teacherEmail || assignmentData.teacherEmail));
 
+            const targetClass = normalizeClassName(userProfile.class);
+
             let query = db.collection('students');
 
-            if (userProfile.class && userProfile.class !== 'Teacher') {
-                // Students: Query by their specific class (guaranteed to exist)
-                query = query.where('class', '==', userProfile.class);
-            } else if (assignmentData.assignedClasses && assignmentData.assignedClasses.length > 0) {
-                // Teachers: Fetch students from all classes assigned to this assignment
-                // Firestore 'in' handles up to 10 classes
+            // Optimization: If teacher mode, we can narrow down by assignedClasses if they exist
+            if (userProfile.class === 'Teacher' && assignmentData.assignedClasses && assignmentData.assignedClasses.length > 0) {
                 query = query.where('class', 'in', assignmentData.assignedClasses);
             } else {
-                // Fallback: Query by teacherEmail (may exclude legacy students without the field)
+                // Otherwise, query by teacherEmail (most efficient common denominator)
                 query = query.where('teacherEmail', '==', targetTeacherEmail);
             }
 
@@ -1795,9 +1796,13 @@
                 snapshot.forEach(doc => {
                     const d = doc.data();
                     const studentTeacher = normalizeTeacherEmail(d.teacherEmail);
+                    const studentClass = normalizeClassName(d.class);
 
-                    // Client-side filter to ensure student belongs to this teacher
-                    if (studentTeacher === targetTeacherEmail) {
+                    // Filter: Must match teacher AND (if student) must match class
+                    const teacherMatch = studentTeacher === targetTeacherEmail;
+                    const classMatch = (userProfile.class === 'Teacher') || (studentClass === targetClass);
+
+                    if (teacherMatch && classMatch) {
                         allFetchedStudents.push({
                             name: d.name || "Anonymous",
                             score: parseFloat(d.auraLifetime) || 0,
