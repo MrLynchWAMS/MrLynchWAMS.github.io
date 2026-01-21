@@ -803,8 +803,13 @@
                 btn.disabled = true;
 
                 // Update Teacher Profile
+                // We update BOTH:
+                // 1. defaultCoTeachers: Used to pre-fill the "Co-Teachers" field on NEW assignments.
+                // 2. coTeachingFor: Used to grant GLOBAL retroactive access to these users (Implicit Co-Teachers).
+                //    (Note: Field name is slightly confusing, but it stores "List of people who co-teach FOR me")
                 await db.collection("teachers").doc(currentUserEmail).set({
-                    defaultCoTeachers: emails
+                    defaultCoTeachers: emails,
+                    coTeachingFor: emails
                 }, { merge: true });
 
                 currentUserDefaultCoTeachers = emails;
