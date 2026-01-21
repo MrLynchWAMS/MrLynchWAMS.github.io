@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,23 +11,63 @@
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
     <style>
-        .hidden { display: none; }
-        .btn-action { transition: background-color 0.2s, transform 0.1s; }
-        .btn-action:active { transform: scale(0.95); }
-        @keyframes fade-in-right { from { opacity: 0; transform: translateX(100%); } to { opacity: 1; transform: translateX(0); } }
-        @keyframes fade-out-right { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(100%); } }
-        .animate-fade-in-right { animation: fade-in-right 0.5s ease-out forwards; }
-        .animate-fade-out-right { animation: fade-out-right 0.5s ease-in forwards; }
+        .hidden {
+            display: none;
+        }
+
+        .btn-action {
+            transition: background-color 0.2s, transform 0.1s;
+        }
+
+        .btn-action:active {
+            transform: scale(0.95);
+        }
+
+        @keyframes fade-in-right {
+            from {
+                opacity: 0;
+                transform: translateX(100%);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes fade-out-right {
+            from {
+                opacity: 1;
+                transform: translateX(0);
+            }
+
+            to {
+                opacity: 0;
+                transform: translateX(100%);
+            }
+        }
+
+        .animate-fade-in-right {
+            animation: fade-in-right 0.5s ease-out forwards;
+        }
+
+        .animate-fade-out-right {
+            animation: fade-out-right 0.5s ease-in forwards;
+        }
     </style>
 </head>
+
 <body class="bg-gray-900 text-white font-sans">
 
     <div id="pageLoader" class="flex flex-col items-center justify-center h-screen">
         <h1 class="text-4xl font-bold text-yellow-400 mb-4">Roster Management</h1>
         <p id="loading-text" class="text-lg text-gray-300">Initializing...</p>
         <div id="signInButtonContainer" class="hidden mt-8">
-             <div id="g_id_onload" data-client_id="1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com" data-callback="handleCredentialResponse"></div>
-             <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_black" data-text="signin_with" data-shape="rectangular" data-logo_alignment="left"></div>
+            <div id="g_id_onload"
+                data-client_id="1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com"
+                data-callback="handleCredentialResponse"></div>
+            <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_black"
+                data-text="signin_with" data-shape="rectangular" data-logo_alignment="left"></div>
         </div>
         <p id="auth-error" class="text-red-500 mt-4"></p>
     </div>
@@ -35,13 +76,21 @@
         <div class="flex justify-between items-center mb-6 flex-wrap gap-4">
             <h1 class="text-3xl font-bold text-yellow-400">Class Rosters</h1>
             <div>
-                <a href="./assignments.html" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg btn-action">&larr; All Assignments</a>
-                <button onclick="openStudentModal()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg btn-action">+ Add Student</button>
-                <button id="signOutButton" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Sign Out</button>
+                <a href="./assignments.html"
+                    class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg btn-action">&larr;
+                    All Assignments</a>
+                <button onclick="openStudentModal()"
+                    class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg btn-action">+ Add
+                    Student</button>
+                <button id="signOutButton"
+                    class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Sign
+                    Out</button>
             </div>
         </div>
-        
-        <div id="loadingState" class="text-center py-10"><p class="text-xl">Loading rosters...</p></div>
+
+        <div id="loadingState" class="text-center py-10">
+            <p class="text-xl">Loading rosters...</p>
+        </div>
 
         <div id="rosterContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <!-- Class roster cards will be dynamically added here -->
@@ -49,7 +98,8 @@
     </div>
 
     <!-- Add/Edit Student Modal -->
-    <div id="studentModal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
+    <div id="studentModal"
+        class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
         <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-lg">
             <div class="flex justify-between items-center p-4 border-b border-gray-700">
                 <h2 id="modalTitle" class="text-2xl font-bold text-yellow-400">Add Student</h2>
@@ -59,37 +109,47 @@
                 <input type="hidden" id="studentId">
                 <label for="studentName" class="block text-sm font-medium text-gray-300">Full Name</label>
                 <input type="text" id="studentName" class="w-full p-3 bg-gray-700 rounded border border-gray-600">
-                
+
                 <label for="studentEmail" class="block text-sm font-medium text-gray-300">Email Address</label>
                 <input type="email" id="studentEmail" class="w-full p-3 bg-gray-700 rounded border border-gray-600">
 
                 <label for="studentPasscode" class="block text-sm font-medium text-gray-300">Passcode</label>
                 <input type="text" id="studentPasscode" class="w-full p-3 bg-gray-700 rounded border border-gray-600">
-                
+
                 <label for="studentClass" class="block text-sm font-medium text-gray-300">Class</label>
                 <input type="text" id="studentClass" class="w-full p-3 bg-gray-700 rounded border border-gray-600">
-                
+
                 <div class="grid grid-cols-2 gap-4 p-3 bg-gray-700/50 rounded border border-gray-600">
                     <div>
-                        <label for="studentAuraLifetime" class="block text-sm font-medium text-yellow-400 mb-2">✧ Lifetime Aura</label>
-                        <input type="number" id="studentAuraLifetime" value="0" min="0" step="0.1" class="w-full p-3 bg-gray-700 rounded border border-gray-600">
+                        <label for="studentAuraLifetime" class="block text-sm font-medium text-yellow-400 mb-2">✧
+                            Lifetime Aura</label>
+                        <input type="number" id="studentAuraLifetime" value="0" min="0" step="0.1"
+                            class="w-full p-3 bg-gray-700 rounded border border-gray-600">
                     </div>
                     <div>
-                        <label for="studentAuraBalance" class="block text-sm font-medium text-yellow-400 mb-2">✧ Spendable Balance</label>
-                        <input type="number" id="studentAuraBalance" value="0" min="0" step="0.1" class="w-full p-3 bg-gray-700 rounded border border-gray-600">
+                        <label for="studentAuraBalance" class="block text-sm font-medium text-yellow-400 mb-2">✧
+                            Spendable Balance</label>
+                        <input type="number" id="studentAuraBalance" value="0" min="0" step="0.1"
+                            class="w-full p-3 bg-gray-700 rounded border border-gray-600">
                     </div>
                 </div>
 
                 <div class="pt-2">
-                    <label for="bulkStudentInput" class="block text-sm font-medium text-yellow-400 mb-1">Bulk add (paste class list)</label>
-                    <textarea id="bulkStudentInput" rows="5" class="w-full p-3 bg-gray-700 rounded border border-gray-600 text-sm" placeholder="Full Name, Email, Passcode, Class (optional)
+                    <label for="bulkStudentInput" class="block text-sm font-medium text-yellow-400 mb-1">Bulk add (paste
+                        class list)</label>
+                    <textarea id="bulkStudentInput" rows="5"
+                        class="w-full p-3 bg-gray-700 rounded border border-gray-600 text-sm" placeholder="Full Name, Email, Passcode, Class (optional)
 Jane Doe, jane@example.com, 1234, Period 1
 John Smith, john@example.com, 5678, Period 1"></textarea>
-                    <p class="text-xs text-gray-400 mt-1">Format: Name, Email, Passcode, Class (optional). One student per line. Comma or tab separated. If Class is omitted per line, the Class field above is used.</p>
+                    <p class="text-xs text-gray-400 mt-1">Format: Name, Email, Passcode, Class (optional). One student
+                        per line. Comma or tab separated. If Class is omitted per line, the Class field above is used.
+                    </p>
                 </div>
-                
+
                 <p id="modal-error" class="text-red-500 text-sm"></p>
-                <button onclick="handleSaveStudent()" id="saveStudentBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg btn-action">Save Student</button>
+                <button onclick="handleSaveStudent()" id="saveStudentBtn"
+                    class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg btn-action">Save
+                    Student</button>
             </div>
         </div>
     </div>
@@ -97,7 +157,8 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
     <div id="toast-wrapper" class="fixed top-4 right-4 z-[100] space-y-3 w-full max-w-sm"></div>
 
     <!-- Student Performance Detail Modal -->
-    <div id="student-performance-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
+    <div id="student-performance-modal"
+        class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
         <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
             <div class="flex justify-between items-center p-4 border-b border-gray-700">
                 <div>
@@ -105,9 +166,10 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
                     <p id="perf-student-email" class="text-sm text-gray-400"></p>
                     <p id="perf-student-lifetime" class="text-sm text-purple-400"></p>
                 </div>
-                <button onclick="closeStudentPerformance()" class="text-gray-400 hover:text-white text-3xl">&times;</button>
+                <button onclick="closeStudentPerformance()"
+                    class="text-gray-400 hover:text-white text-3xl">&times;</button>
             </div>
-            
+
             <!-- Summary Cards -->
             <div class="grid grid-cols-3 gap-4 p-4 border-b border-gray-700">
                 <div class="bg-gray-700 rounded-lg p-4 text-center">
@@ -123,32 +185,39 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
                     <p id="perf-total-aura" class="text-2xl font-bold text-yellow-400">--</p>
                 </div>
             </div>
-            
+
             <!-- Date Filter -->
             <div class="p-4 border-b border-gray-700 flex items-center gap-4 flex-wrap">
                 <label class="text-sm font-medium text-gray-300">Date Range:</label>
                 <input type="date" id="perf-date-start" class="p-2 bg-gray-700 rounded border border-gray-600 text-sm">
                 <span class="text-gray-400">to</span>
                 <input type="date" id="perf-date-end" class="p-2 bg-gray-700 rounded border border-gray-600 text-sm">
-                <button onclick="filterPerformanceByDate()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Filter</button>
-                <button onclick="clearPerformanceFilter()" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Clear</button>
+                <button onclick="filterPerformanceByDate()"
+                    class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Filter</button>
+                <button onclick="clearPerformanceFilter()"
+                    class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Clear</button>
                 <div class="flex items-center gap-2 ml-4">
-                    <input type="checkbox" id="perf-show-questions" onchange="togglePerformanceMode()" class="w-4 h-4 bg-gray-700 border-gray-600 rounded">
-                    <label for="perf-show-questions" class="text-sm font-medium text-gray-300">Show individual questions</label>
+                    <input type="checkbox" id="perf-show-questions" onchange="togglePerformanceMode()"
+                        class="w-4 h-4 bg-gray-700 border-gray-600 rounded">
+                    <label for="perf-show-questions" class="text-sm font-medium text-gray-300">Show individual
+                        questions</label>
                 </div>
                 <div class="flex items-center gap-2 ml-4">
-                    <input type="checkbox" id="perf-show-all-attempts" onchange="togglePerformanceMode()" class="w-4 h-4 bg-gray-700 border-gray-600 rounded">
-                    <label for="perf-show-all-attempts" class="text-sm font-medium text-gray-300">Show all attempts (raw)</label>
+                    <input type="checkbox" id="perf-show-all-attempts" onchange="togglePerformanceMode()"
+                        class="w-4 h-4 bg-gray-700 border-gray-600 rounded">
+                    <label for="perf-show-all-attempts" class="text-sm font-medium text-gray-300">Show all attempts
+                        (raw)</label>
                 </div>
             </div>
-            
+
             <!-- Submissions Table -->
             <div class="flex-1 overflow-y-auto p-4">
                 <table class="w-full">
                     <thead id="perf-table-header" class="bg-gray-700 sticky top-0">
                         <tr>
                             <th class="text-left p-3 text-sm font-medium text-gray-300">Assignment</th>
-                            <th id="perf-slide-header" class="text-left p-3 text-sm font-medium text-gray-300 hidden">Slide</th>
+                            <th id="perf-slide-header" class="text-left p-3 text-sm font-medium text-gray-300 hidden">
+                                Slide</th>
                             <th class="text-left p-3 text-sm font-medium text-gray-300">Date</th>
                             <th class="text-left p-3 text-sm font-medium text-gray-300">Score</th>
                             <th class="text-left p-3 text-sm font-medium text-gray-300">Aura</th>
@@ -158,132 +227,170 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
                         <!-- Rows populated by JavaScript -->
                     </tbody>
                 </table>
-                <p id="perf-no-data" class="text-center text-gray-400 py-8 hidden">No submissions found for this student.</p>
+                <p id="perf-no-data" class="text-center text-gray-400 py-8 hidden">No submissions found for this
+                    student.</p>
             </div>
         </div>
     </div>
 
-<script>
-    const firebaseConfig = {
-      apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
-      authDomain: "mrlynch-slides-app.firebaseapp.com",
-      projectId: "mrlynch-slides-app",
-      storageBucket: "mrlynch-slides-app.appspot.com",
-      messagingSenderId: "223179627035",
-      appId: "1:223179627035:web:ff0f538f3029d829c3f6be"
-    };
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
-    const auth = firebase.auth();
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
+            authDomain: "mrlynch-slides-app.firebaseapp.com",
+            projectId: "mrlynch-slides-app",
+            storageBucket: "mrlynch-slides-app.appspot.com",
+            messagingSenderId: "223179627035",
+            appId: "1:223179627035:web:ff0f538f3029d829c3f6be"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const auth = firebase.auth();
 
-    // Globals for performance modal
-    let assignmentMap = {};
-    let cachedSubmissions = {};
-    let currentPerfStudentId = null;
-    let currentUserEmail = null;
+        // Hardcoded teachers list as fallback if teachers collection is not set up
+        const TEACHER_EMAILS = ["klynch@mtps.us", "mstuart@mtps.us", "cfiori@mtps.us", "mlock@mtps.us", "cheine@mtps.us", "kgray@mtps.us"];
 
-    auth.onAuthStateChanged(async user => {
-        if (user) {
-            try {
-                const teacherDoc = await db.collection("teachers").doc(user.email.toLowerCase()).get();
-                if (teacherDoc.exists) {
-                    currentUserEmail = user.email.toLowerCase();
-                    document.getElementById('pageLoader').classList.add('hidden');
-                    document.getElementById('rosterContent').classList.remove('hidden');
-                    loadRoster();
-                    prefetchAssignments();
-                } else {
-                    document.getElementById('loading-text').textContent = "Access denied. Please contact an administrator.";
-                    document.getElementById('signInButtonContainer').classList.add('hidden');
-                    document.getElementById('auth-error').innerText = "You are not authorized to access this page.";
+        // Globals for performance modal
+        let assignmentMap = {};
+        let cachedSubmissions = {};
+        let currentPerfStudentId = null;
+        let currentUserEmail = null;
+
+        auth.onAuthStateChanged(async user => {
+            if (user) {
+                try {
+                    // Check teachers collection first, then fallback to hardcoded list
+                    const teacherDoc = await db.collection("teachers").doc(user.email.toLowerCase()).get();
+                    const isTeacherInCollection = teacherDoc.exists;
+                    const isTeacherInList = TEACHER_EMAILS.map(e => e.toLowerCase()).includes(user.email.toLowerCase());
+
+                    if (isTeacherInCollection || isTeacherInList) {
+                        currentUserEmail = user.email.toLowerCase();
+                        document.getElementById('pageLoader').classList.add('hidden');
+                        document.getElementById('rosterContent').classList.remove('hidden');
+
+                        // One-time migration: assign legacy students to klynch@mtps.us
+                        await migrateStudentsWithoutTeacher();
+
+                        loadRoster();
+                        prefetchAssignments();
+                    } else {
+                        document.getElementById('loading-text').textContent = "Access denied. Please contact an administrator.";
+                        document.getElementById('signInButtonContainer').classList.add('hidden');
+                        document.getElementById('auth-error').innerText = "You are not authorized to access this page.";
+                    }
+                } catch (error) {
+                    console.error("Error checking teacher authorization:", error);
+                    document.getElementById('auth-error').innerText = "Error checking authorization. Please try again.";
                 }
-            } catch (error) {
-                console.error("Error checking teacher authorization:", error);
-                document.getElementById('auth-error').innerText = "Error checking authorization. Please try again.";
+            } else {
+                document.getElementById('loading-text').textContent = "Please sign in to continue.";
+                document.getElementById('signInButtonContainer').classList.remove('hidden');
             }
-        } else {
-            document.getElementById('loading-text').textContent = "Please sign in to continue.";
-            document.getElementById('signInButtonContainer').classList.remove('hidden');
-        }
-    });
-
-    function handleCredentialResponse(response) {
-        const credential = firebase.auth.GoogleAuthProvider.credential(response.credential);
-        auth.signInWithCredential(credential).catch(error => {
-            console.error("Firebase sign-in error", error);
-            document.getElementById('auth-error').innerText = "Firebase sign-in failed. Please try again.";
         });
-    }
 
-    async function prefetchAssignments() {
-        try {
-            const snapshot = await db.collection("assignments").get();
-            assignmentMap = {};
-            snapshot.forEach(doc => {
-                const data = doc.data();
-                assignmentMap[doc.id] = data.name || data.title || "Untitled";
+        function handleCredentialResponse(response) {
+            const credential = firebase.auth.GoogleAuthProvider.credential(response.credential);
+            auth.signInWithCredential(credential).catch(error => {
+                console.error("Firebase sign-in error", error);
+                document.getElementById('auth-error').innerText = "Firebase sign-in failed. Please try again.";
             });
-            console.log("Prefetched assignments:", Object.keys(assignmentMap).length);
-        } catch (error) {
-            console.error("Error prefetching assignments:", error);
         }
-    }
 
-    function loadRoster() {
-        const rosterContainer = document.getElementById('rosterContainer');
-        const loadingState = document.getElementById('loadingState');
-        
-        db.collection("students")
-            .onSnapshot(snapshot => {
-                // Filter client-side to include those with matching teacherEmail OR no teacherEmail (legacy data defaults to klynch@mtps.us)
-                const allStudents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                const students = allStudents.filter(student => {
-                    const studentTeacher = student.teacherEmail ? student.teacherEmail.toLowerCase() : 'klynch@mtps.us';
-                    return studentTeacher === currentUserEmail;
-                });
-                
-                if (students.length === 0) {
-                    loadingState.innerText = "No students found. Click '+ Add Student' to build your roster.";
-                    loadingState.classList.remove('hidden');
-                    rosterContainer.innerHTML = '';
+        // One-time migration: assign all students without teacherEmail to klynch@mtps.us
+        async function migrateStudentsWithoutTeacher() {
+            const DEFAULT_TEACHER = 'klynch@mtps.us';
+            try {
+                const snapshot = await db.collection("students").get();
+                const studentsToMigrate = snapshot.docs.filter(doc => !doc.data().teacherEmail);
+
+                if (studentsToMigrate.length === 0) {
+                    console.log("No students need teacherEmail migration.");
                     return;
                 }
-                
-                loadingState.classList.add('hidden');
 
-                const classData = {};
-                students.forEach(student => {
-                    const className = student.class || 'Unassigned';
-                    if (!classData[className]) {
-                        classData[className] = [];
-                    }
-                    classData[className].push(student);
+                console.log(`Migrating ${studentsToMigrate.length} students to have teacherEmail: ${DEFAULT_TEACHER}`);
+
+                const batch = db.batch();
+                studentsToMigrate.forEach(doc => {
+                    batch.update(doc.ref, { teacherEmail: DEFAULT_TEACHER });
                 });
+                await batch.commit();
 
-                renderRoster(classData);
+                console.log(`Migration complete: ${studentsToMigrate.length} students updated.`);
+            } catch (error) {
+                console.error("Migration error:", error);
+            }
+        }
 
-            }, error => {
-                console.error("Error fetching roster:", error);
-                loadingState.innerText = "Error loading roster. See console for details.";
-            });
-    }
+        async function prefetchAssignments() {
+            try {
+                const snapshot = await db.collection("assignments").get();
+                assignmentMap = {};
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    assignmentMap[doc.id] = data.name || data.title || "Untitled";
+                });
+                console.log("Prefetched assignments:", Object.keys(assignmentMap).length);
+            } catch (error) {
+                console.error("Error prefetching assignments:", error);
+            }
+        }
 
-    function renderRoster(classData) {
-        const rosterContainer = document.getElementById('rosterContainer');
-        rosterContainer.innerHTML = '';
-        const classNames = Object.keys(classData).sort();
+        function loadRoster() {
+            const rosterContainer = document.getElementById('rosterContainer');
+            const loadingState = document.getElementById('loadingState');
 
-        classNames.forEach(className => {
-            const classCard = document.createElement('div');
-            classCard.className = "bg-gray-800 rounded-lg p-6 shadow-lg";
-            
-            let studentListHTML = '';
-            classData[className]
-                .sort((a,b) => a.name.localeCompare(b.name))
-                .forEach(student => {
-                const lifetime = student.auraLifetime || 0;
-                const balance = student.auraBalance || 0;
-                studentListHTML += `
+            db.collection("students")
+                .onSnapshot(snapshot => {
+                    // Filter client-side to include those with matching teacherEmail OR no teacherEmail (legacy data defaults to klynch@mtps.us)
+                    const allStudents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    const students = allStudents.filter(student => {
+                        const studentTeacher = student.teacherEmail ? student.teacherEmail.toLowerCase() : 'klynch@mtps.us';
+                        return studentTeacher === currentUserEmail;
+                    });
+
+                    if (students.length === 0) {
+                        loadingState.innerText = "No students found. Click '+ Add Student' to build your roster.";
+                        loadingState.classList.remove('hidden');
+                        rosterContainer.innerHTML = '';
+                        return;
+                    }
+
+                    loadingState.classList.add('hidden');
+
+                    const classData = {};
+                    students.forEach(student => {
+                        const className = student.class || 'Unassigned';
+                        if (!classData[className]) {
+                            classData[className] = [];
+                        }
+                        classData[className].push(student);
+                    });
+
+                    renderRoster(classData);
+
+                }, error => {
+                    console.error("Error fetching roster:", error);
+                    loadingState.innerText = "Error loading roster. See console for details.";
+                });
+        }
+
+        function renderRoster(classData) {
+            const rosterContainer = document.getElementById('rosterContainer');
+            rosterContainer.innerHTML = '';
+            const classNames = Object.keys(classData).sort();
+
+            classNames.forEach(className => {
+                const classCard = document.createElement('div');
+                classCard.className = "bg-gray-800 rounded-lg p-6 shadow-lg";
+
+                let studentListHTML = '';
+                classData[className]
+                    .sort((a, b) => a.name.localeCompare(b.name))
+                    .forEach(student => {
+                        const lifetime = student.auraLifetime || 0;
+                        const balance = student.auraBalance || 0;
+                        studentListHTML += `
                     <li class="flex justify-between items-center py-2 border-b border-gray-700">
                         <div class="flex-1">
                             <p class="font-medium">
@@ -302,334 +409,334 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
                         </div>
                     </li>
                 `;
-            });
+                    });
 
-            classCard.innerHTML = `
+                classCard.innerHTML = `
                 <h2 class="text-2xl font-bold text-yellow-400 mb-4">${className}</h2>
                 <div class="text-xs text-gray-500 mb-2 flex justify-end pr-20">Balance / Lifetime</div>
                 <ul class="space-y-2">${studentListHTML}</ul>
             `;
-            rosterContainer.appendChild(classCard);
-        });
-    }
-
-    const studentModal = document.getElementById('studentModal');
-    const modalTitle = document.getElementById('modalTitle');
-    function openStudentModal(student = null) {
-        document.getElementById('studentId').value = '';
-        document.getElementById('studentName').value = '';
-        document.getElementById('studentEmail').value = '';
-        document.getElementById('studentPasscode').value = '';
-        document.getElementById('studentClass').value = '';
-        document.getElementById('studentAuraLifetime').value = '0';
-        document.getElementById('studentAuraBalance').value = '0';
-        document.getElementById('bulkStudentInput').value = '';
-        document.getElementById('modal-error').innerText = '';
-
-        if (student) {
-            modalTitle.innerText = "Edit Student";
-            document.getElementById('studentId').value = student.id;
-            document.getElementById('studentName').value = student.name;
-            document.getElementById('studentEmail').value = student.email;
-            document.getElementById('studentPasscode').value = student.passcode;
-            document.getElementById('studentClass').value = student.class;
-            // Populate Aura fields (default to 0 if not present)
-            document.getElementById('studentAuraLifetime').value = student.auraLifetime || 0;
-            document.getElementById('studentAuraBalance').value = student.auraBalance || 0;
-        } else {
-            modalTitle.innerText = "Add Student";
+                rosterContainer.appendChild(classCard);
+            });
         }
-        studentModal.classList.remove('hidden');
-    }
 
-    function closeStudentModal() { studentModal.classList.add('hidden'); }
+        const studentModal = document.getElementById('studentModal');
+        const modalTitle = document.getElementById('modalTitle');
+        function openStudentModal(student = null) {
+            document.getElementById('studentId').value = '';
+            document.getElementById('studentName').value = '';
+            document.getElementById('studentEmail').value = '';
+            document.getElementById('studentPasscode').value = '';
+            document.getElementById('studentClass').value = '';
+            document.getElementById('studentAuraLifetime').value = '0';
+            document.getElementById('studentAuraBalance').value = '0';
+            document.getElementById('bulkStudentInput').value = '';
+            document.getElementById('modal-error').innerText = '';
 
-    async function handleSaveStudent() {
-        const id = document.getElementById('studentId').value;
-        const bulkInput = document.getElementById('bulkStudentInput').value.trim();
+            if (student) {
+                modalTitle.innerText = "Edit Student";
+                document.getElementById('studentId').value = student.id;
+                document.getElementById('studentName').value = student.name;
+                document.getElementById('studentEmail').value = student.email;
+                document.getElementById('studentPasscode').value = student.passcode;
+                document.getElementById('studentClass').value = student.class;
+                // Populate Aura fields (default to 0 if not present)
+                document.getElementById('studentAuraLifetime').value = student.auraLifetime || 0;
+                document.getElementById('studentAuraBalance').value = student.auraBalance || 0;
+            } else {
+                modalTitle.innerText = "Add Student";
+            }
+            studentModal.classList.remove('hidden');
+        }
 
-        // Bulk add path (only when creating new, not editing)
-        if (bulkInput) {
-            if (id) {
-                document.getElementById('modal-error').innerText = "Bulk paste is only for adding new students, not editing.";
+        function closeStudentModal() { studentModal.classList.add('hidden'); }
+
+        async function handleSaveStudent() {
+            const id = document.getElementById('studentId').value;
+            const bulkInput = document.getElementById('bulkStudentInput').value.trim();
+
+            // Bulk add path (only when creating new, not editing)
+            if (bulkInput) {
+                if (id) {
+                    document.getElementById('modal-error').innerText = "Bulk paste is only for adding new students, not editing.";
+                    return;
+                }
+
+                const defaultClass = document.getElementById('studentClass').value.trim();
+                const lines = bulkInput.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+                const studentsToAdd = [];
+                const errors = [];
+
+                lines.forEach((line, idx) => {
+                    const parts = line.split(/[\,\t]/).map(p => p.trim()).filter(Boolean);
+                    if (parts.length < 3) {
+                        errors.push(`Line ${idx + 1}: expected at least Name, Email, Passcode.`);
+                        return;
+                    }
+                    const [name, emailRaw, passcodeRaw, classFromLine] = parts;
+                    const passcode = parseInt(passcodeRaw, 10);
+                    const email = (emailRaw || '').toLowerCase();
+                    const className = classFromLine || defaultClass;
+
+                    if (!name || !email || isNaN(passcode)) {
+                        errors.push(`Line ${idx + 1}: invalid data (check name/email/passcode).`);
+                        return;
+                    }
+                    if (!className) {
+                        errors.push(`Line ${idx + 1}: missing class (add in line or Class field above).`);
+                        return;
+                    }
+
+                    studentsToAdd.push({
+                        name: name,
+                        email: email,
+                        passcode: passcode,
+                        class: className,
+                        auraLifetime: 0,
+                        auraBalance: 0,
+                        teacherEmail: currentUserEmail
+                    });
+                });
+
+                if (errors.length) {
+                    document.getElementById('modal-error').innerText = errors.join(' ');
+                    return;
+                }
+
+                try {
+                    const batch = db.batch();
+                    studentsToAdd.forEach(stu => {
+                        const docRef = db.collection("students").doc();
+                        batch.set(docRef, stu);
+                    });
+                    await batch.commit();
+                    showToast(`Added ${studentsToAdd.length} students.`, { color: 'green' });
+                    closeStudentModal();
+                } catch (error) {
+                    console.error("Error saving students:", error);
+                    document.getElementById('modal-error').innerText = "Could not save students. See console for details.";
+                }
                 return;
             }
 
-            const defaultClass = document.getElementById('studentClass').value.trim();
-            const lines = bulkInput.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-            const studentsToAdd = [];
-            const errors = [];
+            // Single add/update path
+            const student = {
+                name: document.getElementById('studentName').value.trim(),
+                email: document.getElementById('studentEmail').value.toLowerCase().trim(),
+                passcode: parseInt(document.getElementById('studentPasscode').value.trim(), 10),
+                class: document.getElementById('studentClass').value.trim(),
+                auraLifetime: parseFloat(document.getElementById('studentAuraLifetime').value) || 0,
+                auraBalance: parseFloat(document.getElementById('studentAuraBalance').value) || 0,
+                teacherEmail: currentUserEmail
+            };
 
-            lines.forEach((line, idx) => {
-                const parts = line.split(/[\,\t]/).map(p => p.trim()).filter(Boolean);
-                if (parts.length < 3) {
-                    errors.push(`Line ${idx + 1}: expected at least Name, Email, Passcode.`);
-                    return;
-                }
-                const [name, emailRaw, passcodeRaw, classFromLine] = parts;
-                const passcode = parseInt(passcodeRaw, 10);
-                const email = (emailRaw || '').toLowerCase();
-                const className = classFromLine || defaultClass;
-
-                if (!name || !email || isNaN(passcode)) {
-                    errors.push(`Line ${idx + 1}: invalid data (check name/email/passcode).`);
-                    return;
-                }
-                if (!className) {
-                    errors.push(`Line ${idx + 1}: missing class (add in line or Class field above).`);
-                    return;
-                }
-
-                studentsToAdd.push({
-                    name: name,
-                    email: email,
-                    passcode: passcode,
-                    class: className,
-                    auraLifetime: 0,
-                    auraBalance: 0,
-                    teacherEmail: currentUserEmail
-                });
-            });
-
-            if (errors.length) {
-                document.getElementById('modal-error').innerText = errors.join(' ');
+            if (!student.name || !student.email || !student.passcode || !student.class) {
+                document.getElementById('modal-error').innerText = "All fields are required.";
+                return;
+            }
+            if (isNaN(student.passcode)) {
+                document.getElementById('modal-error').innerText = "Passcode must be a number.";
                 return;
             }
 
             try {
-                const batch = db.batch();
-                studentsToAdd.forEach(stu => {
-                    const docRef = db.collection("students").doc();
-                    batch.set(docRef, stu);
-                });
-                await batch.commit();
-                showToast(`Added ${studentsToAdd.length} students.`, {color: 'green'});
+                if (id) {
+                    await db.collection("students").doc(id).update(student);
+                    showToast("Student updated successfully!", { color: 'green' });
+                } else {
+                    await db.collection("students").add(student);
+                    showToast("Student added successfully!", { color: 'green' });
+                }
                 closeStudentModal();
             } catch (error) {
-                console.error("Error saving students:", error);
-                document.getElementById('modal-error').innerText = "Could not save students. See console for details.";
+                console.error("Error saving student:", error);
+                document.getElementById('modal-error').innerText = "Could not save student. See console for details.";
             }
-            return;
         }
 
-        // Single add/update path
-        const student = {
-            name: document.getElementById('studentName').value.trim(),
-            email: document.getElementById('studentEmail').value.toLowerCase().trim(),
-            passcode: parseInt(document.getElementById('studentPasscode').value.trim(), 10),
-            class: document.getElementById('studentClass').value.trim(),
-            auraLifetime: parseFloat(document.getElementById('studentAuraLifetime').value) || 0,
-            auraBalance: parseFloat(document.getElementById('studentAuraBalance').value) || 0,
-            teacherEmail: currentUserEmail
-        };
-
-        if (!student.name || !student.email || !student.passcode || !student.class) {
-            document.getElementById('modal-error').innerText = "All fields are required.";
-            return;
-        }
-        if (isNaN(student.passcode)) {
-            document.getElementById('modal-error').innerText = "Passcode must be a number.";
-            return;
-        }
-
-        try {
-            if (id) {
-                await db.collection("students").doc(id).update(student);
-                showToast("Student updated successfully!", {color: 'green'});
-            } else {
-                await db.collection("students").add(student);
-                showToast("Student added successfully!", {color: 'green'});
+        async function handleDeleteStudent(id, name) {
+            if (confirm(`Are you sure you want to delete ${name}? This action cannot be undone.`)) {
+                try {
+                    await db.collection("students").doc(id).delete();
+                    showToast("Student deleted successfully.", { color: 'blue' });
+                } catch (error) {
+                    console.error("Error deleting student:", error);
+                    showToast("Could not delete student.", { color: 'red' });
+                }
             }
-            closeStudentModal();
-        } catch (error) {
-            console.error("Error saving student:", error);
-            document.getElementById('modal-error').innerText = "Could not save student. See console for details.";
         }
-    }
 
-    async function handleDeleteStudent(id, name) {
-        if (confirm(`Are you sure you want to delete ${name}? This action cannot be undone.`)) {
+        document.getElementById('signOutButton').onclick = () => { auth.signOut(); };
+
+        // Student Performance Modal Functions
+        async function openStudentPerformance(studentId, name, email, auraLifetime) {
+            currentPerfStudentId = studentId;
+
+            // Populate header
+            document.getElementById('perf-student-name').textContent = name;
+            document.getElementById('perf-student-email').textContent = email;
+            document.getElementById('perf-student-lifetime').textContent = `Lifetime Aura: ${auraLifetime} ✧`;
+
+            // Clear date filters and checkbox
+            document.getElementById('perf-date-start').value = '';
+            document.getElementById('perf-date-end').value = '';
+            document.getElementById('perf-show-questions').checked = false;
+            document.getElementById('perf-show-all-attempts').checked = false;
+
+            // Show modal
+            document.getElementById('student-performance-modal').classList.remove('hidden');
+
+            // Check if submissions are already cached
+            if (cachedSubmissions[studentId]) {
+                renderPerformanceData(cachedSubmissions[studentId], email);
+                return;
+            }
+
+            // Fetch submissions
             try {
-                await db.collection("students").doc(id).delete();
-                showToast("Student deleted successfully.", {color: 'blue'});
-            } catch (error) {
-                console.error("Error deleting student:", error);
-                showToast("Could not delete student.", {color: 'red'});
-            }
-        }
-    }
-    
-document.getElementById('signOutButton').onclick = () => { auth.signOut(); };
-
-    // Student Performance Modal Functions
-    async function openStudentPerformance(studentId, name, email, auraLifetime) {
-        currentPerfStudentId = studentId;
-        
-        // Populate header
-        document.getElementById('perf-student-name').textContent = name;
-        document.getElementById('perf-student-email').textContent = email;
-        document.getElementById('perf-student-lifetime').textContent = `Lifetime Aura: ${auraLifetime} ✧`;
-        
-        // Clear date filters and checkbox
-        document.getElementById('perf-date-start').value = '';
-        document.getElementById('perf-date-end').value = '';
-        document.getElementById('perf-show-questions').checked = false;
-        document.getElementById('perf-show-all-attempts').checked = false;
-        
-        // Show modal
-        document.getElementById('student-performance-modal').classList.remove('hidden');
-        
-        // Check if submissions are already cached
-        if (cachedSubmissions[studentId]) {
-            renderPerformanceData(cachedSubmissions[studentId], email);
-            return;
-        }
-        
-        // Fetch submissions
-        try {
-            let submissionsQuery = await db.collection("submissions")
-                .where("studentId", "==", studentId)
-                .get();
-            
-            let submissions = submissionsQuery.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            
-            if (submissions.length === 0) {
-                submissionsQuery = await db.collection("submissions")
-                    .where("studentEmail", "==", email)
+                let submissionsQuery = await db.collection("submissions")
+                    .where("studentId", "==", studentId)
                     .get();
-                submissions = submissionsQuery.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+                let submissions = submissionsQuery.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+                if (submissions.length === 0) {
+                    submissionsQuery = await db.collection("submissions")
+                        .where("studentEmail", "==", email)
+                        .get();
+                    submissions = submissionsQuery.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                }
+
+                const rawSubmissions = submissions.map(sub => ({
+                    id: sub.id,
+                    assignmentId: sub.assignmentId,
+                    slideIndex: sub.slideIndex !== undefined ? sub.slideIndex : 0,
+                    score: sub.score || 0,
+                    timestamp: sub.timestamp?.seconds || 0,
+                    auraAwarded: sub.auraAwarded || false,
+                    auraAmount: sub.auraAmount || 0,
+                    assignmentName: assignmentMap[sub.assignmentId] || "Unknown Assignment"
+                }));
+
+                cachedSubmissions[studentId] = rawSubmissions;
+                renderPerformanceData(rawSubmissions, email);
+
+            } catch (error) {
+                console.error("Error fetching performance data:", error);
+                showToast("Error loading performance data. See console for details.", { color: 'red' });
+                document.getElementById('perf-no-data').textContent = "Error loading submissions.";
+                document.getElementById('perf-no-data').classList.remove('hidden');
             }
-            
-            const rawSubmissions = submissions.map(sub => ({
-                id: sub.id,
-                assignmentId: sub.assignmentId,
-                slideIndex: sub.slideIndex !== undefined ? sub.slideIndex : 0,
-                score: sub.score || 0,
-                timestamp: sub.timestamp?.seconds || 0,
-                auraAwarded: sub.auraAwarded || false,
-                auraAmount: sub.auraAmount || 0,
-                assignmentName: assignmentMap[sub.assignmentId] || "Unknown Assignment"
-            }));
-            
-            cachedSubmissions[studentId] = rawSubmissions;
-            renderPerformanceData(rawSubmissions, email);
-            
-        } catch (error) {
-            console.error("Error fetching performance data:", error);
-            showToast("Error loading performance data. See console for details.", {color: 'red'});
-            document.getElementById('perf-no-data').textContent = "Error loading submissions.";
-            document.getElementById('perf-no-data').classList.remove('hidden');
         }
-    }
-    
-    function renderPerformanceData(rawSubmissions, email, startDate = null, endDate = null) {
-        const tableBody = document.getElementById('perf-submissions-table');
-        const noDataMsg = document.getElementById('perf-no-data');
-        const showAllAttempts = document.getElementById('perf-show-all-attempts').checked;
-        const showQuestions = document.getElementById('perf-show-questions').checked;
-        const slideHeader = document.getElementById('perf-slide-header');
-        
-        if (showQuestions) {
-            slideHeader.classList.remove('hidden');
-        } else {
-            slideHeader.classList.add('hidden');
-        }
-        
-        let filteredData = rawSubmissions;
-        if (startDate || endDate) {
-            const startTimestamp = startDate ? new Date(startDate).getTime() / 1000 : 0;
-            const endTimestamp = endDate ? new Date(endDate).getTime() / 1000 : Infinity;
-            
-            filteredData = rawSubmissions.filter(p => 
-                p.timestamp >= startTimestamp && p.timestamp <= endTimestamp
-            );
-        }
-        
-        let workingData = filteredData;
-        if (!showAllAttempts) {
-            const dedupeMap = {};
-            filteredData.forEach(sub => {
-                const key = `${sub.assignmentId}_${sub.slideIndex}`;
-                const existing = dedupeMap[key];
-                
-                if (!existing) {
-                    dedupeMap[key] = sub;
-                } else {
-                    const subHasTimestamp = sub.timestamp > 0;
-                    const existingHasTimestamp = existing.timestamp > 0;
-                    
-                    if (subHasTimestamp && existingHasTimestamp) {
-                        if (sub.timestamp > existing.timestamp) {
-                            dedupeMap[key] = sub;
-                        } else if (sub.timestamp === existing.timestamp && sub.id > existing.id) {
-                            dedupeMap[key] = sub;
-                        }
+
+        function renderPerformanceData(rawSubmissions, email, startDate = null, endDate = null) {
+            const tableBody = document.getElementById('perf-submissions-table');
+            const noDataMsg = document.getElementById('perf-no-data');
+            const showAllAttempts = document.getElementById('perf-show-all-attempts').checked;
+            const showQuestions = document.getElementById('perf-show-questions').checked;
+            const slideHeader = document.getElementById('perf-slide-header');
+
+            if (showQuestions) {
+                slideHeader.classList.remove('hidden');
+            } else {
+                slideHeader.classList.add('hidden');
+            }
+
+            let filteredData = rawSubmissions;
+            if (startDate || endDate) {
+                const startTimestamp = startDate ? new Date(startDate).getTime() / 1000 : 0;
+                const endTimestamp = endDate ? new Date(endDate).getTime() / 1000 : Infinity;
+
+                filteredData = rawSubmissions.filter(p =>
+                    p.timestamp >= startTimestamp && p.timestamp <= endTimestamp
+                );
+            }
+
+            let workingData = filteredData;
+            if (!showAllAttempts) {
+                const dedupeMap = {};
+                filteredData.forEach(sub => {
+                    const key = `${sub.assignmentId}_${sub.slideIndex}`;
+                    const existing = dedupeMap[key];
+
+                    if (!existing) {
+                        dedupeMap[key] = sub;
                     } else {
-                        if (sub.id > existing.id) {
-                            dedupeMap[key] = sub;
+                        const subHasTimestamp = sub.timestamp > 0;
+                        const existingHasTimestamp = existing.timestamp > 0;
+
+                        if (subHasTimestamp && existingHasTimestamp) {
+                            if (sub.timestamp > existing.timestamp) {
+                                dedupeMap[key] = sub;
+                            } else if (sub.timestamp === existing.timestamp && sub.id > existing.id) {
+                                dedupeMap[key] = sub;
+                            }
+                        } else {
+                            if (sub.id > existing.id) {
+                                dedupeMap[key] = sub;
+                            }
                         }
                     }
-                }
-            });
-            
-            workingData = Object.values(dedupeMap);
-        }
-        
-        if (workingData.length === 0) {
-            tableBody.innerHTML = '';
-            noDataMsg.classList.remove('hidden');
-            
-            document.getElementById('perf-avg-score').textContent = '--';
-            document.getElementById('perf-assignments-completed').textContent = '0';
-            document.getElementById('perf-total-aura').textContent = '0';
-            return;
-        }
-        
-        noDataMsg.classList.add('hidden');
-        
-        workingData.sort((a, b) => {
-            if (b.timestamp !== a.timestamp) {
-                return b.timestamp - a.timestamp;
+                });
+
+                workingData = Object.values(dedupeMap);
             }
-            const aId = a.id || '';
-            const bId = b.id || '';
-            return bId.localeCompare(aId);
-        });
-        
-        const scores = workingData.map(p => p.score);
-        const avgScore = scores.length > 0 
-            ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(2)
-            : '0.00';
-        
-        const uniqueAssignments = new Set(workingData.map(p => p.assignmentId));
-        const assignmentsCompleted = uniqueAssignments.size;
-        
-        const totalAura = workingData.reduce((sum, p) => sum + (p.auraAwarded ? p.auraAmount : 0), 0);
-        
-        document.getElementById('perf-avg-score').textContent = avgScore + '%';
-        document.getElementById('perf-assignments-completed').textContent = assignmentsCompleted;
-        document.getElementById('perf-total-aura').textContent = totalAura.toFixed(1) + ' ✧';
-        
-        tableBody.innerHTML = workingData.map(p => {
-            const date = p.timestamp > 0 
-                ? new Date(p.timestamp * 1000).toLocaleDateString()
-                : 'N/A';
-            
-            const auraText = p.auraAwarded 
-                ? `✅ ${p.auraAmount} ✧`
-                : 'No';
-            
-            const scoreDisplay = Math.round(p.score);
-            
-            const slideColumn = showQuestions 
-                ? `<td class="p-3 text-sm text-gray-400">${p.slideIndex}</td>`
-                : ''; 
-            
-            const assignmentDisplay = showQuestions 
-                ? p.assignmentName
-                : `${p.assignmentName} <span class="text-gray-500 text-xs">(${p.questionCount} question${p.questionCount !== 1 ? 's' : ''})</span>`;
-            
-            return `
+
+            if (workingData.length === 0) {
+                tableBody.innerHTML = '';
+                noDataMsg.classList.remove('hidden');
+
+                document.getElementById('perf-avg-score').textContent = '--';
+                document.getElementById('perf-assignments-completed').textContent = '0';
+                document.getElementById('perf-total-aura').textContent = '0';
+                return;
+            }
+
+            noDataMsg.classList.add('hidden');
+
+            workingData.sort((a, b) => {
+                if (b.timestamp !== a.timestamp) {
+                    return b.timestamp - a.timestamp;
+                }
+                const aId = a.id || '';
+                const bId = b.id || '';
+                return bId.localeCompare(aId);
+            });
+
+            const scores = workingData.map(p => p.score);
+            const avgScore = scores.length > 0
+                ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(2)
+                : '0.00';
+
+            const uniqueAssignments = new Set(workingData.map(p => p.assignmentId));
+            const assignmentsCompleted = uniqueAssignments.size;
+
+            const totalAura = workingData.reduce((sum, p) => sum + (p.auraAwarded ? p.auraAmount : 0), 0);
+
+            document.getElementById('perf-avg-score').textContent = avgScore + '%';
+            document.getElementById('perf-assignments-completed').textContent = assignmentsCompleted;
+            document.getElementById('perf-total-aura').textContent = totalAura.toFixed(1) + ' ✧';
+
+            tableBody.innerHTML = workingData.map(p => {
+                const date = p.timestamp > 0
+                    ? new Date(p.timestamp * 1000).toLocaleDateString()
+                    : 'N/A';
+
+                const auraText = p.auraAwarded
+                    ? `✅ ${p.auraAmount} ✧`
+                    : 'No';
+
+                const scoreDisplay = Math.round(p.score);
+
+                const slideColumn = showQuestions
+                    ? `<td class="p-3 text-sm text-gray-400">${p.slideIndex}</td>`
+                    : '';
+
+                const assignmentDisplay = showQuestions
+                    ? p.assignmentName
+                    : `${p.assignmentName} <span class="text-gray-500 text-xs">(${p.questionCount} question${p.questionCount !== 1 ? 's' : ''})</span>`;
+
+                return `
                 <tr>
                     <td class="p-3 text-sm">${assignmentDisplay}</td>
                     ${slideColumn}
@@ -638,47 +745,48 @@ document.getElementById('signOutButton').onclick = () => { auth.signOut(); };
                     <td class="p-3 text-sm ${p.auraAwarded ? 'text-yellow-400' : 'text-gray-500'}">${auraText}</td>
                 </tr>
             `;
-        }).join('');
-    }
-    
-    function filterPerformanceByDate() {
-        const startDate = document.getElementById('perf-date-start').value;
-        const endDate = document.getElementById('perf-date-end').value;
-        
-        if (currentPerfStudentId && cachedSubmissions[currentPerfStudentId]) {
-            const email = document.getElementById('perf-student-email').textContent;
-            renderPerformanceData(cachedSubmissions[currentPerfStudentId], email, startDate, endDate);
+            }).join('');
         }
-    }
-    
-    function togglePerformanceMode() {
-        filterPerformanceByDate();
-    }
-    
-    function clearPerformanceFilter() {
-        document.getElementById('perf-date-start').value = '';
-        document.getElementById('perf-date-end').value = '';
-        filterPerformanceByDate();
-    }
-    
-    function closeStudentPerformance() {
-        document.getElementById('student-performance-modal').classList.add('hidden');
-        currentPerfStudentId = null;
-    }
-    
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && !document.getElementById('student-performance-modal').classList.contains('hidden')) {
-            closeStudentPerformance();
-        }
-    });
-    
-    document.getElementById('student-performance-modal').addEventListener('click', (e) => {
-        if (e.target.id === 'student-performance-modal') {
-            closeStudentPerformance();
-        }
-    });
 
-    function showToast(message, options = {}) { const { color = 'default', duration = 3000 } = options; const wrapper = document.getElementById('toast-wrapper'); if (!wrapper) return; const toast = document.createElement('div'); toast.className = 'flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm animate-fade-in-right'; const colors = { default: 'bg-gray-700', green: 'bg-green-600', red: 'bg-red-600', blue: 'bg-blue-600' }; toast.classList.add(colors[color] || colors['default']); const messageSpan = document.createElement('span'); messageSpan.textContent = message; toast.appendChild(messageSpan); const closeButton = document.createElement('button'); closeButton.innerHTML = '&times;'; closeButton.className = 'ml-4 text-2xl font-bold leading-none hover:text-gray-300 focus:outline-none'; let timeoutId = null; const dismiss = () => { if (timeoutId) clearTimeout(timeoutId); toast.classList.remove('animate-fade-in-right'); toast.classList.add('animate-fade-out-right'); toast.addEventListener('animationend', () => toast.remove()); }; closeButton.onclick = dismiss; toast.appendChild(closeButton); wrapper.appendChild(toast); timeoutId = setTimeout(dismiss, duration); };
-</script>
+        function filterPerformanceByDate() {
+            const startDate = document.getElementById('perf-date-start').value;
+            const endDate = document.getElementById('perf-date-end').value;
+
+            if (currentPerfStudentId && cachedSubmissions[currentPerfStudentId]) {
+                const email = document.getElementById('perf-student-email').textContent;
+                renderPerformanceData(cachedSubmissions[currentPerfStudentId], email, startDate, endDate);
+            }
+        }
+
+        function togglePerformanceMode() {
+            filterPerformanceByDate();
+        }
+
+        function clearPerformanceFilter() {
+            document.getElementById('perf-date-start').value = '';
+            document.getElementById('perf-date-end').value = '';
+            filterPerformanceByDate();
+        }
+
+        function closeStudentPerformance() {
+            document.getElementById('student-performance-modal').classList.add('hidden');
+            currentPerfStudentId = null;
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !document.getElementById('student-performance-modal').classList.contains('hidden')) {
+                closeStudentPerformance();
+            }
+        });
+
+        document.getElementById('student-performance-modal').addEventListener('click', (e) => {
+            if (e.target.id === 'student-performance-modal') {
+                closeStudentPerformance();
+            }
+        });
+
+        function showToast(message, options = {}) { const { color = 'default', duration = 3000 } = options; const wrapper = document.getElementById('toast-wrapper'); if (!wrapper) return; const toast = document.createElement('div'); toast.className = 'flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm animate-fade-in-right'; const colors = { default: 'bg-gray-700', green: 'bg-green-600', red: 'bg-red-600', blue: 'bg-blue-600' }; toast.classList.add(colors[color] || colors['default']); const messageSpan = document.createElement('span'); messageSpan.textContent = message; toast.appendChild(messageSpan); const closeButton = document.createElement('button'); closeButton.innerHTML = '&times;'; closeButton.className = 'ml-4 text-2xl font-bold leading-none hover:text-gray-300 focus:outline-none'; let timeoutId = null; const dismiss = () => { if (timeoutId) clearTimeout(timeoutId); toast.classList.remove('animate-fade-in-right'); toast.classList.add('animate-fade-out-right'); toast.addEventListener('animationend', () => toast.remove()); }; closeButton.onclick = dismiss; toast.appendChild(closeButton); wrapper.appendChild(toast); timeoutId = setTimeout(dismiss, duration); };
+    </script>
 </body>
+
 </html>
