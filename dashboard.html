@@ -278,15 +278,25 @@
                         if (impersonated) emailToCheck = impersonated;
                         currentUserEmail = emailToCheck;
 
-                        // Check if user is a teacher in the teachers collection
+                        // 1. Check if user is an explicit teacher
                         const teacherDoc = await db.collection("teachers").doc(emailToCheck).get();
-                        if (!teacherDoc.exists) {
-                            document.getElementById('pageLoader').classList.add('hidden');
-                            document.getElementById('loadingError').textContent = "Access Denied: You are not authorized to view this page.";
-                            auth.signOut();
-                            return;
+                        let isAuthorized = teacherDoc.exists;
+
+                        // 2. If not explicit, check if they are an implicit co-teacher
+                        if (!isAuthorized) {
+                            const implicitQuery = await db.collection("teachers").where("coTeachingFor", "array-contains", emailToCheck).get();
+                            if (!implicitQuery.empty) {
+                                isAuthorized = true;
+                            }
                         }
-                        loadDashboard();
+
+                        if (isAuthorized) {
+                            loadDashboard();
+                        } else {
+                            document.getElementById('pageLoader').classList.add('hidden');
+                            document.getElementById('loadingError').textContent = `Access Denied: You (${emailToCheck}) are not authorized as a teacher.`;
+                            // No signOut, allow stop impersonation
+                        }
                     } catch (error) {
                         console.error("Error checking teacher authorization:", error);
                         document.getElementById('pageLoader').classList.add('hidden');
@@ -510,17 +520,29 @@
                 assignmentData = { id: doc.id, ...doc.data() };
 
                 // Get current user's email and teacher profile
-                // Use the global currentUserEmail (already set in onAuthStateChanged with spoofing logic)
-                // const currentUserEmail = auth.currentUser.email.toLowerCase(); <--- REMOVED
                 const teacherDoc = await db.collection("teachers").doc(currentUserEmail).get();
-                const teacherProfile = teacherDoc.data();
+                const teacherProfile = teacherDoc.exists ? teacherDoc.data() : null;
 
                 // Check if user has permission to view this assignment
                 const isOwner = assignmentData.teacherEmail === currentUserEmail;
                 const isCoTeacher = (assignmentData.coTeachers || []).includes(currentUserEmail);
                 const isAdmin = teacherProfile?.isAdmin === true;
+                let hasAccess = isOwner || isCoTeacher || isAdmin;
 
-                if (!isOwner && !isCoTeacher && !isAdmin) {
+                // If not explicit, check for Implicit Global Co-Teacher access
+                if (!hasAccess && assignmentData.teacherEmail) {
+                    const ownerDoc = await db.collection("teachers").doc(assignmentData.teacherEmail).get();
+                    if (ownerDoc.exists) {
+                        const ownerData = ownerDoc.data();
+                        if (ownerData.coTeachingFor && Array.isArray(ownerData.coTeachingFor)) {
+                            if (ownerData.coTeachingFor.map(e => e.toLowerCase()).includes(currentUserEmail)) {
+                                hasAccess = true;
+                            }
+                        }
+                    }
+                }
+
+                if (!hasAccess) {
                     document.getElementById('loadingError').textContent = "Access Denied: You do not have permission to view this assignment.";
                     return;
                 }
