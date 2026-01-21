@@ -533,7 +533,7 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
             const student = {
                 name: document.getElementById('studentName').value.trim(),
                 email: document.getElementById('studentEmail').value.toLowerCase().trim(),
-                passcode: parseInt(document.getElementById('studentPasscode').value.trim(), 10),
+                passcode: document.getElementById('studentPasscode').value.trim(),
                 class: document.getElementById('studentClass').value.trim(),
                 auraLifetime: parseFloat(document.getElementById('studentAuraLifetime').value) || 0,
                 auraBalance: parseFloat(document.getElementById('studentAuraBalance').value) || 0,
@@ -542,10 +542,6 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
 
             if (!student.name || !student.email || !student.passcode || !student.class) {
                 document.getElementById('modal-error').innerText = "All fields are required.";
-                return;
-            }
-            if (isNaN(student.passcode)) {
-                document.getElementById('modal-error').innerText = "Passcode must be a number.";
                 return;
             }
 
@@ -657,11 +653,11 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
                 }
 
                 const [name, emailRaw, passcodeRaw, classFromLine] = parts;
-                const passcode = parseInt(passcodeRaw, 10);
+                const passcode = passcodeRaw;
                 const email = (emailRaw || '').toLowerCase();
                 const className = classFromLine || defaultClass;
 
-                if (!name || !email || isNaN(passcode)) {
+                if (!name || !email || !passcode) {
                     errors.push(`Line ${idx + 1}: Check format (Name, Email, Passcode).`);
                     return;
                 }
