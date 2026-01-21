@@ -299,9 +299,18 @@
 
         // Focus Mode state
         let focusModeActive = false;
-        let focusModeAction = 'log';
         let violationCount = 0;
         let focusModeInitialized = false;
+        let focusModeAction = 'log'; // 'log' or 'lockout'
+
+        function normalizeTeacherEmail(email) {
+            if (!email) return 'klynch@mtps.us';
+            // Remove all spaces and convert to lowercase
+            const normalized = email.toLowerCase().replace(/\s+/g, '').trim();
+            // Handle specific typo variant if needed
+            if (normalized === 'klynch@mtps.us' || normalized === 'klynch@mtps.us') return 'klynch@mtps.us';
+            return normalized;
+        }
 
         // --- Impersonation Logic ---
         function checkImpersonation() {
@@ -426,7 +435,8 @@
                 profile.auraLifetime = studentData.auraLifetime || 0;
                 profile.auraBalance = studentData.auraBalance || 0;
                 profile.studentDocId = studentDoc.id;
-                profile.teacherEmail = studentData.teacherEmail || assignmentData.teacherEmail;
+                // Use normalized email to prevent split rosters between "klynch@mtps.us" and "klynch@mtps. us"
+                profile.teacherEmail = normalizeTeacherEmail(studentData.teacherEmail || assignmentData.teacherEmail);
 
                 const assignedClasses = assignmentData.assignedClasses || [];
                 if (!assignedClasses.includes(studentClass)) {
@@ -1760,41 +1770,54 @@
             const container = document.getElementById('aura-content');
             container.innerHTML = '<div class="text-center text-gray-400">Loading...</div>';
 
-            // Query logic: Filter by class if available, and ALWAYS by teacherEmail
+            // Query logic: Handle missing teacherEmail fields (legacy data) by using more inclusive queries
             // Leaderboard uses auraLifetime for ranking (not spendable balance)
-            const targetTeacherEmail = userProfile.class === 'Teacher'
+            const targetTeacherEmail = normalizeTeacherEmail(userProfile.class === 'Teacher'
                 ? userProfile.teacherEmail
-                : (userProfile.teacherEmail || assignmentData.teacherEmail);
+                : (userProfile.teacherEmail || assignmentData.teacherEmail));
 
-            let query = db.collection('students').where('teacherEmail', '==', targetTeacherEmail);
+            let query = db.collection('students');
 
             if (userProfile.class && userProfile.class !== 'Teacher') {
+                // Students: Query by their specific class (guaranteed to exist)
                 query = query.where('class', '==', userProfile.class);
+            } else if (assignmentData.assignedClasses && assignmentData.assignedClasses.length > 0) {
+                // Teachers: Fetch students from all classes assigned to this assignment
+                // Firestore 'in' handles up to 10 classes
+                query = query.where('class', 'in', assignmentData.assignedClasses);
+            } else {
+                // Fallback: Query by teacherEmail (may exclude legacy students without the field)
+                query = query.where('teacherEmail', '==', targetTeacherEmail);
             }
 
             query.get().then(snapshot => {
-                let students = [];
+                let allFetchedStudents = [];
                 snapshot.forEach(doc => {
                     const d = doc.data();
-                    students.push({
-                        name: d.name || "Anonymous",
-                        score: parseFloat(d.auraLifetime) || 0,
-                        isMe: d.email === userProfile.email
-                    });
+                    const studentTeacher = normalizeTeacherEmail(d.teacherEmail);
+
+                    // Client-side filter to ensure student belongs to this teacher
+                    if (studentTeacher === targetTeacherEmail) {
+                        allFetchedStudents.push({
+                            name: d.name || "Anonymous",
+                            score: parseFloat(d.auraLifetime) || 0,
+                            isMe: d.email === userProfile.email
+                        });
+                    }
                 });
 
                 // Sort High to Low by lifetime Aura
-                students.sort((a, b) => b.score - a.score);
+                allFetchedStudents.sort((a, b) => b.score - a.score);
 
                 let html = '<div class="space-y-2">';
                 let rank = 1;
 
                 // Render Top 10 logic handling ties
-                for (let i = 0; i < students.length; i++) {
-                    if (i > 0 && students[i].score < students[i - 1].score) rank = i + 1;
+                for (let i = 0; i < allFetchedStudents.length; i++) {
+                    const s = allFetchedStudents[i];
+                    if (i > 0 && s.score < allFetchedStudents[i - 1].score) rank = i + 1;
                     if (rank > 10) break;
 
-                    const s = students[i];
                     const medal = rank === 1 ? '🥇' : (rank === 2 ? '🥈' : (rank === 3 ? '🥉' : rank));
                     const bgClass = s.isMe ? 'bg-purple-900/50 border-purple-500' : 'bg-gray-700 border-transparent';
 
