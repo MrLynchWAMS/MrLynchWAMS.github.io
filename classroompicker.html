@@ -303,6 +303,25 @@
         let violationCount = 0;
         let focusModeInitialized = false;
 
+        // --- Impersonation Logic ---
+        function checkImpersonation() {
+            const impersonatedEmail = sessionStorage.getItem('impersonatedUserEmail');
+            if (impersonatedEmail) {
+                const banner = document.createElement('div');
+                banner.className = 'bg-red-600 text-white text-center p-2 font-bold fixed top-0 left-0 w-full z-[200] flex justify-center items-center gap-4';
+                banner.innerHTML = `<span>⚠️ IMPERSONATING: ${impersonatedEmail}</span><button onclick="stopImpersonating()" class="bg-white text-red-600 px-3 py-1 rounded text-xs hover:bg-gray-200">Stop</button>`;
+                document.body.prepend(banner);
+                document.body.style.paddingTop = '40px';
+                return impersonatedEmail;
+            }
+            return null;
+        }
+        function stopImpersonating() {
+            sessionStorage.removeItem('impersonatedUserEmail');
+            window.location.reload();
+        }
+        // ---------------------------
+
         window.onload = async function () {
             const urlParams = new URLSearchParams(window.location.search);
             assignmentId = urlParams.get('assignmentId');
@@ -326,7 +345,11 @@
                 slideStates = new Array(assignmentData.slideIds.length).fill(null);
                 auth.onAuthStateChanged(user => {
                     if (user) {
-                        const profile = { name: user.displayName, email: user.email };
+                        let email = user.email.toLowerCase();
+                        const impersonated = checkImpersonation();
+                        if (impersonated) email = impersonated;
+
+                        const profile = { name: user.displayName, email: email };
                         authorizeAndStart(profile);
                     } else {
                         loader.classList.add('hidden');
@@ -343,8 +366,41 @@
         async function authorizeAndStart(profile) {
             const errorP = document.getElementById('loadingError');
             const loader = document.getElementById('pageLoader');
-            if (TEACHER_EMAILS.map(e => e.toLowerCase()).includes(profile.email.toLowerCase())) {
-                userProfile = { name: profile.name, email: profile.email, class: 'Teacher', auraLifetime: 0, auraBalance: 0 };
+            const email = profile.email.toLowerCase();
+
+            // 1. Check Hardcoded List or Explicit Teacher Doc
+            let isAuthorizedTeacher = TEACHER_EMAILS.map(e => e.toLowerCase()).includes(email);
+            if (!isAuthorizedTeacher) {
+                try {
+                    const teacherDoc = await db.collection("teachers").doc(email).get();
+                    if (teacherDoc.exists) isAuthorizedTeacher = true;
+                } catch (e) { console.error("Error checking teacher doc:", e); }
+            }
+
+            // 2. Check Assignment-Specific Co-Teacher
+            if (!isAuthorizedTeacher && assignmentData.coTeachers && Array.isArray(assignmentData.coTeachers)) {
+                if (assignmentData.coTeachers.map(e => e.toLowerCase()).includes(email)) {
+                    isAuthorizedTeacher = true;
+                }
+            }
+
+            // 3. Check Implicit Global Co-Teacher (Authorized for the Owner)
+            if (!isAuthorizedTeacher && assignmentData.teacherEmail) {
+                try {
+                    const ownerDoc = await db.collection("teachers").doc(assignmentData.teacherEmail).get();
+                    if (ownerDoc.exists) {
+                        const ownerData = ownerDoc.data();
+                        if (ownerData.coTeachingFor && Array.isArray(ownerData.coTeachingFor)) {
+                            if (ownerData.coTeachingFor.map(e => e.toLowerCase()).includes(email)) {
+                                isAuthorizedTeacher = true;
+                            }
+                        }
+                    }
+                } catch (e) { console.error("Error checking global co-teacher:", e); }
+            }
+
+            if (isAuthorizedTeacher) {
+                userProfile = { name: profile.name, email: email, class: 'Teacher', auraLifetime: 0, auraBalance: 0 };
                 initializeStudentSession();
                 return;
             }
