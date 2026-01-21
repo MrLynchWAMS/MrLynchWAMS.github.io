@@ -1,29 +1,43 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Teacher Management</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👨‍🏫</text></svg>">
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👨‍🏫</text></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
     <style>
-        .hidden { display: none; }
-        .btn-action { transition: background-color 0.2s, transform 0.1s; }
-        .btn-action:active { transform: scale(0.95); }
+        .hidden {
+            display: none;
+        }
+
+        .btn-action {
+            transition: background-color 0.2s, transform 0.1s;
+        }
+
+        .btn-action:active {
+            transform: scale(0.95);
+        }
     </style>
 </head>
+
 <body class="bg-gray-900 text-white font-sans">
 
     <div id="pageLoader" class="flex flex-col items-center justify-center h-screen">
         <h1 class="text-4xl font-bold text-yellow-400 mb-4">Teacher Management</h1>
         <p id="loading-text" class="text-lg text-gray-300">Initializing...</p>
         <div id="signInButtonContainer" class="hidden mt-8">
-            <div id="g_id_onload" data-client_id="1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com" data-callback="handleCredentialResponse"></div>
-            <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_black" data-text="signin_with" data-shape="rectangular" data-logo_alignment="left"></div>
+            <div id="g_id_onload"
+                data-client_id="1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com"
+                data-callback="handleCredentialResponse"></div>
+            <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_black"
+                data-text="signin_with" data-shape="rectangular" data-logo_alignment="left"></div>
         </div>
         <p id="auth-error" class="text-red-500 mt-4"></p>
     </div>
@@ -32,8 +46,12 @@
         <div class="flex justify-between items-center mb-6">
             <h1 class="text-3xl font-bold text-yellow-400">Teacher Management</h1>
             <div class="flex gap-4">
-                <button onclick="openTeacherModal()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg btn-action">+ Add Teacher</button>
-                <button id="signOutButton" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Sign Out</button>
+                <button onclick="openTeacherModal()"
+                    class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg btn-action">+ Add
+                    Teacher</button>
+                <button id="signOutButton"
+                    class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Sign
+                    Out</button>
             </div>
         </div>
 
@@ -46,7 +64,8 @@
     </div>
 
     <!-- Teacher Modal -->
-    <div id="teacherModal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
+    <div id="teacherModal"
+        class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
         <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-lg">
             <div class="flex justify-between items-center p-4 border-b border-gray-700">
                 <h2 id="modalTitle" class="text-2xl font-bold text-yellow-400">Add Teacher</h2>
@@ -54,87 +73,117 @@
             </div>
             <div class="p-6 space-y-4">
                 <input type="hidden" id="teacherId">
-                
+
                 <div>
                     <label for="teacherEmail" class="block text-sm font-medium text-gray-300 mb-2">Email Address</label>
-                    <input type="email" id="teacherEmail" placeholder="teacher@mtps.us" class="w-full p-3 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500">
+                    <input type="email" id="teacherEmail" placeholder="teacher@mtps.us"
+                        class="w-full p-3 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500">
                 </div>
 
                 <div>
                     <label class="flex items-center">
-                        <input type="checkbox" id="teacherIsAdmin" class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500">
+                        <input type="checkbox" id="teacherIsAdmin"
+                            class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500">
                         <span class="ml-2">Is Admin (can manage other teachers)</span>
                     </label>
                 </div>
 
                 <div>
-                    <label for="teacherCoTeachingFor" class="block text-sm font-medium text-gray-300 mb-2">Co-Teaching For (comma-separated emails)</label>
-                    <textarea id="teacherCoTeachingFor" rows="3" placeholder="teacher1@mtps.us, teacher2@mtps.us" class="w-full p-3 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500"></textarea>
-                    <p class="text-xs text-gray-400 mt-1">Teachers listed here will have access to view and manage assignments owned by this teacher.</p>
+                    <label for="teacherCoTeachingFor" class="block text-sm font-medium text-gray-300 mb-2">Co-Teaching
+                        For (comma-separated emails)</label>
+                    <textarea id="teacherCoTeachingFor" rows="3" placeholder="teacher1@mtps.us, teacher2@mtps.us"
+                        class="w-full p-3 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500"></textarea>
+                    <p class="text-xs text-gray-400 mt-1">Teachers listed here will have access to view and manage
+                        assignments owned by this teacher.</p>
                 </div>
 
                 <p id="modal-error" class="text-red-500 text-sm"></p>
-                <button onclick="handleSaveTeacher()" id="saveTeacherBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg btn-action">Save Teacher</button>
+                <button onclick="handleSaveTeacher()" id="saveTeacherBtn"
+                    class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg btn-action">Save
+                    Teacher</button>
             </div>
         </div>
     </div>
 
     <div id="toast-wrapper" class="fixed top-4 right-4 z-[100] space-y-3 w-full max-w-sm"></div>
 
-<script>
-    const ADMIN_EMAIL = "klynch@mtps.us";
-    const firebaseConfig = {
-      apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
-      authDomain: "mrlynch-slides-app.firebaseapp.com",
-      projectId: "mrlynch-slides-app",
-      storageBucket: "mrlynch-slides-app.appspot.com",
-      messagingSenderId: "223179627035",
-      appId: "1:223179627035:web:ff0f538f3029d829c3f6be"
-    };
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
-    const auth = firebase.auth();
+    <script>
+        const ADMIN_EMAIL = "klynch@mtps.us";
+        const firebaseConfig = {
+            apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
+            authDomain: "mrlynch-slides-app.firebaseapp.com",
+            projectId: "mrlynch-slides-app",
+            storageBucket: "mrlynch-slides-app.appspot.com",
+            messagingSenderId: "223179627035",
+            appId: "1:223179627035:web:ff0f538f3029d829c3f6be"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const auth = firebase.auth();
 
-    auth.onAuthStateChanged(user => {
-        if (user) {
-            if (user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
-                document.getElementById('pageLoader').classList.add('hidden');
-                document.getElementById('contentContainer').classList.remove('hidden');
-                loadTeachers();
-            } else {
-                document.getElementById('loading-text').textContent = "Access Denied: Only klynch@mtps.us can access this page.";
-                document.getElementById('auth-error').textContent = "Please sign in with the administrator account.";
-                auth.signOut();
+        // --- Impersonation Logic ---
+        function checkImpersonation() {
+            const impersonatedEmail = sessionStorage.getItem('impersonatedUserEmail');
+            if (impersonatedEmail) {
+                const banner = document.createElement('div');
+                banner.className = 'bg-red-600 text-white text-center p-2 font-bold fixed top-0 w-full z-[200] flex justify-center items-center gap-4';
+                banner.innerHTML = `<span>⚠️ IMPERSONATING: ${impersonatedEmail}</span><button onclick="stopImpersonating()" class="bg-white text-red-600 px-3 py-1 rounded text-xs hover:bg-gray-200">Stop</button>`;
+                document.body.prepend(banner);
+                document.body.style.paddingTop = '40px';
+                return impersonatedEmail;
             }
-        } else {
-            document.getElementById('loading-text').textContent = "Please sign in to continue.";
-            document.getElementById('signInButtonContainer').classList.remove('hidden');
+            return null;
         }
-    });
+        function stopImpersonating() {
+            sessionStorage.removeItem('impersonatedUserEmail');
+            window.location.reload();
+        }
+        // ---------------------------
 
-    function handleCredentialResponse(response) {
-        const credential = firebase.auth.GoogleAuthProvider.credential(response.credential);
-        auth.signInWithCredential(credential).catch(error => {
-            console.error("Firebase sign-in error", error);
-            document.getElementById('auth-error').innerText = "Firebase sign-in failed. Please try again.";
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                let emailToCheck = user.email.toLowerCase();
+                const impersonated = checkImpersonation();
+                if (impersonated) emailToCheck = impersonated;
+
+                if (emailToCheck === ADMIN_EMAIL.toLowerCase()) {
+                    document.getElementById('pageLoader').classList.add('hidden');
+                    document.getElementById('contentContainer').classList.remove('hidden');
+                    loadTeachers();
+                } else {
+                    document.getElementById('loading-text').textContent = `Access Denied: Only ${ADMIN_EMAIL} can access this page.`;
+                    document.getElementById('auth-error').textContent = `You are currently signed in (or impersonating) as ${emailToCheck}.`;
+                    // Do NOT signOut, just deny access. User can click Stop Impersonating.
+                }
+            } else {
+                document.getElementById('loading-text').textContent = "Please sign in to continue.";
+                document.getElementById('signInButtonContainer').classList.remove('hidden');
+            }
         });
-    }
 
-   function loadTeachers() {
-    db.collection("teachers").onSnapshot(snapshot => {
-        const teachersList = document.getElementById('teachersList');
-        
-        if (snapshot.empty) {
-            teachersList.innerHTML = '<p class="text-gray-400">No teachers found. Click "+ Add Teacher" to add one.</p>';
-            return;
+        function handleCredentialResponse(response) {
+            const credential = firebase.auth.GoogleAuthProvider.credential(response.credential);
+            auth.signInWithCredential(credential).catch(error => {
+                console.error("Firebase sign-in error", error);
+                document.getElementById('auth-error').innerText = "Firebase sign-in failed. Please try again.";
+            });
         }
 
-        const teachers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
-            .filter(teacher => teacher.email); // Filter out any docs without email
-        
-        teachers.sort((a, b) => a.email.localeCompare(b.email));
+        function loadTeachers() {
+            db.collection("teachers").onSnapshot(snapshot => {
+                const teachersList = document.getElementById('teachersList');
 
-        teachersList.innerHTML = teachers.map(teacher => `
+                if (snapshot.empty) {
+                    teachersList.innerHTML = '<p class="text-gray-400">No teachers found. Click "+ Add Teacher" to add one.</p>';
+                    return;
+                }
+
+                const teachers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+                    .filter(teacher => teacher.email); // Filter out any docs without email
+
+                teachers.sort((a, b) => a.email.localeCompare(b.email));
+
+                teachersList.innerHTML = teachers.map(teacher => `
             <div class="bg-gray-700 rounded-lg p-4 flex justify-between items-center">
                 <div class="flex-1">
                     <div class="flex items-center gap-3">
@@ -145,171 +194,181 @@
                         <p class="text-xs text-gray-400 mt-1">Co-teaching for: ${escapeHtml(teacher.coTeachingFor.join(', '))}</p>
                     ` : ''}
                 </div>
-                <div class="flex gap-2">
+                <div class="flex gap-2 items-center">
+                    <button onclick="impersonateUser('${escapeHtml(teacher.email)}')" class="text-yellow-400 hover:text-yellow-300 text-sm mr-2 border border-yellow-600 px-2 py-1 rounded">Impersonate</button>
                     <button onclick='openTeacherModal(${JSON.stringify(teacher)})' class="text-blue-400 hover:text-blue-300 text-sm">Edit</button>
                     <button onclick="handleDeleteTeacher('${teacher.id}', '${escapeHtml(teacher.email)}')" class="text-red-400 hover:text-red-300 text-sm">Delete</button>
                 </div>
             </div>
         `).join('');
-    }, error => {
-        console.error("Error loading teachers:", error);
-        showToast("Error loading teachers. See console for details.", { color: 'red' });
-    });
-}
-    function openTeacherModal(teacher = null) {
-        document.getElementById('teacherId').value = '';
-        document.getElementById('teacherEmail').value = '';
-        document.getElementById('teacherIsAdmin').checked = false;
-        document.getElementById('teacherCoTeachingFor').value = '';
-        document.getElementById('modal-error').innerText = '';
+            }, error => {
+                console.error("Error loading teachers:", error);
+                showToast("Error loading teachers. See console for details.", { color: 'red' });
+            });
+        }
+        function openTeacherModal(teacher = null) {
+            document.getElementById('teacherId').value = '';
+            document.getElementById('teacherEmail').value = '';
+            document.getElementById('teacherIsAdmin').checked = false;
+            document.getElementById('teacherCoTeachingFor').value = '';
+            document.getElementById('modal-error').innerText = '';
 
-        if (teacher) {
-            document.getElementById('modalTitle').innerText = "Edit Teacher";
-            document.getElementById('teacherId').value = teacher.id;
-            document.getElementById('teacherEmail').value = teacher.email;
-            document.getElementById('teacherIsAdmin').checked = teacher.isAdmin || false;
-            document.getElementById('teacherCoTeachingFor').value = (teacher.coTeachingFor || []).join(', ');
-        } else {
-            document.getElementById('modalTitle').innerText = "Add Teacher";
+            if (teacher) {
+                document.getElementById('modalTitle').innerText = "Edit Teacher";
+                document.getElementById('teacherId').value = teacher.id;
+                document.getElementById('teacherEmail').value = teacher.email;
+                document.getElementById('teacherIsAdmin').checked = teacher.isAdmin || false;
+                document.getElementById('teacherCoTeachingFor').value = (teacher.coTeachingFor || []).join(', ');
+            } else {
+                document.getElementById('modalTitle').innerText = "Add Teacher";
+            }
+
+            document.getElementById('teacherModal').classList.remove('hidden');
         }
 
-        document.getElementById('teacherModal').classList.remove('hidden');
-    }
-
-    function closeTeacherModal() {
-        document.getElementById('teacherModal').classList.add('hidden');
-    }
-
-async function handleSaveTeacher() {
-    const id = document.getElementById('teacherId').value; // The OLD email (if editing)
-    const newEmail = document.getElementById('teacherEmail').value.trim().toLowerCase();
-
-    // --- 1. GET MISSING VALUES ---
-    
-    // Get Admin status (Assumes a checkbox with ID 'teacherIsAdmin')
-    // If you don't have this checkbox, set this to false or remove it
-    const adminCheckbox = document.getElementById('teacherIsAdmin');
-    const isAdmin = adminCheckbox ? adminCheckbox.checked : false;
-
-    // Get Co-Teaching list (Assumes an input with ID 'teacherCoTeaching')
-    // Splitting comma-separated string into an array
-    const coTeachInput = document.getElementById('teacherCoTeaching');
-    let coTeachingFor = [];
-    if (coTeachInput && coTeachInput.value) {
-        coTeachingFor = coTeachInput.value.split(',').map(s => s.trim()).filter(s => s !== "");
-    }
-
-    // Basic validation
-    if (!newEmail) {
-        alert("Teacher email is required.");
-        return;
-    }
-
-    const teacherData = {
-        email: newEmail,
-        isAdmin: isAdmin,
-        coTeachingFor: coTeachingFor
-    };
-
-    const btn = document.getElementById('saveTeacherBtn');
-    // Save original text to restore it later
-    const originalBtnText = btn.textContent; 
-
-    try {
-        btn.disabled = true;
-        btn.textContent = 'Saving...';
-
-        const batch = db.batch();
-
-        // 2. HANDLE ID CHANGE vs STANDARD SAVE
-        // If we are editing and the email CHANGED, we must delete the old doc and create a new one
-        if (id && id !== newEmail) {
-            const oldDocRef = db.collection("teachers").doc(id);
-            const newDocRef = db.collection("teachers").doc(newEmail);
-            
-            // Atomic swap: Delete old, Set new
-            batch.delete(oldDocRef);
-            batch.set(newDocRef, teacherData); 
-        } else {
-            // Standard save (create new OR update existing with same email)
-            const docRef = db.collection("teachers").doc(newEmail);
-            batch.set(docRef, teacherData, { merge: true });
+        function closeTeacherModal() {
+            document.getElementById('teacherModal').classList.add('hidden');
         }
 
-        await batch.commit(); // Commit all changes atomically
-        
-        showToast("Teacher saved successfully!", { color: 'green' });
-        
-        // Ensure this function exists in your scope
-        if (typeof closeTeacherModal === 'function') {
-            closeTeacherModal();
-        }
+        async function handleSaveTeacher() {
+            const id = document.getElementById('teacherId').value; // The OLD email (if editing)
+            const newEmail = document.getElementById('teacherEmail').value.trim().toLowerCase();
 
-    } catch (error) {
-        console.error("Error saving teacher:", error);
-        
-        // Display error in the modal if an error div exists
-        const errorDiv = document.getElementById('modal-error');
-        if (errorDiv) {
-            errorDiv.innerText = "Error: " + error.message;
-        } else {
-            alert("Error saving: " + error.message);
-        }
+            // --- 1. GET MISSING VALUES ---
 
-    } finally {
-        // --- 3. CLEANUP ---
-        // Always re-enable the button, even if it failed
-        if (btn) {
-            btn.disabled = false;
-            btn.textContent = originalBtnText;
-        }
-    }
-}
-    async function handleDeleteTeacher(id, email) {
-        if (confirm(`Are you sure you want to delete teacher ${email}? This action cannot be undone.`)) {
+            // Get Admin status (Assumes a checkbox with ID 'teacherIsAdmin')
+            // If you don't have this checkbox, set this to false or remove it
+            const adminCheckbox = document.getElementById('teacherIsAdmin');
+            const isAdmin = adminCheckbox ? adminCheckbox.checked : false;
+
+            // Get Co-Teaching list (Assumes an input with ID 'teacherCoTeaching')
+            // Splitting comma-separated string into an array
+            const coTeachInput = document.getElementById('teacherCoTeaching');
+            let coTeachingFor = [];
+            if (coTeachInput && coTeachInput.value) {
+                coTeachingFor = coTeachInput.value.split(',').map(s => s.trim()).filter(s => s !== "");
+            }
+
+            // Basic validation
+            if (!newEmail) {
+                alert("Teacher email is required.");
+                return;
+            }
+
+            const teacherData = {
+                email: newEmail,
+                isAdmin: isAdmin,
+                coTeachingFor: coTeachingFor
+            };
+
+            const btn = document.getElementById('saveTeacherBtn');
+            // Save original text to restore it later
+            const originalBtnText = btn.textContent;
+
             try {
-                await db.collection("teachers").doc(id).delete();
-                showToast("Teacher deleted successfully.", { color: 'blue' });
+                btn.disabled = true;
+                btn.textContent = 'Saving...';
+
+                const batch = db.batch();
+
+                // 2. HANDLE ID CHANGE vs STANDARD SAVE
+                // If we are editing and the email CHANGED, we must delete the old doc and create a new one
+                if (id && id !== newEmail) {
+                    const oldDocRef = db.collection("teachers").doc(id);
+                    const newDocRef = db.collection("teachers").doc(newEmail);
+
+                    // Atomic swap: Delete old, Set new
+                    batch.delete(oldDocRef);
+                    batch.set(newDocRef, teacherData);
+                } else {
+                    // Standard save (create new OR update existing with same email)
+                    const docRef = db.collection("teachers").doc(newEmail);
+                    batch.set(docRef, teacherData, { merge: true });
+                }
+
+                await batch.commit(); // Commit all changes atomically
+
+                showToast("Teacher saved successfully!", { color: 'green' });
+
+                // Ensure this function exists in your scope
+                if (typeof closeTeacherModal === 'function') {
+                    closeTeacherModal();
+                }
+
             } catch (error) {
-                console.error("Error deleting teacher:", error);
-                showToast("Could not delete teacher.", { color: 'red' });
+                console.error("Error saving teacher:", error);
+
+                // Display error in the modal if an error div exists
+                const errorDiv = document.getElementById('modal-error');
+                if (errorDiv) {
+                    errorDiv.innerText = "Error: " + error.message;
+                } else {
+                    alert("Error saving: " + error.message);
+                }
+
+            } finally {
+                // --- 3. CLEANUP ---
+                // Always re-enable the button, even if it failed
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = originalBtnText;
+                }
             }
         }
-    }
+        async function handleDeleteTeacher(id, email) {
+            if (confirm(`Are you sure you want to delete teacher ${email}? This action cannot be undone.`)) {
+                try {
+                    await db.collection("teachers").doc(id).delete();
+                    showToast("Teacher deleted successfully.", { color: 'blue' });
+                } catch (error) {
+                    console.error("Error deleting teacher:", error);
+                    showToast("Could not delete teacher.", { color: 'red' });
+                }
+            }
+        }
 
-    document.getElementById('signOutButton').onclick = () => { auth.signOut(); };
+        document.getElementById('signOutButton').onclick = () => { auth.signOut(); };
 
-    function escapeHtml(str) {
-        if (!str) return '';
-        return String(str).replace(/[&<>"']/g, function(match) {
-            const escapeMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
-            return escapeMap[match];
-        });
-    }
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str).replace(/[&<>"']/g, function (match) {
+                const escapeMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+                return escapeMap[match];
+            });
+        }
 
-    function showToast(message, options = {}) {
-        const { color = 'default', duration = 3000 } = options;
-        const wrapper = document.getElementById('toast-wrapper');
-        if (!wrapper) return;
-        
-        const toast = document.createElement('div');
-        toast.className = 'flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm';
-        const colors = { default: 'bg-gray-700', green: 'bg-green-600', red: 'bg-red-600', blue: 'bg-blue-600' };
-        toast.classList.add(colors[color] || colors['default']);
-        
-        const messageSpan = document.createElement('span');
-        messageSpan.textContent = message;
-        toast.appendChild(messageSpan);
-        
-        const closeButton = document.createElement('button');
-        closeButton.innerHTML = '&times;';
-        closeButton.className = 'ml-4 text-2xl font-bold leading-none hover:text-gray-300 focus:outline-none';
-        closeButton.onclick = () => toast.remove();
-        toast.appendChild(closeButton);
-        
-        wrapper.appendChild(toast);
-        setTimeout(() => toast.remove(), duration);
-    }
-</script>
+        function showToast(message, options = {}) {
+            const { color = 'default', duration = 3000 } = options;
+            const wrapper = document.getElementById('toast-wrapper');
+            if (!wrapper) return;
+
+            const toast = document.createElement('div');
+            toast.className = 'flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm';
+            const colors = { default: 'bg-gray-700', green: 'bg-green-600', red: 'bg-red-600', blue: 'bg-blue-600' };
+            toast.classList.add(colors[color] || colors['default']);
+
+            const messageSpan = document.createElement('span');
+            messageSpan.textContent = message;
+            toast.appendChild(messageSpan);
+
+            const closeButton = document.createElement('button');
+            closeButton.innerHTML = '&times;';
+            closeButton.className = 'ml-4 text-2xl font-bold leading-none hover:text-gray-300 focus:outline-none';
+            closeButton.onclick = () => toast.remove();
+            toast.appendChild(closeButton);
+
+            location.reload();
+            wrapper.appendChild(toast);
+            setTimeout(() => toast.remove(), duration);
+        }
+
+        function impersonateUser(email) {
+            if (confirm(`Are you sure you want to impersonate ${email}? You will see the app as they see it.`)) {
+                sessionStorage.setItem('impersonatedUserEmail', email);
+                window.location.href = './assignments.html';
+            }
+        }
+    </script>
 </body>
+
 </html>
