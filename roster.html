@@ -300,16 +300,39 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
         let currentPerfStudentId = null;
         let currentUserEmail = null;
 
+        // --- Impersonation Logic ---
+        function checkImpersonation() {
+            const impersonatedEmail = sessionStorage.getItem('impersonatedUserEmail');
+            if (impersonatedEmail) {
+                const banner = document.createElement('div');
+                banner.className = 'bg-red-600 text-white text-center p-2 font-bold fixed top-0 w-full z-[200] flex justify-center items-center gap-4';
+                banner.innerHTML = `<span>⚠️ IMPERSONATING: ${impersonatedEmail}</span><button onclick="stopImpersonating()" class="bg-white text-red-600 px-3 py-1 rounded text-xs hover:bg-gray-200">Stop</button>`;
+                document.body.prepend(banner);
+                document.body.style.paddingTop = '40px';
+                return impersonatedEmail;
+            }
+            return null;
+        }
+        function stopImpersonating() {
+            sessionStorage.removeItem('impersonatedUserEmail');
+            window.location.reload();
+        }
+        // ---------------------------
+
         auth.onAuthStateChanged(async user => {
             if (user) {
                 try {
+                    let emailToCheck = user.email.toLowerCase();
+                    const impersonated = checkImpersonation();
+                    if (impersonated) emailToCheck = impersonated;
+
                     // Check teachers collection first, then fallback to hardcoded list
-                    const teacherDoc = await db.collection("teachers").doc(user.email.toLowerCase()).get();
+                    const teacherDoc = await db.collection("teachers").doc(emailToCheck).get();
                     const isTeacherInCollection = teacherDoc.exists;
-                    const isTeacherInList = TEACHER_EMAILS.map(e => e.toLowerCase()).includes(user.email.toLowerCase());
+                    const isTeacherInList = TEACHER_EMAILS.map(e => e.toLowerCase()).includes(emailToCheck);
 
                     if (isTeacherInCollection || isTeacherInList) {
-                        currentUserEmail = user.email.toLowerCase();
+                        currentUserEmail = emailToCheck;
                         document.getElementById('pageLoader').classList.add('hidden');
                         document.getElementById('rosterContent').classList.remove('hidden');
 
