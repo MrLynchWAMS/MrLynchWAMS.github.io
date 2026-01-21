@@ -490,9 +490,28 @@
         assignmentData = { id: assignmentDoc.id, ...assignmentDoc.data() };
 
         // Check access control
+        // Check access control
         const isOwner = assignmentData.teacherEmail === currentUserEmail;
         const isCoTeacher = (assignmentData.coTeachers || []).includes(currentUserEmail);
-        const hasAccess = isOwner || isCoTeacher || isAdmin;
+        let hasAccess = isOwner || isCoTeacher || isAdmin;
+
+        // If not explicit access, check for Implicit Global Co-Teacher access
+        // (i.e. Is currentUser listed in the Owner's 'coTeachingFor' list?)
+        if (!hasAccess && assignmentData.teacherEmail) {
+          try {
+            const ownerDoc = await db.collection("teachers").doc(assignmentData.teacherEmail).get();
+            if (ownerDoc.exists) {
+              const ownerData = ownerDoc.data();
+              if (ownerData.coTeachingFor && Array.isArray(ownerData.coTeachingFor)) {
+                if (ownerData.coTeachingFor.map(e => e.toLowerCase()).includes(currentUserEmail)) {
+                  hasAccess = true;
+                }
+              }
+            }
+          } catch (e) {
+            console.error("Error checking implicit access:", e);
+          }
+        }
 
         if (!hasAccess) {
           loadingText.textContent = "Access Denied: You do not have permission to edit this assignment.";
