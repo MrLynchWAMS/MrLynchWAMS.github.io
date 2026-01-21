@@ -291,26 +291,53 @@
                     const impersonated = checkImpersonation();
                     if (impersonated) emailToCheck = impersonated;
 
+                    // 1. Check if user is an explicit teacher
                     const teacherDoc = await db.collection("teachers").doc(emailToCheck).get();
-                    if (teacherDoc.exists) {
+                    let isTeacher = teacherDoc.exists;
+                    let teacherData = isTeacher ? teacherDoc.data() : {};
+
+                    // 2. If not explicit, check if they are an implicit co-teacher (listed in ANY teacher's coTeachingFor)
+                    if (!isTeacher) {
+                        const implicitQuery = await db.collection("teachers").where("coTeachingFor", "array-contains", emailToCheck).get();
+                        if (!implicitQuery.empty) {
+                            isTeacher = true;
+                            teacherData = {
+                                email: emailToCheck,
+                                isAdmin: false,
+                                defaultCoTeachers: [],
+                                isImplicit: true
+                            };
+                            // Optional: Implicit teachers might default to being "co-teachers" of everyone who listed them?
+                            // For now we just grant access to the page.
+                        }
+                    }
+
+                    if (isTeacher) {
                         currentUserEmail = emailToCheck;
-                        const data = teacherDoc.data();
+                        const data = teacherData;
                         currentUserIsAdmin = data.isAdmin || false;
                         currentUserDefaultCoTeachers = data.defaultCoTeachers || [];
+
                         document.getElementById('pageLoader').classList.add('hidden');
                         document.getElementById('assignmentContent').classList.remove('hidden');
+
+                        // If we need to perform any data migrations
                         await runMigration();
+
                         loadInitialData();
                     } else {
-                        document.getElementById('loading-text').textContent = "Please sign in to continue.";
-                        document.getElementById('signInButtonContainer').classList.remove('hidden');
+                        document.getElementById('loading-text').textContent = `Access Denied: You (${emailToCheck}) are not registered as a teacher.`;
+                        document.getElementById('auth-error').textContent = "Please contact an administrator.";
+                        document.getElementById('signInButtonContainer').classList.add('hidden');
                     }
                 } catch (error) {
                     console.error("Error checking teacher status:", error);
-                    document.getElementById('loading-text').textContent = "Please sign in to continue.";
-                    document.getElementById('signInButtonContainer').classList.remove('hidden');
+                    document.getElementById('loading-text').textContent = "Error verifying access.";
+                    document.getElementById('auth-error').innerText = "Network or permission error.";
                 }
             } else {
+                document.getElementById('pageLoader').classList.remove('hidden');
+                document.getElementById('assignmentContent').classList.add('hidden');
                 document.getElementById('loading-text').textContent = "Please sign in to continue.";
                 document.getElementById('signInButtonContainer').classList.remove('hidden');
             }
@@ -349,7 +376,16 @@
         async function loadInitialData() {
             try {
                 // Filter students by current teacher to ensure Class Dropdown only shows THEIR classes
-                const studentSnapshot = await db.collection("students").where("teacherEmail", "==", currentUserEmail).get();
+                // NOTE: If implicit co-teacher, they might want to see Parent's classes?
+                // For now, simpler: Only show my classes. Co-teachers usually don't roster students themselves?
+                // But if I am co-teaching for Klynch, I might want to see Klynch's students.
+                // Let's broaden student search if implicit?
+                let studentQuery = db.collection("students").where("teacherEmail", "==", currentUserEmail);
+
+                // If I am implicit, also fetch my "parents" students?
+                // This is getting complex. Let's stick to basic access first.
+
+                const studentSnapshot = await studentQuery.get();
                 studentRoster = studentSnapshot.docs.map(doc => doc.data());
                 allClassNames = [...new Set(studentRoster.map(s => String(s.class)))].sort();
             } catch (error) {
@@ -357,12 +393,54 @@
                 showToast("Error: Could not load class roster.", { color: 'red' });
             }
 
-            db.collection("assignments").orderBy("createdAt", "desc").onSnapshot(handleAssignmentsUpdate, handleError);
+            // Assignment Fetching Strategy:
+            // 1. My owned assignments (teacherEmail == me)
+            // 2. Assignments where I am a specific co-teacher (coTeachers array-contains me)
+            // 3. Assignments owned by my "Parents" (teachers who list me in coTeachingFor)
+
+            // Firestore can't do OR across all these easily.
+            // We will set up multiple listeners if needed.
+
+            // Listener 1: Owned by me OR Co-Teacher specific (requires composite index usually, or separate queries)
+            // Simpler: Just fetch owned by me.
+            db.collection("assignments").where("teacherEmail", "==", currentUserEmail)
+                .orderBy("createdAt", "desc")
+                .onSnapshot(snapshot => handleAssignmentsUpdate(snapshot, 'owned'), handleError);
+
+            // Listener 2: Explicit Co-Teacher (array-contains)
+            db.collection("assignments").where("coTeachers", "array-contains", currentUserEmail)
+                .onSnapshot(snapshot => handleAssignmentsUpdate(snapshot, 'coTaught'), handleError);
+
+            // Listener 3: Implicit "Parent" Assignments
+            // First, find who my parents are
+            try {
+                const parentsSnapshot = await db.collection("teachers").where("coTeachingFor", "array-contains", currentUserEmail).get();
+                parentsSnapshot.docs.forEach(doc => {
+                    const parentEmail = doc.id; // teacher email is doc ID
+                    // Listen to their assignments
+                    db.collection("assignments").where("teacherEmail", "==", parentEmail)
+                        .onSnapshot(snapshot => handleAssignmentsUpdate(snapshot, `parent-${parentEmail}`), handleError);
+                });
+            } catch (e) {
+                console.error("Error fetching parent teachers for co-teaching:", e);
+            }
+
             db.collection("submissionStatus").onSnapshot(handleStatusUpdate, handleError);
         }
 
-        function handleAssignmentsUpdate(snapshot) {
-            allAssignments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        let assignmentsBySource = {}; // New global variable to store assignments from different sources
+
+        function handleAssignmentsUpdate(snapshot, sourceName) {
+            assignmentsBySource[sourceName] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+            // Combine all sources, remove duplicates (if an assignment appears in multiple sources)
+            const combinedAssignments = new Map(); // Use Map to ensure uniqueness by ID
+            for (const sourceKey in assignmentsBySource) {
+                assignmentsBySource[sourceKey].forEach(assignment => {
+                    combinedAssignments.set(assignment.id, assignment);
+                });
+            }
+            allAssignments = Array.from(combinedAssignments.values());
 
             // Filter assignments based on permissions
             if (!currentUserIsAdmin) {
