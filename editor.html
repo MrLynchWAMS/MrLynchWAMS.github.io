@@ -137,7 +137,37 @@
 
   <div id="editorContent" class="hidden container mx-auto p-4 md:p-8">
     <div class="flex justify-between items-center mb-6 flex-wrap gap-4">
-      <h1 id="assignmentTitle" class="text-3xl font-bold text-yellow-400"></h1>
+      <div class="flex items-center gap-3">
+        <div id="titleDisplay" class="flex items-center gap-2">
+          <h1 id="assignmentTitle" class="text-3xl font-bold text-yellow-400"></h1>
+          <button onclick="startEditingTitle()" class="text-gray-400 hover:text-white transition-colors"
+            title="Rename Assignment">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+              stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+            </svg>
+          </button>
+        </div>
+        <div id="titleEditor" class="hidden flex items-center gap-2">
+          <input type="text" id="titleInput"
+            class="bg-gray-700 text-white text-xl p-1 rounded border border-gray-600 focus:outline-none focus:border-yellow-400">
+          <button onclick="saveTitle()" class="text-green-400 hover:text-green-300" title="Save">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd"
+                d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                clip-rule="evenodd" />
+            </svg>
+          </button>
+          <button onclick="cancelEditingTitle()" class="text-red-400 hover:text-red-300" title="Cancel">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd"
+                d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                clip-rule="evenodd" />
+            </svg>
+          </button>
+        </div>
+      </div>
       <div>
         <a href="./assignments.html"
           class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg">&larr; Back to Assignments</a>
@@ -1826,6 +1856,47 @@
         showToast("Sign out failed.", { color: 'red' });
       });
     });
+
+    // --- Title Editing Logic ---
+    function startEditingTitle() {
+      const titleDisplay = document.getElementById('titleDisplay');
+      const titleEditor = document.getElementById('titleEditor');
+      const titleInput = document.getElementById('titleInput');
+
+      // Remove "Editing: " prefix if present for the input value
+      const currentTitle = assignmentData.name || "";
+      titleInput.value = currentTitle;
+
+      titleDisplay.classList.add('hidden');
+      titleEditor.classList.remove('hidden');
+      titleInput.focus();
+    }
+
+    function cancelEditingTitle() {
+      document.getElementById('titleDisplay').classList.remove('hidden');
+      document.getElementById('titleEditor').classList.add('hidden');
+    }
+
+    async function saveTitle() {
+      const newName = document.getElementById('titleInput').value.trim();
+      if (!newName) {
+        showToast("Assignment name cannot be empty.", { color: 'red' });
+        return;
+      }
+
+      try {
+        await db.collection("assignments").doc(assignmentId).update({ name: newName });
+        assignmentData.name = newName;
+        // Restore "Editing: " prefix for display
+        document.getElementById('assignmentTitle').textContent = `Editing: ${newName}`;
+        showToast("Assignment renamed successfully!", { color: 'green' });
+        cancelEditingTitle();
+      } catch (error) {
+        console.error("Error updating title:", error);
+        showToast("Error renaming assignment.", { color: 'red' });
+      }
+    }
+    // ---------------------------
   </script>
 </body>
 
