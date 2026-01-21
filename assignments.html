@@ -265,12 +265,35 @@
         let currentUserIsAdmin = false;
         let currentUserDefaultCoTeachers = [];
 
+        // --- Impersonation Logic ---
+        function checkImpersonation() {
+            const impersonatedEmail = sessionStorage.getItem('impersonatedUserEmail');
+            if (impersonatedEmail) {
+                const banner = document.createElement('div');
+                banner.className = 'bg-red-600 text-white text-center p-2 font-bold fixed top-0 w-full z-[200] flex justify-center items-center gap-4';
+                banner.innerHTML = `<span>⚠️ IMPERSONATING: ${impersonatedEmail}</span><button onclick="stopImpersonating()" class="bg-white text-red-600 px-3 py-1 rounded text-xs hover:bg-gray-200">Stop</button>`;
+                document.body.prepend(banner);
+                document.body.style.paddingTop = '40px';
+                return impersonatedEmail;
+            }
+            return null;
+        }
+        function stopImpersonating() {
+            sessionStorage.removeItem('impersonatedUserEmail');
+            window.location.reload();
+        }
+        // ---------------------------
+
         auth.onAuthStateChanged(async user => {
             if (user) {
                 try {
-                    const teacherDoc = await db.collection("teachers").doc(user.email.toLowerCase()).get();
+                    let emailToCheck = user.email.toLowerCase();
+                    const impersonated = checkImpersonation();
+                    if (impersonated) emailToCheck = impersonated;
+
+                    const teacherDoc = await db.collection("teachers").doc(emailToCheck).get();
                     if (teacherDoc.exists) {
-                        currentUserEmail = user.email.toLowerCase();
+                        currentUserEmail = emailToCheck;
                         const data = teacherDoc.data();
                         currentUserIsAdmin = data.isAdmin || false;
                         currentUserDefaultCoTeachers = data.defaultCoTeachers || [];
