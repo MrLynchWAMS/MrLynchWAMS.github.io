@@ -348,7 +348,8 @@
 
         async function loadInitialData() {
             try {
-                const studentSnapshot = await db.collection("students").get();
+                // Filter students by current teacher to ensure Class Dropdown only shows THEIR classes
+                const studentSnapshot = await db.collection("students").where("teacherEmail", "==", currentUserEmail).get();
                 studentRoster = studentSnapshot.docs.map(doc => doc.data());
                 allClassNames = [...new Set(studentRoster.map(s => String(s.class)))].sort();
             } catch (error) {
