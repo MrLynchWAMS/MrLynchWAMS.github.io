@@ -406,16 +406,22 @@
             }
             try {
                 const studentQuery = await db.collection("students").where("email", "==", profile.email).get();
+                const isImpersonating = !!localStorage.getItem('impersonatedUserEmail');
+
                 if (studentQuery.empty) {
                     loader.classList.remove('hidden');
                     errorP.textContent = "Access Denied: Your email is not on the class roster.";
                     document.getElementById('loginContainer').classList.add('hidden');
-                    auth.signOut();
+                    if (!isImpersonating) auth.signOut();
                     return;
                 }
                 const studentDoc = studentQuery.docs[0];
                 const studentData = studentDoc.data();
                 const studentClass = String(studentData.class);
+
+                // For a more accurate impersonation, use the student's name from the official roster
+                profile.name = studentData.name || profile.name;
+
                 profile.class = studentClass;
                 profile.auraLifetime = studentData.auraLifetime || 0;
                 profile.auraBalance = studentData.auraBalance || 0;
@@ -425,7 +431,7 @@
                     loader.classList.remove('hidden');
                     errorP.textContent = `Access Denied: This assignment is not available for your class (${studentClass}).`;
                     document.getElementById('loginContainer').classList.add('hidden');
-                    auth.signOut();
+                    if (!isImpersonating) auth.signOut();
                     return;
                 }
                 const classStatus = assignmentData.classStatus?.[studentClass];
@@ -433,7 +439,7 @@
                     loader.classList.remove('hidden');
                     errorP.textContent = `This assignment is currently closed for your class.`;
                     document.getElementById('loginContainer').classList.add('hidden');
-                    auth.signOut();
+                    if (!isImpersonating) auth.signOut();
                     return;
                 }
                 userProfile = profile;
