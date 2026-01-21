@@ -1,29 +1,43 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Public Assignment Library</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📚</text></svg>">
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📚</text></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
     <style>
-        .hidden { display: none; }
-        .btn-action { transition: background-color 0.2s, transform 0.1s; }
-        .btn-action:active { transform: scale(0.95); }
+        .hidden {
+            display: none;
+        }
+
+        .btn-action {
+            transition: background-color 0.2s, transform 0.1s;
+        }
+
+        .btn-action:active {
+            transform: scale(0.95);
+        }
     </style>
 </head>
+
 <body class="bg-gray-900 text-white font-sans">
 
     <div id="pageLoader" class="flex flex-col items-center justify-center h-screen">
         <h1 class="text-4xl font-bold text-yellow-400 mb-4">Public Assignment Library</h1>
         <p id="loading-text" class="text-lg text-gray-300">Initializing...</p>
         <div id="signInButtonContainer" class="hidden mt-8">
-            <div id="g_id_onload" data-client_id="1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com" data-callback="handleCredentialResponse"></div>
-            <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_black" data-text="signin_with" data-shape="rectangular" data-logo_alignment="left"></div>
+            <div id="g_id_onload"
+                data-client_id="1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com"
+                data-callback="handleCredentialResponse"></div>
+            <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_black"
+                data-text="signin_with" data-shape="rectangular" data-logo_alignment="left"></div>
         </div>
         <p id="auth-error" class="text-red-500 mt-4"></p>
     </div>
@@ -32,16 +46,23 @@
         <div class="flex justify-between items-center mb-6 flex-wrap gap-4">
             <h1 class="text-3xl font-bold text-yellow-400">Public Assignment Library</h1>
             <div>
-                <a href="./assignments.html" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg btn-action">&larr; Back to My Assignments</a>
-                <button id="signOutButton" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Sign Out</button>
+                <a href="./assignments.html"
+                    class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg btn-action">&larr;
+                    Back to My Assignments</a>
+                <button id="signOutButton"
+                    class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Sign
+                    Out</button>
             </div>
         </div>
 
         <div class="mb-6">
-            <input type="search" id="searchInput" placeholder="Search public assignments..." class="w-full p-3 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500">
+            <input type="search" id="searchInput" placeholder="Search public assignments..."
+                class="w-full p-3 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500">
         </div>
 
-        <div id="loadingState" class="text-center py-10"><p class="text-xl">Loading public assignments...</p></div>
+        <div id="loadingState" class="text-center py-10">
+            <p class="text-xl">Loading public assignments...</p>
+        </div>
 
         <div id="assignmentsList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <!-- Assignment cards will be dynamically added here -->
@@ -50,125 +71,154 @@
 
     <div id="toast-wrapper" class="fixed top-4 right-4 z-[100] space-y-3 w-full max-w-sm"></div>
 
-<script>
-    const ADMIN_EMAIL = "klynch@mtps.us";
-    const firebaseConfig = {
-      apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
-      authDomain: "mrlynch-slides-app.firebaseapp.com",
-      projectId: "mrlynch-slides-app",
-      storageBucket: "mrlynch-slides-app.appspot.com",
-      messagingSenderId: "223179627035",
-      appId: "1:223179627035:web:ff0f538f3029d829c3f6be"
-    };
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
-    const auth = firebase.auth();
-    
-    let currentUserEmail = null;
-    let allPublicAssignments = [];
-    let teachersMap = {};
+    <script>
+        const ADMIN_EMAIL = "klynch@mtps.us";
+        const firebaseConfig = {
+            apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
+            authDomain: "mrlynch-slides-app.firebaseapp.com",
+            projectId: "mrlynch-slides-app",
+            storageBucket: "mrlynch-slides-app.appspot.com",
+            messagingSenderId: "223179627035",
+            appId: "1:223179627035:web:ff0f538f3029d829c3f6be"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const auth = firebase.auth();
 
-    auth.onAuthStateChanged(async user => {
-        if (user) {
-            currentUserEmail = user.email.toLowerCase();
-            
-            // 1. Check if user is the Admin (Always allow)
-            const isAdmin = currentUserEmail === ADMIN_EMAIL.toLowerCase();
-            
-            if (isAdmin) {
-                // Admin Access Granted
-                document.getElementById('pageLoader').classList.add('hidden');
-                document.getElementById('contentContainer').classList.remove('hidden');
-                await loadTeachersMap();
-                loadPublicAssignments();
-                return;
+        let currentUserEmail = null;
+        let allPublicAssignments = [];
+        let teachersMap = {};
+
+        // --- Impersonation Logic ---
+        function checkImpersonation() {
+            const impersonatedEmail = sessionStorage.getItem('impersonatedUserEmail');
+            if (impersonatedEmail) {
+                const banner = document.createElement('div');
+                banner.className = 'bg-red-600 text-white text-center p-2 font-bold fixed top-0 w-full z-[200] flex justify-center items-center gap-4';
+                banner.innerHTML = `<span>⚠️ IMPERSONATING: ${impersonatedEmail}</span><button onclick="stopImpersonating()" class="bg-white text-red-600 px-3 py-1 rounded text-xs hover:bg-gray-200">Stop</button>`;
+                document.body.prepend(banner);
+                document.body.style.paddingTop = '40px';
+                return impersonatedEmail;
             }
-
-            // 2. If not admin, check if user is in the 'teachers' collection
-            const teacherDoc = await db.collection("teachers").where("email", "==", currentUserEmail).get();
-            
-            if (!teacherDoc.empty) {
-                // Teacher Access Granted
-                document.getElementById('pageLoader').classList.add('hidden');
-                document.getElementById('contentContainer').classList.remove('hidden');
-                await loadTeachersMap();
-                loadPublicAssignments();
-            } else {
-                // Access Denied
-                document.getElementById('loading-text').textContent = "Access Denied: Only teachers can access the public library.";
-                document.getElementById('auth-error').textContent = "Please sign in with a teacher account.";
-                auth.signOut();
-            }
-
-        } else {
-            document.getElementById('loading-text').textContent = "Please sign in to continue.";
-            document.getElementById('signInButtonContainer').classList.remove('hidden');
+            return null;
         }
-    });
+        function stopImpersonating() {
+            sessionStorage.removeItem('impersonatedUserEmail');
+            window.location.reload();
+        }
+        // ---------------------------
 
-    function handleCredentialResponse(response) {
-        const credential = firebase.auth.GoogleAuthProvider.credential(response.credential);
-        auth.signInWithCredential(credential).catch(error => {
-            console.error("Firebase sign-in error", error);
-            document.getElementById('auth-error').innerText = "Firebase sign-in failed. Please try again.";
-        });
-    }
+        auth.onAuthStateChanged(async user => {
+            if (user) {
+                let emailToCheck = user.email.toLowerCase();
+                const impersonated = checkImpersonation();
+                if (impersonated) emailToCheck = impersonated;
+                currentUserEmail = emailToCheck;
 
-    async function loadTeachersMap() {
-        try {
-            const snapshot = await db.collection("teachers").get();
-            teachersMap = {};
-            snapshot.forEach(doc => {
-                const data = doc.data();
-                if(data.email) {
-                    teachersMap[data.email.toLowerCase()] = data;
+                // 1. Check if user is the Admin (Always allow) OR the actual logged in user is admin?
+                // Actually, if I impersonate a teacher, I am simulating NOT being admin (unless they are admin).
+                // But here "Admin Access Granted" just means "Access library".
+                // The check `const isAdmin = currentUserEmail === ADMIN_EMAIL.toLowerCase();`
+                // If I spoof a normal teacher, `isAdmin` becomes false.
+                // Then it proceeds to step 2: Check if user is in 'teachers' collection.
+                // This is correct behavior.
+
+                const isAdmin = currentUserEmail === ADMIN_EMAIL.toLowerCase();
+
+                if (isAdmin) {
+                    // Admin Access Granted
+                    document.getElementById('pageLoader').classList.add('hidden');
+                    document.getElementById('contentContainer').classList.remove('hidden');
+                    await loadTeachersMap();
+                    loadPublicAssignments();
+                    return;
                 }
+
+                // 2. If not admin, check if user is in the 'teachers' collection
+                const teacherDoc = await db.collection("teachers").where("email", "==", currentUserEmail).get();
+
+                if (!teacherDoc.empty) {
+                    // Teacher Access Granted
+                    document.getElementById('pageLoader').classList.add('hidden');
+                    document.getElementById('contentContainer').classList.remove('hidden');
+                    await loadTeachersMap();
+                    loadPublicAssignments();
+                } else {
+                    // Access Denied
+                    document.getElementById('loading-text').textContent = "Access Denied: Only teachers can access the public library.";
+                    document.getElementById('auth-error').textContent = "Please sign in with a teacher account.";
+                    auth.signOut();
+                }
+
+            } else {
+                document.getElementById('loading-text').textContent = "Please sign in to continue.";
+                document.getElementById('signInButtonContainer').classList.remove('hidden');
+            }
+        });
+
+        function handleCredentialResponse(response) {
+            const credential = firebase.auth.GoogleAuthProvider.credential(response.credential);
+            auth.signInWithCredential(credential).catch(error => {
+                console.error("Firebase sign-in error", error);
+                document.getElementById('auth-error').innerText = "Firebase sign-in failed. Please try again.";
             });
-        } catch (error) {
-            console.error("Error loading teachers:", error);
-        }
-    }
-
-    function loadPublicAssignments() {
-        db.collection("assignments")
-            .where("isPublic", "==", true)
-            .orderBy("createdAt", "desc")
-            .onSnapshot(snapshot => {
-                allPublicAssignments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                displayFilteredAssignments();
-            }, error => {
-                console.error("Error loading public assignments:", error);
-                document.getElementById('loadingState').innerText = "Error loading data. See console for details.";
-            });
-    }
-
-    function displayFilteredAssignments() {
-        const listContainer = document.getElementById('assignmentsList');
-        const loadingState = document.getElementById('loadingState');
-        const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-        
-        const filteredAssignments = allPublicAssignments.filter(assignment => 
-            assignment.name.toLowerCase().includes(searchTerm)
-        );
-
-        listContainer.innerHTML = '';
-        
-        if (filteredAssignments.length === 0) {
-            loadingState.innerText = searchTerm ? "No public assignments found matching your search." : "No public assignments available yet.";
-            loadingState.classList.remove('hidden');
-        } else {
-            loadingState.classList.add('hidden');
         }
 
-        filteredAssignments.forEach(assignment => {
-            const card = document.createElement('div');
-            card.className = "bg-gray-800 rounded-lg p-6 shadow-lg flex flex-col justify-between";
-            
-            const date = assignment.createdAt ? new Date(assignment.createdAt.seconds * 1000).toLocaleDateString() : 'No date';
-            const ownerEmail = assignment.teacherEmail || 'Unknown';
-            const numQuestions = assignment.slideIds ? assignment.slideIds.length : 0;
+        async function loadTeachersMap() {
+            try {
+                const snapshot = await db.collection("teachers").get();
+                teachersMap = {};
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    if (data.email) {
+                        teachersMap[data.email.toLowerCase()] = data;
+                    }
+                });
+            } catch (error) {
+                console.error("Error loading teachers:", error);
+            }
+        }
 
-            card.innerHTML = `
+        function loadPublicAssignments() {
+            db.collection("assignments")
+                .where("isPublic", "==", true)
+                .orderBy("createdAt", "desc")
+                .onSnapshot(snapshot => {
+                    allPublicAssignments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    displayFilteredAssignments();
+                }, error => {
+                    console.error("Error loading public assignments:", error);
+                    document.getElementById('loadingState').innerText = "Error loading data. See console for details.";
+                });
+        }
+
+        function displayFilteredAssignments() {
+            const listContainer = document.getElementById('assignmentsList');
+            const loadingState = document.getElementById('loadingState');
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+
+            const filteredAssignments = allPublicAssignments.filter(assignment =>
+                assignment.name.toLowerCase().includes(searchTerm)
+            );
+
+            listContainer.innerHTML = '';
+
+            if (filteredAssignments.length === 0) {
+                loadingState.innerText = searchTerm ? "No public assignments found matching your search." : "No public assignments available yet.";
+                loadingState.classList.remove('hidden');
+            } else {
+                loadingState.classList.add('hidden');
+            }
+
+            filteredAssignments.forEach(assignment => {
+                const card = document.createElement('div');
+                card.className = "bg-gray-800 rounded-lg p-6 shadow-lg flex flex-col justify-between";
+
+                const date = assignment.createdAt ? new Date(assignment.createdAt.seconds * 1000).toLocaleDateString() : 'No date';
+                const ownerEmail = assignment.teacherEmail || 'Unknown';
+                const numQuestions = assignment.slideIds ? assignment.slideIds.length : 0;
+
+                card.innerHTML = `
                 <div>
                     <h3 class="text-2xl font-bold text-yellow-400 mb-2">${escapeHtml(assignment.name)}</h3>
                     <p class="text-sm text-gray-400 mb-2">Shared by: ${escapeHtml(ownerEmail)}</p>
@@ -179,82 +229,83 @@
                     <button onclick="importAssignment('${assignment.id}', '${escapeHtml(assignment.name)}')" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Import to My Assignments</button>
                 </div>
             `;
-            
-            listContainer.appendChild(card);
-        });
-    }
 
-    document.getElementById('searchInput').addEventListener('input', displayFilteredAssignments);
-
-    async function importAssignment(assignmentId, assignmentName) {
-        if (!confirm(`Import "${assignmentName}" to your assignments?\n\nThis will create a copy in your assignment library.`)) {
-            return;
+                listContainer.appendChild(card);
+            });
         }
 
-        try {
-            // Get the source assignment
-            const sourceDoc = await db.collection("assignments").doc(assignmentId).get();
-            if (!sourceDoc.exists) {
-                showToast("Assignment not found.", { color: 'red' });
+        document.getElementById('searchInput').addEventListener('input', displayFilteredAssignments);
+
+        async function importAssignment(assignmentId, assignmentName) {
+            if (!confirm(`Import "${assignmentName}" to your assignments?\n\nThis will create a copy in your assignment library.`)) {
                 return;
             }
 
-            const sourceData = sourceDoc.data();
+            try {
+                // Get the source assignment
+                const sourceDoc = await db.collection("assignments").doc(assignmentId).get();
+                if (!sourceDoc.exists) {
+                    showToast("Assignment not found.", { color: 'red' });
+                    return;
+                }
 
-            // Create a copy with modified fields
-            const newAssignment = {
-                ...sourceData,
-                name: `${sourceData.name} (imported)`,
-                teacherEmail: currentUserEmail,
-                coTeachers: [],
-                assignedClasses: [],
-                classStatus: {},
-                isPublic: false,
-                createdAt: firebase.firestore.FieldValue.serverTimestamp()
-            };
+                const sourceData = sourceDoc.data();
 
-            await db.collection("assignments").add(newAssignment);
-            
-            showToast("Assignment imported successfully! Check your assignments page.", { color: 'green', duration: 5000 });
-        } catch (error) {
-            console.error("Error importing assignment:", error);
-            showToast("Failed to import assignment. See console for details.", { color: 'red' });
+                // Create a copy with modified fields
+                const newAssignment = {
+                    ...sourceData,
+                    name: `${sourceData.name} (imported)`,
+                    teacherEmail: currentUserEmail,
+                    coTeachers: [],
+                    assignedClasses: [],
+                    classStatus: {},
+                    isPublic: false,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                };
+
+                await db.collection("assignments").add(newAssignment);
+
+                showToast("Assignment imported successfully! Check your assignments page.", { color: 'green', duration: 5000 });
+            } catch (error) {
+                console.error("Error importing assignment:", error);
+                showToast("Failed to import assignment. See console for details.", { color: 'red' });
+            }
         }
-    }
 
-    document.getElementById('signOutButton').onclick = () => { auth.signOut(); };
+        document.getElementById('signOutButton').onclick = () => { auth.signOut(); };
 
-    function escapeHtml(str) {
-        if (!str) return '';
-        return String(str).replace(/[&<>"']/g, function(match) {
-            const escapeMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
-            return escapeMap[match];
-        });
-    }
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str).replace(/[&<>"']/g, function (match) {
+                const escapeMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+                return escapeMap[match];
+            });
+        }
 
-    function showToast(message, options = {}) {
-        const { color = 'default', duration = 3000 } = options;
-        const wrapper = document.getElementById('toast-wrapper');
-        if (!wrapper) return;
-        
-        const toast = document.createElement('div');
-        toast.className = 'flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm';
-        const colors = { default: 'bg-gray-700', green: 'bg-green-600', red: 'bg-red-600', blue: 'bg-blue-600', yellow: 'bg-yellow-500' };
-        toast.classList.add(colors[color] || colors['default']);
-        
-        const messageSpan = document.createElement('span');
-        messageSpan.textContent = message;
-        toast.appendChild(messageSpan);
-        
-        const closeButton = document.createElement('button');
-        closeButton.innerHTML = '&times;';
-        closeButton.className = 'ml-4 text-2xl font-bold leading-none hover:text-gray-300 focus:outline-none';
-        closeButton.onclick = () => toast.remove();
-        toast.appendChild(closeButton);
-        
-        wrapper.appendChild(toast);
-        setTimeout(() => toast.remove(), duration);
-    }
-</script>
+        function showToast(message, options = {}) {
+            const { color = 'default', duration = 3000 } = options;
+            const wrapper = document.getElementById('toast-wrapper');
+            if (!wrapper) return;
+
+            const toast = document.createElement('div');
+            toast.className = 'flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm';
+            const colors = { default: 'bg-gray-700', green: 'bg-green-600', red: 'bg-red-600', blue: 'bg-blue-600', yellow: 'bg-yellow-500' };
+            toast.classList.add(colors[color] || colors['default']);
+
+            const messageSpan = document.createElement('span');
+            messageSpan.textContent = message;
+            toast.appendChild(messageSpan);
+
+            const closeButton = document.createElement('button');
+            closeButton.innerHTML = '&times;';
+            closeButton.className = 'ml-4 text-2xl font-bold leading-none hover:text-gray-300 focus:outline-none';
+            closeButton.onclick = () => toast.remove();
+            toast.appendChild(closeButton);
+
+            wrapper.appendChild(toast);
+            setTimeout(() => toast.remove(), duration);
+        }
+    </script>
 </body>
+
 </html>
