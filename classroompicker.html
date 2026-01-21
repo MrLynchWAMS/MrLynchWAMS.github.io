@@ -1817,11 +1817,11 @@
                 let html = '<div class="space-y-2">';
                 let rank = 1;
 
-                // Render Top 10 logic handling ties
+                // Render Top 5 logic handling ties
                 for (let i = 0; i < allFetchedStudents.length; i++) {
                     const s = allFetchedStudents[i];
                     if (i > 0 && s.score < allFetchedStudents[i - 1].score) rank = i + 1;
-                    if (rank > 10) break;
+                    if (rank > 5) break;
 
                     const medal = rank === 1 ? '🥇' : (rank === 2 ? '🥈' : (rank === 3 ? '🥉' : rank));
                     const bgClass = s.isMe ? 'bg-purple-900/50 border-purple-500' : 'bg-gray-700 border-transparent';
