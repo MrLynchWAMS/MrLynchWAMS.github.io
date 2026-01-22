@@ -838,7 +838,10 @@
             if (typeSelect) typeSelect.value = c.type || 'text';
             typeSelect.dispatchEvent(new Event('change'));
 
-            if (opSelect) opSelect.value = c.op || (c.type === 'number' ? '==' : 'contains');
+            if (opSelect) {
+              opSelect.value = c.op || (c.type === 'number' ? '==' : 'contains');
+              opSelect.dispatchEvent(new Event('change'));
+            }
 
             if (c.type === 'text') {
               const valueInput = condEl.querySelector('.cond-value');
@@ -1628,10 +1631,16 @@
           // Handle 'ordered' (contains in order) behavior
           if (operator === 'ordered') {
             if (pickModeSelect) pickModeSelect.classList.add('hidden');
-            if (valueInput) valueInput.placeholder = "numbers, comma-separated";
+            if (valueInput) {
+              valueInput.type = "text";
+              valueInput.placeholder = "numbers, comma-separated";
+            }
           } else {
             if (pickModeSelect) pickModeSelect.classList.remove('hidden');
-            if (valueInput) valueInput.placeholder = "a number";
+            if (valueInput) {
+              valueInput.type = "number";
+              valueInput.placeholder = "a number";
+            }
           }
         }
 
@@ -1999,4 +2008,4 @@
   </script>
 </body>
 
-</html>
+</html>      
