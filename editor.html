@@ -780,8 +780,12 @@
           } else if (type === 'number') {
             const pickModeEl = cond.querySelector('.number-pick-mode');
             const idxEl = cond.querySelector('.number-index');
+            const val2Input = cond.querySelector('.cond-value-2');
+            const inclusiveEl = cond.querySelector('.cond-inclusive');
             condConfig.pickMode = pickModeEl ? pickModeEl.value : 'first';
             condConfig.index = idxEl ? parseInt(idxEl.value || '1', 10) : 1;
+            if (val2Input) condConfig.value2 = val2Input.value;
+            if (inclusiveEl) condConfig.inclusive = inclusiveEl.checked;
           }
 
           conditions.push(condConfig);
@@ -853,6 +857,18 @@
                   idxEl.classList.remove('hidden');
                 } else {
                   idxEl.classList.add('hidden');
+                }
+              }
+              const val2Input = condEl.querySelector('.cond-value-2');
+              const inclusiveEl = condEl.querySelector('.cond-inclusive');
+              if (val2Input && c.value2 !== undefined) {
+                val2Input.value = c.value2;
+                if (c.op === 'between') val2Input.classList.remove('hidden');
+              }
+              if (inclusiveEl && c.inclusive !== undefined) {
+                inclusiveEl.checked = c.inclusive;
+                if (['>', '<', 'between'].includes(c.op)) {
+                  inclusiveEl.closest('label').classList.remove('hidden');
                 }
               }
             }
@@ -1379,34 +1395,50 @@
             const nthIndex = nthIndexEl ? (parseInt(nthIndexEl.value, 10) || 1) : 1;
 
             const createComparison = (numVar) => {
+              const inclusive = cond.querySelector('.cond-inclusive')?.checked || false;
               if (op === '==') {
                 return tolerance > 0 ? `isNear(${numVar}, ${numericVal}, ${tolerance})` : `(${numVar} == ${numericVal})`;
               } else if (op === '!=') {
                 return tolerance > 0 ? `!isNear(${numVar}, ${numericVal}, ${tolerance})` : `(${numVar} != ${numericVal})`;
               } else if (op === '>') {
-                return `(${numVar} > ${numericVal})`;
+                return inclusive ? `(${numVar} >= ${numericVal})` : `(${numVar} > ${numericVal})`;
               } else if (op === '<') {
-                return `(${numVar} < ${numericVal})`;
+                return inclusive ? `(${numVar} <= ${numericVal})` : `(${numVar} < ${numericVal})`;
+              } else if (op === 'between') {
+                const val2 = parseFloat(cond.querySelector('.cond-value-2')?.value || 0);
+                if (inclusive) {
+                  return `(${numVar} >= ${Math.min(numericVal, val2)} && ${numVar} <= ${Math.max(numericVal, val2)})`;
+                } else {
+                  return `(${numVar} > ${Math.min(numericVal, val2)} && ${numVar} < ${Math.max(numericVal, val2)})`;
+                }
               }
               return 'false';
             };
 
             let conditionString = 'false';
-            switch (pickMode) {
-              case 'first':
-                conditionString = `(answerNums.length > 0 && ${createComparison('answerNums[0]')})`;
-                break;
-              case 'last':
-                conditionString = `(answerNums.length > 0 && ${createComparison('answerNums[answerNums.length - 1]')})`;
-                break;
-              case 'nth':
-                if (nthIndex > 0) {
-                  conditionString = `(answerNums.length >= ${nthIndex} && ${createComparison(`answerNums[${nthIndex - 1}]`)})`;
-                }
-                break;
-              case 'any':
-                conditionString = `(answerNums.some(num => ${createComparison('num')}))`;
-                break;
+            if (op === 'ordered') {
+              const valStr = cond.querySelector('.cond-value')?.value || "";
+              const targetNums = valStr.split(',').map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
+              if (targetNums.length === 0) return;
+              const targetArrayLiteral = JSON.stringify(targetNums);
+              conditionString = `(function(){ const _t = ${targetArrayLiteral}; let _ai = 0; for (const _tn of _t) { const _foundIdx = answerNums.slice(_ai).indexOf(_tn); if (_foundIdx === -1) return false; _ai += _foundIdx + 1; } return true; })()`;
+            } else {
+              switch (pickMode) {
+                case 'first':
+                  conditionString = `(answerNums.length > 0 && ${createComparison('answerNums[0]')})`;
+                  break;
+                case 'last':
+                  conditionString = `(answerNums.length > 0 && ${createComparison('answerNums[answerNums.length - 1]')})`;
+                  break;
+                case 'nth':
+                  if (nthIndex > 0) {
+                    conditionString = `(answerNums.length >= ${nthIndex} && ${createComparison(`answerNums[${nthIndex - 1}]`)})`;
+                  }
+                  break;
+                case 'any':
+                  conditionString = `(answerNums.some(num => ${createComparison('num')}))`;
+                  break;
+              }
             }
             groupConditions.push(conditionString);
           }
@@ -1513,18 +1545,32 @@
         const type = e.target.value;
 
         if (type === 'number') {
-          operatorSelect.innerHTML = `<option value="==">is equal to</option><option value="!=">is not equal to</option><option value=">">is greater than</option><option value="<">is less than</option>`;
+          operatorSelect.innerHTML = `
+            <option value="==">is equal to</option>
+            <option value="!=">is not equal to</option>
+            <option value=">">is greater than</option>
+            <option value="<">is less than</option>
+            <option value="between">is between</option>
+            <option value="ordered">contains in order</option>
+          `;
           valueWrapper.innerHTML = `
-        <div class="flex items-center space-x-1">
-          <select class="number-pick-mode bg-gray-700 border border-gray-600 rounded-md p-1 text-sm">
-            <option value="first">First</option>
-            <option value="last">Last</option>
-            <option value="nth">Nth</option>
-            <option value="any">Any</option>
-          </select>
-          <input type="number" class="number-index w-12 bg-gray-700 border border-gray-600 rounded-md p-1 text-sm hidden" value="1" min="1" step="1">
-          <span class="text-sm text-gray-400">number</span>
-          <input type="number" class="cond-value w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="a number" step="any">
+        <div class="flex flex-col space-y-1">
+          <div class="flex items-center space-x-1">
+            <select class="number-pick-mode bg-gray-700 border border-gray-600 rounded-md p-1 text-sm">
+              <option value="first">First</option>
+              <option value="last">Last</option>
+              <option value="nth">Nth</option>
+              <option value="any">Any</option>
+            </select>
+            <input type="number" class="number-index w-12 bg-gray-700 border border-gray-600 rounded-md p-1 text-sm hidden" value="1" min="1" step="1">
+            <span class="text-sm text-gray-400">number</span>
+            <input type="number" class="cond-value w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="a number" step="any">
+            <span class="cond-between-and hidden text-sm text-gray-400">and</span>
+            <input type="number" class="cond-value-2 hidden w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="a number" step="any">
+          </div>
+          <label class="cond-inclusive-label hidden flex items-center text-xs text-gray-400 cursor-pointer">
+            <input type="checkbox" class="cond-inclusive mr-1"> Inclusive (e.g. >=)
+          </label>
         </div>
       `;
           valueWrapper.querySelector('.number-pick-mode').addEventListener('change', e_pick => {
@@ -1556,6 +1602,39 @@
         const operator = e.target.value;
         const textOptions = div.querySelector('.text-options');
         const valueInput = div.querySelector('.cond-value');
+
+        if (type === 'number') {
+          const val2Input = div.querySelector('.cond-value-2');
+          const andSpan = div.querySelector('.cond-between-and');
+          const inclusiveLabel = div.querySelector('.cond-inclusive-label');
+          const pickModeSelect = div.querySelector('.number-pick-mode');
+
+          // Handle 'between' visibility
+          if (operator === 'between') {
+            val2Input?.classList.remove('hidden');
+            andSpan?.classList.remove('hidden');
+          } else {
+            val2Input?.classList.add('hidden');
+            andSpan?.classList.add('hidden');
+          }
+
+          // Handle 'inclusive' visibility
+          if (['>', '<', 'between'].includes(operator)) {
+            inclusiveLabel?.classList.remove('hidden');
+          } else {
+            inclusiveLabel?.classList.add('hidden');
+          }
+
+          // Handle 'ordered' (contains in order) behavior
+          if (operator === 'ordered') {
+            if (pickModeSelect) pickModeSelect.classList.add('hidden');
+            if (valueInput) valueInput.placeholder = "numbers, comma-separated";
+          } else {
+            if (pickModeSelect) pickModeSelect.classList.remove('hidden');
+            if (valueInput) valueInput.placeholder = "a number";
+          }
+        }
+
         if (type === 'text' && textOptions && valueInput) {
           if ((operator === 'contains' || operator === 'not_contains') && valueInput.value.includes(',')) {
             textOptions.classList.remove('hidden');
