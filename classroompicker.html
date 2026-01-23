@@ -221,7 +221,7 @@
 
     <!-- Confirmation Modal -->
     <div id="confirmationModal"
-        class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50">
+        class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-[100]">
         <div class="bg-gray-800 rounded-lg shadow-xl p-6 max-w-sm mx-auto">
             <p id="confirmationMessage" class="text-white text-lg mb-4"></p>
             <div class="flex justify-end gap-4">
@@ -1834,7 +1834,9 @@
                         : (userProfile.teacherEmail || (assignmentData ? assignmentData.teacherEmail : 'klynch@mtps.us')));
 
                     // 1. Deduct from students collection
-                    const studentId = userProfile.id || userProfile.profileId;
+                    const studentId = userProfile.studentDocId;
+                    if (!studentId) throw new Error("Student document ID not found");
+
                     await db.collection('students').doc(studentId).update({
                         auraBalance: firebase.firestore.FieldValue.increment(-cost)
                     });
