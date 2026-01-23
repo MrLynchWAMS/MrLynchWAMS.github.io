@@ -79,6 +79,9 @@
                 <a href="./assignments.html"
                     class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg btn-action">&larr;
                     All Assignments</a>
+                <button onclick="openStoreConfig()"
+                    class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg btn-action">🏪
+                    Store</button>
                 <button onclick="openAddClassModal()"
                     class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg btn-action">+ Add
                     Class</button>
@@ -216,64 +219,132 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
             </div>
 
             <!-- Summary Cards -->
-            <div class="grid grid-cols-3 gap-4 p-4 border-b border-gray-700">
-                <div class="bg-gray-700 rounded-lg p-4 text-center">
-                    <p class="text-sm text-gray-400 mb-1">Average Score</p>
-                    <p id="perf-avg-score" class="text-2xl font-bold text-green-400">--</p>
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 p-4 border-b border-gray-700">
+                <div class="bg-gray-700 rounded-lg p-3 text-center">
+                    <p class="text-xs text-gray-400 mb-1">Avg Score</p>
+                    <p id="perf-avg-score" class="text-xl font-bold text-green-400">--</p>
                 </div>
-                <div class="bg-gray-700 rounded-lg p-4 text-center">
-                    <p class="text-sm text-gray-400 mb-1">Assignments Completed</p>
-                    <p id="perf-assignments-completed" class="text-2xl font-bold text-blue-400">--</p>
+                <div class="bg-gray-700 rounded-lg p-3 text-center">
+                    <p class="text-xs text-gray-400 mb-1">Completed</p>
+                    <p id="perf-assignments-completed" class="text-xl font-bold text-blue-400">--</p>
                 </div>
-                <div class="bg-gray-700 rounded-lg p-4 text-center">
-                    <p class="text-sm text-gray-400 mb-1">Total Aura Earned</p>
-                    <p id="perf-total-aura" class="text-2xl font-bold text-yellow-400">--</p>
+                <div class="bg-gray-700 rounded-lg p-3 text-center border border-purple-500/20">
+                    <p class="text-xs text-purple-300 mb-1">Lifetime Aura</p>
+                    <p id="perf-total-aura" class="text-xl font-bold text-purple-400 font-mono">--</p>
                 </div>
-            </div>
-
-            <!-- Date Filter -->
-            <div class="p-4 border-b border-gray-700 flex items-center gap-4 flex-wrap">
-                <label class="text-sm font-medium text-gray-300">Date Range:</label>
-                <input type="date" id="perf-date-start" class="p-2 bg-gray-700 rounded border border-gray-600 text-sm">
-                <span class="text-gray-400">to</span>
-                <input type="date" id="perf-date-end" class="p-2 bg-gray-700 rounded border border-gray-600 text-sm">
-                <button onclick="filterPerformanceByDate()"
-                    class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Filter</button>
-                <button onclick="clearPerformanceFilter()"
-                    class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Clear</button>
-                <div class="flex items-center gap-2 ml-4">
-                    <input type="checkbox" id="perf-show-questions" onchange="togglePerformanceMode()"
-                        class="w-4 h-4 bg-gray-700 border-gray-600 rounded">
-                    <label for="perf-show-questions" class="text-sm font-medium text-gray-300">Show individual
-                        questions</label>
-                </div>
-                <div class="flex items-center gap-2 ml-4">
-                    <input type="checkbox" id="perf-show-all-attempts" onchange="togglePerformanceMode()"
-                        class="w-4 h-4 bg-gray-700 border-gray-600 rounded">
-                    <label for="perf-show-all-attempts" class="text-sm font-medium text-gray-300">Show all attempts
-                        (raw)</label>
+                <div class="bg-gray-700 rounded-lg p-3 text-center border border-yellow-500/20">
+                    <p class="text-xs text-yellow-300 mb-1">Spendable</p>
+                    <p id="perf-spendable-aura" class="text-xl font-bold text-yellow-400 font-mono">--</p>
                 </div>
             </div>
 
-            <!-- Submissions Table -->
-            <div class="flex-1 overflow-y-auto p-4">
-                <table class="w-full">
-                    <thead id="perf-table-header" class="bg-gray-700 sticky top-0">
-                        <tr>
-                            <th class="text-left p-3 text-sm font-medium text-gray-300">Assignment</th>
-                            <th id="perf-slide-header" class="text-left p-3 text-sm font-medium text-gray-300 hidden">
-                                Slide</th>
-                            <th class="text-left p-3 text-sm font-medium text-gray-300">Date</th>
-                            <th class="text-left p-3 text-sm font-medium text-gray-300">Score</th>
-                            <th class="text-left p-3 text-sm font-medium text-gray-300">Aura</th>
-                        </tr>
-                    </thead>
-                    <tbody id="perf-submissions-table" class="divide-y divide-gray-700">
-                        <!-- Rows populated by JavaScript -->
-                    </tbody>
-                </table>
-                <p id="perf-no-data" class="text-center text-gray-400 py-8 hidden">No submissions found for this
-                    student.</p>
+            <!-- Modal Content Tabs -->
+            <div class="flex border-b border-gray-700 bg-gray-900/30">
+                <button onclick="switchPerfTab('performance')" id="perf-tab-btn"
+                    class="flex-1 py-3 text-sm font-bold text-yellow-400 border-b-2 border-yellow-400 bg-gray-700 transition">Assignment
+                    Performance</button>
+                <button onclick="switchPerfTab('purchases')" id="purchases-tab-btn"
+                    class="flex-1 py-3 text-sm font-bold text-gray-400 hover:bg-gray-700 transition">Aura Store
+                    Purchases</button>
+            </div>
+
+            <div id="performance-tab-content">
+                <!-- Date Filter -->
+                <div class="p-4 border-b border-gray-700 flex items-center gap-4 flex-wrap">
+                    <label class="text-sm font-medium text-gray-300">Date Range:</label>
+                    <input type="date" id="perf-date-start"
+                        class="p-2 bg-gray-700 rounded border border-gray-600 text-sm">
+                    <span class="text-gray-400">to</span>
+                    <input type="date" id="perf-date-end"
+                        class="p-2 bg-gray-700 rounded border border-gray-600 text-sm">
+                    <button onclick="filterPerformanceByDate()"
+                        class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Filter</button>
+                    <button onclick="clearPerformanceFilter()"
+                        class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Clear</button>
+                    <div class="flex items-center gap-2 ml-4">
+                        <input type="checkbox" id="perf-show-questions" onchange="togglePerformanceMode()"
+                            class="w-4 h-4 bg-gray-700 border-gray-600 rounded">
+                        <label for="perf-show-questions" class="text-sm font-medium text-gray-300">Questions</label>
+                    </div>
+                    <div class="flex items-center gap-2 ml-4">
+                        <input type="checkbox" id="perf-show-all-attempts" onchange="togglePerformanceMode()"
+                            class="w-4 h-4 bg-gray-700 border-gray-600 rounded">
+                        <label for="perf-show-all-attempts" class="text-sm font-medium text-gray-300">All
+                            Attempts</label>
+                    </div>
+                </div>
+
+                <!-- Submissions Table -->
+                <div class="flex-1 overflow-y-auto p-4 max-h-[50vh]">
+                    <p id="perf-no-data" class="text-center text-gray-400 py-8 hidden">No submissions found.</p>
+                    <table id="perf-table" class="w-full">
+                        <thead id="perf-table-header" class="bg-gray-700 sticky top-0">
+                            <tr>
+                                <th class="text-left p-3 text-sm font-medium text-gray-300">Assignment</th>
+                                <th id="perf-slide-header"
+                                    class="text-left p-3 text-sm font-medium text-gray-300 hidden">
+                                    Slide</th>
+                                <th class="text-left p-3 text-sm font-medium text-gray-300">Date</th>
+                                <th class="text-left p-3 text-sm font-medium text-gray-300">Score</th>
+                                <th class="text-left p-3 text-sm font-medium text-gray-300">Aura</th>
+                            </tr>
+                        </thead>
+                        <tbody id="perf-submissions-table" class="divide-y divide-gray-700">
+                            <!-- Rows populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="purchases-tab-content" class="hidden flex-1 overflow-y-auto">
+                <div class="p-4">
+                    <p id="purchase-no-data" class="text-center text-gray-400 py-8 hidden">No purchase history found.
+                    </p>
+                    <table id="purchase-table" class="w-full">
+                        <thead class="bg-gray-700 sticky top-0">
+                            <tr>
+                                <th class="text-left p-3 text-sm font-medium text-gray-300">Item</th>
+                                <th class="text-left p-3 text-sm font-medium text-gray-300">Cost</th>
+                                <th class="text-left p-3 text-sm font-medium text-gray-300">Date</th>
+                                <th class="text-center p-3 text-sm font-medium text-gray-300">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="purchase-history-table" class="divide-y divide-gray-700">
+                            <!-- Rows populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Aura Store Config Modal -->
+    <div id="auraStoreModal"
+        class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
+        <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="flex justify-between items-center p-4 border-b border-gray-700">
+                <h2 class="text-2xl font-bold text-yellow-400">Configure Aura Store</h2>
+                <button onclick="closeStoreConfig()"
+                    class="text-gray-400 hover:text-white text-3xl transition hover:rotate-90">&times;</button>
+            </div>
+            <div class="p-6 overflow-y-auto bg-gray-800">
+                <p class="text-sm text-gray-400 mb-6">Students spend their Aura on these items. Changes apply across all
+                    your classes.</p>
+                <div id="store-items-config" class="space-y-4">
+                    <!-- Items go here -->
+                </div>
+                <button onclick="addStoreItem()"
+                    class="mt-6 w-full py-3 bg-gray-700/50 hover:bg-gray-700 text-yellow-500 border-2 border-dashed border-gray-600 rounded-xl font-bold transition flex items-center justify-center gap-2">
+                    <span class="text-xl">+</span> Add Store Item
+                </button>
+            </div>
+            <div class="p-4 bg-gray-900 border-t border-gray-700 flex justify-end gap-3">
+                <button onclick="closeStoreConfig()"
+                    class="px-6 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg font-bold">Cancel</button>
+                <button id="saveStoreBtn" onclick="saveStoreConfig()"
+                    class="px-6 py-2 bg-yellow-600 hover:bg-yellow-700 text-white font-bold rounded-lg transition">Save
+                    Changes</button>
             </div>
         </div>
     </div>
@@ -297,6 +368,7 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
         // Globals for performance modal
         let assignmentMap = {};
         let cachedSubmissions = {};
+        let cachedPurchases = {};
         let currentPerfStudentId = null;
         let currentUserEmail = null;
 
@@ -707,7 +779,8 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
             // Populate header
             document.getElementById('perf-student-name').textContent = name;
             document.getElementById('perf-student-email').textContent = email;
-            document.getElementById('perf-student-lifetime').textContent = `Lifetime Aura: ${auraLifetime} ✧`;
+            document.getElementById('perf-total-aura').textContent = auraLifetime + ' ✧';
+            document.getElementById('perf-spendable-aura').textContent = '--';
 
             // Clear date filters and checkbox
             document.getElementById('perf-date-start').value = '';
@@ -715,8 +788,17 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
             document.getElementById('perf-show-questions').checked = false;
             document.getElementById('perf-show-all-attempts').checked = false;
 
+            // Reset tabs
+            switchPerfTab('performance');
+
             // Show modal
             document.getElementById('student-performance-modal').classList.remove('hidden');
+
+            // Fetch current spendable balance
+            fetchStudentBalance(studentId, email);
+
+            // Fetch purchases
+            fetchPurchases(email);
 
             // Check if submissions are already cached
             if (cachedSubmissions[studentId]) {
@@ -905,15 +987,222 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
             currentPerfStudentId = null;
         }
 
+        async function fetchStudentBalance(studentId, email) {
+            try {
+                let doc = await db.collection('students').doc(studentId).get();
+                if (!doc.exists) {
+                    const snap = await db.collection('students').where('email', '==', email).limit(1).get();
+                    if (!snap.empty) doc = snap.docs[0];
+                }
+                if (doc.exists) {
+                    const balance = doc.data().auraBalance || 0;
+                    document.getElementById('perf-spendable-aura').textContent = balance + ' ✧';
+                }
+            } catch (err) {
+                console.error("Error fetching balance:", err);
+            }
+        }
+
+        async function fetchPurchases(email) {
+            const tableBody = document.getElementById('purchase-history-table');
+            const noDataMsg = document.getElementById('purchase-no-data');
+            const table = document.getElementById('purchase-table');
+
+            tableBody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-gray-500">Loading history...</td></tr>';
+            noDataMsg.classList.add('hidden');
+            table.classList.remove('hidden');
+
+            try {
+                const snapshot = await db.collection('auraPurchases')
+                    .where('studentEmail', '==', email.toLowerCase())
+                    .orderBy('timestamp', 'desc')
+                    .get();
+
+                const purchases = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                cachedPurchases[currentPerfStudentId] = purchases;
+                renderPurchaseHistory(purchases);
+            } catch (err) {
+                console.error("Error fetching purchases:", err);
+                tableBody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-red-400">Error loading history.</td></tr>';
+            }
+        }
+
+        function renderPurchaseHistory(purchases) {
+            const tableBody = document.getElementById('purchase-history-table');
+            const noDataMsg = document.getElementById('purchase-no-data');
+            const table = document.getElementById('purchase-table');
+
+            if (purchases.length === 0) {
+                tableBody.innerHTML = '';
+                table.classList.add('hidden');
+                noDataMsg.classList.remove('hidden');
+                return;
+            }
+
+            noDataMsg.classList.add('hidden');
+            table.classList.remove('hidden');
+            tableBody.innerHTML = purchases.map(p => {
+                const date = p.timestamp ? new Date(p.timestamp.seconds * 1000).toLocaleDateString() : 'Pending';
+                return `
+                    <tr class="${p.used ? 'opacity-50' : ''}">
+                        <td class="p-3 text-sm font-medium">${p.itemName}</td>
+                        <td class="p-3 text-sm text-yellow-400 font-mono">${p.cost} ✧</td>
+                        <td class="p-3 text-sm text-gray-400">${date}</td>
+                        <td class="p-3 text-center">
+                            <button onclick="togglePurchaseUsed('${p.id}', ${!p.used})" 
+                                class="px-3 py-1 rounded-full text-xs font-bold transition ${p.used ? 'bg-gray-600 text-gray-300' : 'bg-green-600 hover:bg-green-700 text-white'}">
+                                ${p.used ? 'Used' : 'Mark as Used'}
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        async function togglePurchaseUsed(id, used) {
+            try {
+                await db.collection('auraPurchases').doc(id).update({ used: used });
+                if (cachedPurchases[currentPerfStudentId]) {
+                    const p = cachedPurchases[currentPerfStudentId].find(x => x.id === id);
+                    if (p) p.used = used;
+                    renderPurchaseHistory(cachedPurchases[currentPerfStudentId]);
+                }
+            } catch (err) {
+                console.error("Error updating purchase:", err);
+                showToast("Failed to update status.");
+            }
+        }
+
+        window.switchPerfTab = function (tab) {
+            const perfTab = document.getElementById('performance-tab-content');
+            const purchaseTab = document.getElementById('purchases-tab-content');
+            const perfBtn = document.getElementById('perf-tab-btn');
+            const purchaseBtn = document.getElementById('purchases-tab-btn');
+
+            if (tab === 'performance') {
+                perfTab.classList.remove('hidden');
+                purchaseTab.classList.add('hidden');
+                perfBtn.className = "flex-1 py-3 text-sm font-bold text-yellow-400 border-b-2 border-yellow-400 bg-gray-700 transition";
+                purchaseBtn.className = "flex-1 py-3 text-sm font-bold text-gray-400 hover:bg-gray-700 transition";
+            } else {
+                perfTab.classList.add('hidden');
+                purchaseTab.classList.remove('hidden');
+                perfBtn.className = "flex-1 py-3 text-sm font-bold text-gray-400 hover:bg-gray-700 transition";
+                purchaseBtn.className = "flex-1 py-3 text-sm font-bold text-yellow-400 border-b-2 border-yellow-400 bg-gray-700 transition";
+            }
+        }
+
+        // --- Store Config Functions ---
+        let currentStoreItems = [];
+
+        window.openStoreConfig = async function () {
+            const container = document.getElementById('store-items-config');
+            container.innerHTML = '<div class="text-center py-10 text-gray-500">Loading your store config...</div>';
+            document.getElementById('auraStoreModal').classList.remove('hidden');
+
+            try {
+                const doc = await db.collection('auraStores').doc(currentUserEmail).get();
+                if (doc.exists && doc.data().items) {
+                    currentStoreItems = doc.data().items;
+                } else {
+                    currentStoreItems = [
+                        { name: 'Listen to Music', cost: 5, icon: '🎧' },
+                        { name: 'Swap Seats (1 Day)', cost: 10, icon: '🪑' },
+                        { name: 'Homework Pass', cost: 20, icon: '🎟️' }
+                    ];
+                }
+                renderStoreConfig();
+            } catch (err) {
+                console.error("Error loading store config:", err);
+                showToast("Error loading store config.");
+            }
+        }
+
+        function renderStoreConfig() {
+            const container = document.getElementById('store-items-config');
+            if (currentStoreItems.length === 0) {
+                container.innerHTML = '<div class="text-center py-4 text-gray-500 italic">No items yet. Add one!</div>';
+                return;
+            }
+
+            container.innerHTML = currentStoreItems.map((item, index) => `
+                <div class="flex gap-3 items-center bg-gray-700/30 p-3 rounded-lg border border-gray-700 group transition hover:border-gray-500">
+                    <div class="w-12">
+                        <input type="text" value="${item.icon || '✨'}" onchange="updateItem(${index}, 'icon', this.value)" class="w-full bg-gray-800 border-gray-600 rounded p-2 text-center text-xl">
+                    </div>
+                    <div class="flex-1">
+                        <input type="text" value="${item.name}" placeholder="Item Name" onchange="updateItem(${index}, 'name', this.value)" class="w-full bg-gray-800 border-gray-600 rounded p-2 text-sm font-medium">
+                    </div>
+                    <div class="w-20">
+                        <input type="number" value="${item.cost}" placeholder="Cost" onchange="updateItem(${index}, 'cost', this.value)" class="w-full bg-gray-800 border-gray-600 rounded p-2 text-sm text-yellow-400 font-bold">
+                    </div>
+                    <button onclick="removeStoreItem(${index})" class="text-gray-500 hover:text-red-400 p-2 transition">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        window.updateItem = function (index, field, value) {
+            if (field === 'cost') value = parseInt(value, 10) || 0;
+            currentStoreItems[index][field] = value;
+        }
+
+        window.addStoreItem = function () {
+            currentStoreItems.push({ name: '', cost: 10, icon: '✨' });
+            renderStoreConfig();
+        }
+
+        window.removeStoreItem = function (index) {
+            currentStoreItems.splice(index, 1);
+            renderStoreConfig();
+        }
+
+        window.saveStoreConfig = async function () {
+            const btn = document.getElementById('saveStoreBtn');
+            btn.disabled = true;
+            btn.textContent = 'Saving...';
+
+            try {
+                // Filter out empty names
+                const filtered = currentStoreItems.filter(item => item.name.trim() !== '');
+                await db.collection('auraStores').doc(currentUserEmail).set({
+                    items: filtered,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                showToast("Store configuration saved!", { color: 'green' });
+                closeStoreConfig();
+            } catch (err) {
+                console.error("Error saving store:", err);
+                showToast("Failed to save store configuration.", { color: 'red' });
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Save Changes';
+            }
+        }
+
+        window.closeStoreConfig = function () {
+            document.getElementById('auraStoreModal').classList.add('hidden');
+        }
+
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape' && !document.getElementById('student-performance-modal').classList.contains('hidden')) {
                 closeStudentPerformance();
+            }
+            if (e.key === 'Escape' && !document.getElementById('auraStoreModal').classList.contains('hidden')) {
+                closeStoreConfig();
             }
         });
 
         document.getElementById('student-performance-modal').addEventListener('click', (e) => {
             if (e.target.id === 'student-performance-modal') {
                 closeStudentPerformance();
+            }
+        });
+
+        document.getElementById('auraStoreModal').addEventListener('click', (e) => {
+            if (e.target.id === 'auraStoreModal') {
+                closeStoreConfig();
             }
         });
 
