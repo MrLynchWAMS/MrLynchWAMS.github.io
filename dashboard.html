@@ -341,15 +341,16 @@
                     studentSnapshot.docChanges().forEach(change => {
                         const studentData = change.doc.data();
                         const studentTeacher = studentData.teacherEmail ? studentData.teacherEmail.toLowerCase() : 'klynch@mtps.us';
+                        const studentEmail = studentData.email ? studentData.email.toLowerCase() : '';
 
                         if (change.type === "added" || change.type === "modified") {
-                            if (studentTeacher === assignmentTeacher) {
-                                studentsMap.set(studentData.email, studentData);
-                            } else {
-                                studentsMap.delete(studentData.email);
+                            if (studentTeacher === assignmentTeacher && studentEmail) {
+                                studentsMap.set(studentEmail, { ...studentData, email: studentEmail });
+                            } else if (studentEmail) {
+                                studentsMap.delete(studentEmail);
                             }
-                        } else if (change.type === "removed") {
-                            studentsMap.delete(studentData.email);
+                        } else if (change.type === "removed" && studentEmail) {
+                            studentsMap.delete(studentEmail);
                         }
                     });
                     rebuildAllStudentData();
@@ -361,7 +362,8 @@
                 .onSnapshot(submissionSnapshot => {
                     submissionSnapshot.docChanges().forEach(change => {
                         const submission = { id: change.doc.id, ...change.doc.data() };
-                        const studentEmail = submission.studentEmail;
+                        const studentEmail = submission.studentEmail ? submission.studentEmail.toLowerCase() : '';
+                        if (!studentEmail) return;
 
                         if (change.type === "removed") {
                             const submissions = submissionsByStudent.get(studentEmail) || [];
@@ -398,7 +400,9 @@
                     const docsByStudent = new Map();
                     statusSnapshot.forEach(doc => {
                         const data = doc.data();
-                        const email = data.studentEmail;
+                        const email = data.studentEmail ? data.studentEmail.toLowerCase() : '';
+                        if (!email) return;
+
                         submittedEmails.add(email);
 
                         if (!docsByStudent.has(email)) {
@@ -443,7 +447,9 @@
                     violationsByStudent.clear();
                     violationSnapshot.forEach(doc => {
                         const violation = { id: doc.id, ...doc.data() };
-                        const studentEmail = violation.studentEmail;
+                        const studentEmail = violation.studentEmail ? violation.studentEmail.toLowerCase() : '';
+                        if (!studentEmail) return;
+
                         if (!violationsByStudent.has(studentEmail)) {
                             violationsByStudent.set(studentEmail, []);
                         }
@@ -459,8 +465,11 @@
                     questionProgressByStudent.clear();
                     progressSnapshot.forEach(doc => {
                         const progress = { id: doc.id, ...doc.data() };
-                        const studentEmail = progress.studentEmail;
-                        const slideIndex = progress.slideIndex;
+                        const studentEmail = progress.studentEmail ? progress.studentEmail.toLowerCase() : '';
+                        if (!studentEmail) return;
+
+                        const slideIndex = parseInt(progress.slideIndex, 10);
+                        if (isNaN(slideIndex)) return;
 
                         if (!questionProgressByStudent.has(studentEmail)) {
                             questionProgressByStudent.set(studentEmail, new Map());
