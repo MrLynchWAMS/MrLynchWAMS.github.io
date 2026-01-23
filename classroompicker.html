@@ -1339,20 +1339,24 @@
 
             // Calculate base score from checker
             let baseScore = checkCurrentSlideAnswer(studentAnswer, attemptInfo);
-            let finalScore = baseScore;
 
-            // Apply attempt deduction (only for new attempts beyond the first)
-            if (attemptsConfig.enabled && isNewAttempt && attemptCount > 1) {
+            // Calculate total attempt deduction
+            let totalDeduction = 0;
+            if (attemptsConfig.enabled && attemptCount > 1) {
                 const extraAttempts = attemptCount - 1;
-                const deduction = extraAttempts * (attemptsConfig.deduction || 0);
-                finalScore = Math.max(0, baseScore - deduction);
-
-                if (deduction > 0) {
-                    showToast(`-${deduction} points for ${extraAttempts} extra attempt(s).`, { color: 'orange', duration: 4000 });
-                }
+                totalDeduction = extraAttempts * (attemptsConfig.deduction || 0);
             }
 
-            // Apply deadline penalties
+            // Apply deduction to get the score for THIS attempt
+            let currentPenalizedScore = Math.max(0, baseScore - totalDeduction);
+
+            if (totalDeduction > 0 && isNewAttempt) {
+                showToast(`-${totalDeduction} points for ${attemptCount - 1} extra attempt(s).`, { color: 'orange', duration: 4000 });
+            }
+
+            // Apply deadline penalties (to the baseScore first, then re-calculate penalized score)
+            // or apply to final penalized score? Usually, penalties are applied to the earned points.
+            let finalScore = currentPenalizedScore;
             let isOnTime = true;
 
             if (policy && userProfile.class !== 'Teacher') {
@@ -1368,26 +1372,37 @@
                     if (now > deadline) {
                         isOnTime = false;
                         const minutesLate = Math.ceil((now - deadline) / 60000);
+                        let deadlinePenalty = 0;
                         switch (qPolicy.penaltyType) {
-                            case 'zero': finalScore = 0; showToast(`Submitted ${minutesLate} mins late. Score is 0.`, { color: 'red', duration: 7000 }); break;
-                            case 'deduction': const deduction = baseScore * (qPolicy.penaltyValue / 100); finalScore = Math.round(baseScore - deduction); showToast(`-${qPolicy.penaltyValue}% for being ${minutesLate} mins late.`, { color: 'red', duration: 7000 }); break;
-                            case 'incremental': const pointsOff = minutesLate * qPolicy.penaltyValue; finalScore = baseScore - pointsOff; showToast(`-${pointsOff} points for being ${minutesLate} mins late.`, { color: 'red', duration: 7000 }); break;
-                            default: finalScore = baseScore; break;
+                            case 'zero':
+                                finalScore = 0;
+                                showToast(`Submitted ${minutesLate} mins late. Score is 0.`, { color: 'red', duration: 7000 });
+                                break;
+                            case 'deduction':
+                                deadlinePenalty = finalScore * (qPolicy.penaltyValue / 100);
+                                finalScore = Math.round(finalScore - deadlinePenalty);
+                                showToast(`-${qPolicy.penaltyValue}% for being ${minutesLate} mins late.`, { color: 'red', duration: 7000 });
+                                break;
+                            case 'incremental':
+                                deadlinePenalty = minutesLate * qPolicy.penaltyValue;
+                                finalScore = Math.max(0, finalScore - deadlinePenalty);
+                                showToast(`-${deadlinePenalty} points for being ${minutesLate} mins late.`, { color: 'red', duration: 7000 });
+                                break;
                         }
-                        finalScore = Math.max(0, finalScore);
                     }
                 }
             }
 
             // Retain best score logic
-            let scoreToPersist = finalScore;
             let bestScore = questionProgress?.bestScore || 0;
             let bestAnswer = questionProgress?.bestAnswer || null;
+            let scoreToPersist = finalScore;
 
             if (attemptsConfig.enabled && attemptsConfig.retainBestScore !== false) {
-                if (finalScore > bestScore) {
+                if (finalScore >= bestScore) {
                     bestScore = finalScore;
                     bestAnswer = studentAnswer;
+                    scoreToPersist = finalScore;
                 } else {
                     scoreToPersist = bestScore; // Keep best score
                 }
@@ -1395,6 +1410,7 @@
                 // Not retaining best, so current score becomes the best
                 bestScore = finalScore;
                 bestAnswer = studentAnswer;
+                scoreToPersist = finalScore;
             }
 
             // Check if should lock
