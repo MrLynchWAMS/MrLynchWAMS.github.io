@@ -1568,10 +1568,14 @@
             return 0;
         }
 
-        function showConfirmationModal(message, onConfirm) {
-            document.getElementById('confirmationMessage').textContent = message;
+        function showConfirmationModal(message, onConfirm, showCancel = true) {
+            document.getElementById('confirmationMessage').innerHTML = message;
             confirmCallback = onConfirm;
             document.getElementById('confirmationModal').classList.remove('hidden');
+            const cancelBtn = document.querySelector('button[onclick="handleConfirmCancel()"]');
+            if (cancelBtn) {
+                cancelBtn.classList.toggle('hidden', !showCancel);
+            }
         }
 
         function handleConfirmCancel() {
@@ -1764,25 +1768,111 @@
             // Show spendable balance prominently, with lifetime context below
             const balance = userProfile.auraBalance || 0;
             const lifetime = userProfile.auraLifetime || 0;
+
+            const teacherEmail = normalizeTeacherEmail(userProfile.class === 'Teacher'
+                ? userProfile.email
+                : (userProfile.teacherEmail || (assignmentData ? assignmentData.teacherEmail : 'klynch@mtps.us')));
+
             document.getElementById('aura-content').innerHTML = `
             <div class="text-center mb-4">
                 <div class="text-sm text-gray-400">Spendable Balance</div>
                 <div class="text-3xl font-bold text-yellow-400">${balance} ✧</div>
                 <div class="text-xs text-purple-400 mt-1">Lifetime: ${lifetime} ✧</div>
             </div>
-            <div class="space-y-3">
-                 <div class="flex justify-between p-3 bg-gray-700 rounded border border-gray-600 items-center">
-                    <span>🎧 Listen to Music</span> <span class="bg-gray-900 px-2 py-1 rounded text-yellow-400 font-mono">5 ✧</span>
-                </div>
-                <div class="flex justify-between p-3 bg-gray-700 rounded border border-gray-600 items-center">
-                    <span>🪑 Swap Seats (1 Day)</span> <span class="bg-gray-900 px-2 py-1 rounded text-yellow-400 font-mono">10 ✧</span>
-                </div>
-                <div class="flex justify-between p-3 bg-gray-700 rounded border border-gray-600 items-center">
-                    <span>🎟️ Homework Pass</span> <span class="bg-gray-900 px-2 py-1 rounded text-yellow-400 font-mono">20 ✧</span>
-                </div>
+            <div id="store-items-list" class="space-y-3">
+                <div class="text-center py-4 text-gray-500">Loading store...</div>
             </div>
-            <p class="text-center text-xs text-gray-500 mt-4">Redemption features coming soon.</p>
+            <p class="text-center text-xs text-gray-500 mt-6">⚠️ Teacher permission required for all items.</p>
         `;
+
+            // Fetch custom store items
+            db.collection('auraStores').doc(teacherEmail).get().then(doc => {
+                let items = [
+                    { name: 'Listen to Music', cost: 5, icon: '🎧' },
+                    { name: 'Swap Seats (1 Day)', cost: 10, icon: '🪑' },
+                    { name: 'Homework Pass', cost: 20, icon: '🎟️' }
+                ];
+
+                if (doc.exists && doc.data().items && doc.data().items.length > 0) {
+                    items = doc.data().items;
+                }
+
+                const listContainer = document.getElementById('store-items-list');
+                if (!listContainer) return;
+
+                listContainer.innerHTML = items.map(item => {
+                    const canAfford = balance >= item.cost;
+                    return `
+                        <div onclick="${canAfford ? `purchaseItem('${item.name.replace(/'/g, "\\'")}', ${item.cost})` : `showToast('Need more Aura!', {color: 'red'})`}" 
+                             class="flex justify-between p-3 rounded border transition active:scale-95 cursor-pointer ${canAfford ? 'bg-gray-700 hover:bg-gray-600 border-gray-600' : 'bg-gray-800 border-gray-700 opacity-60'} items-center group">
+                            <span class="flex items-center gap-2">
+                                <span class="text-xl">${item.icon || '✨'}</span>
+                                <span class="group-hover:text-yellow-400 transition font-medium">${item.name}</span>
+                            </span>
+                            <span class="bg-gray-900 px-2 py-1 rounded text-yellow-400 font-mono text-sm">${item.cost} ✧</span>
+                        </div>
+                    `;
+                }).join('');
+
+            }).catch(err => {
+                console.error("Error loading store:", err);
+                const listContainer = document.getElementById('store-items-list');
+                if (listContainer) listContainer.innerHTML = '<div class="text-center text-red-400">Error loading items.</div>';
+            });
+        }
+
+        window.purchaseItem = async function (itemName, cost) {
+            if (userProfile.auraBalance < cost) {
+                showToast("Not enough Aura balance.", { color: 'red' });
+                return;
+            }
+
+            showConfirmationModal(`Spend <span class="text-yellow-400 font-bold">${cost} ✧</span> for <br><span class="text-xl font-bold">"${itemName}"</span>?`, async () => {
+                try {
+                    const teacherEmail = normalizeTeacherEmail(userProfile.class === 'Teacher'
+                        ? userProfile.email
+                        : (userProfile.teacherEmail || (assignmentData ? assignmentData.teacherEmail : 'klynch@mtps.us')));
+
+                    // 1. Deduct from students collection
+                    const studentId = userProfile.id || userProfile.profileId;
+                    await db.collection('students').doc(studentId).update({
+                        auraBalance: firebase.firestore.FieldValue.increment(-cost)
+                    });
+
+                    // 2. Log purchase
+                    await db.collection('auraPurchases').add({
+                        studentEmail: userProfile.email,
+                        studentName: userProfile.name,
+                        itemName: itemName,
+                        cost: cost,
+                        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                        teacherEmail: teacherEmail,
+                        used: false
+                    });
+
+                    // 3. Update local state
+                    userProfile.auraBalance -= cost;
+                    updateUserHeader();
+                    renderStoreTab();
+
+                    // 4. Success feedback with permission warning
+                    showConfirmationModal(`
+                        <div class="text-center py-2">
+                            <div class="text-5xl mb-4">🎁</div>
+                            <h3 class="text-xl font-bold text-yellow-400 mb-2">Purchase Successful!</h3>
+                            <p class="text-gray-300">Item: <span class="font-bold text-white">${itemName}</span></p>
+                            <div class="mt-4 p-3 bg-red-900/30 border border-red-500/50 rounded-lg">
+                                <p class="text-sm font-bold text-red-200 uppercase tracking-wider">⚠️ IMPORTANT</p>
+                                <p class="text-xs text-red-100 mt-1">You MUST receive explicit permission from your teacher before using this item!</p>
+                            </div>
+                        </div>
+                    `, () => { }, false); // false for no cancel button
+
+                } catch (error) {
+                    console.error("Purchase error:", error);
+                    showToast("Transaction failed. Try again.", { color: 'red' });
+                }
+            });
         }
 
         function renderLeaderboardTab() {
