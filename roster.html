@@ -221,11 +221,11 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
             <!-- Summary Cards -->
             <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 p-4 border-b border-gray-700">
                 <div class="bg-gray-700 rounded-lg p-3 text-center">
-                    <p class="text-xs text-gray-400 mb-1">Avg Score</p>
+                    <p id="perf-avg-label" class="text-xs text-gray-400 mb-1">Avg Score (Attempted)</p>
                     <p id="perf-avg-score" class="text-xl font-bold text-green-400">--</p>
                 </div>
-                <div class="bg-gray-700 rounded-lg p-3 text-center">
-                    <p class="text-xs text-gray-400 mb-1">Active Assignments</p>
+                <div id="perf-assignment-card" class="bg-gray-700 rounded-lg p-3 text-center">
+                    <p id="perf-completion-label" class="text-xs text-gray-400 mb-1">Active Assignments</p>
                     <p id="perf-assignments-completed" class="text-xl font-bold text-blue-400">--</p>
                 </div>
                 <div class="bg-gray-700 rounded-lg p-3 text-center border border-purple-500/20">
@@ -249,24 +249,42 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
             </div>
 
             <div id="performance-tab-content">
-                <!-- Date Filter -->
+                <!-- Date Filter & Options -->
                 <div class="p-4 border-b border-gray-700 flex items-center gap-4 flex-wrap">
-                    <label class="text-sm font-medium text-gray-300">Date Range:</label>
-                    <input type="date" id="perf-date-start"
-                        class="p-2 bg-gray-700 rounded border border-gray-600 text-sm">
-                    <span class="text-gray-400">to</span>
-                    <input type="date" id="perf-date-end"
-                        class="p-2 bg-gray-700 rounded border border-gray-600 text-sm">
-                    <button onclick="filterPerformanceByDate()"
-                        class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Filter</button>
-                    <button onclick="clearPerformanceFilter()"
-                        class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Clear</button>
+                    <div class="flex items-center gap-2">
+                        <label class="text-sm font-medium text-gray-300">Grade Mode:</label>
+                        <select id="perf-grade-mode" onchange="togglePerformanceMode()"
+                            class="p-2 bg-gray-700 rounded border border-gray-600 text-sm">
+                            <option value="attempted">Attempted Only</option>
+                            <option value="potential">Total Potential</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <label class="text-sm font-medium text-gray-300">Dates:</label>
+                        <input type="date" id="perf-date-start"
+                            class="p-2 bg-gray-700 rounded border border-gray-600 text-sm">
+                        <span class="text-gray-400">to</span>
+                        <input type="date" id="perf-date-end"
+                            class="p-2 bg-gray-700 rounded border border-gray-600 text-sm">
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="filterPerformanceByDate()"
+                            class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Filter</button>
+                        <button onclick="clearPerformanceFilter()"
+                            class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Clear</button>
+                    </div>
                     <div class="flex items-center gap-2 ml-4">
                         <input type="checkbox" id="perf-show-questions" onchange="togglePerformanceMode()"
                             class="w-4 h-4 bg-gray-700 border-gray-600 rounded">
-                        <label for="perf-show-questions" class="text-sm font-medium text-gray-300">Questions</label>
+                        <label for="perf-show-questions" class="text-sm font-medium text-gray-300">View
+                            Questions</label>
                     </div>
-                    <div class="flex items-center gap-2 ml-4">
+                    <div id="aura-toggle-container" class="flex items-center gap-2 ml-4">
+                        <input type="checkbox" id="perf-show-aura" onchange="togglePerformanceMode()"
+                            class="w-4 h-4 bg-gray-700 border-gray-600 rounded">
+                        <label for="perf-show-aura" class="text-sm font-medium text-gray-300">Show Aura</label>
+                    </div>
+                    <div class="flex items-center gap-2 ml-4 hidden" id="all-attempts-container">
                         <input type="checkbox" id="perf-show-all-attempts" onchange="togglePerformanceMode()"
                             class="w-4 h-4 bg-gray-700 border-gray-600 rounded">
                         <label for="perf-show-all-attempts" class="text-sm font-medium text-gray-300">All
@@ -286,7 +304,8 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
                                     Slide</th>
                                 <th class="text-left p-3 text-sm font-medium text-gray-300">Date</th>
                                 <th class="text-left p-3 text-sm font-medium text-gray-300">Score</th>
-                                <th class="text-left p-3 text-sm font-medium text-gray-300">Aura</th>
+                                <th id="perf-aura-header"
+                                    class="text-left p-3 text-sm font-medium text-gray-300 hidden">Aura</th>
                             </tr>
                         </thead>
                         <tbody id="perf-submissions-table" class="divide-y divide-gray-700">
@@ -370,6 +389,7 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
         let cachedSubmissions = {};
         let cachedPurchases = {};
         let currentPerfStudentId = null;
+        let currentPerfStudentClass = null;
         let currentUserEmail = null;
 
         // --- Impersonation Logic ---
@@ -476,7 +496,11 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
                 assignmentMap = {};
                 snapshot.forEach(doc => {
                     const data = doc.data();
-                    assignmentMap[doc.id] = data.name || data.title || "Untitled";
+                    assignmentMap[doc.id] = {
+                        name: data.name || data.title || "Untitled",
+                        slideCount: (data.slideIds || []).length,
+                        assignedClasses: data.assignedClasses || []
+                    };
                 });
                 console.log("Prefetched assignments:", Object.keys(assignmentMap).length);
             } catch (error) {
@@ -542,7 +566,7 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
                     <li class="flex justify-between items-center py-2 border-b border-gray-700">
                         <div class="flex-1">
                             <p class="font-medium">
-                                <span class="text-blue-400 hover:underline cursor-pointer" onclick='openStudentPerformance("${student.id}", "${student.name.replace(/'/g, "\'").replace(/"/g, '&quot;')}", "${student.email}", "${lifetime}")'>${student.name}</span>
+                                <span class="text-blue-400 hover:underline cursor-pointer" onclick='openStudentPerformance("${student.id}", "${student.name.replace(/'/g, "\'").replace(/"/g, '&quot;')}", "${student.email}", "${lifetime}", "${className}")'>${student.name}</span>
                             </p>
                             <p class="text-sm text-gray-400">${student.email}</p>
                         </div>
@@ -773,8 +797,9 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
         document.getElementById('signOutButton').onclick = () => { auth.signOut(); };
 
         // Student Performance Modal Functions
-        async function openStudentPerformance(studentId, name, email, auraLifetime) {
+        async function openStudentPerformance(studentId, name, email, auraLifetime, studentClass = null) {
             currentPerfStudentId = studentId;
+            currentPerfStudentClass = studentClass;
 
             // Populate header with what we have initially
             document.getElementById('perf-student-name').textContent = name;
@@ -839,13 +864,24 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
             const tableBody = document.getElementById('perf-submissions-table');
             const noDataMsg = document.getElementById('perf-no-data');
             const table = document.getElementById('perf-table');
-            const showAllAttempts = document.getElementById('perf-show-all-attempts').checked;
+
+            // Options
             const showQuestions = document.getElementById('perf-show-questions').checked;
-            const slideHeader = document.getElementById('perf-slide-header');
+            const showAllAttempts = document.getElementById('perf-show-all-attempts').checked;
+            const showAura = document.getElementById('perf-show-aura').checked;
+            const gradeMode = document.getElementById('perf-grade-mode').value; // 'attempted' or 'potential'
 
-            slideHeader.classList.toggle('hidden', !showQuestions);
+            // UI Column Management
+            document.getElementById('perf-slide-header').classList.toggle('hidden', !showQuestions);
+            document.getElementById('perf-aura-header').classList.toggle('hidden', showQuestions || !showAura);
+            document.getElementById('aura-toggle-container').classList.toggle('hidden', showQuestions);
+            document.getElementById('all-attempts-container').classList.toggle('hidden', !showQuestions);
 
-            // 1. Filter by Date range
+            // Labels
+            document.getElementById('perf-avg-label').textContent = `Avg Score (${gradeMode === 'potential' ? 'Total Potential' : 'Attempted'})`;
+            document.getElementById('perf-completion-label').textContent = gradeMode === 'potential' ? 'Assignments Total' : 'Active Assignments';
+
+            // 1. Basic Filtering (Date)
             let filteredData = rawSubmissions;
             if (startDate || endDate) {
                 const startT = startDate ? new Date(startDate).getTime() / 1000 : 0;
@@ -853,11 +889,11 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
                 filteredData = rawSubmissions.filter(p => p.timestamp >= startT && p.timestamp <= endT);
             }
 
-            // 2. Grouping & Deduplication
+            // 2. Process Data based on View Mode
             let workingData = [];
 
             if (showQuestions) {
-                // detailed view: show every unique question attempt (or just best per question)
+                // DETAILED VIEW (Per Slide)
                 if (showAllAttempts) {
                     workingData = [...filteredData];
                 } else {
@@ -871,8 +907,10 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
                     workingData = Object.values(bestPerQuestion);
                 }
             } else {
-                // assignment view: collapse all slides into one assignment row
+                // SUMMARY VIEW (Per Assignment)
                 const assignmentGroups = {};
+
+                // A. Initialize with actual submissions
                 filteredData.forEach(sub => {
                     if (!assignmentGroups[sub.assignmentId]) {
                         assignmentGroups[sub.assignmentId] = {
@@ -881,7 +919,8 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
                             slides: new Set(),
                             totalAura: 0,
                             maxScore: 0,
-                            latestTimestamp: 0
+                            latestTimestamp: 0,
+                            hasActivity: true
                         };
                     }
                     const group = assignmentGroups[sub.assignmentId];
@@ -891,24 +930,47 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
                     group.maxScore = Math.max(group.maxScore, sub.score);
                 });
 
+                // B. If "Total Potential", inject missing assignments for this student's class
+                if (gradeMode === 'potential' && currentPerfStudentClass) {
+                    const normalizedClass = currentPerfStudentClass.toLowerCase().trim();
+                    Object.entries(assignmentMap).forEach(([id, meta]) => {
+                        const isAssigned = meta.assignedClasses.some(c => c.toLowerCase().trim() === normalizedClass);
+                        if (isAssigned && !assignmentGroups[id]) {
+                            assignmentGroups[id] = {
+                                assignmentId: id,
+                                assignmentName: meta.name,
+                                slides: new Set(),
+                                totalAura: 0,
+                                maxScore: 0,
+                                latestTimestamp: 0,
+                                hasActivity: false
+                            };
+                        }
+                    });
+                }
+
                 workingData = Object.values(assignmentGroups).map(g => ({
                     assignmentId: g.assignmentId,
                     assignmentName: g.assignmentName,
-                    questionCount: g.slides.size,
+                    questionCount: g.slides.size, // This is questions attempted
+                    totalQuestions: assignmentMap[g.assignmentId]?.slideCount || '?', // New: Total questions in assignment
                     score: g.maxScore,
                     auraAmount: g.totalAura,
                     auraAwarded: g.totalAura > 0,
-                    timestamp: g.latestTimestamp
+                    timestamp: g.latestTimestamp,
+                    hasActivity: g.hasActivity
                 }));
             }
 
             // 3. Update Summary Stats
-            const uniqueAssignments = new Set(filteredData.map(p => p.assignmentId));
-            document.getElementById('perf-assignments-completed').textContent = uniqueAssignments.size;
+            const totalItems = workingData.length;
+            const attemptedItems = workingData.filter(d => d.hasActivity !== false).length;
+
+            document.getElementById('perf-assignments-completed').textContent = (gradeMode === 'potential') ? totalItems : attemptedItems;
 
             const scores = workingData.map(p => p.score);
-            const avgScore = scores.length > 0
-                ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(0)
+            const avgScore = totalItems > 0
+                ? (scores.reduce((a, b) => a + b, 0) / totalItems).toFixed(0)
                 : '--';
             document.getElementById('perf-avg-score').textContent = avgScore + (avgScore !== '--' ? '%' : '');
 
@@ -926,24 +988,31 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
             workingData.sort((a, b) => b.timestamp - a.timestamp);
 
             tableBody.innerHTML = workingData.map(p => {
-                const dateStr = p.timestamp > 0 ? new Date(p.timestamp * 1000).toLocaleDateString() : 'N/A';
+                const dateStr = p.timestamp > 0 ? new Date(p.timestamp * 1000).toLocaleDateString() : (p.hasActivity === false ? 'No Activity' : 'N/A');
                 const scoreDisplay = Math.round(p.score);
-                const scoreColor = scoreDisplay >= 90 ? 'text-green-400' : scoreDisplay >= 70 ? 'text-yellow-400' : 'text-orange-400';
+                const scoreColor = scoreDisplay >= 90 ? 'text-green-400' : (scoreDisplay >= 70 ? 'text-yellow-400' : (p.hasActivity === false ? 'text-gray-600' : 'text-orange-400'));
 
                 let nameDisplay = p.assignmentName;
                 if (!showQuestions) {
-                    nameDisplay += ` <span class="text-gray-500 text-xs ml-1">(${p.questionCount} question${p.questionCount !== 1 ? 's' : ''})</span>`;
+                    const qInfo = (gradeMode === 'potential' && p.totalQuestions !== '?')
+                        ? `${p.questionCount}/${p.totalQuestions}`
+                        : p.questionCount;
+                    nameDisplay += ` <span class="text-gray-500 text-xs ml-1">(${qInfo} question${p.questionCount !== 1 ? 's' : ''})</span>`;
                 }
 
+                const auraCol = (showQuestions || !showAura) ? '' : `
+                    <td class="p-3 text-sm ${p.auraAwarded ? 'text-yellow-400' : 'text-gray-500'}">
+                        ${p.auraAwarded ? `✅ ${p.auraAmount.toFixed(1)} ✧` : 'No'}
+                    </td>
+                `;
+
                 return `
-                    <tr>
+                    <tr class="${p.hasActivity === false ? 'opacity-60' : ''}">
                         <td class="p-3 text-sm">${nameDisplay}</td>
                         ${showQuestions ? `<td class="p-3 text-sm text-gray-400">${p.slideIndex + 1}</td>` : ''}
                         <td class="p-3 text-sm text-gray-400">${dateStr}</td>
                         <td class="p-3 text-sm font-mono ${scoreColor}">${scoreDisplay}%</td>
-                        <td class="p-3 text-sm ${p.auraAwarded ? 'text-yellow-400' : 'text-gray-500'}">
-                            ${p.auraAwarded ? `✅ ${p.auraAmount.toFixed(1)} ✧` : 'No'}
-                        </td>
+                        ${auraCol}
                     </tr>
                 `;
             }).join('');
