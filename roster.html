@@ -847,7 +847,7 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
                         timestamp: sub.timestamp?.seconds || 0,
                         auraAwarded: sub.auraAwarded || false,
                         auraAmount: sub.auraAmount || 0,
-                        assignmentName: assignmentMap[sub.assignmentId] || "Unknown Assignment"
+                        assignmentName: assignmentMap[sub.assignmentId]?.name || "Unknown Assignment"
                     }));
                 }
 
@@ -860,7 +860,10 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
             }
         }
 
-        function renderPerformanceData(rawSubmissions, email, startDate = null, endDate = null) {
+        function renderPerformanceData(data, email, startDate = null, endDate = null) {
+            const rawSubmissions = data.items || [];
+            const statusMap = data.statuses || {};
+
             const tableBody = document.getElementById('perf-submissions-table');
             const noDataMsg = document.getElementById('perf-no-data');
             const table = document.getElementById('perf-table');
@@ -891,33 +894,55 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
 
             // 2. Process Data based on View Mode
             let workingData = [];
+            let totalPossibleDenominator = 0;
 
             if (showQuestions) {
                 // DETAILED VIEW (Per Slide)
-                if (showAllAttempts) {
-                    workingData = [...filteredData];
-                } else {
-                    const bestPerQuestion = {};
-                    filteredData.forEach(sub => {
-                        const key = `${sub.assignmentId}_${sub.slideIndex}`;
-                        if (!bestPerQuestion[key] || sub.timestamp > bestPerQuestion[key].timestamp) {
-                            bestPerQuestion[key] = sub;
+                const bestPerQuestion = {};
+                filteredData.forEach(sub => {
+                    const key = `${sub.assignmentId}_${sub.slideIndex}`;
+                    if (!bestPerQuestion[key] || sub.timestamp > bestPerQuestion[key].timestamp) {
+                        bestPerQuestion[key] = sub;
+                    }
+                });
+
+                if (gradeMode === 'potential' && currentPerfStudentClass) {
+                    const normalizedClass = currentPerfStudentClass.toLowerCase().trim();
+                    Object.entries(assignmentMap).forEach(([id, meta]) => {
+                        const isAssigned = meta.assignedClasses.some(c => c.toLowerCase().trim() === normalizedClass);
+                        if (isAssigned) {
+                            // Add entries for every potential slide
+                            for (let i = 0; i < meta.slideCount; i++) {
+                                const key = `${id}_${i}`;
+                                if (!bestPerQuestion[key]) {
+                                    bestPerQuestion[key] = {
+                                        assignmentId: id,
+                                        assignmentName: meta.name,
+                                        slideIndex: i,
+                                        score: 0,
+                                        timestamp: 0,
+                                        hasActivity: false
+                                    };
+                                }
+                                totalPossibleDenominator++;
+                            }
                         }
                     });
-                    workingData = Object.values(bestPerQuestion);
+                } else {
+                    totalPossibleDenominator = Object.keys(bestPerQuestion).length;
                 }
+
+                workingData = Object.values(bestPerQuestion);
             } else {
                 // SUMMARY VIEW (Per Assignment)
                 const assignmentGroups = {};
-
-                // A. Initialize with actual submissions
                 filteredData.forEach(sub => {
                     if (!assignmentGroups[sub.assignmentId]) {
                         assignmentGroups[sub.assignmentId] = {
                             assignmentId: sub.assignmentId,
                             assignmentName: sub.assignmentName,
                             slides: new Set(),
-                            totalAura: 0,
+                            totalScore: 0,
                             maxScore: 0,
                             latestTimestamp: 0,
                             hasActivity: true
@@ -926,51 +951,66 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
                     const group = assignmentGroups[sub.assignmentId];
                     group.slides.add(sub.slideIndex);
                     group.latestTimestamp = Math.max(group.latestTimestamp, sub.timestamp);
-                    if (sub.auraAwarded) group.totalAura += sub.auraAmount;
+                    group.totalScore += sub.score;
                     group.maxScore = Math.max(group.maxScore, sub.score);
                 });
 
-                // B. If "Total Potential", inject missing assignments for this student's class
                 if (gradeMode === 'potential' && currentPerfStudentClass) {
                     const normalizedClass = currentPerfStudentClass.toLowerCase().trim();
                     Object.entries(assignmentMap).forEach(([id, meta]) => {
                         const isAssigned = meta.assignedClasses.some(c => c.toLowerCase().trim() === normalizedClass);
-                        if (isAssigned && !assignmentGroups[id]) {
-                            assignmentGroups[id] = {
-                                assignmentId: id,
-                                assignmentName: meta.name,
-                                slides: new Set(),
-                                totalAura: 0,
-                                maxScore: 0,
-                                latestTimestamp: 0,
-                                hasActivity: false
-                            };
+                        if (isAssigned) {
+                            totalPossibleDenominator++;
+                            if (!assignmentGroups[id]) {
+                                assignmentGroups[id] = {
+                                    assignmentId: id,
+                                    assignmentName: meta.name,
+                                    slides: new Set(),
+                                    totalScore: 0,
+                                    maxScore: 0,
+                                    latestTimestamp: 0,
+                                    hasActivity: false
+                                };
+                            }
                         }
                     });
+                } else {
+                    totalPossibleDenominator = Object.keys(assignmentGroups).length;
                 }
 
-                workingData = Object.values(assignmentGroups).map(g => ({
-                    assignmentId: g.assignmentId,
-                    assignmentName: g.assignmentName,
-                    questionCount: g.slides.size, // This is questions attempted
-                    totalQuestions: assignmentMap[g.assignmentId]?.slideCount || '?', // New: Total questions in assignment
-                    score: g.maxScore,
-                    auraAmount: g.totalAura,
-                    auraAwarded: g.totalAura > 0,
-                    timestamp: g.latestTimestamp,
-                    hasActivity: g.hasActivity
-                }));
+                workingData = Object.values(assignmentGroups).map(g => {
+                    const meta = assignmentMap[g.assignmentId];
+                    // In potential mode, an assignment score is sum(best slide scores) / total slide count
+                    // For now, let's keep it simple: if they did the assignment, use their max or average?
+                    // The user said "score including only attempted questions... he had a test where he scored 26% but it shows 62%".
+                    // This implies we should divide by the total slide count.
+                    const qCount = meta?.slideCount || g.slides.size || 1;
+                    const calculatedScore = g.hasActivity ? (g.totalScore / qCount) : 0;
+
+                    const status = statusMap[g.assignmentId] || {};
+
+                    return {
+                        assignmentId: g.assignmentId,
+                        assignmentName: g.assignmentName,
+                        questionCount: g.slides.size,
+                        totalQuestions: qCount,
+                        score: calculatedScore,
+                        auraAmount: status.auraAmount || 0,
+                        auraAwarded: status.auraAwarded || false,
+                        timestamp: g.latestTimestamp,
+                        hasActivity: g.hasActivity
+                    };
+                });
             }
 
             // 3. Update Summary Stats
-            const totalItems = workingData.length;
             const attemptedItems = workingData.filter(d => d.hasActivity !== false).length;
 
-            document.getElementById('perf-assignments-completed').textContent = (gradeMode === 'potential') ? totalItems : attemptedItems;
+            document.getElementById('perf-assignments-completed').textContent = (gradeMode === 'potential') ? totalPossibleDenominator : attemptedItems;
 
             const scores = workingData.map(p => p.score);
-            const avgScore = totalItems > 0
-                ? (scores.reduce((a, b) => a + b, 0) / totalItems).toFixed(0)
+            const avgScore = totalPossibleDenominator > 0
+                ? (scores.reduce((a, b) => a + b, 0) / totalPossibleDenominator).toFixed(0)
                 : '--';
             document.getElementById('perf-avg-score').textContent = avgScore + (avgScore !== '--' ? '%' : '');
 
@@ -1002,7 +1042,7 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
 
                 const auraCol = (showQuestions || !showAura) ? '' : `
                     <td class="p-3 text-sm ${p.auraAwarded ? 'text-yellow-400' : 'text-gray-500'}">
-                        ${p.auraAwarded ? `✅ ${p.auraAmount.toFixed(1)} ✧` : 'No'}
+                        ${p.auraAwarded ? `✅ ${p.auraAmount.toFixed(1)} ✧` : '-'}
                     </td>
                 `;
 
