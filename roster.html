@@ -826,29 +826,36 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
             // 3. Fetch submissions (if not cached)
             try {
                 if (!cachedSubmissions[studentId]) {
-                    let submissionsQuery = await db.collection("submissions")
+                    // Fetch individual slide submissions
+                    let subQuery = await db.collection("submissions")
+                        .where("studentEmail", "==", email.toLowerCase())
+                        .get();
+                    if (subQuery.empty) {
+                        subQuery = await db.collection("submissions").where("studentId", "==", studentId).get();
+                    }
+
+                    // Fetch assignment-level status (for official Aura and completion status)
+                    let statusQuery = await db.collection("submissionStatus")
                         .where("studentEmail", "==", email.toLowerCase())
                         .get();
 
-                    // Fallback to studentId if email query empty (older records)
-                    if (submissionsQuery.empty) {
-                        submissionsQuery = await db.collection("submissions")
-                            .where("studentId", "==", studentId)
-                            .get();
-                    }
+                    const submissions = subQuery.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    const statuses = statusQuery.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-                    const submissions = submissionsQuery.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    const statusMap = {};
+                    statuses.forEach(s => { statusMap[s.assignmentId] = s; });
 
-                    cachedSubmissions[studentId] = submissions.map(sub => ({
-                        id: sub.id,
-                        assignmentId: sub.assignmentId,
-                        slideIndex: sub.slideIndex !== undefined ? parseInt(sub.slideIndex, 10) : 0,
-                        score: sub.score || 0,
-                        timestamp: sub.timestamp?.seconds || 0,
-                        auraAwarded: sub.auraAwarded || false,
-                        auraAmount: sub.auraAmount || 0,
-                        assignmentName: assignmentMap[sub.assignmentId]?.name || "Unknown Assignment"
-                    }));
+                    cachedSubmissions[studentId] = {
+                        items: submissions.map(sub => ({
+                            id: sub.id,
+                            assignmentId: sub.assignmentId,
+                            slideIndex: sub.slideIndex !== undefined ? parseInt(sub.slideIndex, 10) : 0,
+                            score: sub.score || 0,
+                            timestamp: sub.timestamp?.seconds || 0,
+                            assignmentName: assignmentMap[sub.assignmentId]?.name || "Unknown Assignment"
+                        })),
+                        statuses: statusMap
+                    };
                 }
 
                 renderPerformanceData(cachedSubmissions[studentId], email);
@@ -884,138 +891,114 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
             document.getElementById('perf-avg-label').textContent = `Avg Score (${gradeMode === 'potential' ? 'Total Potential' : 'Attempted'})`;
             document.getElementById('perf-completion-label').textContent = gradeMode === 'potential' ? 'Assignments Total' : 'Active Assignments';
 
-            // 1. Basic Filtering (Date)
-            let filteredData = rawSubmissions;
+            // 1. Basic Filtering (Date) - Applies only to work actually done
+            let filteredWork = rawSubmissions;
             if (startDate || endDate) {
                 const startT = startDate ? new Date(startDate).getTime() / 1000 : 0;
                 const endT = endDate ? new Date(endDate).getTime() / 1000 : Infinity;
-                filteredData = rawSubmissions.filter(p => p.timestamp >= startT && p.timestamp <= endT);
+                filteredWork = rawSubmissions.filter(p => p.timestamp >= startT && p.timestamp <= endT);
             }
 
-            // 2. Process Data based on View Mode
-            let workingData = [];
-            let totalPossibleDenominator = 0;
+            // 2. Identify Assignments and Calculate Averages
+            const assignmentGroups = {};
 
-            if (showQuestions) {
-                // DETAILED VIEW (Per Slide)
-                const bestPerQuestion = {};
-                filteredData.forEach(sub => {
-                    const key = `${sub.assignmentId}_${sub.slideIndex}`;
-                    if (!bestPerQuestion[key] || sub.timestamp > bestPerQuestion[key].timestamp) {
-                        bestPerQuestion[key] = sub;
+            // A. Populate with actual work
+            filteredWork.forEach(sub => {
+                if (!assignmentGroups[sub.assignmentId]) {
+                    assignmentGroups[sub.assignmentId] = {
+                        id: sub.assignmentId,
+                        name: sub.assignmentName,
+                        slides: {}, // slideIndex -> best score
+                        latestTimestamp: 0,
+                        hasActivity: true
+                    };
+                }
+                const group = assignmentGroups[sub.assignmentId];
+                if (!group.slides[sub.slideIndex] || sub.score > group.slides[sub.slideIndex]) {
+                    group.slides[sub.slideIndex] = sub.score;
+                }
+                group.latestTimestamp = Math.max(group.latestTimestamp, sub.timestamp);
+            });
+
+            // B. Inject Missing Assignments if in Potential mode
+            let totalDenominator = 0;
+            if (gradeMode === 'potential' && currentPerfStudentClass) {
+                const normalizedClass = currentPerfStudentClass.toLowerCase().trim();
+                Object.entries(assignmentMap).forEach(([id, meta]) => {
+                    const isAssigned = (meta.assignedClasses || []).some(c => c.toLowerCase().trim() === normalizedClass);
+                    if (isAssigned) {
+                        totalDenominator++;
+                        if (!assignmentGroups[id]) {
+                            assignmentGroups[id] = {
+                                id: id,
+                                name: meta.name,
+                                slides: {},
+                                latestTimestamp: 0,
+                                hasActivity: false
+                            };
+                        }
                     }
                 });
-
-                if (gradeMode === 'potential' && currentPerfStudentClass) {
-                    const normalizedClass = currentPerfStudentClass.toLowerCase().trim();
-                    Object.entries(assignmentMap).forEach(([id, meta]) => {
-                        const isAssigned = meta.assignedClasses.some(c => c.toLowerCase().trim() === normalizedClass);
-                        if (isAssigned) {
-                            // Add entries for every potential slide
-                            for (let i = 0; i < meta.slideCount; i++) {
-                                const key = `${id}_${i}`;
-                                if (!bestPerQuestion[key]) {
-                                    bestPerQuestion[key] = {
-                                        assignmentId: id,
-                                        assignmentName: meta.name,
-                                        slideIndex: i,
-                                        score: 0,
-                                        timestamp: 0,
-                                        hasActivity: false
-                                    };
-                                }
-                                totalPossibleDenominator++;
-                            }
-                        }
-                    });
-                } else {
-                    totalPossibleDenominator = Object.keys(bestPerQuestion).length;
-                }
-
-                workingData = Object.values(bestPerQuestion);
             } else {
-                // SUMMARY VIEW (Per Assignment)
-                const assignmentGroups = {};
-                filteredData.forEach(sub => {
-                    if (!assignmentGroups[sub.assignmentId]) {
-                        assignmentGroups[sub.assignmentId] = {
-                            assignmentId: sub.assignmentId,
-                            assignmentName: sub.assignmentName,
-                            slides: new Set(),
-                            totalScore: 0,
-                            maxScore: 0,
-                            latestTimestamp: 0,
-                            hasActivity: true
-                        };
-                    }
-                    const group = assignmentGroups[sub.assignmentId];
-                    group.slides.add(sub.slideIndex);
-                    group.latestTimestamp = Math.max(group.latestTimestamp, sub.timestamp);
-                    group.totalScore += sub.score;
-                    group.maxScore = Math.max(group.maxScore, sub.score);
-                });
+                totalDenominator = Object.keys(assignmentGroups).length;
+            }
 
-                if (gradeMode === 'potential' && currentPerfStudentClass) {
-                    const normalizedClass = currentPerfStudentClass.toLowerCase().trim();
-                    Object.entries(assignmentMap).forEach(([id, meta]) => {
-                        const isAssigned = meta.assignedClasses.some(c => c.toLowerCase().trim() === normalizedClass);
-                        if (isAssigned) {
-                            totalPossibleDenominator++;
-                            if (!assignmentGroups[id]) {
-                                assignmentGroups[id] = {
-                                    assignmentId: id,
-                                    assignmentName: meta.name,
-                                    slides: new Set(),
-                                    totalScore: 0,
-                                    maxScore: 0,
-                                    latestTimestamp: 0,
-                                    hasActivity: false
-                                };
-                            }
+            // C. Final Statistics and Working Data for Table
+            let totalGradeSum = 0;
+            let displayList = [];
+
+            Object.values(assignmentGroups).forEach(g => {
+                const meta = assignmentMap[g.id];
+                const totalSlides = meta?.slideCount || 1;
+
+                // Score = sum(best scores) / total slides in assignment
+                let sumOfBest = 0;
+                Object.values(g.slides).forEach(s => sumOfBest += s);
+                const assignmentScore = (sumOfBest / totalSlides);
+                totalGradeSum += assignmentScore;
+
+                const status = statusMap[g.id] || {};
+
+                if (showQuestions) {
+                    for (let i = 0; i < totalSlides; i++) {
+                        const score = g.slides[i] !== undefined ? g.slides[i] : 0;
+                        const hasThisSlide = g.slides[i] !== undefined;
+                        if (gradeMode === 'potential' || hasThisSlide) {
+                            displayList.push({
+                                assignmentId: g.id,
+                                assignmentName: g.name,
+                                slideIndex: i,
+                                score: score,
+                                timestamp: hasThisSlide ? g.latestTimestamp : 0,
+                                hasActivity: hasThisSlide,
+                                totalQuestions: totalSlides
+                            });
                         }
-                    });
+                    }
                 } else {
-                    totalPossibleDenominator = Object.keys(assignmentGroups).length;
-                }
-
-                workingData = Object.values(assignmentGroups).map(g => {
-                    const meta = assignmentMap[g.assignmentId];
-                    // In potential mode, an assignment score is sum(best slide scores) / total slide count
-                    // For now, let's keep it simple: if they did the assignment, use their max or average?
-                    // The user said "score including only attempted questions... he had a test where he scored 26% but it shows 62%".
-                    // This implies we should divide by the total slide count.
-                    const qCount = meta?.slideCount || g.slides.size || 1;
-                    const calculatedScore = g.hasActivity ? (g.totalScore / qCount) : 0;
-
-                    const status = statusMap[g.assignmentId] || {};
-
-                    return {
-                        assignmentId: g.assignmentId,
-                        assignmentName: g.assignmentName,
-                        questionCount: g.slides.size,
-                        totalQuestions: qCount,
-                        score: calculatedScore,
+                    displayList.push({
+                        assignmentId: g.id,
+                        assignmentName: g.name,
+                        questionCount: Object.keys(g.slides).length,
+                        totalQuestions: totalSlides,
+                        score: assignmentScore,
                         auraAmount: status.auraAmount || 0,
                         auraAwarded: status.auraAwarded || false,
                         timestamp: g.latestTimestamp,
                         hasActivity: g.hasActivity
-                    };
-                });
-            }
+                    });
+                }
+            });
 
-            // 3. Update Summary Stats
-            const attemptedItems = workingData.filter(d => d.hasActivity !== false).length;
+            // 3. Update Summary Stats Card
+            const attemptedCount = Object.values(assignmentGroups).filter(g => g.hasActivity).length;
+            document.getElementById('perf-assignments-completed').textContent = (gradeMode === 'potential') ? totalDenominator : attemptedCount;
 
-            document.getElementById('perf-assignments-completed').textContent = (gradeMode === 'potential') ? totalPossibleDenominator : attemptedItems;
-
-            const scores = workingData.map(p => p.score);
-            const avgScore = totalPossibleDenominator > 0
-                ? (scores.reduce((a, b) => a + b, 0) / totalPossibleDenominator).toFixed(0)
-                : '--';
-            document.getElementById('perf-avg-score').textContent = avgScore + (avgScore !== '--' ? '%' : '');
+            const finalAvg = totalDenominator > 0 ? Math.round(totalGradeSum / totalDenominator) : '--';
+            document.getElementById('perf-avg-score').textContent = finalAvg + (finalAvg !== '--' ? '%' : '');
 
             // 4. Render Table
-            if (workingData.length === 0) {
+            if (displayList.length === 0) {
                 tableBody.innerHTML = '';
                 table.classList.add('hidden');
                 noDataMsg.classList.remove('hidden');
@@ -1025,19 +1008,17 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
             noDataMsg.classList.add('hidden');
             table.classList.remove('hidden');
 
-            workingData.sort((a, b) => b.timestamp - a.timestamp);
+            displayList.sort((a, b) => b.timestamp - a.timestamp || a.assignmentName.localeCompare(b.assignmentName));
 
-            tableBody.innerHTML = workingData.map(p => {
+            tableBody.innerHTML = displayList.map(p => {
                 const dateStr = p.timestamp > 0 ? new Date(p.timestamp * 1000).toLocaleDateString() : (p.hasActivity === false ? 'No Activity' : 'N/A');
                 const scoreDisplay = Math.round(p.score);
                 const scoreColor = scoreDisplay >= 90 ? 'text-green-400' : (scoreDisplay >= 70 ? 'text-yellow-400' : (p.hasActivity === false ? 'text-gray-600' : 'text-orange-400'));
 
                 let nameDisplay = p.assignmentName;
                 if (!showQuestions) {
-                    const qInfo = (gradeMode === 'potential' && p.totalQuestions !== '?')
-                        ? `${p.questionCount}/${p.totalQuestions}`
-                        : p.questionCount;
-                    nameDisplay += ` <span class="text-gray-500 text-xs ml-1">(${qInfo} question${p.questionCount !== 1 ? 's' : ''})</span>`;
+                    const qInfo = (gradeMode === 'potential') ? `${p.questionCount}/${p.totalQuestions}` : p.questionCount;
+                    nameDisplay += ` <span class="text-gray-500 text-xs ml-1">(${qInfo} question${p.totalQuestions !== 1 ? 's' : ''})</span>`;
                 }
 
                 const auraCol = (showQuestions || !showAura) ? '' : `
