@@ -225,7 +225,7 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
                     <p id="perf-avg-score" class="text-xl font-bold text-green-400">--</p>
                 </div>
                 <div class="bg-gray-700 rounded-lg p-3 text-center">
-                    <p class="text-xs text-gray-400 mb-1">Completed</p>
+                    <p class="text-xs text-gray-400 mb-1">Active Assignments</p>
                     <p id="perf-assignments-completed" class="text-xl font-bold text-blue-400">--</p>
                 </div>
                 <div class="bg-gray-700 rounded-lg p-3 text-center border border-purple-500/20">
@@ -776,69 +776,61 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
         async function openStudentPerformance(studentId, name, email, auraLifetime) {
             currentPerfStudentId = studentId;
 
-            // Populate header
+            // Populate header with what we have initially
             document.getElementById('perf-student-name').textContent = name;
             document.getElementById('perf-student-email').textContent = email;
-            document.getElementById('perf-total-aura').textContent = auraLifetime + ' ✧';
+            document.getElementById('perf-total-aura').textContent = (auraLifetime || 0) + ' ✧';
             document.getElementById('perf-spendable-aura').textContent = '--';
 
-            // Clear date filters and checkbox
+            // Reset tabs and filters
             document.getElementById('perf-date-start').value = '';
             document.getElementById('perf-date-end').value = '';
             document.getElementById('perf-show-questions').checked = false;
             document.getElementById('perf-show-all-attempts').checked = false;
-
-            // Reset tabs
             switchPerfTab('performance');
 
             // Show modal
             document.getElementById('student-performance-modal').classList.remove('hidden');
 
-            // Fetch current spendable balance
+            // 1. Fetch official student document for accurate balances
             fetchStudentBalance(studentId, email);
 
-            // Fetch purchases
+            // 2. Fetch purchases log
             fetchPurchases(email);
 
-            // Check if submissions are already cached
-            if (cachedSubmissions[studentId]) {
-                renderPerformanceData(cachedSubmissions[studentId], email);
-                return;
-            }
-
-            // Fetch submissions
+            // 3. Fetch submissions (if not cached)
             try {
-                let submissionsQuery = await db.collection("submissions")
-                    .where("studentId", "==", studentId)
-                    .get();
-
-                let submissions = submissionsQuery.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-                if (submissions.length === 0) {
-                    submissionsQuery = await db.collection("submissions")
-                        .where("studentEmail", "==", email)
+                if (!cachedSubmissions[studentId]) {
+                    let submissionsQuery = await db.collection("submissions")
+                        .where("studentEmail", "==", email.toLowerCase())
                         .get();
-                    submissions = submissionsQuery.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+                    // Fallback to studentId if email query empty (older records)
+                    if (submissionsQuery.empty) {
+                        submissionsQuery = await db.collection("submissions")
+                            .where("studentId", "==", studentId)
+                            .get();
+                    }
+
+                    const submissions = submissionsQuery.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+                    cachedSubmissions[studentId] = submissions.map(sub => ({
+                        id: sub.id,
+                        assignmentId: sub.assignmentId,
+                        slideIndex: sub.slideIndex !== undefined ? parseInt(sub.slideIndex, 10) : 0,
+                        score: sub.score || 0,
+                        timestamp: sub.timestamp?.seconds || 0,
+                        auraAwarded: sub.auraAwarded || false,
+                        auraAmount: sub.auraAmount || 0,
+                        assignmentName: assignmentMap[sub.assignmentId] || "Unknown Assignment"
+                    }));
                 }
 
-                const rawSubmissions = submissions.map(sub => ({
-                    id: sub.id,
-                    assignmentId: sub.assignmentId,
-                    slideIndex: sub.slideIndex !== undefined ? sub.slideIndex : 0,
-                    score: sub.score || 0,
-                    timestamp: sub.timestamp?.seconds || 0,
-                    auraAwarded: sub.auraAwarded || false,
-                    auraAmount: sub.auraAmount || 0,
-                    assignmentName: assignmentMap[sub.assignmentId] || "Unknown Assignment"
-                }));
-
-                cachedSubmissions[studentId] = rawSubmissions;
-                renderPerformanceData(rawSubmissions, email);
+                renderPerformanceData(cachedSubmissions[studentId], email);
 
             } catch (error) {
                 console.error("Error fetching performance data:", error);
-                showToast("Error loading performance data. See console for details.", { color: 'red' });
-                document.getElementById('perf-no-data').textContent = "Error loading submissions.";
+                showToast("Error loading performance data.", { color: 'red' });
                 document.getElementById('perf-no-data').classList.remove('hidden');
             }
         }
@@ -846,119 +838,114 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
         function renderPerformanceData(rawSubmissions, email, startDate = null, endDate = null) {
             const tableBody = document.getElementById('perf-submissions-table');
             const noDataMsg = document.getElementById('perf-no-data');
+            const table = document.getElementById('perf-table');
             const showAllAttempts = document.getElementById('perf-show-all-attempts').checked;
             const showQuestions = document.getElementById('perf-show-questions').checked;
             const slideHeader = document.getElementById('perf-slide-header');
 
-            if (showQuestions) {
-                slideHeader.classList.remove('hidden');
-            } else {
-                slideHeader.classList.add('hidden');
-            }
+            slideHeader.classList.toggle('hidden', !showQuestions);
 
+            // 1. Filter by Date range
             let filteredData = rawSubmissions;
             if (startDate || endDate) {
-                const startTimestamp = startDate ? new Date(startDate).getTime() / 1000 : 0;
-                const endTimestamp = endDate ? new Date(endDate).getTime() / 1000 : Infinity;
-
-                filteredData = rawSubmissions.filter(p =>
-                    p.timestamp >= startTimestamp && p.timestamp <= endTimestamp
-                );
+                const startT = startDate ? new Date(startDate).getTime() / 1000 : 0;
+                const endT = endDate ? new Date(endDate).getTime() / 1000 : Infinity;
+                filteredData = rawSubmissions.filter(p => p.timestamp >= startT && p.timestamp <= endT);
             }
 
-            let workingData = filteredData;
-            if (!showAllAttempts) {
-                const dedupeMap = {};
-                filteredData.forEach(sub => {
-                    const key = `${sub.assignmentId}_${sub.slideIndex}`;
-                    const existing = dedupeMap[key];
+            // 2. Grouping & Deduplication
+            let workingData = [];
 
-                    if (!existing) {
-                        dedupeMap[key] = sub;
-                    } else {
-                        const subHasTimestamp = sub.timestamp > 0;
-                        const existingHasTimestamp = existing.timestamp > 0;
-
-                        if (subHasTimestamp && existingHasTimestamp) {
-                            if (sub.timestamp > existing.timestamp) {
-                                dedupeMap[key] = sub;
-                            } else if (sub.timestamp === existing.timestamp && sub.id > existing.id) {
-                                dedupeMap[key] = sub;
-                            }
-                        } else {
-                            if (sub.id > existing.id) {
-                                dedupeMap[key] = sub;
-                            }
+            if (showQuestions) {
+                // detailed view: show every unique question attempt (or just best per question)
+                if (showAllAttempts) {
+                    workingData = [...filteredData];
+                } else {
+                    const bestPerQuestion = {};
+                    filteredData.forEach(sub => {
+                        const key = `${sub.assignmentId}_${sub.slideIndex}`;
+                        if (!bestPerQuestion[key] || sub.timestamp > bestPerQuestion[key].timestamp) {
+                            bestPerQuestion[key] = sub;
                         }
+                    });
+                    workingData = Object.values(bestPerQuestion);
+                }
+            } else {
+                // assignment view: collapse all slides into one assignment row
+                const assignmentGroups = {};
+                filteredData.forEach(sub => {
+                    if (!assignmentGroups[sub.assignmentId]) {
+                        assignmentGroups[sub.assignmentId] = {
+                            assignmentId: sub.assignmentId,
+                            assignmentName: sub.assignmentName,
+                            slides: new Set(),
+                            totalAura: 0,
+                            maxScore: 0,
+                            latestTimestamp: 0
+                        };
                     }
+                    const group = assignmentGroups[sub.assignmentId];
+                    group.slides.add(sub.slideIndex);
+                    group.latestTimestamp = Math.max(group.latestTimestamp, sub.timestamp);
+                    if (sub.auraAwarded) group.totalAura += sub.auraAmount;
+                    group.maxScore = Math.max(group.maxScore, sub.score);
                 });
 
-                workingData = Object.values(dedupeMap);
+                workingData = Object.values(assignmentGroups).map(g => ({
+                    assignmentId: g.assignmentId,
+                    assignmentName: g.assignmentName,
+                    questionCount: g.slides.size,
+                    score: g.maxScore,
+                    auraAmount: g.totalAura,
+                    auraAwarded: g.totalAura > 0,
+                    timestamp: g.latestTimestamp
+                }));
             }
 
+            // 3. Update Summary Stats
+            const uniqueAssignments = new Set(filteredData.map(p => p.assignmentId));
+            document.getElementById('perf-assignments-completed').textContent = uniqueAssignments.size;
+
+            const scores = workingData.map(p => p.score);
+            const avgScore = scores.length > 0
+                ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(0)
+                : '--';
+            document.getElementById('perf-avg-score').textContent = avgScore + (avgScore !== '--' ? '%' : '');
+
+            // 4. Render Table
             if (workingData.length === 0) {
                 tableBody.innerHTML = '';
+                table.classList.add('hidden');
                 noDataMsg.classList.remove('hidden');
-
-                document.getElementById('perf-avg-score').textContent = '--';
-                document.getElementById('perf-assignments-completed').textContent = '0';
-                document.getElementById('perf-total-aura').textContent = '0';
                 return;
             }
 
             noDataMsg.classList.add('hidden');
+            table.classList.remove('hidden');
 
-            workingData.sort((a, b) => {
-                if (b.timestamp !== a.timestamp) {
-                    return b.timestamp - a.timestamp;
-                }
-                const aId = a.id || '';
-                const bId = b.id || '';
-                return bId.localeCompare(aId);
-            });
-
-            const scores = workingData.map(p => p.score);
-            const avgScore = scores.length > 0
-                ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(2)
-                : '0.00';
-
-            const uniqueAssignments = new Set(workingData.map(p => p.assignmentId));
-            const assignmentsCompleted = uniqueAssignments.size;
-
-            const totalAura = workingData.reduce((sum, p) => sum + (p.auraAwarded ? p.auraAmount : 0), 0);
-
-            document.getElementById('perf-avg-score').textContent = avgScore + '%';
-            document.getElementById('perf-assignments-completed').textContent = assignmentsCompleted;
-            document.getElementById('perf-total-aura').textContent = totalAura.toFixed(1) + ' ✧';
+            workingData.sort((a, b) => b.timestamp - a.timestamp);
 
             tableBody.innerHTML = workingData.map(p => {
-                const date = p.timestamp > 0
-                    ? new Date(p.timestamp * 1000).toLocaleDateString()
-                    : 'N/A';
-
-                const auraText = p.auraAwarded
-                    ? `✅ ${p.auraAmount} ✧`
-                    : 'No';
-
+                const dateStr = p.timestamp > 0 ? new Date(p.timestamp * 1000).toLocaleDateString() : 'N/A';
                 const scoreDisplay = Math.round(p.score);
+                const scoreColor = scoreDisplay >= 90 ? 'text-green-400' : scoreDisplay >= 70 ? 'text-yellow-400' : 'text-orange-400';
 
-                const slideColumn = showQuestions
-                    ? `<td class="p-3 text-sm text-gray-400">${p.slideIndex}</td>`
-                    : '';
-
-                const assignmentDisplay = showQuestions
-                    ? p.assignmentName
-                    : `${p.assignmentName} <span class="text-gray-500 text-xs">(${p.questionCount} question${p.questionCount !== 1 ? 's' : ''})</span>`;
+                let nameDisplay = p.assignmentName;
+                if (!showQuestions) {
+                    nameDisplay += ` <span class="text-gray-500 text-xs ml-1">(${p.questionCount} question${p.questionCount !== 1 ? 's' : ''})</span>`;
+                }
 
                 return `
-                <tr>
-                    <td class="p-3 text-sm">${assignmentDisplay}</td>
-                    ${slideColumn}
-                    <td class="p-3 text-sm text-gray-400">${date}</td>
-                    <td class="p-3 text-sm font-mono ${scoreDisplay >= 90 ? 'text-green-400' : scoreDisplay >= 70 ? 'text-yellow-400' : 'text-orange-400'}">${scoreDisplay}%</td>
-                    <td class="p-3 text-sm ${p.auraAwarded ? 'text-yellow-400' : 'text-gray-500'}">${auraText}</td>
-                </tr>
-            `;
+                    <tr>
+                        <td class="p-3 text-sm">${nameDisplay}</td>
+                        ${showQuestions ? `<td class="p-3 text-sm text-gray-400">${p.slideIndex + 1}</td>` : ''}
+                        <td class="p-3 text-sm text-gray-400">${dateStr}</td>
+                        <td class="p-3 text-sm font-mono ${scoreColor}">${scoreDisplay}%</td>
+                        <td class="p-3 text-sm ${p.auraAwarded ? 'text-yellow-400' : 'text-gray-500'}">
+                            ${p.auraAwarded ? `✅ ${p.auraAmount.toFixed(1)} ✧` : 'No'}
+                        </td>
+                    </tr>
+                `;
             }).join('');
         }
 
@@ -991,12 +978,15 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
             try {
                 let doc = await db.collection('students').doc(studentId).get();
                 if (!doc.exists) {
-                    const snap = await db.collection('students').where('email', '==', email).limit(1).get();
+                    const snap = await db.collection('students').where('email', '==', email.toLowerCase()).limit(1).get();
                     if (!snap.empty) doc = snap.docs[0];
                 }
                 if (doc.exists) {
-                    const balance = doc.data().auraBalance || 0;
+                    const data = doc.data();
+                    const balance = data.auraBalance || 0;
+                    const lifetime = data.auraLifetime || 0;
                     document.getElementById('perf-spendable-aura').textContent = balance + ' ✧';
+                    document.getElementById('perf-total-aura').textContent = lifetime + ' ✧';
                 }
             } catch (err) {
                 console.error("Error fetching balance:", err);
