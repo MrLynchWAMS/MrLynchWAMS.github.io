@@ -20,6 +20,7 @@
             left: 0;
             background-color: #1f2937;
             z-index: 10;
+            box-shadow: 2px 0 5px -2px rgba(0, 0, 0, 0.5);
         }
 
         .sticky-row {
@@ -27,6 +28,7 @@
             top: 0;
             background-color: #374151;
             z-index: 20;
+            box-shadow: 0 2px 5px -2px rgba(0, 0, 0, 0.5);
         }
 
         .sticky-intersect {
@@ -35,6 +37,7 @@
             left: 0;
             background-color: #374151;
             z-index: 30;
+            box-shadow: 2px 2px 5px -2px rgba(0, 0, 0, 0.5);
         }
 
         .grid-cell {
@@ -81,13 +84,23 @@
         <p id="auth-error" class="text-red-500 mt-4"></p>
     </div>
 
-    <div id="dashboardContent" class="hidden h-screen flex flex-col p-4 md:p-8">
+    <div id="dashboardContent" class="hidden min-h-screen flex flex-col p-4 md:p-8">
         <div class="flex justify-between items-center mb-6 flex-wrap gap-4">
-            <div class="flex items-center gap-4">
+            <div class="flex items-center gap-4 flex-wrap">
                 <h1 class="text-3xl font-bold text-yellow-400">Class Overview</h1>
                 <select id="classSelector" onchange="handleClassChange()"
                     class="bg-gray-800 border border-gray-700 text-white rounded px-4 py-2 font-bold focus:ring-yellow-400">
                     <option value="">Select a Class...</option>
+                </select>
+                <select id="dateRangeSelector" onchange="handleClassChange()"
+                    class="bg-gray-800 border border-gray-700 text-white rounded px-4 py-2 text-sm focus:ring-yellow-400">
+                    <option value="all">All Assignments</option>
+                    <option value="30">Last 30 Days</option>
+                    <option value="90">Last 90 Days</option>
+                    <option value="mp1">Marking Period 1 (Aug-Oct)</option>
+                    <option value="mp2">Marking Period 2 (Nov-Jan)</option>
+                    <option value="mp3">Marking Period 3 (Feb-Apr)</option>
+                    <option value="mp4">Marking Period 4 (May-Jun)</option>
                 </select>
             </div>
             <div class="flex gap-3">
@@ -104,8 +117,8 @@
             </div>
         </div>
 
-        <div id="gridWrapper" class="flex-1 overflow-auto border border-gray-700 rounded-lg bg-gray-800 relative">
-            <div id="noDataState" class="h-full flex items-center justify-center text-gray-400 italic">
+        <div id="gridWrapper" class="border border-gray-700 rounded-lg bg-gray-800 relative mb-8">
+            <div id="noDataState" class="p-20 flex items-center justify-center text-gray-400 italic">
                 Select a class to view performance data.
             </div>
             <table id="performanceGrid" class="hidden min-w-full border-collapse">
@@ -133,268 +146,381 @@
             </div>
         </div>
 
-        <!-- Student Drilldown Modal -->
-        <div id="drilldownModal"
-            class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
-            <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
-                <div class="flex justify-between items-center p-4 border-b border-gray-700">
-                    <div id="drilldownHeader">
-                        <h2 id="ddStudentName" class="text-2xl font-bold text-yellow-400"></h2>
-                        <p id="ddAssignmentName" class="text-sm text-gray-400"></p>
-                    </div>
-                    <button onclick="closeDrilldown()" class="text-gray-400 hover:text-white text-3xl">&times;</button>
+    </div>
+    </div>
+
+    <!-- Student Performance Modal (from roster.html) -->
+    <div id="student-performance-modal"
+        class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-[60]">
+        <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-5xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="flex justify-between items-center p-4 border-b border-gray-700 bg-gray-900">
+                <div>
+                    <h2 id="perf-student-name" class="text-2xl font-bold text-yellow-400">Student Name</h2>
+                    <p id="perf-student-email" class="text-sm text-gray-400">student@example.com</p>
                 </div>
-                <div id="drilldownContent" class="p-6 overflow-y-auto space-y-4">
-                    <!-- Question cards -->
+                <button onclick="closePerfModal()"
+                    class="text-gray-400 hover:text-white text-3xl transition hover:rotate-90">&times;</button>
+            </div>
+
+            <div class="flex overflow-hidden flex-1">
+                <!-- Sidebar Stats -->
+                <div class="w-64 bg-gray-900/50 p-6 border-r border-gray-700 space-y-6 overflow-y-auto hidden md:block">
+                    <div>
+                        <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Lifetime Aura</p>
+                        <p id="perf-total-aura" class="text-2xl font-bold text-purple-400">0 ✧</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Spendable Aura</p>
+                        <p id="perf-spendable-aura" class="text-2xl font-bold text-yellow-400">0</p>
+                    </div>
+                    <div>
+                        <p id="perf-avg-label" class="text-xs text-gray-500 uppercase tracking-wider mb-1">Avg Score
+                            (Attempted)</p>
+                        <p id="perf-average-score" class="text-2xl font-bold text-blue-400">--</p>
+                    </div>
+                    <div>
+                        <p id="perf-completion-label" class="text-xs text-gray-500 uppercase tracking-wider mb-1">Active
+                            Assignments</p>
+                        <p id="perf-assignments-completed" class="text-2xl font-bold text-green-400">0</p>
+                    </div>
+                </div>
+
+                <!-- Content Area -->
+                <div class="flex-1 flex flex-col min-w-0">
+                    <!-- Controls -->
+                    <div class="p-4 bg-gray-800 border-b border-gray-700 flex flex-wrap items-center gap-4">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs text-gray-400">Range:</span>
+                            <input type="date" id="perf-date-start"
+                                class="bg-gray-900 border border-gray-700 rounded p-1 text-xs text-white"
+                                onchange="refreshPerfData()">
+                            <span class="text-gray-600">-</span>
+                            <input type="date" id="perf-date-end"
+                                class="bg-gray-900 border border-gray-700 rounded p-1 text-xs text-white"
+                                onchange="refreshPerfData()">
+                        </div>
+                        <div class="flex items-center gap-4 border-l border-gray-700 pl-4">
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" id="perf-show-questions" onchange="refreshPerfData()"
+                                    class="rounded border-gray-700 bg-gray-900 text-blue-600">
+                                <span class="text-xs text-gray-300">Show Questions</span>
+                            </label>
+                            <label id="aura-toggle-container" class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" id="perf-show-aura" checked onchange="refreshPerfData()"
+                                    class="rounded border-gray-700 bg-gray-900 text-yellow-600">
+                                <span class="text-xs text-gray-300">Aura Details</span>
+                            </label>
+                            <select id="perf-grade-mode" onchange="refreshPerfData()"
+                                class="bg-gray-900 border border-gray-700 rounded p-1 text-xs text-white">
+                                <option value="attempted">Attempted Only</option>
+                                <option value="potential">Total Potential</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Scrollable Table -->
+                    <div class="flex-1 overflow-auto p-4">
+                        <div id="perf-loading" class="text-center py-12 hidden">
+                            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-500 mx-auto"></div>
+                            <p class="mt-4 text-gray-400">Fetching history...</p>
+                        </div>
+                        <p id="perf-no-data" class="text-center text-gray-400 py-8 hidden">No records found.</p>
+                        <table id="perf-table" class="w-full text-left">
+                            <thead class="bg-gray-700/50 text-xs">
+                                <tr>
+                                    <th class="p-3 font-medium text-gray-300">Assignment</th>
+                                    <th id="perf-slide-header" class="p-3 font-medium text-gray-300 hidden">Slide</th>
+                                    <th class="p-3 font-medium text-gray-300">Date</th>
+                                    <th class="p-3 font-medium text-gray-300">Score</th>
+                                    <th id="perf-aura-header" class="p-3 font-medium text-gray-300">Aura</th>
+                                </tr>
+                            </thead>
+                            <tbody id="perf-submissions-table" class="divide-y divide-gray-700 text-sm">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
+    </div>
 
-        <div id="toast-wrapper" class="fixed top-4 right-4 z-[100] space-y-3 w-full max-w-sm"></div>
+    <div id="toast-wrapper" class="fixed top-4 right-4 z-[100] space-y-3 w-full max-w-sm"></div>
 
-        <script>
-            const firebaseConfig = {
-                apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
-                authDomain: "mrlynch-slides-app.firebaseapp.com",
-                projectId: "mrlynch-slides-app",
-                storageBucket: "mrlynch-slides-app.appspot.com",
-                messagingSenderId: "223179627035",
-                appId: "1:223179627035:web:ff0f538f3029d829c3f6be"
-            };
-            firebase.initializeApp(firebaseConfig);
-            const db = firebase.firestore();
-            const auth = firebase.auth();
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
+            authDomain: "mrlynch-slides-app.firebaseapp.com",
+            projectId: "mrlynch-slides-app",
+            storageBucket: "mrlynch-slides-app.appspot.com",
+            messagingSenderId: "223179627035",
+            appId: "1:223179627035:web:ff0f538f3029d829c3f6be"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const auth = firebase.auth();
 
-            let currentUserEmail = null;
-            let students = [];
-            let assignments = [];
-            let statuses = {};
-            let currentClass = "";
+        let currentUserEmail = null;
+        let students = [];
+        let assignments = [];
+        let statuses = {};
+        let currentClass = "";
+        let submissionsCache = {}; // assignmentId -> studentEmail -> { bestScore, slides: { idx: score } }
 
-            auth.onAuthStateChanged(async user => {
-                if (user) {
-                    try {
-                        let emailToCheck = user.email.toLowerCase();
-                        const impersonated = localStorage.getItem('impersonatedUserEmail');
-                        if (impersonated) emailToCheck = impersonated;
-                        currentUserEmail = emailToCheck;
+        auth.onAuthStateChanged(async user => {
+            if (user) {
+                try {
+                    let emailToCheck = user.email.toLowerCase();
+                    const impersonated = localStorage.getItem('impersonatedUserEmail');
+                    if (impersonated) emailToCheck = impersonated;
+                    currentUserEmail = emailToCheck;
 
-                        document.getElementById('pageLoader').classList.add('hidden');
-                        document.getElementById('dashboardContent').classList.remove('hidden');
+                    document.getElementById('pageLoader').classList.add('hidden');
+                    document.getElementById('dashboardContent').classList.remove('hidden');
 
-                        loadData();
-                    } catch (error) {
-                        console.error("Auth error:", error);
-                    }
-                } else {
-                    document.getElementById('signInButtonContainer').classList.remove('hidden');
+                    loadData();
+                } catch (error) {
+                    console.error("Auth error:", error);
                 }
-            });
-
-            async function loadData() {
-                const studentSnap = await db.collection("students").where("teacherEmail", "==", currentUserEmail).get();
-                students = studentSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-                const ownedSnap = await db.collection("assignments").where("teacherEmail", "==", currentUserEmail).get();
-                const coTaughtSnap = await db.collection("assignments").where("coTeachers", "array-contains", currentUserEmail).get();
-
-                const assignmentMap = new Map();
-                ownedSnap.forEach(doc => assignmentMap.set(doc.id, { id: doc.id, ...doc.data() }));
-                coTaughtSnap.forEach(doc => assignmentMap.set(doc.id, { id: doc.id, ...doc.data() }));
-                assignments = Array.from(assignmentMap.values()).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-
-                const classes = [...new Set(students.map(s => s.class))].filter(Boolean).sort();
-                const selector = document.getElementById('classSelector');
-                classes.forEach(c => {
-                    const opt = document.createElement('option');
-                    opt.value = c;
-                    opt.textContent = c;
-                    selector.appendChild(opt);
-                });
-                if (classes.length === 1) {
-                    selector.value = classes[0];
-                    handleClassChange();
-                }
+            } else {
+                document.getElementById('signInButtonContainer').classList.remove('hidden');
             }
+        });
 
-            async function handleClassChange() {
-                currentClass = document.getElementById('classSelector').value;
-                if (!currentClass) {
-                    document.getElementById('noDataState').classList.remove('hidden');
-                    document.getElementById('performanceGrid').classList.add('hidden');
-                    return;
-                }
-                document.getElementById('noDataState').innerHTML = `<div class="text-center">
+        async function loadData() {
+            const studentSnap = await db.collection("students").where("teacherEmail", "==", currentUserEmail).get();
+            students = studentSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+            const ownedSnap = await db.collection("assignments").where("teacherEmail", "==", currentUserEmail).get();
+            const coTaughtSnap = await db.collection("assignments").where("coTeachers", "array-contains", currentUserEmail).get();
+
+            const assignmentMap = new Map();
+            ownedSnap.forEach(doc => assignmentMap.set(doc.id, { id: doc.id, ...doc.data() }));
+            coTaughtSnap.forEach(doc => assignmentMap.set(doc.id, { id: doc.id, ...doc.data() }));
+            assignments = Array.from(assignmentMap.values()).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+
+            const classes = [...new Set(students.map(s => (s.class || "Unassigned").toString().trim()))].filter(Boolean).sort();
+            const selector = document.getElementById('classSelector');
+            selector.innerHTML = '<option value="">Select a Class...</option>';
+            classes.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c;
+                opt.textContent = c;
+                selector.appendChild(opt);
+            });
+            if (classes.length === 1) {
+                selector.value = classes[0];
+                handleClassChange();
+            }
+        }
+
+        async function handleClassChange() {
+            currentClass = document.getElementById('classSelector').value;
+            const dateRange = document.getElementById('dateRangeSelector').value;
+            if (!currentClass) {
+                document.getElementById('noDataState').classList.remove('hidden');
+                document.getElementById('performanceGrid').classList.add('hidden');
+                return;
+            }
+            document.getElementById('noDataState').innerHTML = `<div class="text-center">
                     <p class="text-xl mb-2">Analyzing class data...</p>
                     <div class="w-64 h-2 bg-gray-700 rounded-full mx-auto overflow-hidden">
                         <div class="h-full bg-yellow-400 animate-pulse"></div>
                     </div>
                 </div>`;
+            document.getElementById('noDataState').classList.remove('hidden');
+            document.getElementById('performanceGrid').classList.add('hidden');
 
-                const classAssignments = assignments.filter(a => (a.assignedClasses || []).includes(currentClass));
-                const classStudents = students.filter(s => s.class === currentClass);
-                const studentEmails = new Set(classStudents.map(s => s.email.toLowerCase()));
+            // Filter assignments by class AND date range
+            const now = new Date();
+            let classAssignments = assignments.filter(a => (a.assignedClasses || []).some(c => c.trim() === currentClass));
 
-                // 1. Fetch Submission Statuses (to know who "submitted")
-                const statusSnap = await db.collection("submissionStatus")
-                    .where("status", "==", "submitted")
-                    .get();
+            if (dateRange !== 'all') {
+                classAssignments = classAssignments.filter(a => {
+                    const created = a.createdAt?.seconds ? new Date(a.createdAt.seconds * 1000) : null;
+                    if (!created) return false;
 
-                const statusMap = {};
-                statusSnap.forEach(doc => {
-                    const data = doc.data();
-                    if (studentEmails.has(data.studentEmail.toLowerCase())) {
-                        if (!statusMap[data.assignmentId]) statusMap[data.assignmentId] = {};
-                        statusMap[data.assignmentId][data.studentEmail.toLowerCase()] = data;
-                    }
+                    if (dateRange === '30') return (now - created) < (30 * 24 * 60 * 60 * 1000);
+                    if (dateRange === '90') return (now - created) < (90 * 24 * 60 * 60 * 1000);
+
+                    const month = created.getMonth();
+                    if (dateRange === 'mp1') return month >= 7 && month <= 9; // Aug-Oct
+                    if (dateRange === 'mp2') return month >= 10 || month <= 0; // Nov-Jan
+                    if (dateRange === 'mp3') return month >= 1 && month <= 3; // Feb-Apr
+                    if (dateRange === 'mp4') return month >= 4 && month <= 6; // May-Jul
+                    return true;
                 });
+            }
 
-                // 2. Fetch ALL Submissions for these assignments to calculate scores
-                statuses = {};
+            const classStudents = students.filter(s => (s.class || "").toString().trim() === currentClass);
+            const studentEmails = new Set(classStudents.map(s => s.email.toLowerCase()));
 
-                for (const assignment of classAssignments) {
+            // 1. Fetch Submission Statuses
+            const statusSnap = await db.collection("submissionStatus")
+                .where("status", "==", "submitted")
+                .get();
+
+            const statusMap = {};
+            statusSnap.forEach(doc => {
+                const data = doc.data();
+                if (studentEmails.has(data.studentEmail.toLowerCase())) {
+                    if (!statusMap[data.assignmentId]) statusMap[data.assignmentId] = {};
+                    statusMap[data.assignmentId][data.studentEmail.toLowerCase()] = data;
+                }
+            });
+
+            // 2. Fetch/Load data
+            statuses = {};
+
+            for (const assignment of classAssignments) {
+                if (!submissionsCache[assignment.id]) {
                     const subSnap = await db.collection("submissions")
                         .where("assignmentId", "==", assignment.id)
                         .get();
 
                     const assignmentScores = {};
-                    const numQuestions = assignment.slideIds?.length || 1;
-
                     subSnap.forEach(doc => {
                         const sub = doc.data();
                         const email = sub.studentEmail.toLowerCase();
-                        if (studentEmails.has(email)) {
-                            if (!assignmentScores[email]) assignmentScores[email] = { slides: {} };
-                            const idx = sub.slideIndex;
-                            if (!assignmentScores[email].slides[idx] || sub.score > assignmentScores[email].slides[idx]) {
-                                assignmentScores[email].slides[idx] = sub.score;
-                            }
+                        if (!assignmentScores[email]) assignmentScores[email] = { slides: {} };
+                        const idx = sub.slideIndex;
+                        if (!assignmentScores[email].slides[idx] || sub.score > assignmentScores[email].slides[idx]) {
+                            assignmentScores[email].slides[idx] = sub.score;
                         }
                     });
+                    submissionsCache[assignment.id] = assignmentScores;
+                }
 
-                    if (!statuses[assignment.id]) statuses[assignment.id] = {};
+                const cachedScores = submissionsCache[assignment.id];
+                const numQuestions = assignment.slideIds?.length || 1;
+                if (!statuses[assignment.id]) statuses[assignment.id] = {};
 
-                    Object.keys(assignmentScores).forEach(email => {
+                studentEmails.forEach(email => {
+                    const studentScoreData = cachedScores[email];
+                    if (studentScoreData) {
                         let sum = 0;
-                        Object.values(assignmentScores[email].slides).forEach(s => sum += s);
-                        const finalScore = sum / numQuestions;
-
+                        Object.values(studentScoreData.slides).forEach(s => sum += s);
                         statuses[assignment.id][email] = {
-                            score: finalScore,
+                            score: sum / numQuestions,
                             isSubmitted: !!statusMap[assignment.id]?.[email]
                         };
-                    });
-                }
-                renderGrid();
+                    } else {
+                        statuses[assignment.id][email] = { score: null, isSubmitted: false };
+                    }
+                });
+            }
+            renderGrid(classAssignments, classStudents);
+        }
+
+        function renderGrid(classAssignments, classStudents) {
+            const grid = document.getElementById('performanceGrid');
+            const header = document.getElementById('gridHeader');
+            const body = document.getElementById('gridBody');
+
+            if (classStudents.length === 0 || classAssignments.length === 0) {
+                document.getElementById('noDataState').innerHTML = "No students or assignments found for this selection.";
+                document.getElementById('noDataState').classList.remove('hidden');
+                grid.classList.add('hidden');
+                return;
             }
 
-            function renderGrid() {
-                const grid = document.getElementById('performanceGrid');
-                const header = document.getElementById('gridHeader');
-                const body = document.getElementById('gridBody');
-                const classStudents = students.filter(s => s.class === currentClass).sort((a, b) => a.name.localeCompare(b.name));
-                const classAssignments = assignments.filter(a => (a.assignedClasses || []).includes(currentClass));
+            document.getElementById('noDataState').classList.add('hidden');
+            grid.classList.remove('hidden');
 
-                if (classStudents.length === 0 || classAssignments.length === 0) {
-                    document.getElementById('noDataState').innerHTML = "No students or assignments found for this class.";
-                    document.getElementById('noDataState').classList.remove('hidden');
-                    grid.classList.add('hidden');
-                    return;
-                }
-
-                document.getElementById('noDataState').classList.add('hidden');
-                grid.classList.remove('hidden');
-
-                header.innerHTML = `
+            // Header
+            header.innerHTML = `
                 <tr>
                     <th class="sticky-intersect p-4 text-left border-b border-r border-gray-700 w-64">Student Name</th>
                     ${classAssignments.map(a => `
                         <th class="sticky-row p-4 text-center border-b border-gray-700 min-w-[120px]">
-                            <a href="./dashboard.html?assignmentId=${a.id}" class="text-xs hover:text-yellow-400 block" title="Go to Assignment Dashboard">${a.name}</a>
+                            <a href="./dashboard.html?assignmentId=${a.id}" class="text-xs hover:text-yellow-400 block truncate max-w-[150px]" title="${a.name}">${a.name}</a>
+                            <div class="text-[10px] text-gray-500 font-normal">Avg: <span id="col-avg-${a.id}">-</span></div>
                         </th>
                     `).join('')}
                     <th class="sticky-row p-4 text-center border-b border-gray-700 bg-gray-900/50">Avg</th>
                 </tr>
             `;
 
-                body.innerHTML = classStudents.map(s => {
-                    let totalScore = 0;
-                    let count = 0;
-                    const email = s.email.toLowerCase();
-                    const cells = classAssignments.map(a => {
-                        const status = statuses[a.id]?.[email];
-                        const score = status?.score !== undefined ? status.score : null;
-                        let colorClass = "text-gray-600";
-                        let display = "-";
-                        if (score !== null) {
-                            totalScore += score;
-                            count++;
-                            display = Math.round(score) + "%";
-                            colorClass = score >= 90 ? "bg-green-600/40 text-green-200" : (score >= 70 ? "bg-yellow-600/40 text-yellow-200" : "bg-red-600/40 text-red-200");
-                        }
-                        return `<td class="p-4 text-center border-b border-gray-700 grid-cell ${colorClass}" onclick="openDrilldown('${s.id}', '${a.id}')">${display}</td>`;
-                    }).join('');
-                    const avg = count > 0 ? Math.round(totalScore / count) + "%" : "-";
-                    return `
+            // Body
+            body.innerHTML = classStudents.map(s => {
+                let totalScore = 0;
+                let count = 0;
+                const email = s.email.toLowerCase();
+                const cells = classAssignments.map(a => {
+                    const status = statuses[a.id]?.[email];
+                    const score = status?.score !== undefined ? status.score : null;
+                    let colorClass = "text-gray-600";
+                    let display = "-";
+                    if (score !== null) {
+                        totalScore += score;
+                        count++;
+                        display = Math.round(score) + "%";
+                        colorClass = score >= 90 ? "bg-green-600/40 text-green-200" : (score >= 70 ? "bg-yellow-600/40 text-yellow-200" : "bg-red-600/40 text-red-200");
+                    }
+                    return `<td class="p-4 text-center border-b border-gray-700 grid-cell ${colorClass}" onclick="openDrilldown('${s.id}', '${a.id}')">${display}</td>`;
+                }).join('');
+                const avg = count > 0 ? Math.round(totalScore / count) + "%" : "-";
+
+                // Lifetime and Balance for student modal prep
+                const lifetime = s.auraLifetime || 0;
+
+                return `
                     <tr class="hover:bg-gray-700/50">
-                        <td class="sticky-col p-4 border-b border-r border-gray-700 font-medium">${s.name}</td>
+                        <td class="sticky-col p-4 border-b border-r border-gray-700 font-medium">
+                            <span class="text-blue-400 hover:underline cursor-pointer" onclick='openStudentPerformance("${s.id}", "${s.name.replace(/'/g, "\\'")}", "${s.email}", ${lifetime}, "${currentClass}")'>${s.name}</span>
+                        </td>
                         ${cells}
                         <td class="p-4 text-center border-b border-gray-700 font-bold bg-gray-900/30">${avg}</td>
                     </tr>
                 `;
-                }).join('');
+            }).join('');
 
-                const avgRow = `
-                <tr class="bg-gray-900/80 font-bold">
-                    <td class="sticky-col p-4 border-r border-gray-700">Class Average</td>
-                    ${classAssignments.map(a => {
-                    let colTotal = 0;
-                    let colCount = 0;
-                    classStudents.forEach(s => {
-                        const score = statuses[a.id]?.[s.email.toLowerCase()]?.score;
-                        if (score !== undefined) {
-                            colTotal += score;
-                            colCount++;
-                        }
-                    });
-                    const colAvg = colCount > 0 ? Math.round(colTotal / colCount) + "%" : "-";
-                    return `<td class="p-4 text-center border-gray-700">${colAvg}</td>`;
-                }).join('')}
-                    <td class="p-4 text-center border-gray-700"></td>
-                </tr>
-            `;
-                body.innerHTML += avgRow;
-            }
+            // Update Column Averages in Header
+            classAssignments.forEach(a => {
+                let colTotal = 0;
+                let colCount = 0;
+                classStudents.forEach(s => {
+                    const score = statuses[a.id]?.[s.email.toLowerCase()]?.score;
+                    if (score !== undefined) {
+                        colTotal += score;
+                        colCount++;
+                    }
+                });
+                const colAvg = colCount > 0 ? Math.round(colTotal / colCount) + "%" : "-";
+                const avgEl = document.getElementById(`col-avg-${a.id}`);
+                if (avgEl) avgEl.textContent = colAvg;
+            });
+        }
 
-            async function openDrilldown(studentId, assignmentId) {
-                const student = students.find(s => s.id === studentId);
-                const assignment = assignments.find(a => a.id === assignmentId);
-                if (!student || !assignment) return;
-                document.getElementById('ddStudentName').textContent = student.name;
-                document.getElementById('ddAssignmentName').textContent = assignment.name;
-                document.getElementById('drilldownContent').innerHTML = '<p class="text-center py-10 text-gray-500">Loading question details...</p>';
-                document.getElementById('drilldownModal').classList.remove('hidden');
-                try {
-                    const subSnap = await db.collection("submissions")
-                        .where("assignmentId", "==", assignmentId)
-                        .where("studentEmail", "==", student.email.toLowerCase())
-                        .get();
-                    const subs = subSnap.docs.map(doc => doc.data());
-                    const bestBySlide = {};
-                    subs.forEach(sub => {
-                        const idx = sub.slideIndex;
-                        if (!bestBySlide[idx] || sub.score > bestBySlide[idx].score) {
-                            bestBySlide[idx] = sub;
-                        }
-                    });
-                    const numSlides = assignment.slideIds?.length || 1;
-                    let html = "";
-                    for (let i = 0; i < numSlides; i++) {
-                        const sub = bestBySlide[i];
-                        const score = sub ? Math.round(sub.score) : 0;
-                        const color = sub ? (score >= 90 ? 'text-green-400' : (score >= 70 ? 'text-yellow-400' : 'text-red-400')) : 'text-gray-600';
-                        const answer = sub ? sub.answer : "[No attempt]";
-                        html += `
+        async function openDrilldown(studentId, assignmentId) {
+            const student = students.find(s => s.id === studentId);
+            const assignment = assignments.find(a => a.id === assignmentId);
+            if (!student || !assignment) return;
+            document.getElementById('ddStudentName').textContent = student.name;
+            document.getElementById('ddAssignmentName').textContent = assignment.name;
+            document.getElementById('drilldownContent').innerHTML = '<p class="text-center py-10 text-gray-500">Loading question details...</p>';
+            document.getElementById('drilldownModal').classList.remove('hidden');
+            try {
+                const subSnap = await db.collection("submissions")
+                    .where("assignmentId", "==", assignmentId)
+                    .where("studentEmail", "==", student.email.toLowerCase())
+                    .get();
+                const subs = subSnap.docs.map(doc => doc.data());
+                const bestBySlide = {};
+                subs.forEach(sub => {
+                    const idx = sub.slideIndex;
+                    if (!bestBySlide[idx] || sub.score > bestBySlide[idx].score) {
+                        bestBySlide[idx] = sub;
+                    }
+                });
+                const numSlides = assignment.slideIds?.length || 1;
+                let html = "";
+                for (let i = 0; i < numSlides; i++) {
+                    const sub = bestBySlide[i];
+                    const score = sub ? Math.round(sub.score) : 0;
+                    const color = sub ? (score >= 90 ? 'text-green-400' : (score >= 70 ? 'text-yellow-400' : 'text-red-400')) : 'text-gray-600';
+                    const answer = sub ? sub.answer : "[No attempt]";
+                    html += `
                         <div class="bg-gray-700 rounded-lg p-4 border border-gray-600">
                             <div class="flex justify-between items-center mb-2">
                                 <span class="font-bold text-gray-300">Question ${i + 1}</span>
@@ -405,48 +531,223 @@
                             </div>
                         </div>
                     `;
-                    }
-                    document.getElementById('drilldownContent').innerHTML = html;
-                } catch (error) {
-                    console.error("Drilldown error:", error);
-                    document.getElementById('drilldownContent').innerHTML = '<p class="text-center py-10 text-red-400">Error loading details.</p>';
                 }
+                document.getElementById('drilldownContent').innerHTML = html;
+            } catch (error) {
+                console.error("Drilldown error:", error);
+                document.getElementById('drilldownContent').innerHTML = '<p class="text-center py-10 text-red-400">Error loading details.</p>';
+            }
+        }
+
+        async function openStudentPerformance(studentId, name, email, auraLifetime, studentClass = null) {
+            currentPerfStudentId = studentId;
+            currentPerfStudentClass = studentClass;
+
+            document.getElementById('perf-student-name').textContent = name;
+            document.getElementById('perf-student-email').textContent = email;
+            document.getElementById('perf-total-aura').textContent = (auraLifetime || 0) + ' ✧';
+            document.getElementById('perf-spendable-aura').textContent = '--';
+            document.getElementById('student-performance-modal').classList.remove('hidden');
+
+            // 1. Fetch official student doc for exact balance
+            const doc = await db.collection("students").doc(studentId).get();
+            if (doc.exists) {
+                document.getElementById('perf-spendable-aura').textContent = doc.data().auraBalance || 0;
             }
 
-            function closeDrilldown() { document.getElementById('drilldownModal').classList.add('hidden'); }
-            function handleCredentialResponse(response) {
-                auth.signInWithCredential(firebase.auth.GoogleAuthProvider.credential(response.credential));
-            }
-            document.getElementById('signOutButton').onclick = () => auth.signOut();
-            document.getElementById('exportCsv').onclick = () => {
-                if (!currentClass) return;
-                const classStudents = students.filter(s => s.class === currentClass).sort((a, b) => a.name.localeCompare(b.name));
-                const classAssignments = assignments.filter(a => (a.assignedClasses || []).includes(currentClass));
-                let csv = "Student Name," + classAssignments.map(a => `"${a.name}"`).join(",") + ",Average\n";
-                classStudents.forEach(s => {
-                    let row = `"${s.name}",`;
-                    let total = 0, count = 0;
-                    classAssignments.forEach(a => {
-                        const score = statuses[a.id]?.[s.email.toLowerCase()]?.score;
-                        if (score !== undefined) {
-                            row += `${Math.round(score)}%,`;
-                            total += score;
-                            count++;
-                        } else {
-                            row += "-,";
-                        }
-                    });
-                    row += (count > 0 ? Math.round(total / count) + "%" : "-") + "\n";
-                    csv += row;
+            // 2. Load Work
+            refreshPerfData(email);
+        }
+
+        async function refreshPerfData(email) {
+            const studentId = currentPerfStudentId;
+            const targetEmail = email || document.getElementById('perf-student-email').textContent;
+
+            const startDate = document.getElementById('perf-date-start').value;
+            const endDate = document.getElementById('perf-date-end').value;
+            const showQuestions = document.getElementById('perf-show-questions').checked;
+            const showAura = document.getElementById('perf-show-aura').checked;
+            const gradeMode = document.getElementById('perf-grade-mode').value;
+
+            document.getElementById('perf-loading').classList.remove('hidden');
+            document.getElementById('perf-table').classList.add('hidden');
+            document.getElementById('perf-no-data').classList.add('hidden');
+
+            try {
+                // Reuse cache or fetch
+                const subSnap = await db.collection("submissions").where("studentEmail", "==", targetEmail.toLowerCase()).get();
+                const statusSnap = await db.collection("submissionStatus").where("studentEmail", "==", targetEmail.toLowerCase()).get();
+
+                const subs = subSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                const statuses = statusSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                const statusMap = {};
+                statuses.forEach(s => statusMap[s.assignmentId] = s);
+
+                // Filter & Sort
+                let work = subs.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+                if (startDate || endDate) {
+                    const sT = startDate ? new Date(startDate).getTime() / 1000 : 0;
+                    const eT = endDate ? new Date(endDate).getTime() / 1000 : Infinity;
+                    work = work.filter(w => (w.timestamp?.seconds || 0) >= sT && (w.timestamp?.seconds || 0) <= eT);
+                }
+
+                // Render Summary Table
+                const tableBody = document.getElementById('perf-submissions-table');
+                tableBody.innerHTML = '';
+
+                document.getElementById('perf-slide-header').classList.toggle('hidden', !showQuestions);
+                document.getElementById('perf-aura-header').classList.toggle('hidden', showQuestions || !showAura);
+
+                // Group by Assignment
+                const groups = {};
+                work.forEach(s => {
+                    if (!groups[s.assignmentId]) groups[s.assignmentId] = { id: s.assignmentId, subs: [] };
+                    groups[s.assignmentId].subs.push(s);
                 });
-                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-                const link = document.createElement("a");
-                link.href = URL.createObjectURL(blob);
-                link.download = `Overview_${currentClass.replace(/\s+/g, '_')}.csv`;
-                link.click();
-            };
-            document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDrilldown(); });
-        </script>
+
+                let totalGradeSum = 0;
+                let activeCount = 0;
+
+                // Build Row Objects
+                const rows = [];
+                Object.values(groups).forEach(g => {
+                    const assignment = assignments.find(a => a.id === g.id) || { name: "Unknown", slideIds: [1] };
+                    const bestScores = {};
+                    g.subs.forEach(s => {
+                        if (!bestScores[s.slideIndex] || s.score > bestScores[s.slideIndex]) bestScores[s.slideIndex] = s.score;
+                    });
+
+                    let sum = 0;
+                    Object.values(bestScores).forEach(v => sum += v);
+                    const avg = sum / (assignment.slideIds?.length || 1);
+                    totalGradeSum += avg;
+                    activeCount++;
+
+                    if (showQuestions) {
+                        for (let i = 0; i < (assignment.slideIds?.length || 1); i++) {
+                            const slideSub = g.subs.find(s => s.slideIndex === i);
+                            if (slideSub || gradeMode === 'potential') {
+                                rows.push({
+                                    name: assignment.name,
+                                    slide: i + 1,
+                                    date: slideSub?.timestamp ? new Date(slideSub.timestamp.seconds * 1000).toLocaleDateString() : '--',
+                                    score: slideSub ? Math.round(slideSub.score) + '%' : '0%',
+                                    aura: '--',
+                                    isNewGroup: i === 0
+                                });
+                            }
+                        }
+                    } else {
+                        const status = statusMap[g.id] || {};
+                        rows.push({
+                            name: assignment.name,
+                            slide: '--',
+                            date: g.subs[0]?.timestamp ? new Date(g.subs[0].timestamp.seconds * 1000).toLocaleDateString() : '--',
+                            score: Math.round(avg) + '%',
+                            aura: status.auraAmount || 0,
+                            isNewGroup: true
+                        });
+                    }
+                });
+
+                if (rows.length === 0) {
+                    document.getElementById('perf-no-data').classList.remove('hidden');
+                } else {
+                    tableBody.innerHTML = rows.map(r => `
+                        <tr class="${r.isNewGroup ? 'bg-gray-700/20' : ''}">
+                            <td class="p-3 font-medium">${r.isNewGroup ? r.name : ''}</td>
+                            <td class="p-3 ${showQuestions ? '' : 'hidden'}">${r.slide}</td>
+                            <td class="p-3 text-gray-400">${r.date}</td>
+                            <td class="p-3 font-mono">${r.score}</td>
+                            <td class="p-3 ${!showQuestions && showAura ? '' : 'hidden'} text-yellow-500">${r.aura} ✧</td>
+                        </tr>
+                    `).join('');
+                    document.getElementById('perf-table').classList.remove('hidden');
+                }
+
+                document.getElementById('perf-average-score').textContent = activeCount > 0 ? Math.round(totalGradeSum / activeCount) + '%' : '--';
+                document.getElementById('perf-assignments-completed').textContent = activeCount;
+
+            } catch (error) {
+                console.error("Perf refresh error:", error);
+            } finally {
+                document.getElementById('perf-loading').classList.add('hidden');
+            }
+        }
+
+        function closePerfModal() { document.getElementById('student-performance-modal').classList.add('hidden'); }
+        function closeDrilldown() { document.getElementById('drilldownModal').classList.add('hidden'); }
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') { closeDrilldown(); closePerfModal(); }
+        });
+
+        function handleCredentialResponse(response) {
+            auth.signInWithCredential(firebase.auth.GoogleAuthProvider.credential(response.credential));
+        }
+        document.getElementById('signOutButton').onclick = () => auth.signOut();
+        document.getElementById('exportCsv').onclick = () => {
+            if (!currentClass) return;
+            const dateRange = document.getElementById('dateRangeSelector').value;
+            const classStudents = students.filter(s => (s.class || "").toString().trim() === currentClass).sort((a, b) => a.name.localeCompare(b.name));
+
+            // Re-filter assignments for CSV (to match UI)
+            const now = new Date();
+            let classAssignments = assignments.filter(a => (a.assignedClasses || []).some(c => c.trim() === currentClass));
+            if (dateRange !== 'all') {
+                classAssignments = classAssignments.filter(a => {
+                    const created = a.createdAt?.seconds ? new Date(a.createdAt.seconds * 1000) : null;
+                    if (!created) return false;
+                    if (dateRange === '30') return (now - created) < (30 * 24 * 60 * 60 * 1000);
+                    if (dateRange === '90') return (now - created) < (90 * 24 * 60 * 60 * 1000);
+                    const month = created.getMonth();
+                    if (dateRange === 'mp1') return month >= 7 && month <= 9;
+                    if (dateRange === 'mp2') return month >= 10 || month <= 0;
+                    if (dateRange === 'mp3') return month >= 1 && month <= 3;
+                    if (dateRange === 'mp4') return month >= 4 && month <= 6;
+                    return true;
+                });
+            }
+
+            let csv = "Student Name," + classAssignments.map(a => `"${a.name}"`).join(",") + ",Average\n";
+            classStudents.forEach(s => {
+                let row = `"${s.name}",`;
+                let total = 0, count = 0;
+                classAssignments.forEach(a => {
+                    const score = statuses[a.id]?.[s.email.toLowerCase()]?.score;
+                    if (score !== undefined && score !== null) {
+                        row += `${Math.round(score)}%,`;
+                        total += score;
+                        count++;
+                    } else {
+                        row += "-,";
+                    }
+                });
+                row += (count > 0 ? Math.round(total / count) + "%" : "-") + "\n";
+                csv += row;
+            });
+
+            // Add Class Average Row
+            let avgRow = "Class Average,";
+            classAssignments.forEach(a => {
+                let colTotal = 0, colCount = 0;
+                classStudents.forEach(s => {
+                    const score = statuses[a.id]?.[s.email.toLowerCase()]?.score;
+                    if (score !== undefined && score !== null) {
+                        colTotal += score;
+                        colCount++;
+                    }
+                });
+                avgRow += (colCount > 0 ? Math.round(colTotal / colCount) + "%," : "-,");
+            });
+            csv += avgRow + "\n";
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = `Overview_${currentClass.replace(/\s+/g, '_')}_${dateRange}.csv`;
+            link.click();
+        };
+    </script>
 </body>
 
 </html>
