@@ -164,12 +164,18 @@
                     </div>
                     <div class="h-6 border-l border-gray-600 hidden md:block"></div>
                     <div class="flex items-center gap-4">
+                        <div class="flex items-center gap-2">
+                            <label for="scaleFactor" class="font-semibold text-sm">Scale:</label>
+                            <input type="number" id="scaleFactor" value="1" step="0.1"
+                                class="w-16 bg-gray-700 border border-gray-600 rounded-md p-1 text-white text-sm">
+                        </div>
+                        <button id="copyGradesButton"
+                            class="bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2 px-4 rounded-lg text-sm">Copy
+                            Grades</button>
                         <button id="exportButton"
-                            class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Export to
-                            CSV</button>
+                            class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm">CSV</button>
                         <button id="regradeAllButton" onclick="regradeAllSubmissions()"
-                            class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg">Regrade
-                            All</button>
+                            class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg text-sm">Regrade</button>
                     </div>
                 </div>
             </div>
@@ -1302,29 +1308,71 @@
             }, duration);
         }
 
+        function copyGrades() {
+            const scaleFactor = parseFloat(document.getElementById('scaleFactor').value) || 1;
+            const studentsToExport = getCurrentlySortedStudents();
+            const numQuestions = assignmentData.slideIds.length;
+
+            const outputData = studentsToExport.map(student => {
+                const nameParts = student.name.split(' ').filter(Boolean);
+                const firstName = nameParts[0] || "";
+                const lastName = nameParts.slice(1).join(' ') || "";
+                const formattedName = lastName ? `${lastName}, ${firstName}` : firstName;
+
+                let totalScore = 0;
+                for (let i = 0; i < numQuestions; i++) {
+                    const latestSubmission = student.submissions.filter(s => s.slideIndex === i).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
+                    if (latestSubmission) {
+                        totalScore += latestSubmission.score;
+                    }
+                }
+                const rawAverage = numQuestions > 0 ? totalScore / numQuestions : 0;
+                const scaledScore = Math.round(rawAverage * scaleFactor);
+
+                return `${formattedName}\t${scaledScore}`;
+            });
+
+            const finalText = outputData.join('\n');
+            if (finalText) {
+                const tempTextArea = document.createElement("textarea");
+                tempTextArea.value = finalText;
+                document.body.appendChild(tempTextArea);
+                tempTextArea.select();
+                try {
+                    document.execCommand('copy');
+                    showToast(`Copied ${outputData.length} grades to clipboard!`, { color: 'green' });
+                } catch (err) {
+                    console.error('Fallback: Oops, unable to copy', err);
+                    showToast("Failed to copy grades.", { color: 'red' });
+                }
+                document.body.removeChild(tempTextArea);
+            }
+        }
+
         function exportToCSV() {
-            let csvContent = "";
+            let csvContent = "\uFEFF"; // Add BOM for Excel UTF-8 support
             const numQuestions = assignmentData.slideIds.length;
             const hasFocusMode = assignmentData.focusModeEnabled;
-            let headers = ["Email", "Last Name", "First Name", "Last, First", "Class", "Average Score", "Completion %"];
-            if (hasFocusMode) {
-                headers.push("Focus Violations");
-            }
+
+            let headers = ["Email", "Last Name", "First Name", "Full Name (Last, First)", "Class", "Average Score %", "Completion %"];
+            if (hasFocusMode) headers.push("Focus Violations");
             headers.push("Aura");
             for (let i = 1; i <= numQuestions; i++) { headers.push(`Q${i} Score`); }
-            csvContent += headers.join(',') + "\r\n";
+
+            csvContent += headers.map(h => `"${h}"`).join(',') + "\r\n";
 
             const studentsToExport = getCurrentlySortedStudents();
 
             studentsToExport.forEach(student => {
-                const nameParts = student.name.split(' ');
-                const lastName = nameParts.pop() || "";
-                const firstName = nameParts.join(' ') || "";
-                const lastFirst = `"${lastName}, ${firstName}"`;
+                const nameParts = student.name.split(' ').filter(Boolean);
+                const firstName = nameParts[0] || "";
+                const lastName = nameParts.slice(1).join(' ') || "";
+                const fullNameLF = `"${lastName}, ${firstName}"`;
 
                 let questionScores = [];
                 let totalScore = 0;
                 let attemptedQuestions = 0;
+
                 for (let i = 0; i < numQuestions; i++) {
                     const latestSubmission = student.submissions.filter(s => s.slideIndex === i).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
                     if (latestSubmission) {
@@ -1332,17 +1380,29 @@
                         totalScore += latestSubmission.score;
                         attemptedQuestions++;
                     } else {
-                        questionScores.push("");
+                        questionScores.push(0); // Unattempted count as 0
                     }
                 }
-                const averageScore = attemptedQuestions > 0 ? (totalScore / attemptedQuestions).toFixed(2) : "";
+
+                const averageScore = numQuestions > 0 ? (totalScore / numQuestions).toFixed(2) : "0.00";
                 const completionPercentage = numQuestions > 0 ? ((attemptedQuestions / numQuestions) * 100).toFixed(2) : "0.00";
 
-                let row = [student.email, `"${lastName}"`, `"${firstName}"`, lastFirst, student.class, averageScore, completionPercentage];
+                let row = [
+                    `"${student.email}"`,
+                    `"${lastName}"`,
+                    `"${firstName}"`,
+                    fullNameLF, // already quoted
+                    `"${student.class}"`,
+                    averageScore,
+                    completionPercentage
+                ];
+
                 if (hasFocusMode) {
                     row.push((student.violations || []).length);
                 }
                 row.push(student.auraAwarded ? student.auraAmount : 0);
+
+                // Add individual question scores
                 row = [...row, ...questionScores].join(',');
                 csvContent += row + "\r\n";
             });
@@ -1352,14 +1412,16 @@
             const url = URL.createObjectURL(blob);
             link.setAttribute("href", url);
             const safeAssignmentName = assignmentData.name.replace(/[^a-z0-9]/gi, '_');
-            const safeViewName = activeClass.replace(/\s+/g, '_');
+            const safeViewName = (activeClass || 'All').replace(/\s+/g, '_');
             link.setAttribute("download", `submissions_${safeAssignmentName}_${safeViewName}.csv`);
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
         }
+
         document.getElementById('exportButton').onclick = exportToCSV;
+        document.getElementById('copyGradesButton').onclick = copyGrades;
     </script>
 </body>
 
