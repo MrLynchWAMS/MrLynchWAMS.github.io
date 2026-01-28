@@ -92,16 +92,20 @@
                     class="bg-gray-800 border border-gray-700 text-white rounded px-4 py-2 font-bold focus:ring-yellow-400">
                     <option value="">Select a Class...</option>
                 </select>
-                <select id="dateRangeSelector" onchange="handleClassChange()"
+                <select id="dateRangeSelector" onchange="toggleCustomDates(); handleClassChange();"
                     class="bg-gray-800 border border-gray-700 text-white rounded px-4 py-2 text-sm focus:ring-yellow-400">
                     <option value="all">All Assignments</option>
                     <option value="30">Last 30 Days</option>
                     <option value="90">Last 90 Days</option>
-                    <option value="mp1">Marking Period 1 (Aug-Oct)</option>
-                    <option value="mp2">Marking Period 2 (Nov-Jan)</option>
-                    <option value="mp3">Marking Period 3 (Feb-Apr)</option>
-                    <option value="mp4">Marking Period 4 (May-Jun)</option>
+                    <option value="custom">Custom Range...</option>
                 </select>
+                <div id="customDateRange" class="hidden flex items-center gap-2">
+                    <input type="date" id="startDate" onchange="handleClassChange()"
+                        class="bg-gray-800 border border-gray-700 text-white rounded px-2 py-1 text-sm focus:ring-yellow-400">
+                    <span class="text-gray-500">to</span>
+                    <input type="date" id="endDate" onchange="handleClassChange()"
+                        class="bg-gray-800 border border-gray-700 text-white rounded px-2 py-1 text-sm focus:ring-yellow-400">
+                </div>
             </div>
             <div class="flex gap-3">
                 <a href="./assignments.html"
@@ -343,16 +347,31 @@
                     if (dateRange === '30') return (now - created) < (30 * 24 * 60 * 60 * 1000);
                     if (dateRange === '90') return (now - created) < (90 * 24 * 60 * 60 * 1000);
 
-                    const month = created.getMonth();
-                    if (dateRange === 'mp1') return month >= 7 && month <= 9; // Aug-Oct
-                    if (dateRange === 'mp2') return month >= 10 || month <= 0; // Nov-Jan
-                    if (dateRange === 'mp3') return month >= 1 && month <= 3; // Feb-Apr
-                    if (dateRange === 'mp4') return month >= 4 && month <= 6; // May-Jul
+                    if (dateRange === 'custom') {
+                        const startStr = document.getElementById('startDate').value;
+                        const endStr = document.getElementById('endDate').value;
+                        if (!startStr && !endStr) return true;
+                        const start = startStr ? new Date(startStr).getTime() : 0;
+                        const end = endStr ? new Date(endStr).getTime() + (24 * 60 * 60 * 1000) : Infinity;
+                        return created.getTime() >= start && created.getTime() <= end;
+                    }
                     return true;
                 });
             }
 
             const classStudents = students.filter(s => (s.class || "").toString().trim() === currentClass);
+
+            // Sort by Last Name (Last Token)
+            classStudents.sort((a, b) => {
+                const nameA = (a.name || "").trim().split(" ");
+                const nameB = (b.name || "").trim().split(" ");
+                const lastA = nameA[nameA.length - 1].toLowerCase();
+                const lastB = nameB[nameB.length - 1].toLowerCase();
+                if (lastA < lastB) return -1;
+                if (lastA > lastB) return 1;
+                return (nameA[0] || "").toLowerCase().localeCompare((nameB[0] || "").toLowerCase());
+            });
+
             const studentEmails = new Set(classStudents.map(s => s.email.toLowerCase()));
 
             // 1. Fetch Submission Statuses
@@ -677,6 +696,11 @@
 
         function closePerfModal() { document.getElementById('student-performance-modal').classList.add('hidden'); }
         function closeDrilldown() { document.getElementById('drilldownModal').classList.add('hidden'); }
+        function toggleCustomDates() {
+            const range = document.getElementById('dateRangeSelector').value;
+            document.getElementById('customDateRange').classList.toggle('hidden', range !== 'custom');
+        }
+
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') { closeDrilldown(); closePerfModal(); }
         });
@@ -688,9 +712,19 @@
         document.getElementById('exportCsv').onclick = () => {
             if (!currentClass) return;
             const dateRange = document.getElementById('dateRangeSelector').value;
-            const classStudents = students.filter(s => (s.class || "").toString().trim() === currentClass).sort((a, b) => a.name.localeCompare(b.name));
+            const classStudents = students.filter(s => (s.class || "").toString().trim() === currentClass);
 
-            // Re-filter assignments for CSV (to match UI)
+            // Sort by Last Name (Last Token)
+            classStudents.sort((a, b) => {
+                const nameA = (a.name || "").trim().split(" ");
+                const nameB = (b.name || "").trim().split(" ");
+                const lastA = nameA[nameA.length - 1].toLowerCase();
+                const lastB = nameB[nameB.length - 1].toLowerCase();
+                if (lastA < lastB) return -1;
+                if (lastA > lastB) return 1;
+                return (nameA[0] || "").toLowerCase().localeCompare((nameB[0] || "").toLowerCase());
+            });
+
             const now = new Date();
             let classAssignments = assignments.filter(a => (a.assignedClasses || []).some(c => c.trim() === currentClass));
             if (dateRange !== 'all') {
@@ -699,11 +733,15 @@
                     if (!created) return false;
                     if (dateRange === '30') return (now - created) < (30 * 24 * 60 * 60 * 1000);
                     if (dateRange === '90') return (now - created) < (90 * 24 * 60 * 60 * 1000);
-                    const month = created.getMonth();
-                    if (dateRange === 'mp1') return month >= 7 && month <= 9;
-                    if (dateRange === 'mp2') return month >= 10 || month <= 0;
-                    if (dateRange === 'mp3') return month >= 1 && month <= 3;
-                    if (dateRange === 'mp4') return month >= 4 && month <= 6;
+
+                    if (dateRange === 'custom') {
+                        const startStr = document.getElementById('startDate').value;
+                        const endStr = document.getElementById('endDate').value;
+                        if (!startStr && !endStr) return true;
+                        const start = startStr ? new Date(startStr).getTime() : 0;
+                        const end = endStr ? new Date(endStr).getTime() + (24 * 60 * 60 * 1000) : Infinity;
+                        return created.getTime() >= start && created.getTime() <= end;
+                    }
                     return true;
                 });
             }
