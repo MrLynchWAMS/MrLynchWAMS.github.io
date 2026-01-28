@@ -446,17 +446,16 @@
             document.getElementById('noDataState').classList.add('hidden');
             grid.classList.remove('hidden');
 
-            // Header
             header.innerHTML = `
                 <tr>
                     <th class="sticky-intersect p-4 text-left border-b border-r border-gray-700 w-64">Student Name</th>
+                    <th class="sticky-row p-4 text-center border-b border-gray-700 bg-gray-900/50 w-20">Avg</th>
                     ${classAssignments.map(a => `
                         <th class="sticky-row p-4 text-center border-b border-gray-700 min-w-[120px]">
                             <a href="./dashboard.html?assignmentId=${a.id}" class="text-xs hover:text-yellow-400 block truncate max-w-[150px]" title="${a.name}">${a.name}</a>
                             <div class="text-[10px] text-gray-500 font-normal">Avg: <span id="col-avg-${a.id}">-</span></div>
                         </th>
                     `).join('')}
-                    <th class="sticky-row p-4 text-center border-b border-gray-700 bg-gray-900/50">Avg</th>
                 </tr>
             `;
 
@@ -485,11 +484,11 @@
 
                 return `
                     <tr class="hover:bg-gray-700/50">
-                        <td class="sticky-col p-4 border-b border-r border-gray-700 font-medium">
+                        <td class="sticky-col p-4 border-b border-r border-gray-700 font-medium whitespace-nowrap overflow-hidden text-ellipsis w-64">
                             <span class="text-blue-400 hover:underline cursor-pointer" onclick='openStudentPerformance("${s.id}", "${s.name.replace(/'/g, "\\'")}", "${s.email}", ${lifetime}, "${currentClass}")'>${s.name}</span>
                         </td>
+                        <td class="p-4 text-center border-b border-gray-700 font-bold bg-gray-900/30 w-20">${avg}</td>
                         ${cells}
-                        <td class="p-4 text-center border-b border-gray-700 font-bold bg-gray-900/30">${avg}</td>
                     </tr>
                 `;
             }).join('');
@@ -746,26 +745,26 @@
                 });
             }
 
-            let csv = "Student Name," + classAssignments.map(a => `"${a.name}"`).join(",") + ",Average\n";
+            let csv = "Student Name,Average," + classAssignments.map(a => `"${a.name}"`).join(",") + "\n";
             classStudents.forEach(s => {
-                let row = `"${s.name}",`;
                 let total = 0, count = 0;
+                let studentCells = "";
                 classAssignments.forEach(a => {
                     const score = statuses[a.id]?.[s.email.toLowerCase()]?.score;
                     if (score !== undefined && score !== null) {
-                        row += `${Math.round(score)}%,`;
+                        studentCells += `${Math.round(score)}%,`;
                         total += score;
                         count++;
                     } else {
-                        row += "-,";
+                        studentCells += "-,";
                     }
                 });
-                row += (count > 0 ? Math.round(total / count) + "%" : "-") + "\n";
-                csv += row;
+                const avg = count > 0 ? Math.round(total / count) + "%" : "-";
+                csv += `"${s.name}",${avg},${studentCells.slice(0, -1)}\n`;
             });
 
             // Add Class Average Row
-            let avgRow = "Class Average,";
+            let avgRow = "Class Average,-,";
             classAssignments.forEach(a => {
                 let colTotal = 0, colCount = 0;
                 classStudents.forEach(s => {
