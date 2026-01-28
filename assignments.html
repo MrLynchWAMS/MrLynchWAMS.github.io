@@ -87,6 +87,9 @@
                 <a href="./roster.html"
                     class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Manage
                     Roster</a>
+                <a href="./class-dashboard.html"
+                    class="bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Class
+                    Overview</a>
                 <a href="./public-library.html"
                     class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Public
                     Library</a>
@@ -545,10 +548,15 @@
                          <button onclick="openStatusModal('${assignment.id}')" class="flex-1 text-center bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-3 rounded-lg btn-action">Assign & Schedule</button>
                          <button onclick="deleteAssignment('${assignment.id}', '${escapedName}')" class="flex-1 text-center bg-red-700 hover:bg-red-800 text-white font-bold py-2 px-3 rounded-lg btn-action">Delete</button>
                     </div>
-                    <div class="flex justify-between gap-2">
-                        <button onclick="openCoTeacherModal('${assignment.id}')" class="flex-1 text-center bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold py-2 px-2 rounded-lg btn-action">Co-Teachers</button>
-                        <button onclick="openShareModal('${assignment.id}')" class="flex-1 text-center bg-green-600 hover:bg-green-700 text-white text-sm font-bold py-2 px-2 rounded-lg btn-action">Share</button>
-                        <button onclick="togglePublic('${assignment.id}', ${assignment.isPublic || false})" class="flex-1 text-center bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold py-2 px-2 rounded-lg btn-action">${assignment.isPublic ? 'Make Private' : 'Make Public'}</button>
+                    <div class="flex flex-col gap-2">
+                        <div class="flex justify-between gap-2">
+                            <button onclick="openCoTeacherModal('${assignment.id}')" class="flex-1 text-center bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold py-2 px-2 rounded-lg btn-action">Co-Teachers</button>
+                            <button onclick="openShareModal('${assignment.id}')" class="flex-1 text-center bg-green-600 hover:bg-green-700 text-white text-sm font-bold py-2 px-2 rounded-lg btn-action">Share</button>
+                        </div>
+                        <div class="flex justify-between gap-2">
+                            <button onclick="togglePublic('${assignment.id}', ${assignment.isPublic || false})" class="flex-1 text-center bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold py-2 px-2 rounded-lg btn-action">${assignment.isPublic ? 'Make Private' : 'Make Public'}</button>
+                            <a href="./class-dashboard.html" class="flex-1 text-center bg-cyan-600 hover:bg-cyan-700 text-white text-sm font-bold py-2 px-2 rounded-lg btn-action">Class Overview</a>
+                        </div>
                     </div>
                 </div>
             `;
