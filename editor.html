@@ -1911,20 +1911,22 @@
             slideIds: assignmentData.slideIds,
             checkerFunctions: checkerFunctions,
             checkerMeta: checkerMeta,
-            deadlinePolicy: {
-              ...deadlinePolicy,
-              perClass: isPerClass,
-              globalDueAt: globalDueAt || firebase.firestore.FieldValue.delete()
-            },
+            deadlinePolicy: deadlinePolicy,
             postSubmissionRule: postSubmissionRule,
             auraOnTime: auraOnTime,
-            auraDueAt: auraDueAt || firebase.firestore.FieldValue.delete(),
             auraRules: auraRules.map(({ id, ...rest }) => rest), // Remove internal IDs
             focusModeEnabled: focusModeEnabled,
             focusModeAction: focusModeAction
           };
 
-          // Include auraDueAt if set, otherwise delete it from the document
+          // Use dot notation to avoid nested FieldValue.delete() errors
+          updatePayload["deadlinePolicy.perClass"] = isPerClass;
+          if (globalDueAt) {
+            updatePayload["deadlinePolicy.globalDueAt"] = globalDueAt;
+          } else {
+            updatePayload["deadlinePolicy.globalDueAt"] = firebase.firestore.FieldValue.delete();
+          }
+
           if (auraDueAt) {
             updatePayload.auraDueAt = auraDueAt;
           } else {
