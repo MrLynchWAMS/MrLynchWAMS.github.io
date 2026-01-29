@@ -194,13 +194,42 @@
         <span id="deadline-chevron" class="text-2xl transform transition-transform">▶</span>
       </div>
       <div id="deadline-content" class="collapsible-content px-6 pb-6">
-        <p class="text-gray-400 mb-4">Set the official start time for each class period. Per-question deadlines are
-          calculated in minutes after this time.</p>
-        <div id="class-start-times" class="flex flex-wrap gap-4"></div>
-        <div class="mt-4 border-t border-gray-700 pt-4 flex justify-end">
-          <button onclick="saveTeacherDefaults()"
-            class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">Save These Times as My
-            Defaults</button>
+        <div class="mb-6 bg-gray-700/30 p-4 rounded-lg border border-gray-700">
+          <label class="flex items-center cursor-pointer mb-2">
+            <input type="checkbox" id="perClassDeadlines" onchange="togglePerClassDeadlines()"
+              class="w-5 h-5 text-yellow-500 rounded focus:ring-yellow-500 bg-gray-800 border-gray-600">
+            <span class="ml-3 font-semibold text-white">Specify individual deadlines by class</span>
+          </label>
+          <p class="text-xs text-gray-400">If unchecked, all periods share a single global deadline. If checked, each
+            period can have its own start time and due date.</p>
+        </div>
+
+        <!-- Global Deadline Section -->
+        <div id="global-deadline-config" class="space-y-4 mb-6">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm text-gray-400 mb-1">Global Due Date</label>
+              <input type="date" id="globalDueDate"
+                class="w-full p-2 bg-gray-700 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none">
+            </div>
+            <div>
+              <label class="block text-sm text-gray-400 mb-1">Global Due Time</label>
+              <input type="time" id="globalDueTime"
+                class="w-full p-2 bg-gray-700 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none">
+            </div>
+          </div>
+        </div>
+
+        <!-- Per-Class Deadlines (Collapsible) -->
+        <div id="per-class-config" class="hidden">
+          <p class="text-gray-400 mb-4">Set the official start time and due date for each class period. Per-question
+            deadlines are calculated in minutes after the start time.</p>
+          <div id="class-start-times" class="flex flex-wrap gap-4"></div>
+          <div class="mt-4 border-t border-gray-700 pt-4 flex justify-end">
+            <button onclick="saveTeacherDefaults()"
+              class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">Save These Start Times
+              as My Defaults</button>
+          </div>
         </div>
       </div>
     </div>
@@ -248,41 +277,46 @@
       </div>
     </div>
 
-    <div class="mb-4 p-4 bg-gray-700 rounded-lg border border-gray-600">
-      <h3 class="font-bold text-yellow-400 mb-2">✧ Aura Rewards</h3>
-      <p class="text-xs text-gray-400 mb-3">Aura is awarded once per assignment at submit time, based on overall
-        assignment average.</p>
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div>
-          <label class="block text-sm text-gray-400 mb-1">Aura Points</label>
-          <input type="number" id="auraAmount" value="1" min="0" max="100" step="0.1"
-            class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none">
+    <div id="aura-section" class="bg-gray-800 rounded-lg mb-8 overflow-hidden">
+      <div id="aura-header" class="flex justify-between items-center p-6 cursor-pointer" onclick="toggleAuraSection()">
+        <h2 class="text-2xl font-bold text-yellow-400">✧ Aura Rewards</h2>
+        <span id="aura-chevron" class="text-2xl transform transition-transform">▶</span>
+      </div>
+      <div id="aura-content" class="collapsible-content px-6 pb-6 border-t border-gray-700">
+        <p class="text-gray-400 mb-4 mt-4">Aura is awarded once per assignment at submit time, based on the overall
+          assignment average. If multiple rules match, the highest matching reward is given (non-cumulative).</p>
+
+        <div id="aura-rules-container" class="space-y-4">
+          <!-- Aura rules will be injected here -->
         </div>
-        <div>
-          <label class="block text-sm text-gray-400 mb-1">Min Score %</label>
-          <input type="number" id="auraMinScore" value="0" min="0" max="100"
-            class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none">
+
+        <div class="mt-6 flex justify-between items-center">
+          <button onclick="addAuraRule()"
+            class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm">+ Add Aura
+            Condition</button>
+          <div class="flex items-center">
+            <input type="checkbox" id="auraOnTime"
+              class="w-4 h-4 text-yellow-500 rounded focus:ring-yellow-500 bg-gray-700 border-gray-500">
+            <label for="auraOnTime" class="ml-2 text-sm text-gray-300">"Must be on time" applies to ALL rules</label>
+          </div>
         </div>
-        <div class="flex items-center pt-6">
-          <input type="checkbox" id="auraOnTime"
-            class="w-4 h-4 text-yellow-500 rounded focus:ring-yellow-500 bg-gray-700 border-gray-500">
-          <label for="auraOnTime" class="ml-2 text-sm text-gray-300">Must be on time</label>
+
+        <div id="aura-global-deadline"
+          class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6 p-4 bg-gray-700/30 rounded-lg border border-gray-700 hidden">
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Global Aura Deadline Date</label>
+            <input type="date" id="auraDueDate"
+              class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Global Aura Deadline Time</label>
+            <input type="time" id="auraDueTime"
+              class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none">
+          </div>
+          <p class="text-xs text-gray-500 md:col-span-2">This deadline applies if "Must be on time" is checked. Students
+            must submit before this deadline to earn any Aura.</p>
         </div>
       </div>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-        <div>
-          <label class="block text-sm text-gray-400 mb-1">Aura Deadline Date</label>
-          <input type="date" id="auraDueDate"
-            class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none">
-        </div>
-        <div>
-          <label class="block text-sm text-gray-400 mb-1">Aura Deadline Time</label>
-          <input type="time" id="auraDueTime"
-            class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none">
-        </div>
-      </div>
-      <p class="text-xs text-gray-500 mt-2">If "Must be on time" is checked, both date and time must be set. Students
-        must submit before this deadline to earn Aura.</p>
     </div>
 
     <div id="slidesContainer" class="space-y-8"></div>
@@ -532,23 +566,33 @@
         document.getElementById('assignmentTitle').textContent = `Editing: ${assignmentData.name}`;
         document.getElementById('shareLink').value = `https://custom.scienceclass.rocks/classroompicker.html?assignmentId=${assignmentId}`;
         document.getElementById('postSubmissionRule').value = assignmentData.postSubmissionRule || 'open';
-        document.getElementById('auraAmount').value = assignmentData.auraAmount ?? 1;
-        document.getElementById('auraMinScore').value = assignmentData.auraMinScore ?? 0;
-        document.getElementById('auraOnTime').checked = assignmentData.auraOnTime || false;
 
-        // Populate Aura deadline date/time using teacher's local timezone
+        // Aura Rewards Initialization
+        const auraOnTime = document.getElementById('auraOnTime');
         const auraDueDateInput = document.getElementById('auraDueDate');
         const auraDueTimeInput = document.getElementById('auraDueTime');
+        const auraGlobalDeadline = document.getElementById('aura-global-deadline');
+        auraGlobalDeadline.classList.toggle('hidden', !auraOnTime.checked);
+        auraOnTime.addEventListener('change', () => { auraGlobalDeadline.classList.toggle('hidden', !auraOnTime.checked); });
+
+        auraOnTime.checked = assignmentData.auraOnTime || false;
+
+        // Initialize auraRules (backward compatibility)
+        auraRules = [];
+        if (assignmentData.auraRules && Array.isArray(assignmentData.auraRules)) {
+          assignmentData.auraRules.forEach(rule => addAuraRule(rule));
+        } else if (assignmentData.auraAmount !== undefined) {
+          addAuraRule({ amount: assignmentData.auraAmount, minScore: assignmentData.auraMinScore || 0 });
+        } else {
+          addAuraRule({ amount: 1, minScore: 0 }); // Default
+        }
+
         if (assignmentData.auraDueAt) {
-          const dueAt = assignmentData.auraDueAt.toDate
-            ? assignmentData.auraDueAt.toDate()
-            : new Date(assignmentData.auraDueAt);
-          // Format as yyyy-mm-dd for date input (local timezone)
+          const dueAt = assignmentData.auraDueAt.toDate ? assignmentData.auraDueAt.toDate() : new Date(assignmentData.auraDueAt);
           const year = dueAt.getFullYear();
           const month = String(dueAt.getMonth() + 1).padStart(2, '0');
           const day = String(dueAt.getDate()).padStart(2, '0');
           auraDueDateInput.value = `${year}-${month}-${day}`;
-          // Format as HH:MM for time input (24-hour, local timezone)
           const hours = String(dueAt.getHours()).padStart(2, '0');
           const minutes = String(dueAt.getMinutes()).padStart(2, '0');
           auraDueTimeInput.value = `${hours}:${minutes}`;
@@ -557,18 +601,34 @@
           auraDueTimeInput.value = '';
         }
 
-        // Load Focus Mode settings
+        // Focus Mode initialization
         const focusModeEnabled = document.getElementById('focusModeEnabled');
         const focusModeAction = document.getElementById('focusModeAction');
         const focusModeOptions = document.getElementById('focusModeOptions');
         focusModeEnabled.checked = assignmentData.focusModeEnabled || false;
         focusModeAction.value = assignmentData.focusModeAction || 'log';
         focusModeOptions.classList.toggle('hidden', !focusModeEnabled.checked);
+        focusModeEnabled.addEventListener('change', () => { focusModeOptions.classList.toggle('hidden', !focusModeEnabled.checked); });
 
-        // Toggle Focus Mode options visibility
-        focusModeEnabled.addEventListener('change', () => {
-          focusModeOptions.classList.toggle('hidden', !focusModeEnabled.checked);
-        });
+        // Deadlines initialization
+        const perClassDeadlines = document.getElementById('perClassDeadlines');
+        const globalDueDateInput = document.getElementById('globalDueDate');
+        const globalDueTimeInput = document.getElementById('globalDueTime');
+
+        const isPerClass = assignmentData.deadlinePolicy?.perClass || false;
+        perClassDeadlines.checked = isPerClass;
+        togglePerClassDeadlines(); // Set visibility based on initial state
+
+        if (assignmentData.deadlinePolicy?.globalDueAt) {
+          const dueAt = assignmentData.deadlinePolicy.globalDueAt.toDate ? assignmentData.deadlinePolicy.globalDueAt.toDate() : new Date(assignmentData.deadlinePolicy.globalDueAt);
+          const year = dueAt.getFullYear();
+          const month = String(dueAt.getMonth() + 1).padStart(2, '0');
+          const day = String(dueAt.getDate()).padStart(2, '0');
+          globalDueDateInput.value = `${year}-${month}-${day}`;
+          const hours = String(dueAt.getHours()).padStart(2, '0');
+          const minutes = String(dueAt.getMinutes()).padStart(2, '0');
+          globalDueTimeInput.value = `${hours}:${minutes}`;
+        }
 
         renderDeadlineUI();
         renderEditor();
@@ -1767,53 +1827,62 @@
           }
         });
 
-        const postSubmissionRule = document.getElementById('postSubmissionRule').value;
-        const auraAmount = parseFloat(document.getElementById('auraAmount').value) || 0;
-        const auraMinScore = parseFloat(document.getElementById('auraMinScore').value) || 0;
+        // Aura Rules
         const auraOnTime = document.getElementById('auraOnTime').checked;
-
-        // Read Focus Mode settings
-        const focusModeEnabled = document.getElementById('focusModeEnabled').checked;
-        const focusModeAction = document.getElementById('focusModeAction').value;
-
-        // Read Aura deadline date and time
         const auraDueDateStr = document.getElementById('auraDueDate').value;
         const auraDueTimeStr = document.getElementById('auraDueTime').value;
 
         // Validation: if auraOnTime is true, require both date and time
         if (auraOnTime && (!auraDueDateStr || !auraDueTimeStr)) {
-          showToast("To require 'Must be on time', please set both Aura deadline date and time.", { color: 'red' });
+          showToast("To require 'Must be on time', please set BOTH Aura deadline date and time.", { color: 'red' });
           saveBtn.textContent = "Save Assignment";
           return;
         }
 
-        // Build auraDueAt Timestamp if both date and time are provided
         let auraDueAt = null;
         if (auraDueDateStr && auraDueTimeStr) {
           const dateParts = auraDueDateStr.split('-');
           const timeParts = auraDueTimeStr.split(':');
-          // Validate expected format
           if (dateParts.length === 3 && timeParts.length >= 2) {
             const [year, month, day] = dateParts.map(Number);
             const [hour, minute] = timeParts.map(Number);
-            // Validate parsed values are valid numbers
             if (!isNaN(year) && !isNaN(month) && !isNaN(day) && !isNaN(hour) && !isNaN(minute)) {
-              const localDate = new Date(year, month - 1, day, hour, minute, 0, 0);
-              auraDueAt = firebase.firestore.Timestamp.fromDate(localDate);
+              auraDueAt = firebase.firestore.Timestamp.fromDate(new Date(year, month - 1, day, hour, minute, 0, 0));
             }
           }
         }
 
-        // Build the update payload
+        // Global deadlines
+        const isPerClass = document.getElementById('perClassDeadlines').checked;
+        const globalDueDateStr = document.getElementById('globalDueDate').value;
+        const globalDueTimeStr = document.getElementById('globalDueTime').value;
+        let globalDueAt = null;
+
+        if (globalDueDateStr && globalDueTimeStr) {
+          const dateParts = globalDueDateStr.split('-');
+          const timeParts = globalDueTimeStr.split(':');
+          if (dateParts.length === 3 && timeParts.length >= 2) {
+            const [year, month, day] = dateParts.map(Number);
+            const [hour, minute] = timeParts.map(Number);
+            if (!isNaN(year) && !isNaN(month) && !isNaN(day) && !isNaN(hour) && !isNaN(minute)) {
+              globalDueAt = firebase.firestore.Timestamp.fromDate(new Date(year, month - 1, day, hour, minute, 0, 0));
+            }
+          }
+        }
+
         const updatePayload = {
           slideIds: assignmentData.slideIds,
           checkerFunctions: checkerFunctions,
           checkerMeta: checkerMeta,
-          deadlinePolicy: deadlinePolicy,
+          deadlinePolicy: {
+            ...deadlinePolicy,
+            perClass: isPerClass,
+            globalDueAt: globalDueAt || firebase.firestore.FieldValue.delete()
+          },
           postSubmissionRule: postSubmissionRule,
-          auraAmount: auraAmount,
-          auraMinScore: auraMinScore,
           auraOnTime: auraOnTime,
+          auraDueAt: auraDueAt || firebase.firestore.FieldValue.delete(),
+          auraRules: auraRules.map(({ id, ...rest }) => rest), // Remove internal IDs
           focusModeEnabled: focusModeEnabled,
           focusModeAction: focusModeAction
         };
@@ -1899,6 +1968,77 @@
       shareLinkInput.setSelectionRange(0, 99999);
       document.execCommand("copy");
       showToast("Link copied to clipboard!", { color: 'blue' });
+    }
+
+    function toggleAuraSection() {
+      const content = document.getElementById('aura-content');
+      const chevron = document.getElementById('aura-chevron');
+      if (content.style.maxHeight && content.style.maxHeight !== '0px') {
+        content.style.maxHeight = '0';
+        chevron.style.transform = 'rotate(0deg)';
+      } else {
+        content.style.maxHeight = '2000px'; // Using a large enough max-height
+        chevron.style.transform = 'rotate(90deg)';
+      }
+    }
+
+    function togglePerClassDeadlines() {
+      const isChecked = document.getElementById('perClassDeadlines').checked;
+      document.getElementById('per-class-config').classList.toggle('hidden', !isChecked);
+      document.getElementById('global-deadline-config').classList.toggle('hidden', isChecked);
+
+      // Update collapsible height if open
+      const content = document.getElementById('deadline-content');
+      if (content.style.maxHeight && content.style.maxHeight !== '0px') {
+        content.style.maxHeight = '2000px';
+      }
+    }
+
+    let auraRules = [];
+    function addAuraRule(ruleData = { amount: 1, minScore: 0 }) {
+      const id = Date.now() + Math.random().toString(36).substr(2, 9);
+      const rule = { id, ...ruleData };
+      auraRules.push(rule);
+      renderAuraRules();
+    }
+
+    function removeAuraRule(id) {
+      auraRules = auraRules.filter(r => r.id !== id);
+      renderAuraRules();
+    }
+
+    function renderAuraRules() {
+      const container = document.getElementById('aura-rules-container');
+      container.innerHTML = '';
+
+      if (auraRules.length === 0) {
+        container.innerHTML = '<p class="text-gray-500 italic text-sm">No aura rewards configured. Click "Add Aura Condition" to start.</p>';
+        return;
+      }
+
+      auraRules.forEach((rule, index) => {
+        const div = document.createElement('div');
+        div.className = "grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-700/50 rounded-lg border border-gray-600 relative animate-fade-in-right";
+        div.innerHTML = `
+          <div>
+            <label class="block text-xs text-gray-400 mb-1">Aura Points</label>
+            <input type="number" value="${rule.amount}" step="0.1" onchange="updateRule(${index}, 'amount', this.value)" class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none text-sm">
+          </div>
+          <div>
+            <label class="block text-xs text-gray-400 mb-1">Min Score %</label>
+            <input type="number" value="${rule.minScore}" min="0" max="100" onchange="updateRule(${index}, 'minScore', this.value)" class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none text-sm">
+          </div>
+          <div class="flex items-end justify-between">
+            <p class="text-[10px] text-gray-500 mb-2">Rule #${index + 1}</p>
+            <button onclick="removeAuraRule('${rule.id}')" class="text-red-400 hover:text-red-300 text-sm font-bold mb-1">Remove</button>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function updateRule(index, field, value) {
+      auraRules[index][field] = parseFloat(value) || 0;
     }
 
     function showToast(message, options = {}) {
@@ -2008,4 +2148,4 @@
   </script>
 </body>
 
-</html>      
+</html>
