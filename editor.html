@@ -1786,6 +1786,11 @@
           const checkerMeta = {};
           const deadlinePolicy = { classStartTimes: {}, classDueAt: {} };
 
+          // Read form values
+          const postSubmissionRule = document.getElementById('postSubmissionRule').value;
+          const focusModeEnabled = document.getElementById('focusModeEnabled').checked;
+          const focusModeAction = document.getElementById('focusModeAction').value;
+
           allClassNames.forEach(className => {
             const timeValue = document.getElementById(`start-time-${className}`).value;
             if (timeValue) {
