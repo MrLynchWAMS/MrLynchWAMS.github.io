@@ -795,8 +795,16 @@
                     const overallAverage = slideStates.length > 0 ? totalScore / slideStates.length : 0;
 
                     // Read assignment-level Aura config
-                    const assignmentAuraAmount = parseFloat(assignmentData.auraAmount) || 0;
-                    const auraMinScore = parseFloat(assignmentData.auraMinScore) || 0;
+                    // Calculate Aura Eligibility (New Rule-Based System)
+                    const assignmentAuraRules = assignmentData.auraRules || [];
+                    // Backward compatibility
+                    if (assignmentAuraRules.length === 0 && assignmentData.auraAmount) {
+                        assignmentAuraRules.push({
+                            amount: parseFloat(assignmentData.auraAmount) || 0,
+                            minScore: parseFloat(assignmentData.auraMinScore) || 0
+                        });
+                    }
+
                     const auraOnTime = assignmentData.auraOnTime || false;
                     const auraDueAt = assignmentData.auraDueAt;
 
@@ -809,12 +817,14 @@
                     }
 
                     // Check aura eligibility
-                    if (assignmentAuraAmount > 0 &&
-                        overallAverage >= auraMinScore &&
-                        (!auraOnTime || isOnTimeAssignment) &&
-                        userProfile.studentDocId) {
-                        auraAwarded = true;
-                        auraAmount = assignmentAuraAmount;
+                    if ((!auraOnTime || isOnTimeAssignment) && userProfile.studentDocId) {
+                        // Find highest matching rule
+                        for (const rule of assignmentAuraRules) {
+                            if (overallAverage >= rule.minScore && rule.amount > auraAmount) {
+                                auraAmount = rule.amount;
+                            }
+                        }
+                        if (auraAmount > 0) auraAwarded = true;
                     }
                 } catch (auraError) {
                     console.error("Error calculating aura eligibility:", auraError);
@@ -1141,28 +1151,70 @@
                 auraContainer.innerHTML = `${assignmentAuraEarned || 0} ✧`;
             } else {
                 // Potential Aura Calculation (Pre-submission)
-                const auraAmount = parseFloat(assignmentData.auraAmount) || 0;
-                const auraMinScore = parseFloat(assignmentData.auraMinScore) || 0;
+                const assignmentAuraRules = assignmentData.auraRules || [];
+                // Backward compatibility
+                if (assignmentAuraRules.length === 0 && assignmentData.auraAmount) {
+                    assignmentAuraRules.push({
+                        amount: parseFloat(assignmentData.auraAmount) || 0,
+                        minScore: parseFloat(assignmentData.auraMinScore) || 0
+                    });
+                }
+
                 const auraOnTime = assignmentData.auraOnTime || false;
                 const auraDueAt = assignmentData.auraDueAt;
 
-                let isMeetingScore = parseFloat(overallAverage) >= auraMinScore;
-                let isMeetingTime = true;
+                let isOnTimeAssignment = true;
                 if (auraOnTime && auraDueAt) {
                     const now = new Date();
                     const dueAt = auraDueAt.toDate ? auraDueAt.toDate() : new Date(auraDueAt);
-                    isMeetingTime = now <= dueAt;
+                    isOnTimeAssignment = now <= dueAt;
                 }
 
                 summaryAuraLabel.textContent = "Potential Aura";
 
-                if (auraAmount <= 0) {
+                // Calculate max potential and current eligible
+                let maxPotentialAura = 0;
+                let currentEligibleAura = 0;
+                let nextGoal = null;
+
+                // Find currently earned aura
+                assignmentAuraRules.forEach(rule => {
+                    if (rule.amount > maxPotentialAura) maxPotentialAura = rule.amount;
+                    if (parseFloat(overallAverage) >= rule.minScore && rule.amount > currentEligibleAura) {
+                        currentEligibleAura = rule.amount;
+                    }
+                });
+
+                // Find next goal
+                // Sort rules by amount ascending
+                const sortedRules = [...assignmentAuraRules].sort((a, b) => a.amount - b.amount);
+                for (const rule of sortedRules) {
+                    if (rule.amount > currentEligibleAura) {
+                        nextGoal = rule;
+                        break; // First rule better than current
+                    }
+                }
+
+                if (assignmentAuraRules.length === 0 || maxPotentialAura <= 0) {
                     auraContainer.innerHTML = `<span class="text-gray-500">None ✧</span>`;
-                } else if (isMeetingScore && isMeetingTime) {
-                    auraContainer.innerHTML = `<span class="text-yellow-400 animate-pulse">${auraAmount} ✧</span><div class="text-[10px] text-green-400 mt-1">Goal Met!</div>`;
+                } else if (!isOnTimeAssignment) {
+                    auraContainer.innerHTML = `<span class="text-gray-500">0 ✧</span><div class="text-[10px] text-red-400 mt-1">Past Deadline</div>`;
+                } else if (currentEligibleAura > 0) {
+                    let subtext = "Goal Met!";
+                    if (nextGoal) {
+                        subtext = `Next: ${nextGoal.amount}✧ at ${nextGoal.minScore}%`;
+                    }
+                    auraContainer.innerHTML = `<span class="text-yellow-400 animate-pulse">${currentEligibleAura} ✧</span><div class="text-[10px] text-green-400 mt-1">${subtext}</div>`;
                 } else {
-                    let reason = !isMeetingScore ? `Score below ${auraMinScore}%` : "Past deadline";
-                    auraContainer.innerHTML = `<span class="text-gray-500">${auraAmount} ✧</span><div class="text-[10px] text-red-400 mt-1">${reason}</div>`;
+                    // No aura earned yet, show next goal
+                    let subtext = "Keep trying!";
+                    if (nextGoal) {
+                        subtext = `Get ${nextGoal.amount}✧ at ${nextGoal.minScore}%`;
+                    } else if (sortedRules.length > 0) {
+                        const first = sortedRules[0];
+                        subtext = `Get ${first.amount}✧ at ${first.minScore}%`;
+                    }
+                    auraContainer.innerHTML = `<span class="text-gray-500">0 ✧</span><div class="text-[10px] text-red-400 mt-1">${subtext}</div>`;
                 }
             }
         }
@@ -1632,8 +1684,16 @@
                         const overallAverage = slideStates.length > 0 ? totalScore / slideStates.length : 0;
 
                         // Read assignment-level Aura config
-                        const auraAmount = parseFloat(assignmentData.auraAmount) || 0;
-                        const auraMinScore = parseFloat(assignmentData.auraMinScore) || 0;
+                        // Calculate Aura Eligibility (New Rule-Based System)
+                        const assignmentAuraRules = assignmentData.auraRules || [];
+                        // Backward compatibility
+                        if (assignmentAuraRules.length === 0 && assignmentData.auraAmount) {
+                            assignmentAuraRules.push({
+                                amount: parseFloat(assignmentData.auraAmount) || 0,
+                                minScore: parseFloat(assignmentData.auraMinScore) || 0
+                            });
+                        }
+
                         const auraOnTime = assignmentData.auraOnTime || false;
                         const auraDueAt = assignmentData.auraDueAt;
 
@@ -1656,14 +1716,28 @@
                             .get();
                         const alreadyAwarded = !priorAwardQuery.empty;
 
+                        let auraAlgorithmAmount = 0;
+                        let shouldAward = false;
+
                         // Award Aura if all conditions are met
-                        if (
-                            auraAmount > 0 &&
-                            overallAverage >= auraMinScore &&
-                            (!auraOnTime || isOnTimeAssignment) &&
-                            !alreadyAwarded &&
-                            userProfile.studentDocId
-                        ) {
+                        if ((!auraOnTime || isOnTimeAssignment) && !alreadyAwarded && userProfile.studentDocId) {
+                            // Find highest matching rule
+                            for (const rule of assignmentAuraRules) {
+                                if (overallAverage >= rule.minScore && rule.amount > auraAlgorithmAmount) {
+                                    auraAlgorithmAmount = rule.amount;
+                                }
+                            }
+                            if (auraAlgorithmAmount > 0) {
+                                shouldAward = true;
+                                // Override the const 'auraAmount' used in subsequent logic
+                                // We need to define it as a let in the outer scope or reuse it?
+                                // The original code defined 'auraAmount' as a const at line 1687.
+                                // I am replacing that block.
+                            }
+                        }
+
+                        if (shouldAward) {
+                            const auraAmount = auraAlgorithmAmount; // Re-declare for scope
                             // Update student document with atomic increment
                             await db.collection('students').doc(userProfile.studentDocId).update({
                                 auraLifetime: firebase.firestore.FieldValue.increment(auraAmount),
