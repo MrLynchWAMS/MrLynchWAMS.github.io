@@ -27,9 +27,9 @@
     </style>
 </head>
 
-<body class="bg-gray-900 text-white font-sans">
+<body class="bg-gray-900 text-white font-sans h-screen overflow-hidden">
 
-    <div id="pageLoader" class="flex flex-col items-center justify-center h-screen">
+    <div id="pageLoader" class="flex flex-col items-center justify-center h-screen fixed inset-0 bg-gray-900 z-[9999]">
         <h1 class="text-4xl font-bold text-yellow-400 mb-4">Public Assignment Library</h1>
         <p id="loading-text" class="text-lg text-gray-300">Initializing...</p>
         <div id="signInButtonContainer" class="hidden mt-8">
@@ -42,52 +42,66 @@
         <p id="auth-error" class="text-red-500 mt-4"></p>
     </div>
 
-    <div id="contentContainer" class="hidden container mx-auto p-4 md:p-8">
-        <div class="flex justify-between items-center mb-6 flex-wrap gap-4">
-            <h1 class="text-3xl font-bold text-yellow-400">Public Assignment Library</h1>
+    <div id="contentContainer" class="hidden h-full flex flex-col p-4 md:p-6 lg:p-8">
+        <!-- Header -->
+        <div class="flex-none flex justify-between items-center mb-4 flex-wrap gap-4">
+            <h1 class="text-2xl md:text-3xl font-bold text-yellow-400">Public Assignment Library</h1>
             <div>
                 <a href="./assignments.html"
-                    class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg btn-action">&larr;
-                    Back to My Assignments</a>
+                    class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg btn-action text-sm md:text-base">&larr;
+                    My Assignments</a>
                 <button id="signOutButton"
-                    class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Sign
+                    class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg btn-action text-sm md:text-base ml-2">Sign
                     Out</button>
             </div>
         </div>
 
-        <div class="mb-6">
+        <!-- Search -->
+        <div class="flex-none mb-4">
             <input type="search" id="searchInput" placeholder="Search public assignments..."
                 class="w-full p-3 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500">
         </div>
 
-        <div id="loadingState" class="text-center py-10">
-            <p class="text-xl">Loading public assignments...</p>
-        </div>
-
-        <div class="flex flex-col md:flex-row gap-6 h-[calc(100vh-200px)]">
+        <!-- Main Content Area -->
+        <div class="flex-1 min-h-0 flex flex-col md:flex-row gap-6">
             <!-- Left Pane: List of Assignments -->
-            <div class="w-full md:w-1/3 flex flex-col bg-gray-800 rounded-lg overflow-hidden border border-gray-700">
-                <div class="p-3 border-b border-gray-700 bg-gray-900/50">
+            <div
+                class="w-full md:w-1/3 flex flex-col bg-gray-800 rounded-lg overflow-hidden border border-gray-700 shadow-xl">
+                <div class="flex-none p-3 border-b border-gray-700 bg-gray-900/50">
                     <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Available Assignments</h2>
                 </div>
-                <div id="assignmentsList" class="flex-1 overflow-y-auto p-2 space-y-2">
+
+                <!-- Loading State inside the list container -->
+                <div id="loadingState" class="p-4 text-center text-gray-400 hidden">
+                    <p class="animate-pulse">Loading assignments...</p>
+                </div>
+
+                <div id="assignmentsList"
+                    class="flex-1 overflow-y-auto p-2 space-y-2 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
                     <!-- List items will be dynamically added here -->
                 </div>
             </div>
 
             <!-- Right Pane: Preview -->
-            <div class="w-full md:w-2/3 bg-gray-800 rounded-lg border border-gray-700 flex flex-col overflow-hidden">
+            <div
+                class="w-full md:w-2/3 bg-gray-800 rounded-lg border border-gray-700 flex flex-col overflow-hidden shadow-xl">
                 <div id="previewContainer" class="flex-1 flex flex-col h-full relative">
-                    <div id="empty-state" class="absolute inset-0 flex items-center justify-center text-gray-500">
-                        <p>Select an assignment to preview it here.</p>
+                    <div id="empty-state"
+                        class="absolute inset-0 flex items-center justify-center text-gray-500 bg-gray-800 z-0">
+                        <div class="text-center">
+                            <p class="text-4xl mb-2">👈</p>
+                            <p>Select an assignment from the list to preview.</p>
+                        </div>
                     </div>
 
-                    <div id="preview-content" class="hidden flex flex-col h-full">
+                    <div id="preview-content" class="hidden flex flex-col h-full z-10 bg-gray-800 relative">
                         <!-- Preview Header -->
-                        <div class="p-6 border-b border-gray-700 bg-gray-900/50 flex justify-between items-start">
+                        <div
+                            class="flex-none p-6 border-b border-gray-700 bg-gray-900/50 flex justify-between items-start">
                             <div>
-                                <h2 id="preview-title" class="text-3xl font-bold text-yellow-400 mb-2"> Assignment Name
-                                </h2>
+                                <h2 id="preview-title"
+                                    class="text-2xl md:text-3xl font-bold text-yellow-400 mb-2 leading-tight">
+                                    Assignment Name</h2>
                                 <p id="preview-meta" class="text-sm text-gray-400"></p>
                                 <a id="view-slides-link" href="#" target="_blank"
                                     class="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 mt-2 hover:underline">
@@ -100,10 +114,10 @@
                                 </a>
                             </div>
                             <button id="import-btn"
-                                class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg btn-action shadow-lg flex items-center gap-2">
-                                <span>Import Assignment</span>
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20"
-                                    fill="currentColor">
+                                class="flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 md:px-6 rounded-lg btn-action shadow-lg flex items-center gap-2 text-sm md:text-base">
+                                <span>Import</span>
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 hidden md:block"
+                                    viewBox="0 0 20 20" fill="currentColor">
                                     <path fill-rule="evenodd"
                                         d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z"
                                         clip-rule="evenodd" />
@@ -113,9 +127,9 @@
 
                         <!-- Preview Image Area -->
                         <div id="slides-container"
-                            class="flex-1 bg-gray-900 relative overflow-y-auto flex flex-col items-center p-4 gap-4">
+                            class="flex-1 bg-gray-900 relative overflow-y-auto flex flex-col items-center p-4 gap-4 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-900">
                             <!-- First Slide (Always Loaded) -->
-                            <div class="relative w-full max-w-3xl flex-shrink-0">
+                            <div class="relative w-full max-w-4xl flex-shrink-0">
                                 <div id="image-loader"
                                     class="absolute inset-0 flex items-center justify-center bg-gray-900 z-10 h-64">
                                     <span class="animate-pulse text-gray-500">Loading preview...</span>
@@ -136,7 +150,7 @@
                             </div>
 
                             <!-- Additional Slides Container -->
-                            <div id="additional-slides" class="w-full max-w-3xl flex flex-col gap-4"></div>
+                            <div id="additional-slides" class="w-full max-w-4xl flex flex-col gap-4"></div>
 
                             <!-- Load More Button -->
                             <button id="load-all-slides-btn"
@@ -147,7 +161,7 @@
 
                         <!-- Footer / Context -->
                         <div
-                            class="p-4 bg-gray-800 border-t border-gray-700 text-xs text-gray-500 flex justify-between items-center">
+                            class="flex-none p-3 bg-gray-800 border-t border-gray-700 text-xs text-gray-500 flex justify-between items-center">
                             <span>Total Slides: <span id="preview-slide-count">?</span></span>
                             <span>ID: <span id="preview-id" class="font-mono">...</span></span>
                         </div>
@@ -272,6 +286,9 @@
         }
 
         function loadPublicAssignments() {
+            const loadingState = document.getElementById('loadingState');
+            if (loadingState) loadingState.classList.remove('hidden');
+
             db.collection("assignments")
                 .where("isPublic", "==", true)
                 .orderBy("createdAt", "desc")
@@ -280,7 +297,10 @@
                     displayFilteredAssignments();
                 }, error => {
                     console.error("Error loading public assignments:", error);
-                    document.getElementById('loadingState').innerText = "Error loading data. See console for details.";
+                    // If error, show a message in the list
+                    const list = document.getElementById('assignmentsList');
+                    list.innerHTML = `<div class="p-4 text-red-400 text-center">Error loading assignments.</div>`;
+                    if (loadingState) loadingState.classList.add('hidden');
                 });
         }
 
