@@ -89,6 +89,15 @@
                                 <h2 id="preview-title" class="text-3xl font-bold text-yellow-400 mb-2"> Assignment Name
                                 </h2>
                                 <p id="preview-meta" class="text-sm text-gray-400"></p>
+                                <a id="view-slides-link" href="#" target="_blank"
+                                    class="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 mt-2 hover:underline">
+                                    <span>View on Google Slides</span>
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none"
+                                        viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                    </svg>
+                                </a>
                             </div>
                             <button id="import-btn"
                                 class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg btn-action shadow-lg flex items-center gap-2">
@@ -103,30 +112,43 @@
                         </div>
 
                         <!-- Preview Image Area -->
-                        <div class="flex-1 bg-gray-900 relative overflow-hidden flex items-center justify-center p-4">
-                            <div id="image-loader"
-                                class="absolute inset-0 flex items-center justify-center bg-gray-900 z-10">
-                                <span class="animate-pulse text-gray-500">Loading preview...</span>
-                            </div>
-                            <img id="preview-image" src="" alt="Slide Preview"
-                                class="max-w-full max-h-full object-contain shadow-2xl rounded-lg border border-gray-700">
+                        <div id="slides-container"
+                            class="flex-1 bg-gray-900 relative overflow-y-auto flex flex-col items-center p-4 gap-4">
+                            <!-- First Slide (Always Loaded) -->
+                            <div class="relative w-full max-w-3xl flex-shrink-0">
+                                <div id="image-loader"
+                                    class="absolute inset-0 flex items-center justify-center bg-gray-900 z-10 h-64">
+                                    <span class="animate-pulse text-gray-500">Loading preview...</span>
+                                </div>
+                                <img id="preview-image" src="" alt="Slide Preview"
+                                    class="w-full h-auto object-contain shadow-2xl rounded-lg border border-gray-700">
 
-                            <!-- Error State for Image -->
-                            <div id="preview-error"
-                                class="hidden absolute inset-0 flex flex-col items-center justify-center bg-gray-900 p-8 text-center">
-                                <div class="text-4xl mb-4">🖼️</div>
-                                <h3 class="text-xl font-semibold text-gray-300 mb-2">Preview Unavailable</h3>
-                                <p class="text-gray-500 max-w-md">The preview image could not be loaded. This might be
-                                    due to permissions or the slide content type.</p>
-                                <p class="text-xs text-gray-600 mt-4">You can still import the assignment to view it
-                                    fully.</p>
+                                <!-- Error State for Image -->
+                                <div id="preview-error"
+                                    class="hidden absolute inset-0 flex flex-col items-center justify-center bg-gray-900 p-8 text-center h-64">
+                                    <div class="text-4xl mb-4">🖼️</div>
+                                    <h3 class="text-xl font-semibold text-gray-300 mb-2">Preview Unavailable</h3>
+                                    <p class="text-gray-500 max-w-md">The preview image could not be loaded. This might
+                                        be due to permissions or the slide content type.</p>
+                                    <p class="text-xs text-gray-600 mt-4">You can still import the assignment to view it
+                                        fully.</p>
+                                </div>
                             </div>
+
+                            <!-- Additional Slides Container -->
+                            <div id="additional-slides" class="w-full max-w-3xl flex flex-col gap-4"></div>
+
+                            <!-- Load More Button -->
+                            <button id="load-all-slides-btn"
+                                class="mt-4 mb-8 bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 px-6 rounded-full border border-gray-600 transition-colors shadow-lg">
+                                Load All Slides
+                            </button>
                         </div>
 
                         <!-- Footer / Context -->
                         <div
                             class="p-4 bg-gray-800 border-t border-gray-700 text-xs text-gray-500 flex justify-between items-center">
-                            <span>Previewing Slide 1 of <span id="preview-slide-count">?</span></span>
+                            <span>Total Slides: <span id="preview-slide-count">?</span></span>
                             <span>ID: <span id="preview-id" class="font-mono">...</span></span>
                         </div>
                     </div>
@@ -334,10 +356,18 @@
             const slideCountEl = document.getElementById('preview-slide-count');
             const idEl = document.getElementById('preview-id');
             const importBtn = document.getElementById('import-btn');
+            const viewSlidesLink = document.getElementById('view-slides-link');
+            const additionalSlidesContainer = document.getElementById('additional-slides');
+            const loadAllBtn = document.getElementById('load-all-slides-btn');
+            const slidesContainer = document.getElementById('slides-container');
 
             // Show content, hide empty state
             previewContent.classList.remove('hidden');
             emptyState.classList.add('hidden');
+
+            // Reset scrolling
+            slidesContainer.scrollTop = 0;
+            additionalSlidesContainer.innerHTML = ''; // Clear previous slides
 
             // Populate Text
             titleEl.textContent = assignment.name;
@@ -351,21 +381,25 @@
             slideCountEl.textContent = slideIds.length;
             idEl.textContent = assignment.id;
 
+            // Link to Google Slides
+            if (assignment.presentationId) {
+                viewSlidesLink.href = `https://docs.google.com/presentation/d/${assignment.presentationId}/preview`;
+                viewSlidesLink.classList.remove('hidden');
+            } else {
+                viewSlidesLink.classList.add('hidden');
+            }
+
             // Update Import Button
-            // Remove old listener to prevent duplicates (cloning node is a trick, or just overwrite onclick)
             importBtn.onclick = () => importAssignment(assignment.id, assignment.name);
 
-            // Handle Image
-            // Reset state
+            // Handle First Slide Image (Hero Image)
             imageEl.classList.add('hidden');
             loaderEl.classList.remove('hidden');
             errorEl.classList.add('hidden');
 
             if (slideIds.length > 0) {
-                // Construct URL
                 const presentationId = assignment.presentationId;
                 const firstSlideId = slideIds[0];
-                // Use the same URL pattern as Editor/ClassroomPicker
                 const imageUrl = `https://docs.google.com/presentation/d/${presentationId}/export/png?id=${presentationId}&pageid=${firstSlideId}&time=${new Date().getTime()}`;
 
                 imageEl.src = imageUrl;
@@ -378,15 +412,55 @@
                     loaderEl.classList.add('hidden');
                     errorEl.classList.remove('hidden');
                 };
+
+                // Configure "Load All Slides" button
+                if (slideIds.length > 1) {
+                    loadAllBtn.classList.remove('hidden');
+                    loadAllBtn.textContent = `Load All ${slideIds.length} Slides`;
+                    loadAllBtn.onclick = () => loadAllSlides(assignment, loadAllBtn);
+                } else {
+                    loadAllBtn.classList.add('hidden');
+                }
+
             } else {
-                // No slides?
                 loaderEl.classList.add('hidden');
                 errorEl.classList.remove('hidden');
                 errorEl.querySelector('p').textContent = "This assignment has no slides.";
+                loadAllBtn.classList.add('hidden');
             }
+        }
 
-            // Scroll preview to top in case previous was scrolled (if we add scrolling later)
-            // document.getElementById('previewContainer').scrollTop = 0; 
+        function loadAllSlides(assignment, btn) {
+            const container = document.getElementById('additional-slides');
+            const slideIds = assignment.slideIds || [];
+            if (slideIds.length <= 1) return;
+
+            btn.textContent = "Loading...";
+            btn.disabled = true;
+
+            // Start from index 1 (skip first slide which is already shown)
+            slideIds.slice(1).forEach((slideId, index) => {
+                const realIndex = index + 2; // +2 because 0-based index of slice + skipped 1st slide means this is the 2nd slide (Question 2)
+
+                const wrapper = document.createElement('div');
+                wrapper.className = "relative w-full border border-gray-700 rounded-lg overflow-hidden bg-gray-800";
+
+                const label = document.createElement('div');
+                label.className = "absolute top-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded";
+                label.textContent = `Slide ${realIndex}`;
+
+                const img = document.createElement('img');
+                img.className = "w-full h-auto block";
+                img.loading = "lazy"; // Native lazy loading
+                const presentationId = assignment.presentationId;
+                img.src = `https://docs.google.com/presentation/d/${presentationId}/export/png?id=${presentationId}&pageid=${slideId}`;
+
+                wrapper.appendChild(img);
+                wrapper.appendChild(label);
+                container.appendChild(wrapper);
+            });
+
+            btn.classList.add('hidden'); // Hide button after loading
         }
 
         document.getElementById('searchInput').addEventListener('input', displayFilteredAssignments);
