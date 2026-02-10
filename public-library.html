@@ -64,9 +64,79 @@
             <p class="text-xl">Loading public assignments...</p>
         </div>
 
-        <div id="assignmentsList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <!-- Assignment cards will be dynamically added here -->
+        <div class="flex flex-col md:flex-row gap-6 h-[calc(100vh-200px)]">
+            <!-- Left Pane: List of Assignments -->
+            <div class="w-full md:w-1/3 flex flex-col bg-gray-800 rounded-lg overflow-hidden border border-gray-700">
+                <div class="p-3 border-b border-gray-700 bg-gray-900/50">
+                    <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Available Assignments</h2>
+                </div>
+                <div id="assignmentsList" class="flex-1 overflow-y-auto p-2 space-y-2">
+                    <!-- List items will be dynamically added here -->
+                </div>
+            </div>
+
+            <!-- Right Pane: Preview -->
+            <div class="w-full md:w-2/3 bg-gray-800 rounded-lg border border-gray-700 flex flex-col overflow-hidden">
+                <div id="previewContainer" class="flex-1 flex flex-col h-full relative">
+                    <div id="empty-state" class="absolute inset-0 flex items-center justify-center text-gray-500">
+                        <p>Select an assignment to preview it here.</p>
+                    </div>
+
+                    <div id="preview-content" class="hidden flex flex-col h-full">
+                        <!-- Preview Header -->
+                        <div class="p-6 border-b border-gray-700 bg-gray-900/50 flex justify-between items-start">
+                            <div>
+                                <h2 id="preview-title" class="text-3xl font-bold text-yellow-400 mb-2"> Assignment Name
+                                </h2>
+                                <p id="preview-meta" class="text-sm text-gray-400"></p>
+                            </div>
+                            <button id="import-btn"
+                                class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg btn-action shadow-lg flex items-center gap-2">
+                                <span>Import Assignment</span>
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20"
+                                    fill="currentColor">
+                                    <path fill-rule="evenodd"
+                                        d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z"
+                                        clip-rule="evenodd" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <!-- Preview Image Area -->
+                        <div class="flex-1 bg-gray-900 relative overflow-hidden flex items-center justify-center p-4">
+                            <div id="image-loader"
+                                class="absolute inset-0 flex items-center justify-center bg-gray-900 z-10">
+                                <span class="animate-pulse text-gray-500">Loading preview...</span>
+                            </div>
+                            <img id="preview-image" src="" alt="Slide Preview"
+                                class="max-w-full max-h-full object-contain shadow-2xl rounded-lg border border-gray-700">
+
+                            <!-- Error State for Image -->
+                            <div id="preview-error"
+                                class="hidden absolute inset-0 flex flex-col items-center justify-center bg-gray-900 p-8 text-center">
+                                <div class="text-4xl mb-4">🖼️</div>
+                                <h3 class="text-xl font-semibold text-gray-300 mb-2">Preview Unavailable</h3>
+                                <p class="text-gray-500 max-w-md">The preview image could not be loaded. This might be
+                                    due to permissions or the slide content type.</p>
+                                <p class="text-xs text-gray-600 mt-4">You can still import the assignment to view it
+                                    fully.</p>
+                            </div>
+                        </div>
+
+                        <!-- Footer / Context -->
+                        <div
+                            class="p-4 bg-gray-800 border-t border-gray-700 text-xs text-gray-500 flex justify-between items-center">
+                            <span>Previewing Slide 1 of <span id="preview-slide-count">?</span></span>
+                            <span>ID: <span id="preview-id" class="font-mono">...</span></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
+
+        <script>
+            // ... existing script starts ...
+        </script>
     </div>
 
     <div id="toast-wrapper" class="fixed top-4 right-4 z-[100] space-y-3 w-full max-w-sm"></div>
@@ -192,9 +262,11 @@
                 });
         }
 
+        let selectedAssignmentId = null;
+
         function displayFilteredAssignments() {
             const listContainer = document.getElementById('assignmentsList');
-            const loadingState = document.getElementById('loadingState');
+            const loadingState = document.getElementById('loadingState'); // Note: Loading state might need better placement in new layout
             const searchTerm = document.getElementById('searchInput').value.toLowerCase();
 
             const filteredAssignments = allPublicAssignments.filter(assignment =>
@@ -203,35 +275,118 @@
 
             listContainer.innerHTML = '';
 
+            // If we have a selection but it's filtered out, deselect? 
+            // Or just keep it. For now, we keep it but it might not show in list.
+
+            // Handle Empty States
             if (filteredAssignments.length === 0) {
-                loadingState.innerText = searchTerm ? "No public assignments found matching your search." : "No public assignments available yet.";
-                loadingState.classList.remove('hidden');
-            } else {
-                loadingState.classList.add('hidden');
+                const emptyMsg = document.createElement('div');
+                emptyMsg.className = "p-4 text-center text-gray-500 text-sm";
+                emptyMsg.innerText = searchTerm ? "No matches found." : "No assignments.";
+                listContainer.appendChild(emptyMsg);
             }
 
             filteredAssignments.forEach(assignment => {
-                const card = document.createElement('div');
-                card.className = "bg-gray-800 rounded-lg p-6 shadow-lg flex flex-col justify-between";
+                const item = document.createElement('div');
+                // Styling for list item
+                const isSelected = selectedAssignmentId === assignment.id;
+                const baseClass = "p-3 border-b border-gray-700 cursor-pointer transition-colors duration-150";
+                const activeClass = isSelected ? "bg-blue-900/50 border-l-4 border-l-blue-500" : "hover:bg-gray-700/50 hover:border-l-4 hover:border-l-gray-600 border-l-4 border-l-transparent";
+
+                item.className = `${baseClass} ${activeClass}`;
+                item.onclick = () => selectAssignment(assignment.id);
 
                 const date = assignment.createdAt ? new Date(assignment.createdAt.seconds * 1000).toLocaleDateString() : 'No date';
                 const ownerEmail = assignment.teacherEmail || 'Unknown';
+                // Try to get display name from teachersMap if avail
+                const teacherName = teachersMap[ownerEmail.toLowerCase()]?.name || ownerEmail;
                 const numQuestions = assignment.slideIds ? assignment.slideIds.length : 0;
 
-                card.innerHTML = `
-                <div>
-                    <h3 class="text-2xl font-bold text-yellow-400 mb-2">${escapeHtml(assignment.name)}</h3>
-                    <p class="text-sm text-gray-400 mb-2">Shared by: ${escapeHtml(ownerEmail)}</p>
-                    <p class="text-sm text-gray-400 mb-2">${numQuestions} question${numQuestions !== 1 ? 's' : ''}</p>
-                    <p class="text-gray-500 text-xs">Published: ${date}</p>
-                </div>
-                <div class="mt-4 pt-4 border-t border-gray-700">
-                    <button onclick="importAssignment('${assignment.id}', '${escapeHtml(assignment.name)}')" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Import to My Assignments</button>
-                </div>
-            `;
-
-                listContainer.appendChild(card);
+                item.innerHTML = `
+                    <h4 class="font-bold text-white text-md truncate">${escapeHtml(assignment.name)}</h4>
+                    <div class="flex justify-between items-center mt-1">
+                        <span class="text-xs text-gray-400 truncate w-2/3">${escapeHtml(teacherName)}</span>
+                        <span class="text-xs text-gray-500">${numQuestions} Qs</span>
+                    </div>
+                `;
+                listContainer.appendChild(item);
             });
+        }
+
+        function selectAssignment(id) {
+            selectedAssignmentId = id;
+            displayFilteredAssignments(); // Re-render list to update highlighting
+
+            const assignment = allPublicAssignments.find(a => a.id === id);
+            if (assignment) {
+                updatePreview(assignment);
+            }
+        }
+
+        function updatePreview(assignment) {
+            const previewContent = document.getElementById('preview-content');
+            const emptyState = document.getElementById('empty-state');
+            const titleEl = document.getElementById('preview-title');
+            const metaEl = document.getElementById('preview-meta');
+            const imageEl = document.getElementById('preview-image');
+            const loaderEl = document.getElementById('image-loader');
+            const errorEl = document.getElementById('preview-error');
+            const slideCountEl = document.getElementById('preview-slide-count');
+            const idEl = document.getElementById('preview-id');
+            const importBtn = document.getElementById('import-btn');
+
+            // Show content, hide empty state
+            previewContent.classList.remove('hidden');
+            emptyState.classList.add('hidden');
+
+            // Populate Text
+            titleEl.textContent = assignment.name;
+            const date = assignment.createdAt ? new Date(assignment.createdAt.seconds * 1000).toLocaleDateString() : 'Unknown Date';
+            const ownerEmail = assignment.teacherEmail || 'Unknown';
+            const teacherName = teachersMap[ownerEmail.toLowerCase()]?.name || ownerEmail;
+
+            metaEl.innerHTML = `Created by <span class="text-white font-medium">${escapeHtml(teacherName)}</span> on ${date}`;
+
+            const slideIds = assignment.slideIds || [];
+            slideCountEl.textContent = slideIds.length;
+            idEl.textContent = assignment.id;
+
+            // Update Import Button
+            // Remove old listener to prevent duplicates (cloning node is a trick, or just overwrite onclick)
+            importBtn.onclick = () => importAssignment(assignment.id, assignment.name);
+
+            // Handle Image
+            // Reset state
+            imageEl.classList.add('hidden');
+            loaderEl.classList.remove('hidden');
+            errorEl.classList.add('hidden');
+
+            if (slideIds.length > 0) {
+                // Construct URL
+                const presentationId = assignment.presentationId;
+                const firstSlideId = slideIds[0];
+                // Use the same URL pattern as Editor/ClassroomPicker
+                const imageUrl = `https://docs.google.com/presentation/d/${presentationId}/export/png?id=${presentationId}&pageid=${firstSlideId}&time=${new Date().getTime()}`;
+
+                imageEl.src = imageUrl;
+                imageEl.onload = () => {
+                    loaderEl.classList.add('hidden');
+                    imageEl.classList.remove('hidden');
+                };
+                imageEl.onerror = () => {
+                    console.warn("Failed to load preview image");
+                    loaderEl.classList.add('hidden');
+                    errorEl.classList.remove('hidden');
+                };
+            } else {
+                // No slides?
+                loaderEl.classList.add('hidden');
+                errorEl.classList.remove('hidden');
+                errorEl.querySelector('p').textContent = "This assignment has no slides.";
+            }
+
+            // Scroll preview to top in case previous was scrolled (if we add scrolling later)
+            // document.getElementById('previewContainer').scrollTop = 0; 
         }
 
         document.getElementById('searchInput').addEventListener('input', displayFilteredAssignments);
