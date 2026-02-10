@@ -294,6 +294,8 @@
                 .orderBy("createdAt", "desc")
                 .onSnapshot(snapshot => {
                     allPublicAssignments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+                    if (loadingState) loadingState.classList.add('hidden');
                     displayFilteredAssignments();
                 }, error => {
                     console.error("Error loading public assignments:", error);
@@ -308,7 +310,6 @@
 
         function displayFilteredAssignments() {
             const listContainer = document.getElementById('assignmentsList');
-            const loadingState = document.getElementById('loadingState'); // Note: Loading state might need better placement in new layout
             const searchTerm = document.getElementById('searchInput').value.toLowerCase();
 
             const filteredAssignments = allPublicAssignments.filter(assignment =>
