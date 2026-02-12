@@ -614,6 +614,7 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
             document.getElementById('studentClass').value = '';
             document.getElementById('studentAuraLifetime').value = '0';
             document.getElementById('studentAuraBalance').value = '0';
+            document.getElementById('studentHasModifications').checked = false; // Reset checkbox
             document.getElementById('modal-error').innerText = '';
 
             if (student) {
@@ -626,6 +627,8 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
                 // Populate Aura fields (default to 0 if not present)
                 document.getElementById('studentAuraLifetime').value = student.auraLifetime || 0;
                 document.getElementById('studentAuraBalance').value = student.auraBalance || 0;
+                // Set checkbox state
+                document.getElementById('studentHasModifications').checked = student.hasModifications || false;
             } else {
                 modalTitle.innerText = "Add Student";
             }
