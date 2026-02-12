@@ -79,6 +79,9 @@
                 <a href="./assignments.html"
                     class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg btn-action">&larr;
                     All Assignments</a>
+                <a href="./class-dashboard.html"
+                    class="bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Class
+                    Overview</a>
                 <button onclick="openStoreConfig()"
                     class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg btn-action">🏪
                     Store</button>
@@ -179,6 +182,15 @@ John Doe, john@school.edu, 1001, Period 1
                             Spendable Balance</label>
                         <input type="number" id="studentAuraBalance" value="0" min="0" step="0.1"
                             class="w-full p-3 bg-gray-700 rounded border border-gray-600">
+                    </div>
+                    <div class="col-span-2 mt-2 pt-2 border-t border-gray-600">
+                        <label class="flex items-center space-x-2 cursor-pointer">
+                            <input type="checkbox" id="studentHasModifications"
+                                class="w-5 h-5 rounded bg-gray-700 border-gray-600 text-purple-500 focus:ring-purple-500">
+                            <span class="text-sm font-medium text-gray-300">🧩 Has Modifications (IEP/504)</span>
+                        </label>
+                        <p class="text-xs text-gray-500 ml-7">User will automatically be selected for modifications in
+                            assignments.</p>
                     </div>
                 </div>
 
