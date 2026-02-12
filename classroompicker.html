@@ -1685,7 +1685,9 @@
 
         function checkCurrentSlideAnswer(studentAnswer, info) {
             // Use the global currentSlideIndex variable
-            const checkerCode = assignmentData.checkerFunctions?.[currentSlideIndex];
+            // Editor saves checkers with keys like "calc1", "calc2" (1-based)
+            const funcKey = `calc${currentSlideIndex + 1}`;
+            const checkerCode = assignmentData.checkerFunctions?.[funcKey];
             const funcString = checkerCode;
             if (funcString) {
                 try {
