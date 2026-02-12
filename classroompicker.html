@@ -1692,15 +1692,19 @@
                             throw new Error("Could not find a valid function definition (e.g., 'function calc1(...)') in the checker code.");
                         }
                         const funcNameToRun = funcNameMatch[1];
-                        const runner = new Function('studentAnswer', 'showToast', 'userProfile', 'attemptInfo', `
+                        const runner = new Function('studentAnswer', 'showToast', 'userProfile', 'attemptInfo', 'checkTextCondition', `
                     ${funcString}
                     if (typeof ${funcNameToRun} === 'function') {
                         return ${funcNameToRun}(studentAnswer, showToast, userProfile, attemptInfo);
-                    } else {
+                    }
+                    if (typeof checkAnswer === 'function') {
+                        return checkAnswer(studentAnswer);
+                    }
+                    else {
                         throw new Error("The function '${funcNameToRun}' defined in your code could not be executed.");
                     }
                 `);
-                        return runner(answer, showToast, userProfile, attemptInfo);
+                        return runner(answer, showToast, userProfile, attemptInfo, checkTextCondition);
                     } catch (e) {
                         console.error(`Error executing checker function ${funcNameKey}:`, e);
                         showToast(`Error in checking logic: ${e.message}`, { color: 'red' });
