@@ -1618,81 +1618,82 @@
             } else {
                 timeoutId = setTimeout(dismiss, duration);
             }
+        }
 
-            // Helper for Fuzzy Matching (Levenshtein Distance)
-            function levenshteinDistance(a, b) {
-                if (a.length === 0) return b.length;
-                if (b.length === 0) return a.length;
-                const matrix = [];
-                for (let i = 0; i <= b.length; i++) { matrix[i] = [i]; }
-                for (let j = 0; j <= a.length; j++) { matrix[0][j] = j; }
-                for (let i = 1; i <= b.length; i++) {
-                    for (let j = 1; j <= a.length; j++) {
-                        if (b.charAt(i - 1) == a.charAt(j - 1)) {
-                            matrix[i][j] = matrix[i - 1][j - 1];
-                        } else {
-                            matrix[i][j] = Math.min(matrix[i - 1][j - 1] + 1, Math.min(matrix[i][j - 1] + 1, matrix[i - 1][j] + 1));
-                        }
+        // Helper for Fuzzy Matching (Levenshtein Distance)
+        function levenshteinDistance(a, b) {
+            if (a.length === 0) return b.length;
+            if (b.length === 0) return a.length;
+            const matrix = [];
+            for (let i = 0; i <= b.length; i++) { matrix[i] = [i]; }
+            for (let j = 0; j <= a.length; j++) { matrix[0][j] = j; }
+            for (let i = 1; i <= b.length; i++) {
+                for (let j = 1; j <= a.length; j++) {
+                    if (b.charAt(i - 1) == a.charAt(j - 1)) {
+                        matrix[i][j] = matrix[i - 1][j - 1];
+                    } else {
+                        matrix[i][j] = Math.min(matrix[i - 1][j - 1] + 1, Math.min(matrix[i][j - 1] + 1, matrix[i - 1][j] + 1));
                     }
                 }
-                return matrix[b.length][a.length];
             }
+            return matrix[b.length][a.length];
+        }
 
-            // Helper for Text Conditions (called by generated checker code)
-            function checkTextCondition(studentVal, targetVal, op) {
-                const userText = (studentVal || "").toLowerCase().trim();
-                const targetText = (targetVal || "").toLowerCase().trim();
+        // Helper for Text Conditions (called by generated checker code)
+        function checkTextCondition(studentVal, targetVal, op) {
+            const userText = (studentVal || "").toLowerCase().trim();
+            const targetText = (targetVal || "").toLowerCase().trim();
 
-                const isFuzzyEnabled = assignmentData.modifications && assignmentData.modifications.enabled && assignmentData.modifications.fuzzy;
-                // Only apply fuzzy if enabled AND student actually has modifications? 
-                // User said: "an additonal per question modification option when modifications are turned on".
-                // Interpretation: Global toggle. If on, it applies. But does it apply to *everyone* or just *modified students*?
-                // "when modifications are turned on... fuzzy checking to accomodate poor spellers".
-                // Usually accommodations apply only to the accommodated student.
-                // So checks `userProfile.hasModifications`.
+            const isFuzzyEnabled = assignmentData.modifications && assignmentData.modifications.enabled && assignmentData.modifications.fuzzy;
+            // Only apply fuzzy if enabled AND student actually has modifications? 
+            // User said: "an additonal per question modification option when modifications are turned on".
+            // Interpretation: Global toggle. If on, it applies. But does it apply to *everyone* or just *modified students*?
+            // "when modifications are turned on... fuzzy checking to accomodate poor spellers".
+            // Usually accommodations apply only to the accommodated student.
+            // So checks `userProfile.hasModifications`.
 
-                const useFuzzy = isFuzzyEnabled && userProfile.hasModifications;
+            const useFuzzy = isFuzzyEnabled && userProfile.hasModifications;
 
-                if (op === 'contains') {
-                    if (useFuzzy) {
-                        // Fuzzy contains is hard. Simplified: check if target is close to any substring? 
-                        // Or just check if Levenshtein(userText, targetText) is low enough? No, contains is substring.
-                        // For "contains", fuzzy is expensive/complex. 
-                        // Let's stick to simple includes for now unless exact match.
-                        // Or scan sliding window? 
-                        return userText.includes(targetText);
-                    }
+            if (op === 'contains') {
+                if (useFuzzy) {
+                    // Fuzzy contains is hard. Simplified: check if target is close to any substring? 
+                    // Or just check if Levenshtein(userText, targetText) is low enough? No, contains is substring.
+                    // For "contains", fuzzy is expensive/complex. 
+                    // Let's stick to simple includes for now unless exact match.
+                    // Or scan sliding window? 
                     return userText.includes(targetText);
-                } else if (op === 'not_contains') {
-                    return !userText.includes(targetText);
-                } else if (op === 'equals_str') {
-                    if (useFuzzy) {
-                        const dist = levenshteinDistance(userText, targetText);
-                        // Threshold: allow 1 error per 4 chars? Min 1?
-                        // e.g. "appel" (5) vs "apple" (5) -> dist 2 (swap) or 1?
-                        // "apple" vs "aple" -> 1.
-                        // Let's say max distance = Math.max(1, Math.floor(targetText.length / 4));
-                        // If target is 3 chars, max 1 error. 
-                        const maxErrors = Math.max(1, Math.floor(targetText.length / 4));
-                        return dist <= maxErrors;
-                    }
-                    return userText === targetText;
                 }
-                return false;
+                return userText.includes(targetText);
+            } else if (op === 'not_contains') {
+                return !userText.includes(targetText);
+            } else if (op === 'equals_str') {
+                if (useFuzzy) {
+                    const dist = levenshteinDistance(userText, targetText);
+                    // Threshold: allow 1 error per 4 chars? Min 1?
+                    // e.g. "appel" (5) vs "apple" (5) -> dist 2 (swap) or 1?
+                    // "apple" vs "aple" -> 1.
+                    // Let's say max distance = Math.max(1, Math.floor(targetText.length / 4));
+                    // If target is 3 chars, max 1 error. 
+                    const maxErrors = Math.max(1, Math.floor(targetText.length / 4));
+                    return dist <= maxErrors;
+                }
+                return userText === targetText;
             }
+            return false;
+        }
 
-            function checkCurrentSlideAnswer(studentAnswer, info) {
-                const currentSlideIndex = getCurrentSlideIndex();
-                const checkerCode = assignmentData.checkerFunctions?.[currentSlideIndex];
-                const funcString = checkerCode; // Use checkerCode directly as funcString
-                if (funcString) {
-                    try {
-                        const funcNameMatch = funcString.match(/function\s+([a-zA-Z0-9_]+)\s*\(/);
-                        if (!funcNameMatch || !funcNameMatch[1]) {
-                            throw new Error("Could not find a valid function definition (e.g., 'function calc1(...)') in the checker code.");
-                        }
-                        const funcNameToRun = funcNameMatch[1];
-                        const runner = new Function('studentAnswer', 'showToast', 'userProfile', 'attemptInfo', 'checkTextCondition', `
+        function checkCurrentSlideAnswer(studentAnswer, info) {
+            const currentSlideIndex = getCurrentSlideIndex();
+            const checkerCode = assignmentData.checkerFunctions?.[currentSlideIndex];
+            const funcString = checkerCode; // Use checkerCode directly as funcString
+            if (funcString) {
+                try {
+                    const funcNameMatch = funcString.match(/function\s+([a-zA-Z0-9_]+)\s*\(/);
+                    if (!funcNameMatch || !funcNameMatch[1]) {
+                        throw new Error("Could not find a valid function definition (e.g., 'function calc1(...)') in the checker code.");
+                    }
+                    const funcNameToRun = funcNameMatch[1];
+                    const runner = new Function('studentAnswer', 'showToast', 'userProfile', 'attemptInfo', 'checkTextCondition', `
                     ${funcString}
                     if (typeof ${funcNameToRun} === 'function') {
                         return ${funcNameToRun}(studentAnswer, showToast, userProfile, attemptInfo);
@@ -1704,202 +1705,202 @@
                         throw new Error("The function '${funcNameToRun}' defined in your code could not be executed.");
                     }
                 `);
-                        return runner(answer, showToast, userProfile, attemptInfo, checkTextCondition);
-                    } catch (e) {
-                        console.error(`Error executing checker function ${funcNameKey}:`, e);
-                        showToast(`Error in checking logic: ${e.message}`, { color: 'red' });
-                        return 0;
-                    }
-                }
-                showToast("No checking logic for this slide.");
-                return 0;
-            }
-
-            function showConfirmationModal(message, onConfirm, showCancel = true) {
-                document.getElementById('confirmationMessage').innerHTML = message;
-                confirmCallback = onConfirm;
-                document.getElementById('confirmationModal').classList.remove('hidden');
-                const cancelBtn = document.querySelector('button[onclick="handleConfirmCancel()"]');
-                if (cancelBtn) {
-                    cancelBtn.classList.toggle('hidden', !showCancel);
+                    return runner(answer, showToast, userProfile, attemptInfo, checkTextCondition);
+                } catch (e) {
+                    console.error(`Error executing checker function ${funcNameKey}:`, e);
+                    showToast(`Error in checking logic: ${e.message}`, { color: 'red' });
+                    return 0;
                 }
             }
+            showToast("No checking logic for this slide.");
+            return 0;
+        }
 
-            function handleConfirmCancel() {
-                document.getElementById('confirmationModal').classList.add('hidden');
-                confirmCallback = null;
+        function showConfirmationModal(message, onConfirm, showCancel = true) {
+            document.getElementById('confirmationMessage').innerHTML = message;
+            confirmCallback = onConfirm;
+            document.getElementById('confirmationModal').classList.remove('hidden');
+            const cancelBtn = document.querySelector('button[onclick="handleConfirmCancel()"]');
+            if (cancelBtn) {
+                cancelBtn.classList.toggle('hidden', !showCancel);
+            }
+        }
+
+        function handleConfirmCancel() {
+            document.getElementById('confirmationModal').classList.add('hidden');
+            confirmCallback = null;
+        }
+
+        function handleConfirmOk() {
+            if (typeof confirmCallback === 'function') {
+                confirmCallback();
+            }
+            document.getElementById('confirmationModal').classList.add('hidden');
+            confirmCallback = null;
+        }
+
+        async function handleSubmitAssignment() {
+            if (isSubmitted) {
+                showToast("You have already submitted this assignment.", { color: 'red' });
+                return;
             }
 
-            function handleConfirmOk() {
-                if (typeof confirmCallback === 'function') {
-                    confirmCallback();
-                }
-                document.getElementById('confirmationModal').classList.add('hidden');
-                confirmCallback = null;
-            }
+            const confirmMessage = "Are you sure you want to submit this assignment? This action cannot be undone.";
 
-            async function handleSubmitAssignment() {
-                if (isSubmitted) {
-                    showToast("You have already submitted this assignment.", { color: 'red' });
-                    return;
-                }
+            showConfirmationModal(confirmMessage, async () => {
+                const submitButton = document.getElementById('submitButton');
+                try {
+                    submitButton.disabled = true;
+                    submitButton.textContent = 'Submitting...';
 
-                const confirmMessage = "Are you sure you want to submit this assignment? This action cannot be undone.";
+                    // Create submissionStatus document and keep the reference
+                    const statusRef = await db.collection("submissionStatus").add({
+                        studentEmail: userProfile.email,
+                        studentName: userProfile.name,
+                        assignmentId: assignmentData.id,
+                        status: 'submitted',
+                        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                        auraAwarded: false
+                    });
 
-                showConfirmationModal(confirmMessage, async () => {
-                    const submitButton = document.getElementById('submitButton');
+                    isSubmitted = true;
+                    showToast("Assignment submitted successfully!", { color: 'green', duration: 5000 });
+
+                    // --- AURA AWARDING AT SUBMIT TIME ---
+                    // Aura is awarded once per assignment, based on overall average, at submit time
                     try {
-                        submitButton.disabled = true;
-                        submitButton.textContent = 'Submitting...';
-
-                        // Create submissionStatus document and keep the reference
-                        const statusRef = await db.collection("submissionStatus").add({
-                            studentEmail: userProfile.email,
-                            studentName: userProfile.name,
-                            assignmentId: assignmentData.id,
-                            status: 'submitted',
-                            timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-                            auraAwarded: false
+                        // Calculate overall assignment average from slideStates
+                        // Use slideStates.length as denominator to include unanswered slides as 0
+                        let totalScore = 0;
+                        slideStates.forEach(state => {
+                            if (state && typeof state.score === 'number') {
+                                totalScore += state.score;
+                            }
                         });
+                        const overallAverage = slideStates.length > 0 ? totalScore / slideStates.length : 0;
 
-                        isSubmitted = true;
-                        showToast("Assignment submitted successfully!", { color: 'green', duration: 5000 });
-
-                        // --- AURA AWARDING AT SUBMIT TIME ---
-                        // Aura is awarded once per assignment, based on overall average, at submit time
-                        try {
-                            // Calculate overall assignment average from slideStates
-                            // Use slideStates.length as denominator to include unanswered slides as 0
-                            let totalScore = 0;
-                            slideStates.forEach(state => {
-                                if (state && typeof state.score === 'number') {
-                                    totalScore += state.score;
-                                }
+                        // Read assignment-level Aura config
+                        // Calculate Aura Eligibility (New Rule-Based System)
+                        const assignmentAuraRules = assignmentData.auraRules || [];
+                        // Backward compatibility
+                        if (assignmentAuraRules.length === 0 && assignmentData.auraAmount) {
+                            assignmentAuraRules.push({
+                                amount: parseFloat(assignmentData.auraAmount) || 0,
+                                minScore: parseFloat(assignmentData.auraMinScore) || 0
                             });
-                            const overallAverage = slideStates.length > 0 ? totalScore / slideStates.length : 0;
-
-                            // Read assignment-level Aura config
-                            // Calculate Aura Eligibility (New Rule-Based System)
-                            const assignmentAuraRules = assignmentData.auraRules || [];
-                            // Backward compatibility
-                            if (assignmentAuraRules.length === 0 && assignmentData.auraAmount) {
-                                assignmentAuraRules.push({
-                                    amount: parseFloat(assignmentData.auraAmount) || 0,
-                                    minScore: parseFloat(assignmentData.auraMinScore) || 0
-                                });
-                            }
-
-                            const auraOnTime = assignmentData.auraOnTime || false;
-                            const auraDueAt = assignmentData.auraDueAt;
-
-                            // Compute assignment-level on-time status
-                            let isOnTimeAssignment = true;
-                            if (auraOnTime && auraDueAt) {
-                                const now = new Date();
-                                const dueAt = auraDueAt.toDate
-                                    ? auraDueAt.toDate()
-                                    : new Date(auraDueAt);
-                                isOnTimeAssignment = now <= dueAt;
-                            }
-
-                            // Check for existing submissions to prevent double-award
-                            // Query for any prior submissionStatus docs with auraAwarded=true for this assignment/student
-                            const priorAwardQuery = await db.collection("submissionStatus")
-                                .where("studentEmail", "==", userProfile.email)
-                                .where("assignmentId", "==", assignmentData.id)
-                                .where("auraAwarded", "==", true)
-                                .get();
-                            const alreadyAwarded = !priorAwardQuery.empty;
-
-                            let auraAlgorithmAmount = 0;
-                            let shouldAward = false;
-
-                            // Award Aura if all conditions are met
-                            if ((!auraOnTime || isOnTimeAssignment) && !alreadyAwarded && userProfile.studentDocId) {
-                                // Find highest matching rule
-                                for (const rule of assignmentAuraRules) {
-                                    if (overallAverage >= rule.minScore && rule.amount > auraAlgorithmAmount) {
-                                        auraAlgorithmAmount = rule.amount;
-                                    }
-                                }
-                                if (auraAlgorithmAmount > 0) {
-                                    shouldAward = true;
-                                    // Override the const 'auraAmount' used in subsequent logic
-                                    // We need to define it as a let in the outer scope or reuse it?
-                                    // The original code defined 'auraAmount' as a const at line 1687.
-                                    // I am replacing that block.
-                                }
-                            }
-
-                            if (shouldAward) {
-                                const auraAmount = auraAlgorithmAmount; // Re-declare for scope
-                                // Update student document with atomic increment
-                                await db.collection('students').doc(userProfile.studentDocId).update({
-                                    auraLifetime: firebase.firestore.FieldValue.increment(auraAmount),
-                                    auraBalance: firebase.firestore.FieldValue.increment(auraAmount)
-                                });
-
-                                // Mark Aura as awarded in submissionStatus
-                                await statusRef.update({
-                                    auraAwarded: true,
-                                    auraAmount: auraAmount
-                                });
-
-                                // Update local userProfile
-                                userProfile.auraLifetime = (userProfile.auraLifetime || 0) + auraAmount;
-                                userProfile.auraBalance = (userProfile.auraBalance || 0) + auraAmount;
-                                updateUserHeader();
-
-                                // Update local assignment-level Aura display
-                                assignmentAuraEarned = auraAmount;
-
-                                // Show Aura toast
-                                showToast(`+${auraAmount} Aura for scoring ${overallAverage.toFixed(1)}%!`, { color: 'yellow', duration: 4000 });
-                            }
-                        } catch (auraError) {
-                            // Aura awarding failed but submission still succeeded
-                            console.error("Error awarding Aura:", auraError);
-                        }
-                        // --- END AURA AWARDING ---
-
-                        const postRule = assignmentData.postSubmissionRule || 'open';
-
-                        // On submit, show summary based on post-submission rule
-                        if (postRule === 'hide') {
-                            showToast("Assignment is now hidden.", { color: 'blue', duration: 3000 });
-                            showSummary();
-                        } else if (postRule === 'lock') {
-                            showToast("Assignment is now locked. You can review but not edit.", { color: 'blue', duration: 5000 });
-                            showSummary();
-                        } else {
-                            showSummary();
                         }
 
-                    } catch (error) {
-                        console.error("Error submitting assignment:", error);
-                        showToast("Failed to submit assignment. Please try again.", { color: 'red' });
-                        submitButton.disabled = false;
-                        submitButton.textContent = 'Submit Assignment';
+                        const auraOnTime = assignmentData.auraOnTime || false;
+                        const auraDueAt = assignmentData.auraDueAt;
+
+                        // Compute assignment-level on-time status
+                        let isOnTimeAssignment = true;
+                        if (auraOnTime && auraDueAt) {
+                            const now = new Date();
+                            const dueAt = auraDueAt.toDate
+                                ? auraDueAt.toDate()
+                                : new Date(auraDueAt);
+                            isOnTimeAssignment = now <= dueAt;
+                        }
+
+                        // Check for existing submissions to prevent double-award
+                        // Query for any prior submissionStatus docs with auraAwarded=true for this assignment/student
+                        const priorAwardQuery = await db.collection("submissionStatus")
+                            .where("studentEmail", "==", userProfile.email)
+                            .where("assignmentId", "==", assignmentData.id)
+                            .where("auraAwarded", "==", true)
+                            .get();
+                        const alreadyAwarded = !priorAwardQuery.empty;
+
+                        let auraAlgorithmAmount = 0;
+                        let shouldAward = false;
+
+                        // Award Aura if all conditions are met
+                        if ((!auraOnTime || isOnTimeAssignment) && !alreadyAwarded && userProfile.studentDocId) {
+                            // Find highest matching rule
+                            for (const rule of assignmentAuraRules) {
+                                if (overallAverage >= rule.minScore && rule.amount > auraAlgorithmAmount) {
+                                    auraAlgorithmAmount = rule.amount;
+                                }
+                            }
+                            if (auraAlgorithmAmount > 0) {
+                                shouldAward = true;
+                                // Override the const 'auraAmount' used in subsequent logic
+                                // We need to define it as a let in the outer scope or reuse it?
+                                // The original code defined 'auraAmount' as a const at line 1687.
+                                // I am replacing that block.
+                            }
+                        }
+
+                        if (shouldAward) {
+                            const auraAmount = auraAlgorithmAmount; // Re-declare for scope
+                            // Update student document with atomic increment
+                            await db.collection('students').doc(userProfile.studentDocId).update({
+                                auraLifetime: firebase.firestore.FieldValue.increment(auraAmount),
+                                auraBalance: firebase.firestore.FieldValue.increment(auraAmount)
+                            });
+
+                            // Mark Aura as awarded in submissionStatus
+                            await statusRef.update({
+                                auraAwarded: true,
+                                auraAmount: auraAmount
+                            });
+
+                            // Update local userProfile
+                            userProfile.auraLifetime = (userProfile.auraLifetime || 0) + auraAmount;
+                            userProfile.auraBalance = (userProfile.auraBalance || 0) + auraAmount;
+                            updateUserHeader();
+
+                            // Update local assignment-level Aura display
+                            assignmentAuraEarned = auraAmount;
+
+                            // Show Aura toast
+                            showToast(`+${auraAmount} Aura for scoring ${overallAverage.toFixed(1)}%!`, { color: 'yellow', duration: 4000 });
+                        }
+                    } catch (auraError) {
+                        // Aura awarding failed but submission still succeeded
+                        console.error("Error awarding Aura:", auraError);
                     }
-                });
+                    // --- END AURA AWARDING ---
+
+                    const postRule = assignmentData.postSubmissionRule || 'open';
+
+                    // On submit, show summary based on post-submission rule
+                    if (postRule === 'hide') {
+                        showToast("Assignment is now hidden.", { color: 'blue', duration: 3000 });
+                        showSummary();
+                    } else if (postRule === 'lock') {
+                        showToast("Assignment is now locked. You can review but not edit.", { color: 'blue', duration: 5000 });
+                        showSummary();
+                    } else {
+                        showSummary();
+                    }
+
+                } catch (error) {
+                    console.error("Error submitting assignment:", error);
+                    showToast("Failed to submit assignment. Please try again.", { color: 'red' });
+                    submitButton.disabled = false;
+                    submitButton.textContent = 'Submit Assignment';
+                }
+            });
+        }
+
+        let currentAuraTab = 'store';
+
+        window.openAuraStore = function () {
+            // Mark that user has opened the popup at least once this session
+            // This makes the aura display mode sticky after first open
+            if (!hasOpenedAuraPopup) {
+                hasOpenedAuraPopup = true;
+                // Update header to reflect the new display state
+                updateUserHeader();
             }
 
-            let currentAuraTab = 'store';
+            // Remove existing if any
+            const existing = document.getElementById('aura-modal');
+            if (existing) existing.remove();
 
-            window.openAuraStore = function () {
-                // Mark that user has opened the popup at least once this session
-                // This makes the aura display mode sticky after first open
-                if (!hasOpenedAuraPopup) {
-                    hasOpenedAuraPopup = true;
-                    // Update header to reflect the new display state
-                    updateUserHeader();
-                }
-
-                // Remove existing if any
-                const existing = document.getElementById('aura-modal');
-                if (existing) existing.remove();
-
-                const modalHTML = `
+            const modalHTML = `
             <div class="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50" id="aura-modal">
                 <div class="bg-gray-800 rounded-xl max-w-lg w-full text-white border border-gray-600 shadow-2xl flex flex-col max-h-[90vh]">
                     <div class="flex border-b border-gray-600">
@@ -1913,36 +1914,36 @@
                 </div>
             </div>
         `;
-                document.body.insertAdjacentHTML('beforeend', modalHTML);
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
+            renderStoreTab();
+        };
+
+        window.switchAuraTab = function (tab) {
+            currentAuraTab = tab;
+            const storeBtn = document.getElementById('tab-btn-store');
+            const leadBtn = document.getElementById('tab-btn-leaderboard');
+
+            if (tab === 'store') {
+                storeBtn.className = "flex-1 py-3 font-bold text-yellow-400 border-b-2 border-yellow-400 bg-gray-700 transition";
+                leadBtn.className = "flex-1 py-3 font-bold text-gray-400 hover:bg-gray-700 transition";
                 renderStoreTab();
-            };
+            } else {
+                storeBtn.className = "flex-1 py-3 font-bold text-gray-400 hover:bg-gray-700 transition";
+                leadBtn.className = "flex-1 py-3 font-bold text-purple-400 border-b-2 border-purple-400 bg-gray-700 transition";
+                renderLeaderboardTab();
+            }
+        };
 
-            window.switchAuraTab = function (tab) {
-                currentAuraTab = tab;
-                const storeBtn = document.getElementById('tab-btn-store');
-                const leadBtn = document.getElementById('tab-btn-leaderboard');
+        function renderStoreTab() {
+            // Show spendable balance prominently, with lifetime context below
+            const balance = userProfile.auraBalance || 0;
+            const lifetime = userProfile.auraLifetime || 0;
 
-                if (tab === 'store') {
-                    storeBtn.className = "flex-1 py-3 font-bold text-yellow-400 border-b-2 border-yellow-400 bg-gray-700 transition";
-                    leadBtn.className = "flex-1 py-3 font-bold text-gray-400 hover:bg-gray-700 transition";
-                    renderStoreTab();
-                } else {
-                    storeBtn.className = "flex-1 py-3 font-bold text-gray-400 hover:bg-gray-700 transition";
-                    leadBtn.className = "flex-1 py-3 font-bold text-purple-400 border-b-2 border-purple-400 bg-gray-700 transition";
-                    renderLeaderboardTab();
-                }
-            };
+            const teacherEmail = normalizeTeacherEmail(userProfile.class === 'Teacher'
+                ? userProfile.email
+                : (userProfile.teacherEmail || (assignmentData ? assignmentData.teacherEmail : 'klynch@mtps.us')));
 
-            function renderStoreTab() {
-                // Show spendable balance prominently, with lifetime context below
-                const balance = userProfile.auraBalance || 0;
-                const lifetime = userProfile.auraLifetime || 0;
-
-                const teacherEmail = normalizeTeacherEmail(userProfile.class === 'Teacher'
-                    ? userProfile.email
-                    : (userProfile.teacherEmail || (assignmentData ? assignmentData.teacherEmail : 'klynch@mtps.us')));
-
-                document.getElementById('aura-content').innerHTML = `
+            document.getElementById('aura-content').innerHTML = `
             <div class="text-center mb-4">
                 <div class="text-sm text-gray-400">Spendable Balance</div>
                 <div class="text-3xl font-bold text-yellow-400">${balance} ✧</div>
@@ -1954,24 +1955,24 @@
             <p class="text-center text-xs text-gray-500 mt-6">⚠️ Teacher permission required for all items.</p>
         `;
 
-                // Fetch custom store items
-                db.collection('auraStores').doc(teacherEmail).get().then(doc => {
-                    let items = [
-                        { name: 'Listen to Music', cost: 5, icon: '🎧' },
-                        { name: 'Swap Seats (1 Day)', cost: 10, icon: '🪑' },
-                        { name: 'Homework Pass', cost: 20, icon: '🎟️' }
-                    ];
+            // Fetch custom store items
+            db.collection('auraStores').doc(teacherEmail).get().then(doc => {
+                let items = [
+                    { name: 'Listen to Music', cost: 5, icon: '🎧' },
+                    { name: 'Swap Seats (1 Day)', cost: 10, icon: '🪑' },
+                    { name: 'Homework Pass', cost: 20, icon: '🎟️' }
+                ];
 
-                    if (doc.exists && doc.data().items && doc.data().items.length > 0) {
-                        items = doc.data().items;
-                    }
+                if (doc.exists && doc.data().items && doc.data().items.length > 0) {
+                    items = doc.data().items;
+                }
 
-                    const listContainer = document.getElementById('store-items-list');
-                    if (!listContainer) return;
+                const listContainer = document.getElementById('store-items-list');
+                if (!listContainer) return;
 
-                    listContainer.innerHTML = items.map(item => {
-                        const canAfford = balance >= item.cost;
-                        return `
+                listContainer.innerHTML = items.map(item => {
+                    const canAfford = balance >= item.cost;
+                    return `
                         <div onclick="${canAfford ? `purchaseItem('${item.name.replace(/'/g, "\\'")}', ${item.cost})` : `showToast('Need more Aura!', {color: 'red'})`}" 
                              class="flex justify-between p-3 rounded border transition active:scale-95 cursor-pointer ${canAfford ? 'bg-gray-700 hover:bg-gray-600 border-gray-600' : 'bg-gray-800 border-gray-700 opacity-60'} items-center group">
                             <span class="flex items-center gap-2">
@@ -1981,53 +1982,53 @@
                             <span class="bg-gray-900 px-2 py-1 rounded text-yellow-400 font-mono text-sm">${item.cost} ✧</span>
                         </div>
                     `;
-                    }).join('');
+                }).join('');
 
-                }).catch(err => {
-                    console.error("Error loading store:", err);
-                    const listContainer = document.getElementById('store-items-list');
-                    if (listContainer) listContainer.innerHTML = '<div class="text-center text-red-400">Error loading items.</div>';
-                });
+            }).catch(err => {
+                console.error("Error loading store:", err);
+                const listContainer = document.getElementById('store-items-list');
+                if (listContainer) listContainer.innerHTML = '<div class="text-center text-red-400">Error loading items.</div>';
+            });
+        }
+
+        window.purchaseItem = async function (itemName, cost) {
+            if (userProfile.auraBalance < cost) {
+                showToast("Not enough Aura balance.", { color: 'red' });
+                return;
             }
 
-            window.purchaseItem = async function (itemName, cost) {
-                if (userProfile.auraBalance < cost) {
-                    showToast("Not enough Aura balance.", { color: 'red' });
-                    return;
-                }
+            showConfirmationModal(`Spend <span class="text-yellow-400 font-bold">${cost} ✧</span> for <br><span class="text-xl font-bold">"${itemName}"</span>?`, async () => {
+                try {
+                    const teacherEmail = normalizeTeacherEmail(userProfile.class === 'Teacher'
+                        ? userProfile.email
+                        : (userProfile.teacherEmail || (assignmentData ? assignmentData.teacherEmail : 'klynch@mtps.us')));
 
-                showConfirmationModal(`Spend <span class="text-yellow-400 font-bold">${cost} ✧</span> for <br><span class="text-xl font-bold">"${itemName}"</span>?`, async () => {
-                    try {
-                        const teacherEmail = normalizeTeacherEmail(userProfile.class === 'Teacher'
-                            ? userProfile.email
-                            : (userProfile.teacherEmail || (assignmentData ? assignmentData.teacherEmail : 'klynch@mtps.us')));
+                    // 1. Deduct from students collection
+                    const studentId = userProfile.studentDocId;
+                    if (!studentId) throw new Error("Student document ID not found");
 
-                        // 1. Deduct from students collection
-                        const studentId = userProfile.studentDocId;
-                        if (!studentId) throw new Error("Student document ID not found");
+                    await db.collection('students').doc(studentId).update({
+                        auraBalance: firebase.firestore.FieldValue.increment(-cost)
+                    });
 
-                        await db.collection('students').doc(studentId).update({
-                            auraBalance: firebase.firestore.FieldValue.increment(-cost)
-                        });
+                    // 2. Log purchase
+                    await db.collection('auraPurchases').add({
+                        studentEmail: userProfile.email,
+                        studentName: userProfile.name,
+                        itemName: itemName,
+                        cost: cost,
+                        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                        teacherEmail: teacherEmail,
+                        used: false
+                    });
 
-                        // 2. Log purchase
-                        await db.collection('auraPurchases').add({
-                            studentEmail: userProfile.email,
-                            studentName: userProfile.name,
-                            itemName: itemName,
-                            cost: cost,
-                            timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-                            teacherEmail: teacherEmail,
-                            used: false
-                        });
+                    // 3. Update local state
+                    userProfile.auraBalance -= cost;
+                    updateUserHeader();
+                    renderStoreTab();
 
-                        // 3. Update local state
-                        userProfile.auraBalance -= cost;
-                        updateUserHeader();
-                        renderStoreTab();
-
-                        // 4. Success feedback with permission warning
-                        showConfirmationModal(`
+                    // 4. Success feedback with permission warning
+                    showConfirmationModal(`
                         <div class="text-center py-2">
                             <div class="text-5xl mb-4">🎁</div>
                             <h3 class="text-xl font-bold text-yellow-400 mb-2">Purchase Successful!</h3>
@@ -2039,71 +2040,71 @@
                         </div>
                     `, () => { }, false); // false for no cancel button
 
-                    } catch (error) {
-                        console.error("Purchase error:", error);
-                        showToast("Transaction failed. Try again.", { color: 'red' });
-                    }
-                });
+                } catch (error) {
+                    console.error("Purchase error:", error);
+                    showToast("Transaction failed. Try again.", { color: 'red' });
+                }
+            });
+        }
+
+        function renderLeaderboardTab() {
+            const container = document.getElementById('aura-content');
+            container.innerHTML = '<div class="text-center text-gray-400">Loading...</div>';
+
+            // Query logic: Fetch all students for the teacher to ensure we don't miss legacy/typo data
+            // We then filter client-side to handle whitespace and casing inconsistencies
+            const targetTeacherEmail = normalizeTeacherEmail(userProfile.class === 'Teacher'
+                ? userProfile.teacherEmail
+                : (userProfile.teacherEmail || assignmentData.teacherEmail));
+
+            const targetClass = normalizeClassName(userProfile.class);
+
+            let query = db.collection('students');
+
+            // Optimization: If teacher mode, we can narrow down by assignedClasses if they exist
+            if (userProfile.class === 'Teacher' && assignmentData.assignedClasses && assignmentData.assignedClasses.length > 0) {
+                query = query.where('class', 'in', assignmentData.assignedClasses);
+            } else {
+                // Otherwise, query by teacherEmail (most efficient common denominator)
+                query = query.where('teacherEmail', '==', targetTeacherEmail);
             }
 
-            function renderLeaderboardTab() {
-                const container = document.getElementById('aura-content');
-                container.innerHTML = '<div class="text-center text-gray-400">Loading...</div>';
+            query.get().then(snapshot => {
+                let allFetchedStudents = [];
+                snapshot.forEach(doc => {
+                    const d = doc.data();
+                    const studentTeacher = normalizeTeacherEmail(d.teacherEmail);
+                    const studentClass = normalizeClassName(d.class);
 
-                // Query logic: Fetch all students for the teacher to ensure we don't miss legacy/typo data
-                // We then filter client-side to handle whitespace and casing inconsistencies
-                const targetTeacherEmail = normalizeTeacherEmail(userProfile.class === 'Teacher'
-                    ? userProfile.teacherEmail
-                    : (userProfile.teacherEmail || assignmentData.teacherEmail));
+                    // Filter: Must match teacher AND (if student) must match class
+                    const teacherMatch = studentTeacher === targetTeacherEmail;
+                    const classMatch = (userProfile.class === 'Teacher') || (studentClass === targetClass);
 
-                const targetClass = normalizeClassName(userProfile.class);
+                    if (teacherMatch && classMatch) {
+                        allFetchedStudents.push({
+                            name: d.name || "Anonymous",
+                            score: parseFloat(d.auraLifetime) || 0,
+                            isMe: d.email === userProfile.email
+                        });
+                    }
+                });
 
-                let query = db.collection('students');
+                // Sort High to Low by lifetime Aura
+                allFetchedStudents.sort((a, b) => b.score - a.score);
 
-                // Optimization: If teacher mode, we can narrow down by assignedClasses if they exist
-                if (userProfile.class === 'Teacher' && assignmentData.assignedClasses && assignmentData.assignedClasses.length > 0) {
-                    query = query.where('class', 'in', assignmentData.assignedClasses);
-                } else {
-                    // Otherwise, query by teacherEmail (most efficient common denominator)
-                    query = query.where('teacherEmail', '==', targetTeacherEmail);
-                }
+                let html = '<div class="space-y-2">';
+                let rank = 1;
 
-                query.get().then(snapshot => {
-                    let allFetchedStudents = [];
-                    snapshot.forEach(doc => {
-                        const d = doc.data();
-                        const studentTeacher = normalizeTeacherEmail(d.teacherEmail);
-                        const studentClass = normalizeClassName(d.class);
+                // Render Top 5 logic handling ties
+                for (let i = 0; i < allFetchedStudents.length; i++) {
+                    const s = allFetchedStudents[i];
+                    if (i > 0 && s.score < allFetchedStudents[i - 1].score) rank = i + 1;
+                    if (rank > 5) break;
 
-                        // Filter: Must match teacher AND (if student) must match class
-                        const teacherMatch = studentTeacher === targetTeacherEmail;
-                        const classMatch = (userProfile.class === 'Teacher') || (studentClass === targetClass);
+                    const medal = rank === 1 ? '🥇' : (rank === 2 ? '🥈' : (rank === 3 ? '🥉' : rank));
+                    const bgClass = s.isMe ? 'bg-purple-900/50 border-purple-500' : 'bg-gray-700 border-transparent';
 
-                        if (teacherMatch && classMatch) {
-                            allFetchedStudents.push({
-                                name: d.name || "Anonymous",
-                                score: parseFloat(d.auraLifetime) || 0,
-                                isMe: d.email === userProfile.email
-                            });
-                        }
-                    });
-
-                    // Sort High to Low by lifetime Aura
-                    allFetchedStudents.sort((a, b) => b.score - a.score);
-
-                    let html = '<div class="space-y-2">';
-                    let rank = 1;
-
-                    // Render Top 5 logic handling ties
-                    for (let i = 0; i < allFetchedStudents.length; i++) {
-                        const s = allFetchedStudents[i];
-                        if (i > 0 && s.score < allFetchedStudents[i - 1].score) rank = i + 1;
-                        if (rank > 5) break;
-
-                        const medal = rank === 1 ? '🥇' : (rank === 2 ? '🥈' : (rank === 3 ? '🥉' : rank));
-                        const bgClass = s.isMe ? 'bg-purple-900/50 border-purple-500' : 'bg-gray-700 border-transparent';
-
-                        html += `
+                    html += `
                     <div class="flex justify-between items-center p-2 rounded border ${bgClass}">
                         <div class="flex items-center gap-3">
                             <span class="w-6 text-center font-mono text-gray-400">${medal}</span>
@@ -2111,21 +2112,20 @@
                         </div>
                         <span class="font-mono text-purple-300 font-bold">${s.score}</span>
                     </div>`;
-                    }
-                    html += '</div>';
-                    container.innerHTML = html;
-                }).catch(error => {
-                    // Handle Firestore read errors gracefully
-                    console.error("Error loading leaderboard:", error);
-                    container.innerHTML = `
+                }
+                html += '</div>';
+                container.innerHTML = html;
+            }).catch(error => {
+                // Handle Firestore read errors gracefully
+                console.error("Error loading leaderboard:", error);
+                container.innerHTML = `
                 <div class="text-center text-red-400">
                     <p class="mb-2">Could not load leaderboard.</p>
                     <p class="text-sm text-gray-500">Please try again later.</p>
                 </div>
             `;
-                });
-            }
-        };
+            });
+        }
     </script>
 </body>
 
