@@ -2017,30 +2017,6 @@
             updatePayload.auraDueAt = firebase.firestore.FieldValue.delete();
           }
 
-          // This block seems to be for loading data, not saving.
-          // Assuming 'data' would be passed into this function or available in scope for loading.
-          // If this is intended for saving, 'data' is undefined here.
-          // For now, placing it as requested, but noting the context mismatch.
-          // If this is meant to be part of a 'loadAssignment' function, it should be moved there.
-          // If 'data' is meant to be 'assignmentData' or similar, it needs clarification.
-          // For the purpose of this edit, 'data' is treated as an assumed available object.
-          if (data.modifications) {
-            document.getElementById('modificationsEnabled').checked = data.modifications.enabled || false;
-            if (data.modifications.enabled) document.getElementById('modificationsSettings').classList.remove('hidden');
-
-            document.getElementById('modTimeMultiplier').value = data.modifications.timeMultiplier || 1.5;
-            document.getElementById('modPenaltyMultiplier').value = (data.modifications.penaltyMultiplier !== undefined) ? data.modifications.penaltyMultiplier : 0.5;
-            document.getElementById('modAttemptsBonus').value = (data.modifications.maxAttemptsBonus !== undefined) ? data.modifications.maxAttemptsBonus : 2;
-            document.getElementById('modHelpThreshold').value = (data.modifications.helpThreshold !== undefined) ? data.modifications.helpThreshold : 1;
-            document.getElementById('modFuzzyMatch').checked = data.modifications.fuzzy || false;
-            // Load students happens when section is expanded or manually called? 
-            // We should probably init the student list logic or just let the toggle handle it
-          } else {
-            // Defaults
-            document.getElementById('modificationsEnabled').checked = false;
-            document.getElementById('modificationsSettings').classList.add('hidden');
-          }
-
           // Modifications Data (original saving logic)
           const modsEnabled = document.getElementById('modificationsEnabled').checked;
           if (modsEnabled) {
