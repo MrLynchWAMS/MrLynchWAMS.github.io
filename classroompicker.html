@@ -458,17 +458,6 @@
                     return;
                 }
                 userProfile = profile;
-
-                // Determine if user has modifications for this assignment
-                if (assignmentData.modifications && assignmentData.modifications.enabled) {
-                    const modStudentIds = assignmentData.modifications.studentIds || [];
-                    if (modStudentIds.includes(profile.studentDocId)) {
-                        userProfile.hasModifications = true;
-                    }
-                    // Fallback using roster flag if student list is missing or empty?
-                    // No, editor explicitly saves the list. Trust the list.
-                }
-
                 initializeStudentSession();
             } catch (error) {
                 console.error("Authorization Error:", error);
@@ -988,19 +977,7 @@
             const qPolicy = policy?.[`q${qNum}`] || {};
             const attemptsConfig = qPolicy.attempts || { enabled: false };
             const questionProgress = questionProgressData[currentSlideIndex];
-
-            // Calculate effective max attempts including modifications
-            let maxAttempts = attemptsConfig.maxAttempts || 0;
-            if (userProfile && userProfile.hasModifications && assignmentData.modifications?.enabled) {
-                maxAttempts += (assignmentData.modifications.maxAttemptsBonus || 0);
-            }
-
-            // Determine lock status
-            // If DB says locked, but we now have more attempts allowed, treat as unlocked
-            let isAttemptLocked = attemptsConfig.enabled && questionProgress?.locked;
-            if (isAttemptLocked && questionProgress.attemptCount < maxAttempts) {
-                isAttemptLocked = false;
-            }
+            const isAttemptLocked = attemptsConfig.enabled && questionProgress?.locked;
 
             if (shouldLock || isAttemptLocked) {
                 inputBox.disabled = true;
@@ -1314,24 +1291,7 @@
             const qPolicy = policy?.[`q${qNum}`] || {};
             const attemptsConfig = qPolicy.attempts || { enabled: false };
 
-            // Apply Modifications logic overrides on top of qPolicy
-            let maxAttempts = attemptsConfig.maxAttempts || 0;
-            let deduction = attemptsConfig.deduction || 0;
-            let showHelpAfter = attemptsConfig.showHelpAfter || null;
-            let deadlineMultiplier = 1.0;
-
-            if (userProfile.hasModifications && assignmentData.modifications && assignmentData.modifications.enabled) {
-                const mods = assignmentData.modifications;
-                maxAttempts += (mods.maxAttemptsBonus || 0);
-                deduction *= (mods.penaltyMultiplier !== undefined ? mods.penaltyMultiplier : 1.0);
-                deadlineMultiplier = (mods.timeMultiplier || 1.0);
-
-                if (mods.helpThreshold) {
-                    showHelpAfter = mods.helpThreshold;
-                }
-            }
-
-            // Check if question is locked (using modified maxAttempts)
+            // Check if question is locked
             const progressKey = `${assignmentData.id}_${userProfile.email}_${currentSlideIndex}`;
             let questionProgress = questionProgressData[currentSlideIndex] || null;
             let questionProgressLoadFailed = false;
@@ -1347,35 +1307,49 @@
                 } catch (error) {
                     console.error("Error loading question progress:", error);
                     questionProgressLoadFailed = true;
-                    // Fallback to submissions... (omitted for brevity, assume existing logic)
+                    // Fallback: derive from submissions if questionProgress fails
+                    try {
+                        const submissionsQuery = await db.collection("submissions")
+                            .where("studentEmail", "==", userProfile.email)
+                            .where("assignmentId", "==", assignmentData.id)
+                            .where("slideIndex", "==", currentSlideIndex)
+                            .get();
+
+                        let derivedAttemptCount = 0;
+                        let derivedBestScore = 0;
+                        let derivedNormalizedAnswersSet = new Set();
+
+                        submissionsQuery.docs.forEach(doc => {
+                            const sub = doc.data();
+                            if (sub.normalizedAnswer && derivedNormalizedAnswersSet.size < MAX_NORMALIZED_ANSWERS) {
+                                derivedNormalizedAnswersSet.add(sub.normalizedAnswer);
+                            }
+                            if (typeof sub.score === 'number' && sub.score > derivedBestScore) {
+                                derivedBestScore = sub.score;
+                            }
+                        });
+
+                        derivedAttemptCount = derivedNormalizedAnswersSet.size;
+                        const derivedNormalizedAnswers = Array.from(derivedNormalizedAnswersSet).slice(-MAX_NORMALIZED_ANSWERS);
+
+                        questionProgress = {
+                            attemptCount: derivedAttemptCount,
+                            bestScore: derivedBestScore,
+                            normalizedAnswers: derivedNormalizedAnswers,
+                            locked: false
+                        };
+                        questionProgressData[currentSlideIndex] = questionProgress;
+                    } catch (fallbackError) {
+                        console.error("Error loading from submissions fallback:", fallbackError);
+                    }
                 }
             }
 
-            // Use MODIFIED maxAttempts for lock check
             if (attemptsConfig.enabled && questionProgress?.locked) {
-                // If locked flag is set in DB, it's locked. 
-                // BUT wait, if we grant MORE attempts now, should we unlock it?
-                // Complex edge case: Student locked at 3 attempts. Teacher grants +2. 
-                // The 'locked' field in DB is true.
-                // Ideally, we should check attemptCount < modifiedMaxAttempts. 
-                // If attempts < max, we should allow even if DB says locked?
-                // For now, respect the DB lock to avoid inconsistencies, or auto-unlock?
-                // Logic below re-checks attemptCount vs maxAttempts before locking, so if we rely on that it might work.
-                // However, the UI display blocks input if 'locked' is true.
-                // We might need to handle 'silent unlock' if attemptCount < newMax.
-
-                const currentAttempts = questionProgress.attemptCount || 0;
-                if (currentAttempts < maxAttempts) {
-                    // Implicit unlock allowed due to modification bonus
-                    questionProgress.locked = false; // Optimistic local unlock
-                } else {
-                    const lockMsg = attemptsConfig.lockMessage || "This question is locked. You have reached the maximum number of attempts.";
-                    showToast(lockMsg, { color: 'red', duration: 5000 });
-                    return;
-                }
+                const lockMsg = attemptsConfig.lockMessage || "This question is locked. You have reached the maximum number of attempts.";
+                showToast(lockMsg, { color: 'red', duration: 5000 });
+                return;
             }
-
-            // ... (normalization and uniqueness check) ...
 
             // Normalize answer for uniqueness check
             const normalizedAnswer = normalizeAnswer(
@@ -1390,6 +1364,7 @@
             const normalizedAnswers = questionProgress?.normalizedAnswers || [];
 
             if (attemptsConfig.enabled) {
+                // Use Set for O(1) uniqueness check instead of O(n) array search
                 const normalizedAnswersSet = new Set(normalizedAnswers);
                 isNewAttempt = !normalizedAnswersSet.has(normalizedAnswer);
 
@@ -1397,6 +1372,7 @@
                     attemptCount++;
                 }
             } else {
+                // For attempts disabled, always use attemptIndex = 1
                 attemptCount = 1;
             }
 
@@ -1405,10 +1381,10 @@
                 attemptCount: attemptsConfig.enabled ? attemptCount : 0,
                 attemptIndex: attemptsConfig.enabled ? attemptCount : 1,
                 isNewAttempt: attemptsConfig.enabled ? isNewAttempt : true,
-                maxAttempts: maxAttempts,
+                maxAttempts: attemptsConfig.maxAttempts || 0,
                 lockOnMax: attemptsConfig.lockOnMax || false,
                 locked: false,
-                showHelpAfter: showHelpAfter,
+                showHelpAfter: attemptsConfig.showHelpAfter || null,
                 caseSensitive: attemptsConfig.caseSensitive || false,
                 punctuationSensitive: attemptsConfig.punctuationSensitive || false
             };
@@ -1416,21 +1392,22 @@
             // Calculate base score from checker
             let baseScore = checkCurrentSlideAnswer(studentAnswer, attemptInfo);
 
-            // Calculate total attempt deduction using MODIFIED deduction
+            // Calculate total attempt deduction
             let totalDeduction = 0;
             if (attemptsConfig.enabled && attemptCount > 1) {
                 const extraAttempts = attemptCount - 1;
-                totalDeduction = extraAttempts * deduction; // Uses variable 'deduction'
+                totalDeduction = extraAttempts * (attemptsConfig.deduction || 0);
             }
 
-            // ... (score calculation) ...
+            // Apply deduction to get the score for THIS attempt
             let currentPenalizedScore = Math.max(0, baseScore - totalDeduction);
 
             if (totalDeduction > 0 && isNewAttempt) {
                 showToast(`-${totalDeduction} points for ${attemptCount - 1} extra attempt(s).`, { color: 'orange', duration: 4000 });
             }
 
-            // Apply deadline penalties
+            // Apply deadline penalties (to the baseScore first, then re-calculate penalized score)
+            // or apply to final penalized score? Usually, penalties are applied to the earned points.
             let finalScore = currentPenalizedScore;
             let isOnTime = true;
 
@@ -1442,16 +1419,11 @@
                     const startTime = new Date();
                     const [hours, minutes] = classStartTimeStr.split(':');
                     startTime.setHours(hours, minutes, 0, 0);
-
-                    // APPLY MODIFIED DEADLINE MINUTES
-                    const modifiedMinutes = qPolicy.deadlineMinutes * deadlineMultiplier;
-
-                    const deadline = new Date(startTime.getTime() + modifiedMinutes * 60000);
+                    const deadline = new Date(startTime.getTime() + qPolicy.deadlineMinutes * 60000);
 
                     if (now > deadline) {
                         isOnTime = false;
                         const minutesLate = Math.ceil((now - deadline) / 60000);
-                        // ... penalty logic ...
                         let deadlinePenalty = 0;
                         switch (qPolicy.penaltyType) {
                             case 'zero':
@@ -1473,7 +1445,7 @@
                 }
             }
 
-            // ... (best score logic) ...
+            // Retain best score logic
             let bestScore = questionProgress?.bestScore || 0;
             let bestAnswer = questionProgress?.bestAnswer || null;
             let scoreToPersist = finalScore;
@@ -1487,27 +1459,25 @@
                     scoreToPersist = bestScore; // Keep best score
                 }
             } else {
+                // Not retaining best, so current score becomes the best
                 bestScore = finalScore;
                 bestAnswer = studentAnswer;
                 scoreToPersist = finalScore;
             }
 
-            // Check if should lock (using MODIFIED maxAttempts)
+            // Check if should lock
             let shouldLock = false;
-            if (attemptsConfig.enabled && attemptsConfig.lockOnMax && attemptCount >= maxAttempts) {
+            if (attemptsConfig.enabled && attemptsConfig.lockOnMax && attemptCount >= attemptsConfig.maxAttempts) {
                 shouldLock = true;
             }
 
-            // Show help after N attempts (using MODIFIED showHelpAfter)
-            if (attemptsConfig.enabled && showHelpAfter && attemptCount >= showHelpAfter) {
-                let helpMsg = `You've made ${attemptCount} attempts. Consider reviewing the material.`;
-                if (userProfile.hasModifications && assignmentData.modifications?.extraHelpMessage) {
-                    helpMsg += `\n\n💡 Hint: ${assignmentData.modifications.extraHelpMessage}`;
-                }
-                showToast(helpMsg, { color: 'blue', duration: 8000 });
+            // Show help after N attempts
+            if (attemptsConfig.enabled && attemptsConfig.showHelpAfter && attemptCount >= attemptsConfig.showHelpAfter) {
+                // Just a notification - teachers can use this to trigger help content
+                showToast(`You've made ${attemptCount} attempts. Consider reviewing the material.`, { color: 'blue', duration: 6000 });
             }
 
-            // ... (Update UI and Save) ...
+            // Update UI
             resultElement.innerHTML = "Your Score: " + scoreToPersist;
             resultElement.style.color = scoreToPersist >= 90 ? "lightgreen" : "orange";
             slideStates[currentSlideIndex] = { answer: studentAnswer, score: scoreToPersist };
@@ -1616,96 +1586,32 @@
             if (position.includes('top')) {
                 wrapper.appendChild(toast);
             } else {
-                timeoutId = setTimeout(dismiss, duration);
+                wrapper.prepend(toast);
             }
+            timeoutId = setTimeout(dismiss, duration);
         }
 
-        // Helper for Fuzzy Matching (Levenshtein Distance)
-        function levenshteinDistance(a, b) {
-            if (a.length === 0) return b.length;
-            if (b.length === 0) return a.length;
-            const matrix = [];
-            for (let i = 0; i <= b.length; i++) { matrix[i] = [i]; }
-            for (let j = 0; j <= a.length; j++) { matrix[0][j] = j; }
-            for (let i = 1; i <= b.length; i++) {
-                for (let j = 1; j <= a.length; j++) {
-                    if (b.charAt(i - 1) == a.charAt(j - 1)) {
-                        matrix[i][j] = matrix[i - 1][j - 1];
-                    } else {
-                        matrix[i][j] = Math.min(matrix[i - 1][j - 1] + 1, Math.min(matrix[i][j - 1] + 1, matrix[i - 1][j] + 1));
-                    }
-                }
-            }
-            return matrix[b.length][a.length];
-        }
-
-        // Helper for Text Conditions (called by generated checker code)
-        function checkTextCondition(studentVal, targetVal, op) {
-            const userText = (studentVal || "").toLowerCase().trim();
-            const targetText = (targetVal || "").toLowerCase().trim();
-
-            const isFuzzyEnabled = assignmentData.modifications && assignmentData.modifications.enabled && assignmentData.modifications.fuzzy;
-            // Only apply fuzzy if enabled AND student actually has modifications? 
-            // User said: "an additonal per question modification option when modifications are turned on".
-            // Interpretation: Global toggle. If on, it applies. But does it apply to *everyone* or just *modified students*?
-            // "when modifications are turned on... fuzzy checking to accomodate poor spellers".
-            // Usually accommodations apply only to the accommodated student.
-            // So checks `userProfile.hasModifications`.
-
-            const useFuzzy = isFuzzyEnabled && userProfile.hasModifications;
-
-            if (op === 'contains') {
-                if (useFuzzy) {
-                    // Fuzzy contains is hard. Simplified: check if target is close to any substring? 
-                    // Or just check if Levenshtein(userText, targetText) is low enough? No, contains is substring.
-                    // For "contains", fuzzy is expensive/complex. 
-                    // Let's stick to simple includes for now unless exact match.
-                    // Or scan sliding window? 
-                    return userText.includes(targetText);
-                }
-                return userText.includes(targetText);
-            } else if (op === 'not_contains') {
-                return !userText.includes(targetText);
-            } else if (op === 'equals_str') {
-                if (useFuzzy) {
-                    const dist = levenshteinDistance(userText, targetText);
-                    // Threshold: allow 1 error per 4 chars? Min 1?
-                    // e.g. "appel" (5) vs "apple" (5) -> dist 2 (swap) or 1?
-                    // "apple" vs "aple" -> 1.
-                    // Let's say max distance = Math.max(1, Math.floor(targetText.length / 4));
-                    // If target is 3 chars, max 1 error. 
-                    const maxErrors = Math.max(1, Math.floor(targetText.length / 4));
-                    return dist <= maxErrors;
-                }
-                return userText === targetText;
-            }
-            return false;
-        }
-
-        function checkCurrentSlideAnswer(studentAnswer, info) {
-            // Use the global currentSlideIndex variable
-            const checkerCode = assignmentData.checkerFunctions?.[currentSlideIndex];
-            const funcString = checkerCode;
+        function checkCurrentSlideAnswer(answer, attemptInfo = null) {
+            const funcNameKey = `calc${currentSlideIndex + 1}`;
+            const funcString = checkerFunctionStrings[funcNameKey];
             if (funcString) {
                 try {
                     const funcNameMatch = funcString.match(/function\s+([a-zA-Z0-9_]+)\s*\(/);
                     if (!funcNameMatch || !funcNameMatch[1]) {
-                        throw new Error("Could not find a valid function definition in the checker code.");
+                        throw new Error("Could not find a valid function definition (e.g., 'function calc1(...)') in the checker code.");
                     }
                     const funcNameToRun = funcNameMatch[1];
-                    const runner = new Function('studentAnswer', 'showToast', 'userProfile', 'attemptInfo', 'checkTextCondition', `
-                        ${funcString}
-                        if (typeof ${funcNameToRun} === 'function') {
-                            return ${funcNameToRun}(studentAnswer, showToast, userProfile, attemptInfo);
-                        }
-                        if (typeof checkAnswer === 'function') {
-                            return checkAnswer(studentAnswer);
-                        }
-                        throw new Error("Checker function not found.");
-                    `);
-                    return runner(studentAnswer, showToast, userProfile, info, checkTextCondition);
+                    const runner = new Function('studentAnswer', 'showToast', 'userProfile', 'attemptInfo', `
+                    ${funcString}
+                    if (typeof ${funcNameToRun} === 'function') {
+                        return ${funcNameToRun}(studentAnswer, showToast, userProfile, attemptInfo);
+                    } else {
+                        throw new Error("The function '${funcNameToRun}' defined in your code could not be executed.");
+                    }
+                `);
+                    return runner(answer, showToast, userProfile, attemptInfo);
                 } catch (e) {
-                    console.error(`Error executing checker for slide ${currentSlideIndex}:`, e);
+                    console.error(`Error executing checker function ${funcNameKey}:`, e);
                     showToast(`Error in checking logic: ${e.message}`, { color: 'red' });
                     return 0;
                 }
@@ -1713,7 +1619,6 @@
             showToast("No checking logic for this slide.");
             return 0;
         }
-
 
         function showConfirmationModal(message, onConfirm, showCancel = true) {
             document.getElementById('confirmationMessage').innerHTML = message;
