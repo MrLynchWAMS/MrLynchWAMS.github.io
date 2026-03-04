@@ -754,7 +754,20 @@
         const defaultStartTimes = teacherDefaults.classStartTimes;
         const hardcodedDefaults = { '1': '08:01', '2': '08:50', '5': '11:17', '7': '12:55', '8': '13:44' };
         allClassNames.forEach(className => {
-          const startTimeValue = assignmentStartTimes?.[className] || defaultStartTimes?.[className] || hardcodedDefaults[className] || '00:00';
+          const startTimeValue = assignmentStartTimes?.[className] || defaultStartTimes?.[className] || hardcodedDefaults[className] || '08:00';
+
+          // Parse per-class start date/time (if using classStartAt Timestamp)
+          let startDateValue = '';
+          const classStart = assignmentData.deadlinePolicy?.classStartAt?.[className];
+          if (classStart) {
+            const startAt = classStart.toDate ? classStart.toDate() : new Date(classStart);
+            if (!isNaN(startAt.getTime())) {
+              const year = startAt.getFullYear();
+              const month = String(startAt.getMonth() + 1).padStart(2, '0');
+              const day = String(startAt.getDate()).padStart(2, '0');
+              startDateValue = `${year}-${month}-${day}`;
+            }
+          }
 
           // Parse per-class due date/time from Firestore Timestamp or ISO string
           let dueDateValue = '';
@@ -777,6 +790,10 @@
       <div class="bg-gray-700 p-3 rounded-lg">
         <label class="block text-sm font-semibold mb-2">Period ${className}</label>
         <div class="flex flex-col gap-2">
+          <div class="flex items-center gap-2">
+            <label for="start-date-${className}" class="text-xs text-gray-400 w-20">Start Date</label>
+            <input type="date" id="start-date-${className}" value="${startDateValue}" class="p-2 bg-gray-800 border border-gray-600 rounded text-sm">
+          </div>
           <div class="flex items-center gap-2">
             <label for="start-time-${className}" class="text-xs text-gray-400 w-20">Start Time</label>
             <input type="time" id="start-time-${className}" value="${startTimeValue}" class="p-2 bg-gray-800 border border-gray-600 rounded w-28 text-sm">
@@ -1864,7 +1881,7 @@
           saveBtn.textContent = "Saving...";
           const checkerFunctions = {};
           const checkerMeta = {};
-          const deadlinePolicy = { classStartTimes: {}, classDueAt: {} };
+          const deadlinePolicy = { classStartTimes: {}, classStartAt: {}, classDueAt: {} };
 
           // Read form values
           const postSubmissionRule = document.getElementById('postSubmissionRule').value;
@@ -1872,9 +1889,25 @@
           const focusModeAction = document.getElementById('focusModeAction').value;
 
           allClassNames.forEach(className => {
-            const timeValue = document.getElementById(`start-time-${className}`).value;
-            if (timeValue) {
-              deadlinePolicy.classStartTimes[String(className)] = timeValue;
+            const startTimeValue = document.getElementById(`start-time-${className}`).value;
+            const startDateValue = document.getElementById(`start-date-${className}`).value;
+
+            if (startTimeValue) {
+              deadlinePolicy.classStartTimes[String(className)] = startTimeValue;
+            }
+
+            // Build per-class start Timestamp if both date and time are provided
+            if (startDateValue && startTimeValue) {
+              const dateParts = startDateValue.split('-');
+              const timeParts = startTimeValue.split(':');
+              if (dateParts.length === 3 && timeParts.length >= 2) {
+                const [year, month, day] = dateParts.map(Number);
+                const [hour, minute] = timeParts.map(Number);
+                if (!isNaN(year) && !isNaN(month) && !isNaN(day) && !isNaN(hour) && !isNaN(minute)) {
+                  const localDate = new Date(year, month - 1, day, hour, minute, 0, 0);
+                  deadlinePolicy.classStartAt[String(className)] = firebase.firestore.Timestamp.fromDate(localDate);
+                }
+              }
             }
 
             // Read per-class due date and time
