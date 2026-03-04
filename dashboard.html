@@ -1052,7 +1052,7 @@
             if (!student) { showToast("Could not find student data.", { color: 'red' }); return; }
             try {
                 if (isChecked) {
-                    await db.collection("submissionStatus").add({
+                    await db.collection("submissionStatus").doc(`${assignmentId}_${student.email}`).set({
                         studentEmail: student.email,
                         studentName: student.name,
                         assignmentId: assignmentId,
@@ -1062,15 +1062,9 @@
                     student.isSubmitted = true;
                     showToast(`Submitted for ${student.name}.`, { color: 'green' });
                 } else {
-                    const statusSnapshot = await db.collection("submissionStatus")
-                        .where("studentEmail", "==", studentEmail)
-                        .where("assignmentId", "==", assignmentId)
-                        .get();
-                    if (!statusSnapshot.empty) {
-                        await db.collection("submissionStatus").doc(statusSnapshot.docs[0].id).delete();
-                        student.isSubmitted = false;
-                        showToast(`Un-submitted for ${student.name}.`, { color: 'green' });
-                    }
+                    await db.collection("submissionStatus").doc(`${assignmentId}_${studentEmail}`).delete();
+                    student.isSubmitted = false;
+                    showToast(`Un-submitted for ${student.name}.`, { color: 'green' });
                 }
             } catch (error) {
                 console.error("Error updating submission status:", error);
