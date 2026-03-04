@@ -95,6 +95,12 @@
                 </div>
 
                 <div>
+                    <label for="teacherName" class="block text-sm font-medium text-gray-300 mb-2">Display Name</label>
+                    <input type="text" id="teacherName" placeholder="e.g. Mr. Lynch"
+                        class="w-full p-3 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500">
+                </div>
+
+                <div>
                     <label class="flex items-center">
                         <input type="checkbox" id="teacherIsAdmin"
                             class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500">
@@ -212,23 +218,67 @@
                     }
                 });
 
-                let html = '';
+                // Fetch all assignments once to calculate stats
+                db.collection("assignments").get().then(assignmentsSnapshot => {
+                    const statsByTeacher = {}; // email -> { count, lastActivity }
 
-                teachers.forEach(teacher => {
-                    // Find any implicit co-teachers associated with THIS teacher
-                    const myImplicit = implicitCoTeachers.filter(i => i.parentEmail === teacher.email);
+                    assignmentsSnapshot.forEach(doc => {
+                        const data = doc.data();
+                        const owner = data.teacherEmail ? data.teacherEmail.toLowerCase() : '';
+                        if (!owner) return;
 
-                    html += `
+                        if (!statsByTeacher[owner]) {
+                            statsByTeacher[owner] = { count: 0, lastActivity: 0 };
+                        }
+
+                        statsByTeacher[owner].count++;
+
+                        // For last activity, use createdAt or similar if updatedAt not available
+                        const activityDate = data.createdAt ? (data.createdAt.seconds * 1000) : 0;
+                        if (activityDate > statsByTeacher[owner].lastActivity) {
+                            statsByTeacher[owner].lastActivity = activityDate;
+                        }
+                    });
+
+                    renderTeachersList(snapshot, implicitCoTeachers, statsByTeacher);
+                }).catch(err => {
+                    console.error("Error fetching assignments for stats:", err);
+                    renderTeachersList(snapshot, implicitCoTeachers, {});
+                });
+            });
+        }
+
+        function renderTeachersList(snapshot, implicitCoTeachers, statsByTeacher) {
+            const teachersList = document.getElementById('teachersList');
+            const teachers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+                .filter(teacher => teacher.email);
+
+            teachers.sort((a, b) => a.email.localeCompare(b.email));
+
+            let html = '';
+
+            teachers.forEach(teacher => {
+                const myImplicit = implicitCoTeachers.filter(i => i.parentEmail === teacher.email);
+                const stats = statsByTeacher[teacher.email.toLowerCase()] || { count: 0, lastActivity: 0 };
+                const activityDate = stats.lastActivity > 0 ? new Date(stats.lastActivity).toLocaleDateString() : 'None';
+
+                html += `
             <div class="bg-gray-700 rounded-lg p-4 mb-3">
-                <div class="flex justify-between items-center mb-2">
+                <div class="flex justify-between items-start mb-2">
                     <div class="flex-1">
-                        <div class="flex items-center gap-3">
-                            <span class="font-medium text-white">${escapeHtml(teacher.email)}</span>
+                        <div class="flex items-center gap-3 mb-1">
+                            <span class="font-bold text-white text-lg">${escapeHtml(teacher.email)}</span>
                             ${teacher.isAdmin ? '<span class="bg-yellow-600 text-white text-xs px-2 py-1 rounded">Admin</span>' : ''}
+                        </div>
+                        ${teacher.name ? `<p class="text-sm text-yellow-400 font-medium">${escapeHtml(teacher.name)}</p>` : ''}
+                        
+                        <div class="flex gap-4 mt-3 text-xs text-gray-400">
+                            <div><span class="text-gray-300 font-semibold">Assignments:</span> ${stats.count}</div>
+                            <div><span class="text-gray-300 font-semibold">Recent Activity:</span> ${activityDate}</div>
                         </div>
                     </div>
                     <div class="flex gap-2 items-center">
-                        <button onclick="impersonateUser('${escapeHtml(teacher.email)}')" class="text-yellow-400 hover:text-yellow-300 text-sm mr-2 border border-yellow-600 px-2 py-1 rounded">Impersonate</button>
+                        <button onclick="impersonateUser('${escapeHtml(teacher.email)}')" class="text-yellow-400 hover:text-yellow-300 text-sm border border-yellow-600 px-2 py-1 rounded">Impersonate</button>
                         <button onclick='openTeacherModal(${JSON.stringify(teacher)})' class="text-blue-400 hover:text-blue-300 text-sm">Edit</button>
                         <button onclick="handleDeleteTeacher('${teacher.id}', '${escapeHtml(teacher.email)}')" class="text-red-400 hover:text-red-300 text-sm">Delete</button>
                     </div>
@@ -248,19 +298,16 @@
                         <p class="text-xs text-gray-400 mt-2">Explicit "Co-Teaching For" List: ${escapeHtml(teacher.coTeachingFor.join(', '))}</p>
                 ` : ''}
             </div>`;
-                });
-
-                teachersList.innerHTML = html;
-
-            }, error => {
-                console.error("Error loading teachers:", error);
-                showToast("Error loading teachers. See console for details.", { color: 'red' });
             });
-        }
+
+            teachersList.innerHTML = html;
+
+        });
         function openTeacherModal(teacher = null) {
             document.getElementById('teacherId').value = '';
             document.getElementById('teacherEmail').value = '';
             document.getElementById('teacherIsAdmin').checked = false;
+            document.getElementById('teacherName').value = '';
             document.getElementById('teacherCoTeachingFor').value = '';
             document.getElementById('modal-error').innerText = '';
 
@@ -268,6 +315,7 @@
                 document.getElementById('modalTitle').innerText = "Edit Teacher";
                 document.getElementById('teacherId').value = teacher.id;
                 document.getElementById('teacherEmail').value = teacher.email;
+                document.getElementById('teacherName').value = teacher.name || '';
                 document.getElementById('teacherIsAdmin').checked = teacher.isAdmin || false;
                 document.getElementById('teacherCoTeachingFor').value = (teacher.coTeachingFor || []).join(', ');
             } else {
@@ -308,6 +356,7 @@
 
             const teacherData = {
                 email: newEmail,
+                name: document.getElementById('teacherName').value.trim(),
                 isAdmin: isAdmin,
                 coTeachingFor: coTeachingFor
             };
