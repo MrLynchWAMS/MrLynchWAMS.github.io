@@ -245,6 +245,9 @@
                     console.error("Error fetching assignments for stats:", err);
                     renderTeachersList(snapshot, implicitCoTeachers, {});
                 });
+            }, error => {
+                console.error("Error loading teachers:", error);
+                showToast("Error loading teachers. See console for details.", { color: 'red' });
             });
         }
 
@@ -302,7 +305,7 @@
 
             teachersList.innerHTML = html;
 
-        });
+        }
         function openTeacherModal(teacher = null) {
             document.getElementById('teacherId').value = '';
             document.getElementById('teacherEmail').value = '';
