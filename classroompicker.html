@@ -710,19 +710,8 @@
         async function fetchStudentSubmissions() {
             if (!userProfile || !assignmentData) return;
             try {
-                // Check submission status and get assignment-level Aura
-                const statusQuery = db.collection("submissionStatus")
-                    .where("studentEmail", "==", userProfile.email)
-                    .where("assignmentId", "==", assignmentData.id);
-                const statusSnapshot = await statusQuery.get();
-                if (!statusSnapshot.empty) {
-                    const statusData = statusSnapshot.docs[0].data();
-                    isSubmitted = statusData.status === 'submitted';
-                    assignmentAuraEarned = statusData.auraAwarded ? (statusData.auraAmount || 0) : 0;
-                } else {
-                    isSubmitted = false;
-                    assignmentAuraEarned = 0;
-                }
+                // Submission status and assignment-level Aura are handled by the onSnapshot listener in initializeStudentSession
+                // and a one-time fetch there. This query is redundant.
 
                 const q = db.collection("submissions").where("studentEmail", "==", userProfile.email).where("assignmentId", "==", assignmentData.id);
                 const querySnapshot = await q.get();
@@ -987,7 +976,8 @@
                 }
 
                 // Create submissionStatus document
-                const statusRef = await db.collection("submissionStatus").add({
+                const statusRef = db.collection("submissionStatus").doc(`${assignmentData.id}_${userProfile.email}`);
+                await statusRef.set({
                     studentEmail: userProfile.email,
                     studentName: userProfile.name,
                     assignmentId: assignmentData.id,
@@ -1901,7 +1891,8 @@
                     submitButton.textContent = 'Submitting...';
 
                     // Create submissionStatus document and keep the reference
-                    const statusRef = await db.collection("submissionStatus").add({
+                    const statusRef = db.collection("submissionStatus").doc(`${assignmentData.id}_${userProfile.email}`);
+                    await statusRef.set({
                         studentEmail: userProfile.email,
                         studentName: userProfile.name,
                         assignmentId: assignmentData.id,
