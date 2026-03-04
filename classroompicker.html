@@ -334,6 +334,9 @@
         }
         // ---------------------------
 
+        let assignmentListener = null;
+        let submissionStatusListener = null;
+
         window.onload = async function () {
             const urlParams = new URLSearchParams(window.location.search);
             assignmentId = urlParams.get('assignmentId');
@@ -344,6 +347,7 @@
                 return;
             }
             try {
+                // Initial fetch to get names etc
                 const doc = await db.collection("assignments").doc(assignmentId).get();
                 if (!doc.exists) {
                     errorP.textContent = "Error: This assignment could not be found.";
@@ -351,10 +355,33 @@
                 }
                 assignmentData = { id: doc.id, ...doc.data() };
                 document.title = assignmentData.name + " - IterātED";
-                if (assignmentData.checkerFunctions) {
-                    checkerFunctionStrings = assignmentData.checkerFunctions;
-                }
-                slideStates = new Array(assignmentData.slideIds.length).fill(null);
+
+                // Start Real-time Assignment Listener
+                assignmentListener = db.collection("assignments").doc(assignmentId).onSnapshot(snapshot => {
+                    if (!snapshot.exists) {
+                        errorP.textContent = "Error: This assignment was deleted.";
+                        if (userProfile) hideMainContent();
+                        return;
+                    }
+                    const oldData = assignmentData;
+                    assignmentData = { id: snapshot.id, ...snapshot.data() };
+
+                    if (assignmentData.checkerFunctions) {
+                        checkerFunctionStrings = assignmentData.checkerFunctions;
+                    }
+
+                    // If slides changed, re-init slideStates
+                    if (!oldData || assignmentData.slideIds.length !== oldData.slideIds.length) {
+                        slideStates = new Array(assignmentData.slideIds.length).fill(null);
+                    }
+
+                    if (userProfile) {
+                        evaluateAccess();
+                    }
+                }, err => {
+                    console.error("Assignment listener error:", err);
+                });
+
                 auth.onAuthStateChanged(user => {
                     if (user) {
                         let email = user.email.toLowerCase();
@@ -374,6 +401,105 @@
                 errorP.textContent = "An error occurred while loading the assignment.";
             }
         };
+
+        function hideMainContent() {
+            document.getElementById('mainContainer').classList.add('hidden');
+            document.getElementById('summaryContainer').classList.add('hidden');
+            document.getElementById('pageLoader').classList.remove('hidden');
+        }
+
+        function showAccessDenied(message) {
+            const loader = document.getElementById('pageLoader');
+            const errorP = document.getElementById('loadingError');
+            loader.classList.remove('hidden');
+            errorP.innerHTML = `<div class="flex flex-col items-center gap-4 bg-gray-800 p-8 rounded-xl border border-red-500/30">
+                <span class="text-6xl">🔒</span>
+                <span class="text-xl font-bold">${message}</span>
+                <p class="text-gray-400 text-sm">Please talk to your teacher if you believe this is an error.</p>
+                <button onclick="window.location.reload()" class="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded text-sm mt-2">Check Again</button>
+            </div>`;
+            document.getElementById('mainContainer').classList.add('hidden');
+            document.getElementById('summaryContainer').classList.add('hidden');
+            document.getElementById('loginContainer').classList.add('hidden');
+        }
+
+        let accessEvaluationInterval = null;
+
+        function evaluateAccess() {
+            if (!userProfile || !assignmentData) return;
+
+            // Authorized Teachers always have access regardless of class status
+            const isAuthorizedTeacher = (userProfile.class === 'Teacher');
+            if (isAuthorizedTeacher) return;
+
+            const studentClass = userProfile.class;
+            const assignedClasses = assignmentData.assignedClasses || [];
+
+            if (!assignedClasses.includes(studentClass)) {
+                showAccessDenied(`Access Denied: This assignment is not available for your class (${studentClass}).`);
+                return;
+            }
+
+            const classStatus = assignmentData.classStatus?.[studentClass] || 'closed';
+
+            if (classStatus === 'closed') {
+                showAccessDenied("This assignment is currently closed for your class.");
+                return;
+            }
+
+            if (classStatus === 'scheduled') {
+                const now = new Date();
+                let startAt = null;
+
+                // Try to get Start At Timestamp
+                const classStartAt = assignmentData.deadlinePolicy?.classStartAt?.[studentClass];
+                if (classStartAt) {
+                    startAt = classStartAt.toDate ? classStartAt.toDate() : new Date(classStartAt);
+                } else {
+                    // Fallback to legacy Start Time (Time of Day Today)
+                    const classStartTimeStr = assignmentData.deadlinePolicy?.classStartTimes?.[studentClass];
+                    if (classStartTimeStr) {
+                        const [hours, mins] = classStartTimeStr.split(':').map(Number);
+                        startAt = new Date();
+                        startAt.setHours(hours, mins, 0, 0);
+                    }
+                }
+
+                if (startAt && now < startAt) {
+                    const timeStr = startAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+                    const dateStr = startAt.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' });
+                    showAccessDenied(`Scheduled to open on ${dateStr} at ${timeStr}.`);
+
+                    // Setup internal interval to auto-unlock if they stay on page
+                    if (!accessEvaluationInterval) {
+                        accessEvaluationInterval = setInterval(evaluateAccess, 10000);
+                    }
+                    return;
+                }
+            }
+
+            // If we reach here, and they WERE seeing an error, restore view
+            if (accessEvaluationInterval) {
+                clearInterval(accessEvaluationInterval);
+                accessEvaluationInterval = null;
+            }
+
+            // If we are showing an error, hide it
+            const errorP = document.getElementById('loadingError');
+            if (errorP.innerHTML.includes('🔒')) {
+                errorP.innerHTML = '';
+                document.getElementById('pageLoader').classList.add('hidden');
+
+                // Show main or summary
+                const postRule = assignmentData.postSubmissionRule || 'open';
+                if (isSubmitted && postRule === 'hide') {
+                    showSummary();
+                } else {
+                    document.getElementById('mainContainer').classList.remove('hidden');
+                    updateSlideDisplay();
+                }
+            }
+        }
 
         async function authorizeAndStart(profile) {
             const errorP = document.getElementById('loadingError');
@@ -441,35 +567,46 @@
                 // Use normalized email to prevent split rosters between "klynch@mtps.us" and "klynch@mtps. us"
                 profile.teacherEmail = normalizeTeacherEmail(studentData.teacherEmail || assignmentData.teacherEmail);
 
-                const assignedClasses = assignmentData.assignedClasses || [];
-                if (!assignedClasses.includes(studentClass)) {
-                    loader.classList.remove('hidden');
-                    errorP.textContent = `Access Denied: This assignment is not available for your class (${studentClass}).`;
-                    document.getElementById('loginContainer').classList.add('hidden');
-                    if (!isImpersonating) auth.signOut();
-                    return;
-                }
-                const classStatus = assignmentData.classStatus?.[studentClass];
-                if (classStatus !== 'open') {
-                    loader.classList.remove('hidden');
-                    errorP.textContent = `This assignment is currently closed for your class.`;
-                    document.getElementById('loginContainer').classList.add('hidden');
-                    if (!isImpersonating) auth.signOut();
-                    return;
-                }
                 userProfile = profile;
 
-                // Determine if user has modifications for this assignment
-                if (assignmentData.modifications && assignmentData.modifications.enabled) {
-                    const modStudentIds = assignmentData.modifications.studentIds || [];
-                    if (modStudentIds.includes(profile.studentDocId)) {
-                        userProfile.hasModifications = true;
-                    }
-                    // Fallback using roster flag if student list is missing or empty?
-                    // No, editor explicitly saves the list. Trust the list.
-                }
+                // Real-time Submission Status Listener
+                if (submissionStatusListener) submissionStatusListener();
+                submissionStatusListener = db.collection("submissionStatus")
+                    .doc(`${assignmentId}_${profile.email}`)
+                    .onSnapshot(snapshot => {
+                        const wasSubmitted = isSubmitted;
+                        const oldAura = assignmentAuraEarned;
 
-                initializeStudentSession();
+                        if (snapshot.exists) {
+                            const data = snapshot.data();
+                            isSubmitted = data.status === 'submitted';
+                            assignmentAuraEarned = data.auraAwarded ? (data.auraAmount || 0) : 0;
+                        } else {
+                            isSubmitted = false;
+                            assignmentAuraEarned = 0;
+                        }
+
+                        // If status changed to submitted, react
+                        if (isSubmitted && !wasSubmitted) {
+                            showToast("Assignment submitted (handled by teacher)!", { color: 'green' });
+                            const postRule = assignmentData.postSubmissionRule || 'open';
+                            if (postRule === 'hide') {
+                                showSummary();
+                            }
+                        } else if (!isSubmitted && wasSubmitted) {
+                            showToast("Assignment un-submitted by teacher.", { color: 'blue' });
+                            hideSummary();
+                            document.getElementById('mainContainer').classList.remove('hidden');
+                            updateSlideDisplay();
+                        }
+                    });
+
+                evaluateAccess();
+
+                // If access evaluation passed (didn't show an error)
+                if (!document.getElementById('loadingError').innerHTML.includes('🔒')) {
+                    initializeStudentSession();
+                }
             } catch (error) {
                 console.error("Authorization Error:", error);
                 errorP.textContent = "An error occurred during authorization.";
@@ -540,6 +677,14 @@
             const loader = document.getElementById('pageLoader');
             loader.classList.remove('hidden');
             loader.querySelector('h1').textContent = `Loading your work, ${userProfile.name.split(' ')[0]}...`;
+
+            // We already fetch snapshot in onSnapshot for submissionStatus, but we can do a one-time verify here
+            // to ensure isSubmitted is set correctly before the UI displays.
+            const statusDoc = await db.collection("submissionStatus").doc(`${assignmentId}_${userProfile.email}`).get();
+            if (statusDoc.exists) {
+                isSubmitted = statusDoc.data().status === 'submitted';
+            }
+
             await fetchStudentSubmissions();
 
             // Update user header with Aura info
