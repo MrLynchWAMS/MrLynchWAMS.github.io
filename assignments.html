@@ -511,7 +511,10 @@
                 if (assignedClasses.length > 0) {
                     assignedClasses.sort().forEach(className => {
                         const status = assignment.classStatus?.[className] || 'closed';
-                        const color = status === 'open' ? 'text-green-400' : 'text-red-400';
+                        let color = 'text-red-400';
+                        if (status === 'open') color = 'text-green-400';
+                        else if (status === 'scheduled') color = 'text-blue-400';
+
                         const studentsInClass = studentRoster.filter(s => String(s.class) === className);
                         const submissionCount = Object.keys(submissionStatuses[assignment.id] || {}).filter(email =>
                             studentsInClass.some(s => s.email === email)
@@ -645,6 +648,7 @@
             let contentHTML = `
             <div class="flex justify-end gap-2 mb-4">
                 <button onclick="setAllStatuses('open')" class="text-sm bg-green-600 hover:bg-green-700 px-3 py-1 rounded-md btn-action">Open All</button>
+                <button onclick="setAllStatuses('scheduled')" class="text-sm bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded-md btn-action">Schedule All</button>
                 <button onclick="setAllStatuses('closed')" class="text-sm bg-yellow-600 hover:bg-yellow-700 px-3 py-1 rounded-md btn-action">Close All</button>
                 <button onclick="setAllStatuses('not-assigned')" class="text-sm bg-gray-600 hover:bg-gray-500 px-3 py-1 rounded-md btn-action">Unassign All</button>
             </div>
@@ -668,6 +672,7 @@
                             <label for="status-${className}" class="font-semibold">${className}</label>
                             <select id="status-${className}" data-class-name="${className}" class="bg-gray-600 rounded p-2 border border-gray-500">
                                 <option value="open" ${currentStatus === 'open' ? 'selected' : ''}>Open</option>
+                                <option value="scheduled" ${currentStatus === 'scheduled' ? 'selected' : ''}>Scheduled</option>
                                 <option value="closed" ${currentStatus === 'closed' ? 'selected' : ''}>Closed</option>
                                 <option value="not-assigned" ${currentStatus === 'not-assigned' ? 'selected' : ''}>Not Assigned</option>
                             </select>
