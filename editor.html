@@ -806,6 +806,10 @@
             <label for="due-time-${className}" class="text-xs text-gray-400 w-20">Due Time</label>
             <input type="time" id="due-time-${className}" value="${dueTimeValue}" class="p-2 bg-gray-800 border border-gray-600 rounded w-28 text-sm">
           </div>
+          <div class="flex items-center gap-2">
+            <label for="early-access-padding-${className}" class="text-xs text-gray-400 w-20">Early Access (mins)</label>
+            <input type="number" id="early-access-padding-${className}" value="${assignmentData.deadlinePolicy?.earlyAccessPadding?.[className] || 0}" class="p-2 bg-gray-800 border border-gray-600 rounded w-28 text-sm">
+          </div>
         </div>
       </div>`;
         });
@@ -1881,7 +1885,7 @@
           saveBtn.textContent = "Saving...";
           const checkerFunctions = {};
           const checkerMeta = {};
-          const deadlinePolicy = { classStartTimes: {}, classStartAt: {}, classDueAt: {} };
+          const deadlinePolicy = { classStartTimes: {}, classStartAt: {}, classDueAt: {}, earlyAccessPadding: {} };
 
           // Read form values
           const postSubmissionRule = document.getElementById('postSubmissionRule').value;
@@ -1927,6 +1931,9 @@
                 }
               }
             }
+            // Read early access padding
+            const paddingValue = parseInt(document.getElementById(`early-access-padding-${className}`).value, 10) || 0;
+            deadlinePolicy.earlyAccessPadding[String(className)] = paddingValue;
           });
 
           assignmentData.slideIds.forEach((id, index) => {
