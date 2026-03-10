@@ -465,16 +465,26 @@
                     }
                 }
 
-                if (startAt && now < startAt) {
-                    const timeStr = startAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-                    const dateStr = startAt.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' });
-                    showAccessDenied(`Scheduled to open on ${dateStr} at ${timeStr}.`);
+                if (startAt) {
+                    const padding = assignmentData.deadlinePolicy?.earlyAccessPadding?.[studentClass] || 0;
+                    const unlockTime = new Date(startAt.getTime() - (padding * 60000));
 
-                    // Setup internal interval to auto-unlock if they stay on page
-                    if (!accessEvaluationInterval) {
-                        accessEvaluationInterval = setInterval(evaluateAccess, 10000);
+                    if (now < unlockTime) {
+                        const timeStr = startAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+                        const dateStr = startAt.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' });
+                        let message = `Scheduled to open on ${dateStr} at ${timeStr}.`;
+                        if (padding > 0) {
+                            const unlockStr = unlockTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+                            message += `<br><span class="text-sm text-blue-400">Early access opens at ${unlockStr}.</span>`;
+                        }
+                        showAccessDenied(message);
+
+                        // Setup internal interval to auto-unlock if they stay on page
+                        if (!accessEvaluationInterval) {
+                            accessEvaluationInterval = setInterval(evaluateAccess, 10000);
+                        }
+                        return;
                     }
-                    return;
                 }
             }
 
