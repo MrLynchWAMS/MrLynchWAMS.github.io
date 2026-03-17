@@ -947,7 +947,7 @@
                             totalScore += state.score;
                         }
                     });
-                    const overallAverage = slideStates.length > 0 ? totalScore / slideStates.length : 0;
+                    const overallAverage = assignmentData.slideIds.length > 0 ? totalScore / assignmentData.slideIds.length : 0;
 
                     // Read assignment-level Aura config
                     // Calculate Aura Eligibility (New Rule-Based System)
@@ -1288,7 +1288,8 @@
             const postRule = assignmentData.postSubmissionRule || 'open';
             const shouldDisableLinks = isSubmitted && postRule === 'hide';
 
-            slideStates.forEach((state, index) => {
+            for (let index = 0; index < assignmentData.slideIds.length; index++) {
+                const state = slideStates[index];
                 let score = (state && state.score !== undefined) ? state.score : 0;
                 totalScore += score;
                 let displayScore = 'N/A';
@@ -1304,8 +1305,8 @@
                 const opacityClass = shouldDisableLinks ? 'opacity-50' : '';
 
                 perQuestionHTML += `<div ${clickHandler} class="flex justify-between items-center bg-gray-700 p-3 rounded-lg ${cursorClass} ${hoverClass} ${opacityClass} transition-colors"><span class="font-medium">Question ${index + 1}</span><span class="font-bold ${color}">${displayScore}</span></div>`;
-            });
-            const overallAverage = (totalScore / slideStates.length).toFixed(1);
+            }
+            const overallAverage = (totalScore / assignmentData.slideIds.length).toFixed(1);
             const overallColor = overallAverage >= 90 ? 'text-green-400' : overallAverage >= 60 ? 'text-yellow-400' : 'text-red-400';
             document.getElementById('overallScore').innerHTML = `<span class="${overallColor}">${overallAverage}%</span>`;
             document.getElementById('perQuestionScores').innerHTML = perQuestionHTML;
@@ -1925,7 +1926,7 @@
                                 totalScore += state.score;
                             }
                         });
-                        const overallAverage = slideStates.length > 0 ? totalScore / slideStates.length : 0;
+                        const overallAverage = assignmentData.slideIds.length > 0 ? totalScore / assignmentData.slideIds.length : 0;
 
                         // Read assignment-level Aura config
                         // Calculate Aura Eligibility (New Rule-Based System)
