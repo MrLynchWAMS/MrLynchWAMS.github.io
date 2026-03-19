@@ -714,9 +714,17 @@
             return;
           }
           // Filter students by current teacher to ensure Class Times logic only shows THEIR classes
-          const studentSnapshot = await db.collection("students").where("teacherEmail", "==", currentUserEmail).get();
-          const students = studentSnapshot.docs.map(doc => doc.data());
-          allClassNames = [...new Set(students.map(s => String(s.class)))].sort();
+          // Match roster.html logic: fetch all and filter client-side to handle legacy data/no email students
+          const studentSnapshot = await db.collection("students").get();
+          const allStudentsFetched = studentSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          const teacherStudents = allStudentsFetched.filter(s => {
+            const studentTeacher = s.teacherEmail ? s.teacherEmail.toLowerCase() : 'klynch@mtps.us';
+            return studentTeacher === currentUserEmail;
+          });
+          // Store globally for mod list to avoid re-fetching
+          window.allTeacherStudents = teacherStudents;
+
+          allClassNames = [...new Set(teacherStudents.map(s => String(s.class)))].sort();
           loadingText.textContent = "Fetching slide information from Google...";
           const response = await gapi.client.slides.presentations.get({ presentationId: assignmentData.presentationId });
           const slides = response.result.slides;
@@ -2524,31 +2532,18 @@
 
       async function loadModificationsStudentList() {
         const list = document.getElementById('modStudentList');
-        // Only load if classes are selected
-        if (allClassNames.size === 0) {
+        // Only load if classes exist
+        if (allClassNames.length === 0) {
           list.innerHTML = '<p class="text-gray-500 italic p-2">No classes assigned yet. Add classes to the assignment first.</p>';
           return;
         }
 
         try {
-          const classesArray = Array.from(allClassNames);
-          // Firestore 'in' query supports up to 10 values. 
-          // If > 10 classes, we might need multiple queries or just fetch all students and filter client side (if manageable).
-          // For now, assuming <= 10 classes is the norm.
-          let students = [];
+          // Use pre-fetched students from loadAssignment to ensure full roster (including legacy students)
+          let students = window.allTeacherStudents || [];
 
-          if (classesArray.length > 10) {
-            // Fallback: multiple queries or just warn? 
-            // Simple fallback: chunk it
-            for (let i = 0; i < classesArray.length; i += 10) {
-              const chunk = classesArray.slice(i, i + 10);
-              const snap = await db.collection("students").where("class", "in", chunk).get();
-              snap.forEach(doc => students.push({ id: doc.id, ...doc.data() }));
-            }
-          } else {
-            const studentsSnapshot = await db.collection("students").where("class", "in", classesArray).get();
-            studentsSnapshot.forEach(doc => students.push({ id: doc.id, ...doc.data() }));
-          }
+          // Sort by name
+          students.sort((a, b) => a.name.localeCompare(b.name));
 
           if (students.length === 0) {
             list.innerHTML = '<p class="text-gray-500 italic p-2">No students found in assigned classes.</p>';
