@@ -760,6 +760,10 @@
                 // Use normalized email to prevent split rosters between "klynch@mtps.us" and "klynch@mtps. us"
                 profile.teacherEmail = normalizeTeacherEmail(studentData.teacherEmail || assignmentData.teacherEmail);
 
+                // Set hasModifications based on assignment-specific list
+                const mods = assignmentData.modifications;
+                profile.hasModifications = mods && mods.enabled && (mods.studentIds || []).includes(studentDoc.id);
+
                 userProfile = profile;
 
                 // Real-time Submission Status Listener
@@ -1664,6 +1668,9 @@
                 if (mods.helpThreshold) {
                     showHelpAfter = mods.helpThreshold;
                 }
+                if (mods.ignoreDeduction) {
+                    deduction = 0;
+                }
             }
 
             // Check if question is locked (using modified maxAttempts)
@@ -2473,24 +2480,28 @@
             // Calculator Initialization
             const calcBtn = document.getElementById('calc-toggle-btn');
             const calcPopup = document.getElementById('calculator-popup');
-            if (tools.calculatorEnabled) {
+            const calcEnabled = tools.calculatorEnabled && (!tools.calculatorModsOnly || userProfile.hasModifications);
+
+            if (calcEnabled) {
                 calcBtn.classList.remove('hidden');
                 makeDraggable(calcPopup, document.getElementById('calc-header'));
             } else {
                 calcBtn.classList.add('hidden');
-                calcPopup.style.display = 'none';
+                if (calcPopup) calcPopup.style.display = 'none';
             }
 
             // Word Bank Initialization
             const wbBtn = document.getElementById('wordbank-toggle-btn');
             const wbPopup = document.getElementById('wordbank-popup');
-            if (tools.wordBankMode && tools.wordBankMode !== 'none') {
+            const wbEnabled = tools.wordBankMode && tools.wordBankMode !== 'none' && (!tools.wordBankModsOnly || userProfile.hasModifications);
+
+            if (wbEnabled) {
                 wbBtn.classList.remove('hidden');
                 makeDraggable(wbPopup, document.getElementById('wordbank-header'));
                 updateWordBank();
             } else {
                 wbBtn.classList.add('hidden');
-                wbPopup.style.display = 'none';
+                if (wbPopup) wbPopup.style.display = 'none';
             }
         }
 
