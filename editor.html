@@ -343,6 +343,15 @@
                     class="w-full p-2 bg-gray-800 border border-gray-600 rounded">
                   <p class="text-xs text-gray-500 mt-1">Show "Help" notifications after this many attempts.</p>
                 </div>
+                <div>
+                  <label class="flex items-center cursor-pointer mt-6">
+                    <input type="checkbox" id="modIgnoreDeduction"
+                      class="w-5 h-5 text-purple-500 rounded bg-gray-800 border-gray-600">
+                    <span class="ml-3 font-semibold text-white text-sm">Ignore Attempt Penalty</span>
+                  </label>
+                  <p class="text-xs text-gray-500 mt-1">If enabled, point deductions for extra attempts are ignored for
+                    modified students.</p>
+                </div>
               </div>
 
               <div class="flex items-center gap-3 mt-2">
@@ -435,6 +444,12 @@
                   class="w-5 h-5 text-blue-500 rounded focus:ring-blue-500 bg-gray-800 border-gray-600">
                 <span class="ml-3 font-semibold text-white">Enable Floating Calculator (+-x÷)</span>
               </label>
+              <div class="ml-8 mt-2 flex items-center gap-2">
+                <input type="checkbox" id="calculatorModsOnly"
+                  class="w-4 h-4 text-purple-600 rounded bg-gray-800 border-gray-600">
+                <label for="calculatorModsOnly" class="text-xs text-purple-300">Only for Modified Students
+                  (Accommodated)</label>
+              </div>
               <p class="text-xs text-gray-400 mt-2">Adds a button for students to open a movable basic calculator.</p>
             </div>
 
@@ -446,6 +461,12 @@
                 <option value="assignment">Assignment-Wide (Same list for all questions)</option>
                 <option value="question">Per-Question (Unique lists for each question)</option>
               </select>
+              <div id="wordBankModsOnlyContainer" class="ml-2 mt-2 flex items-center gap-2 hidden">
+                <input type="checkbox" id="wordBankModsOnly"
+                  class="w-4 h-4 text-purple-600 rounded bg-gray-800 border-gray-600">
+                <label for="wordBankModsOnly" class="text-xs text-purple-300">Only for Modified Students
+                  (Accommodated)</label>
+              </div>
 
               <div id="global-wordbank-container" class="hidden">
                 <label class="block text-sm text-gray-400 mb-2">Global Word List (comma separated)</label>
@@ -788,6 +809,21 @@
           wbMode.value = assignmentData.toolsConfig?.wordBankMode || 'none';
           globalWBList.value = assignmentData.toolsConfig?.globalWordBankList || '';
 
+          document.getElementById('calculatorModsOnly').checked = assignmentData.toolsConfig?.calculatorModsOnly || false;
+          document.getElementById('wordBankModsOnly').checked = assignmentData.toolsConfig?.wordBankModsOnly || false;
+
+          // Initialize Modifications
+          const mods = assignmentData.modifications || {};
+          document.getElementById('modificationsEnabled').checked = mods.enabled || false;
+          document.getElementById('modTimeMultiplier').value = mods.timeMultiplier || 1.5;
+          document.getElementById('modPenaltyMultiplier').value = mods.penaltyMultiplier || 0.5;
+          document.getElementById('modAttemptsBonus').value = mods.maxAttemptsBonus || 2;
+          document.getElementById('modHelpThreshold').value = mods.helpThreshold || 1;
+          document.getElementById('modIgnoreDeduction').checked = mods.ignoreDeduction || false;
+          document.getElementById('modFuzzyMatch').checked = mods.fuzzy || false;
+
+          toggleModificationsEnabled(); // Set visibility
+
           toggleWordBankSettings();
 
           renderEditor();
@@ -1009,6 +1045,7 @@
           const groupConnector = group.querySelector('.group-connector')?.value || '&&';
           const toastMessage = group.querySelector('.rule-toast-message')?.value || '';
           const toastColor = group.querySelector('.rule-toast-color')?.value || 'default';
+          const toastTarget = group.querySelector('.rule-toast-target')?.value || 'all';
 
           const conditions = [];
           group.querySelectorAll('.condition-row').forEach(cond => {
@@ -1041,6 +1078,7 @@
             groupConnector,
             toastMessage,
             toastColor,
+            toastTarget,
             conditions
           });
         });
@@ -1066,11 +1104,13 @@
           const connectorSelect = groupEl.querySelector('.group-connector');
           const toastMessageInput = groupEl.querySelector('.rule-toast-message');
           const toastColorSelect = groupEl.querySelector('.rule-toast-color');
+          const toastTargetSelect = groupEl.querySelector('.rule-toast-target');
 
           if (pointsInput) pointsInput.value = g.points ?? 0;
           if (connectorSelect) connectorSelect.value = g.groupConnector || '&&';
           if (toastMessageInput) toastMessageInput.value = g.toastMessage || '';
           if (toastColorSelect) toastColorSelect.value = g.toastColor || 'default';
+          if (toastTargetSelect) toastTargetSelect.value = g.toastTarget || 'all';
 
           const condContainer = groupEl.querySelector('.conditions-container');
           if (condContainer) {
@@ -1586,12 +1626,14 @@
           const connectorEl = group.querySelector('.group-connector');
           const toastMessageEl = group.querySelector('.rule-toast-message');
           const toastColorEl = group.querySelector('.rule-toast-color');
+          const toastTargetEl = group.querySelector('.rule-toast-target');
 
           // Skip malformed groups missing essential elements
           const points = pointsEl ? (Number(pointsEl.value) || 0) : 0;
           const groupConnector = connectorEl ? connectorEl.value : '&&';
           const toastMessage = toastMessageEl ? (toastMessageEl.value.trim() || '') : '';
           const toastColor = toastColorEl ? (toastColorEl.value || 'default') : 'default';
+          const toastTarget = toastTargetEl ? (toastTargetEl.value || 'all') : 'all';
 
           // Collect condition expressions for this group (to be combined with && or ||)
           let groupConditions = [];
@@ -1707,7 +1749,13 @@
             code += `        score += ${points};\n`;
             if (toastMessage) {
               code += `        if (typeof showToast === "function") {\n`;
-              code += `            try { showToast(${JSON.stringify(toastMessage)}, { color: ${JSON.stringify(toastColor)} }); } catch (_) {}\n`;
+              if (toastTarget === 'mods_only') {
+                code += `            if (userProfile && userProfile.hasModifications) {\n`;
+                code += `                try { showToast(${JSON.stringify(toastMessage)}, { color: ${JSON.stringify(toastColor)} }); } catch (_) {}\n`;
+                code += `            }\n`;
+              } else {
+                code += `            try { showToast(${JSON.stringify(toastMessage)}, { color: ${JSON.stringify(toastColor)} }); } catch (_) {}\n`;
+              }
               code += `        }\n`;
             }
             code += `    }\n`;
@@ -1947,7 +1995,9 @@
           // Tools & Features
           const toolsConfig = {
             calculatorEnabled: document.getElementById('calculatorEnabled').checked,
+            calculatorModsOnly: document.getElementById('calculatorModsOnly').checked,
             wordBankMode: document.getElementById('wordBankMode').value,
+            wordBankModsOnly: document.getElementById('wordBankModsOnly').checked,
             globalWordBankList: document.getElementById('globalWordBankList').value.trim()
           };
 
@@ -2140,6 +2190,7 @@
               penaltyMultiplier: parseFloat(document.getElementById('modPenaltyMultiplier').value) || 1.0,
               maxAttemptsBonus: parseInt(document.getElementById('modAttemptsBonus').value) || 0,
               helpThreshold: parseInt(document.getElementById('modHelpThreshold').value) || 1,
+              ignoreDeduction: document.getElementById('modIgnoreDeduction').checked,
               fuzzy: document.getElementById('modFuzzyMatch').checked,
               studentIds: modStudentIds
             };
@@ -2426,6 +2477,7 @@
         const mode = document.getElementById('wordBankMode').value;
         const globalContainer = document.getElementById('global-wordbank-container');
         globalContainer.classList.toggle('hidden', mode !== 'assignment');
+        document.getElementById('wordBankModsOnlyContainer').classList.toggle('hidden', mode === 'none');
 
         // Toggle per-question configs in the editor
         document.querySelectorAll('.word-bank-question-config').forEach(el => {
