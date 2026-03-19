@@ -97,6 +97,189 @@
         .animate-fade-out-down {
             animation: fade-out-down 0.5s ease-in forwards;
         }
+
+        /* --- Floating Calculator & Word Bank Styles --- */
+        #calculator-popup,
+        #wordbank-popup {
+            position: fixed;
+            z-index: 1000;
+            background: #1f2937;
+            border: 1px solid #374151;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+            user-select: none;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+            min-width: 200px;
+        }
+
+        .popup-header {
+            background: #111827;
+            padding: 8px 12px;
+            cursor: move;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #374151;
+        }
+
+        .popup-header span {
+            font-size: 0.8rem;
+            font-weight: bold;
+            color: #9ca3af;
+        }
+
+        .popup-close {
+            cursor: pointer;
+            color: #ef4444;
+            font-weight: bold;
+            padding: 2px 6px;
+        }
+
+        /* Calculator Specific */
+        #calculator-popup {
+            width: 260px;
+        }
+
+        .calc-display {
+            background: #111827;
+            padding: 15px;
+            text-align: right;
+            font-family: monospace;
+            border-bottom: 1px solid #374151;
+        }
+
+        #calc-history {
+            font-size: 0.75rem;
+            color: #6b7280;
+            height: 1.2rem;
+            overflow: hidden;
+        }
+
+        #calc-current {
+            font-size: 1.5rem;
+            color: #fff;
+            margin-top: 4px;
+        }
+
+        .calc-buttons {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1px;
+            background: #374151;
+        }
+
+        .calc-btn {
+            background: #1f2937;
+            border: none;
+            color: #fff;
+            padding: 15px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .calc-btn:hover {
+            background: #374151;
+        }
+
+        .calc-btn.op {
+            background: #374151;
+            color: #fbbf24;
+        }
+
+        .calc-btn.equals {
+            background: #fbbf24;
+            color: #000;
+            font-weight: bold;
+        }
+
+        /* Word Bank Specific */
+        #wordbank-popup {
+            max-width: 300px;
+            max-height: 400px;
+        }
+
+        .wordbank-body {
+            padding: 12px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            overflow-y: auto;
+        }
+
+        .word-item {
+            background: #374151;
+            color: #fff;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+        }
+
+        .word-item:hover {
+            background: #4b5563;
+        }
+
+        .word-item.crossed-off {
+            text-decoration: line-through;
+            opacity: 0.4;
+            background: #111827;
+        }
+
+        /* Floating Toggle Buttons */
+        .tool-toggle-btn {
+            position: fixed;
+            right: 20px;
+            z-index: 999;
+            width: 45px;
+            height: 45px;
+            border-radius: 10px;
+            background: #1f2937;
+            border: 1px solid #374151;
+            color: #fff;
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+            transition: transform 0.2s;
+        }
+
+        .tool-toggle-btn:hover {
+            transform: scale(1.1);
+            background: #374151;
+        }
+
+        #calc-toggle-btn {
+            bottom: 80px;
+        }
+
+        #wordbank-toggle-btn {
+            bottom: 140px;
+        }
+
+        /* Responsive Adjustments */
+        @media (max-width: 768px) {
+            .tool-toggle-btn {
+                width: 40px;
+                height: 40px;
+                font-size: 1rem;
+                right: 10px;
+            }
+
+            #calc-toggle-btn {
+                bottom: 70px;
+            }
+
+            #wordbank-toggle-btn {
+                bottom: 120px;
+            }
+        }
     </style>
 </head>
 
@@ -714,6 +897,7 @@
                 loader.classList.add('hidden');
                 document.getElementById('mainContainer').classList.remove('hidden');
                 updateSlideDisplay();
+                initTools();
             }
         }
 
@@ -1222,8 +1406,13 @@
                     })
                     .catch(err => {
                         console.error("Error loading question progress:", err);
-                        // Don't block - will fallback to submissions in myfunction if needed
                     });
+            }
+
+            // Update Word Bank if active
+            const tools = assignmentData.toolsConfig || {};
+            if (tools.wordBankMode === 'question') {
+                updateWordBank();
             }
         }
 
@@ -2275,7 +2464,224 @@
             `;
             });
         }
+
+        // --- Tool Initialization ---
+        function initTools() {
+            if (!assignmentData) return;
+            const tools = assignmentData.toolsConfig || {};
+
+            // Calculator Initialization
+            const calcBtn = document.getElementById('calc-toggle-btn');
+            const calcPopup = document.getElementById('calculator-popup');
+            if (tools.calculatorEnabled) {
+                calcBtn.classList.remove('hidden');
+                makeDraggable(calcPopup, document.getElementById('calc-header'));
+            } else {
+                calcBtn.classList.add('hidden');
+                calcPopup.style.display = 'none';
+            }
+
+            // Word Bank Initialization
+            const wbBtn = document.getElementById('wordbank-toggle-btn');
+            const wbPopup = document.getElementById('wordbank-popup');
+            if (tools.wordBankMode && tools.wordBankMode !== 'none') {
+                wbBtn.classList.remove('hidden');
+                makeDraggable(wbPopup, document.getElementById('wordbank-header'));
+                updateWordBank();
+            } else {
+                wbBtn.classList.add('hidden');
+                wbPopup.style.display = 'none';
+            }
+        }
+
+        // --- Draggable Helper ---
+        function makeDraggable(elmnt, header) {
+            let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+            header.onmousedown = dragMouseDown;
+
+            function dragMouseDown(e) {
+                e = e || window.event;
+                e.preventDefault();
+                pos3 = e.clientX;
+                pos4 = e.clientY;
+                document.onmouseup = closeDragElement;
+                document.onmousemove = elementDrag;
+            }
+
+            function elementDrag(e) {
+                e = e || window.event;
+                e.preventDefault();
+                pos1 = pos3 - e.clientX;
+                pos2 = pos4 - e.clientY;
+                pos3 = e.clientX;
+                pos4 = e.clientY;
+                elmnt.style.top = (elmnt.offsetTop - pos2) + "px";
+                elmnt.style.left = (elmnt.offsetLeft - pos1) + "px";
+                elmnt.style.bottom = 'auto';
+                elmnt.style.right = 'auto';
+            }
+
+            function closeDragElement() {
+                document.onmouseup = null;
+                document.onmousemove = null;
+            }
+        }
+
+        // --- Calculator Logic ---
+        let calcExpression = '';
+        function toggleCalculator() {
+            const calc = document.getElementById('calculator-popup');
+            if (calc.style.display === 'flex') {
+                calc.style.display = 'none';
+            } else {
+                calc.style.display = 'flex';
+                if (!calc.style.top) {
+                    calc.style.top = '100px';
+                    calc.style.left = '100px';
+                }
+            }
+        }
+
+        function clearCalc() {
+            calcExpression = '';
+            document.getElementById('calc-current').textContent = '0';
+            document.getElementById('calc-history').textContent = '';
+        }
+
+        function appendCalc(val) {
+            if (calcExpression === 'Error') calcExpression = '';
+            calcExpression += val;
+            document.getElementById('calc-current').textContent = calcExpression;
+        }
+
+        function backspaceCalc() {
+            if (calcExpression === 'Error') {
+                clearCalc();
+                return;
+            }
+            calcExpression = calcExpression.slice(0, -1);
+            document.getElementById('calc-current').textContent = calcExpression || '0';
+        }
+
+        function calculateResult() {
+            try {
+                const history = calcExpression;
+                // Basic sanitization: only allow numbers, operators, dots, and parentheses
+                const sanitized = calcExpression.replace(/[^-()\d/*+.]/g, '');
+                // Using Function constructor instead of eval for a bit more safety
+                const result = new Function('return ' + sanitized)();
+                document.getElementById('calc-history').textContent = history + ' =';
+                calcExpression = String(result);
+                document.getElementById('calc-current').textContent = calcExpression;
+            } catch (e) {
+                document.getElementById('calc-current').textContent = 'Error';
+                calcExpression = 'Error';
+            }
+        }
+
+        // --- Word Bank Logic ---
+        function toggleWordBank() {
+            const wb = document.getElementById('wordbank-popup');
+            if (wb.style.display === 'flex') {
+                wb.style.display = 'none';
+            } else {
+                wb.style.display = 'flex';
+                if (!wb.style.top) {
+                    wb.style.top = '100px';
+                    wb.style.right = '100px';
+                    wb.style.left = 'auto';
+                }
+            }
+        }
+
+        function updateWordBank() {
+            if (!assignmentData) return;
+            const tools = assignmentData.toolsConfig || {};
+            let words = [];
+
+            if (tools.wordBankMode === 'assignment') {
+                words = (tools.globalWordBankList || '').split(',').map(w => w.trim()).filter(Boolean);
+            } else if (tools.wordBankMode === 'question') {
+                const qNum = currentSlideIndex + 1;
+                const slidePolicy = assignmentData.deadlinePolicy?.[`q${qNum}`] || {};
+                words = (slidePolicy.wordBankList || '').split(',').map(w => w.trim()).filter(Boolean);
+            }
+
+            const container = document.getElementById('wordbank-list');
+            if (!container) return;
+            container.innerHTML = '';
+
+            if (words.length === 0) {
+                container.innerHTML = '<p class="text-gray-500 italic text-xs p-2">No words available for this question.</p>';
+                return;
+            }
+
+            words.forEach(word => {
+                const div = document.createElement('div');
+                div.className = 'word-item';
+                div.textContent = word;
+                div.onclick = () => div.classList.toggle('crossed-off');
+                container.appendChild(div);
+            });
+        }
     </script>
+    <!-- Floating Tools UI -->
+    <button id="calc-toggle-btn" class="tool-toggle-btn hidden" onclick="toggleCalculator()"
+        title="Open Calculator">+-x÷</button>
+    <button id="wordbank-toggle-btn" class="tool-toggle-btn hidden" onclick="toggleWordBank()"
+        title="Open Word Bank">📖</button>
+
+    <!-- Calculator Popup -->
+    <div id="calculator-popup">
+        <div class="popup-header" id="calc-header">
+            <span>CALCULATOR</span>
+            <div class="flex gap-2 items-center">
+                <span class="popup-close" onclick="toggleCalculator()">×</span>
+            </div>
+        </div>
+        <div class="calc-display">
+            <div id="calc-history"></div>
+            <div id="calc-current">0</div>
+        </div>
+        <div class="calc-buttons">
+            <button class="calc-btn op" onclick="clearCalc()">C</button>
+            <button class="calc-btn op" onclick="appendCalc('(')">(</button>
+            <button class="calc-btn op" onclick="appendCalc(')')">)</button>
+            <button class="calc-btn op" onclick="appendCalc('/')">÷</button>
+
+            <button class="calc-btn" onclick="appendCalc('7')">7</button>
+            <button class="calc-btn" onclick="appendCalc('8')">8</button>
+            <button class="calc-btn" onclick="appendCalc('9')">9</button>
+            <button class="calc-btn op" onclick="appendCalc('*')">×</button>
+
+            <button class="calc-btn" onclick="appendCalc('4')">4</button>
+            <button class="calc-btn" onclick="appendCalc('5')">5</button>
+            <button class="calc-btn" onclick="appendCalc('6')">6</button>
+            <button class="calc-btn op" onclick="appendCalc('-')">-</button>
+
+            <button class="calc-btn" onclick="appendCalc('1')">1</button>
+            <button class="calc-btn" onclick="appendCalc('2')">2</button>
+            <button class="calc-btn" onclick="appendCalc('3')">3</button>
+            <button class="calc-btn op" onclick="appendCalc('+')">+</button>
+
+            <button class="calc-btn" onclick="appendCalc('0')">0</button>
+            <button class="calc-btn" onclick="appendCalc('.')">.</button>
+            <button class="calc-btn" onclick="backspaceCalc()">⌫</button>
+            <button class="calc-btn equals" onclick="calculateResult()">=</button>
+        </div>
+    </div>
+
+    <!-- Word Bank Popup -->
+    <div id="wordbank-popup">
+        <div class="popup-header" id="wordbank-header">
+            <span>WORD BANK</span>
+            <span class="popup-close" onclick="toggleWordBank()">×</span>
+        </div>
+        <div class="wordbank-body" id="wordbank-list">
+            <!-- Words will be injected here -->
+        </div>
+    </div>
+
 </body>
 
 </html>
