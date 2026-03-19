@@ -418,6 +418,46 @@
         </div>
       </div>
 
+      <div id="tools-section" class="bg-gray-800 rounded-lg mb-8 overflow-hidden border border-blue-900/30">
+        <div id="tools-header" class="p-6 cursor-pointer" onclick="toggleToolsSection()">
+          <div class="flex justify-between items-center">
+            <h2 class="text-2xl font-bold text-yellow-400">🧰 Tools & Features</h2>
+            <span id="tools-chevron" class="text-2xl transform transition-transform">▶</span>
+          </div>
+          <p class="text-gray-400 mt-2">Enable additional tools like a floating calculator or word bank for students.
+          </p>
+        </div>
+        <div id="tools-content" class="collapsible-content">
+          <div class="px-6 pb-6 space-y-6">
+            <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-700">
+              <label class="flex items-center cursor-pointer">
+                <input type="checkbox" id="calculatorEnabled"
+                  class="w-5 h-5 text-blue-500 rounded focus:ring-blue-500 bg-gray-800 border-gray-600">
+                <span class="ml-3 font-semibold text-white">Enable Floating Calculator (+-x÷)</span>
+              </label>
+              <p class="text-xs text-gray-400 mt-2">Adds a button for students to open a movable basic calculator.</p>
+            </div>
+
+            <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-700">
+              <label class="block font-semibold text-white mb-2">Word Bank Mode</label>
+              <select id="wordBankMode" onchange="toggleWordBankSettings()"
+                class="w-full md:w-1/2 p-2 bg-gray-800 rounded border border-gray-600 focus:border-yellow-400 focus:outline-none mb-4">
+                <option value="none">None (Disabled)</option>
+                <option value="assignment">Assignment-Wide (Same list for all questions)</option>
+                <option value="question">Per-Question (Unique lists for each question)</option>
+              </select>
+
+              <div id="global-wordbank-container" class="hidden">
+                <label class="block text-sm text-gray-400 mb-2">Global Word List (comma separated)</label>
+                <textarea id="globalWordBankList" rows="3"
+                  class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-sm"
+                  placeholder="e.g. Mitochondria, Nucleus, Ribosome..."></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div id="slidesContainer" class="space-y-8"></div>
     </div>
 
@@ -738,6 +778,18 @@
           }
 
           renderDeadlineUI();
+
+          // Initialize Tools & Features
+          const calcEnabled = document.getElementById('calculatorEnabled');
+          const wbMode = document.getElementById('wordBankMode');
+          const globalWBList = document.getElementById('globalWordBankList');
+
+          calcEnabled.checked = assignmentData.toolsConfig?.calculatorEnabled || false;
+          wbMode.value = assignmentData.toolsConfig?.wordBankMode || 'none';
+          globalWBList.value = assignmentData.toolsConfig?.globalWordBankList || '';
+
+          toggleWordBankSettings();
+
           renderEditor();
         } catch (error) {
           console.error("Error loading assignment or slides:", error);
@@ -911,6 +963,11 @@
             </div>
           </div>
         </div>
+      </div>
+      <div class="mt-4 border-t border-gray-700 pt-4 word-bank-question-config hidden">
+        <h4 class="font-semibold mb-2 text-sm text-purple-400">Word Bank for this Slide</h4>
+        <textarea id="word-bank-list-${index}" rows="2" placeholder="Enter words separated by commas..." class="w-full p-2 bg-gray-700 border border-gray-600 rounded text-sm">${slidePolicy.wordBankList || ''}</textarea>
+        <p class="text-[10px] text-gray-500 mt-1">Only active if "Per-Question" mode is selected in Tools & Features.</p>
       </div>
     `;
           const checkerTemplate = document.getElementById('checkerTemplate');
@@ -1887,6 +1944,13 @@
           const checkerMeta = {};
           const deadlinePolicy = { classStartTimes: {}, classStartAt: {}, classDueAt: {}, earlyAccessPadding: {} };
 
+          // Tools & Features
+          const toolsConfig = {
+            calculatorEnabled: document.getElementById('calculatorEnabled').checked,
+            wordBankMode: document.getElementById('wordBankMode').value,
+            globalWordBankList: document.getElementById('globalWordBankList').value.trim()
+          };
+
           // Read form values
           const postSubmissionRule = document.getElementById('postSubmissionRule').value;
           const focusModeEnabled = document.getElementById('focusModeEnabled').checked;
@@ -1982,10 +2046,17 @@
                 lockMessage: lockMessage || '',
                 showHelpAfter: showHelpAfter,
                 caseSensitive: caseSensitive,
+                caseSensitive: caseSensitive,
                 punctuationSensitive: punctuationSensitive
               };
             } else {
               deadlinePolicy[`q${qNum}`].attempts = { enabled: false };
+            }
+
+            // Word Bank for this question
+            const wbListInput = document.getElementById(`word-bank-list-${index}`);
+            if (wbListInput) {
+              deadlinePolicy[`q${qNum}`].wordBankList = wbListInput.value.trim();
             }
           });
 
@@ -2041,7 +2112,8 @@
             auraOnTime: auraOnTime,
             auraRules: auraRules.map(({ id, ...rest }) => rest), // Remove internal IDs
             focusModeEnabled: focusModeEnabled,
-            focusModeAction: focusModeAction
+            focusModeAction: focusModeAction,
+            toolsConfig: toolsConfig
           };
 
           // Use dot notation to avoid nested FieldValue.delete() errors
@@ -2334,6 +2406,36 @@
         } catch (error) {
           console.error("Error updating title:", error);
           showToast("Error renaming assignment.", { color: 'red' });
+        }
+      }
+
+      // --- Tools & Features Logic ---
+      function toggleToolsSection() {
+        const content = document.getElementById('tools-content');
+        const chevron = document.getElementById('tools-chevron');
+        if (content.style.maxHeight && content.style.maxHeight !== '0px') {
+          content.style.maxHeight = '0';
+          chevron.style.transform = 'rotate(0deg)';
+        } else {
+          content.style.maxHeight = '2000px';
+          chevron.style.transform = 'rotate(90deg)';
+        }
+      }
+
+      function toggleWordBankSettings() {
+        const mode = document.getElementById('wordBankMode').value;
+        const globalContainer = document.getElementById('global-wordbank-container');
+        globalContainer.classList.toggle('hidden', mode !== 'assignment');
+
+        // Toggle per-question configs in the editor
+        document.querySelectorAll('.word-bank-question-config').forEach(el => {
+          el.classList.toggle('hidden', mode !== 'question');
+        });
+
+        // Update heights of collapsible sections
+        const toolsContent = document.getElementById('tools-content');
+        if (toolsContent.style.maxHeight && toolsContent.style.maxHeight !== '0px') {
+          toolsContent.style.maxHeight = '2000px';
         }
       }
       // ---------------------------
