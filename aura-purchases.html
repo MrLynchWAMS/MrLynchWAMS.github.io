@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aura Purchase Management - IterātED</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
+    <style>
+        .hidden {
+            display: none;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #1f2937;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #4b5563;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #6b7280;
+        }
+
+        .tab-active {
+            border-bottom: 2px solid #fbbf24;
+            color: #fbbf24;
+            background-color: rgba(31, 41, 55, 0.5);
+        }
+
+        @keyframes pulse-subtle {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        .animate-pulse-subtle {
+            animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-900 text-white font-sans min-h-screen flex flex-col">
+
+    <div id="pageLoader" class="flex flex-col items-center justify-center h-screen bg-gray-900 fixed inset-0 z-50">
+        <h1 class="text-4xl font-bold text-yellow-400 mb-4">Aura Purchases</h1>
+        <p id="loading-text" class="text-lg text-gray-300">Initializing...</p>
+        <div id="signInButtonContainer" class="hidden mt-8">
+            <div id="g_id_onload"
+                data-client_id="1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com"
+                data-callback="handleCredentialResponse"></div>
+            <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_black"
+                data-text="signin_with" data-shape="rectangular" data-logo_alignment="left"></div>
+        </div>
+        <p id="auth-error" class="text-red-500 mt-4"></p>
+    </div>
+
+    <div id="dashboardContent" class="hidden flex-1 flex flex-col p-4 md:p-8 max-w-7xl mx-auto w-full">
+        <!-- Header -->
+        <div class="flex justify-between items-center mb-6 flex-wrap gap-4">
+            <div class="flex items-center gap-4 flex-wrap">
+                <h1 class="text-3xl font-bold text-yellow-400">Aura Management</h1>
+                <select id="classSelector" onchange="filterPurchases()"
+                    class="bg-gray-800 border border-gray-700 text-white rounded px-4 py-2 font-bold focus:ring-yellow-400">
+                    <option value="all">All Classes</option>
+                </select>
+                <div class="relative">
+                    <input type="text" id="purchaseSearch" placeholder="Search student or item..." oninput="filterPurchases()"
+                        class="bg-gray-800 border border-gray-700 text-white rounded px-4 py-2 text-sm focus:ring-yellow-400 w-64">
+                    <span class="absolute right-3 top-2.5 text-gray-500">🔍</span>
+                </div>
+            </div>
+            <div class="flex gap-2 flex-wrap">
+                <a href="./class-dashboard.html"
+                    class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg text-sm transition">Dashboard</a>
+                <a href="./assignments.html"
+                    class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg text-sm transition">Assignments</a>
+                <a href="./roster.html"
+                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg text-sm transition font-bold">Roster</a>
+                <button onclick="handleSignOut()"
+                    class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg text-sm transition">Sign Out</button>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="flex border-b border-gray-700 mb-6 bg-gray-800/30 rounded-t-lg overflow-hidden">
+            <button onclick="switchTab('pending')" id="tab-pending"
+                class="flex-1 py-3 px-6 font-bold text-gray-400 hover:bg-gray-800 transition-all flex items-center justify-center gap-2">
+                Pending <span id="count-pending" class="bg-yellow-500 text-gray-900 text-[10px] px-1.5 py-0.5 rounded-full hidden">0</span>
+            </button>
+            <button onclick="switchTab('approved')" id="tab-approved"
+                class="flex-1 py-3 px-6 font-bold text-gray-400 hover:bg-gray-800 transition-all">Approved</button>
+            <button onclick="switchTab('history')" id="tab-history"
+                class="flex-1 py-3 px-6 font-bold text-gray-400 hover:bg-gray-800 transition-all">History / Denied</button>
+        </div>
+
+        <!-- Table Content -->
+        <div class="bg-gray-800 border border-gray-700 rounded-lg shadow-xl overflow-hidden flex-1 flex flex-col">
+            <div id="table-loading" class="p-20 text-center flex flex-col items-center justify-center gap-4">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-400 mx-auto"></div>
+                <p class="text-gray-400 italic">Syncing with store records...</p>
+            </div>
+            
+            <div id="no-purchases" class="hidden p-20 text-center text-gray-500 italic">
+                No purchases found matching your criteria.
+            </div>
+
+            <div id="table-wrapper" class="hidden overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead class="bg-gray-900/50 text-xs uppercase tracking-wider text-gray-400">
+                        <tr>
+                            <th class="p-4 border-b border-gray-700">Student / Class</th>
+                            <th class="p-4 border-b border-gray-700">Item Name</th>
+                            <th class="p-4 border-b border-gray-700">Cost</th>
+                            <th class="p-4 border-b border-gray-700">Purchase Date</th>
+                            <th class="p-4 border-b border-gray-700 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="purchaseTableBody" class="divide-y divide-gray-700">
+                        <!-- Dynamic -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="mt-4 text-xs text-gray-500 flex justify-between items-center">
+            <p>✧ Real-time tracking enabled. Changes reflect instantly.</p>
+            <p id="lastSync">Last updated: Just now</p>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirmationModal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-[100] p-4">
+        <div class="bg-gray-800 rounded-xl shadow-2xl p-6 max-w-md w-full border border-gray-700">
+            <h3 id="confirmTitle" class="text-xl font-bold text-white mb-2">Confirm Action</h3>
+            <p id="confirmMessage" class="text-gray-400 mb-6">Are you sure you want to proceed?</p>
+            <div class="flex justify-end gap-3">
+                <button id="confirmCancel" onclick="closeConfirm()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg font-medium transition">Cancel</button>
+                <button id="confirmOk" class="px-4 py-2 rounded-lg font-bold transition">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast container -->
+    <div id="toast-wrapper" class="fixed top-4 right-4 z-[110] space-y-3 w-full max-w-sm"></div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
+            authDomain: "mrlynch-slides-app.firebaseapp.com",
+            projectId: "mrlynch-slides-app",
+            storageBucket: "mrlynch-slides-app.appspot.com",
+            messagingSenderId: "223179627035",
+            appId: "1:223179627035:web:ff0f538f3029d829c3f6be"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const auth = firebase.auth();
+
+        let currentUserEmail = null;
+        let allPurchases = [];
+        let currentTab = 'pending';
+        let purchaseListener = null;
+
+        auth.onAuthStateChanged(async user => {
+            if (user) {
+                let email = user.email.toLowerCase();
+                const impersonated = localStorage.getItem('impersonatedUserEmail');
+                if (impersonated) email = impersonated;
+                currentUserEmail = email;
+
+                // Load class list for dropdown
+                initializeClasses();
+                
+                // Start real-time listener
+                listenToPurchases();
+
+                document.getElementById('pageLoader').classList.add('hidden');
+                document.getElementById('dashboardContent').classList.remove('hidden');
+            } else {
+                document.getElementById('signInButtonContainer').classList.remove('hidden');
+            }
+        });
+
+        async function initializeClasses() {
+            try {
+                const studentSnap = await db.collection("students").where("teacherEmail", "==", currentUserEmail).get();
+                const classes = [...new Set(studentSnap.docs.map(doc => {
+                    const data = doc.data();
+                    return (data.class || "Unassigned").toString().trim();
+                }))].filter(Boolean).sort();
+
+                const selector = document.getElementById('classSelector');
+                classes.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c;
+                    opt.textContent = c;
+                    selector.appendChild(opt);
+                });
+            } catch (err) {
+                console.error("Error loading classes:", err);
+            }
+        }
+
+        function listenToPurchases() {
+            if (purchaseListener) purchaseListener();
+
+            purchaseListener = db.collection('auraPurchases')
+                .where('teacherEmail', '==', currentUserEmail)
+                .orderBy('timestamp', 'desc')
+                .onSnapshot(snapshot => {
+                    allPurchases = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    filterPurchases();
+                    updateCounts();
+                    document.getElementById('lastSync').textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
+                }, err => {
+                    console.error("Purchase listener error:", err);
+                    showToast("Error syncing purchases. Try refreshing.", "red");
+                });
+        }
+
+        function updateCounts() {
+            const pendingCount = allPurchases.filter(p => p.status === 'pending' || (!p.status && !p.used)).length;
+            const countEl = document.getElementById('count-pending');
+            if (pendingCount > 0) {
+                countEl.textContent = pendingCount;
+                countEl.classList.remove('hidden');
+            } else {
+                countEl.classList.add('hidden');
+            }
+        }
+
+        function switchTab(tab) {
+            currentTab = tab;
+            ['pending', 'approved', 'history'].forEach(t => {
+                document.getElementById(`tab-${t}`).classList.remove('tab-active');
+            });
+            document.getElementById(`tab-${tab}`).classList.add('tab-active');
+            filterPurchases();
+        }
+
+        function filterPurchases() {
+            const selectedClass = document.getElementById('classSelector').value;
+            const search = document.getElementById('purchaseSearch').value.toLowerCase();
+            const body = document.getElementById('purchaseTableBody');
+            
+            let filtered = allPurchases.filter(p => {
+                // Class filter
+                if (selectedClass !== 'all' && (p.studentClass || "Unassigned").toString().trim() !== selectedClass) return false;
+                
+                // Search filter
+                if (search && !p.studentName.toLowerCase().includes(search) && !p.itemName.toLowerCase().includes(search)) return false;
+
+                // Tab filter
+                if (currentTab === 'pending') {
+                    return p.status === 'pending' || (!p.status && !p.used);
+                } else if (currentTab === 'approved') {
+                    return p.status === 'approved' && !p.used;
+                } else if (currentTab === 'history') {
+                    return p.used === true || p.status === 'denied';
+                }
+                return true;
+            });
+
+            document.getElementById('table-loading').classList.add('hidden');
+            
+            if (filtered.length === 0) {
+                document.getElementById('table-wrapper').classList.add('hidden');
+                document.getElementById('no-purchases').classList.remove('hidden');
+                return;
+            }
+
+            document.getElementById('no-purchases').classList.add('hidden');
+            document.getElementById('table-wrapper').classList.remove('hidden');
+
+            renderPurchases(filtered);
+        }
+
+        function renderPurchases(purchases) {
+            const body = document.getElementById('purchaseTableBody');
+            body.innerHTML = purchases.map(p => {
+                const date = p.timestamp ? new Date(p.timestamp.seconds * 1000).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Pending...';
+                
+                let actionBtns = '';
+                if (currentTab === 'pending') {
+                    actionBtns = `
+                        <button onclick="approvePurchase('${p.id}')" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-1.5 px-3 rounded-lg mr-2 transition">Approve</button>
+                        <button onclick="denyPurchase('${p.id}', ${p.cost}, '${p.studentEmail}')" class="bg-red-600 hover:bg-red-700 text-white text-xs font-bold py-1.5 px-3 rounded-lg transition">Deny & Refund</button>
+                    `;
+                } else if (currentTab === 'approved') {
+                    actionBtns = `
+                        <button onclick="markUsed('${p.id}', true)" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-1.5 px-3 rounded-lg transition">Mark as Used</button>
+                    `;
+                } else if (currentTab === 'history') {
+                    if (p.status === 'denied') {
+                        actionBtns = `<span class="text-red-500 font-bold text-xs uppercase px-3">Denied</span>`;
+                    } else {
+                        actionBtns = `
+                            <button onclick="markUsed('${p.id}', false)" class="text-gray-500 hover:text-gray-300 text-[10px] underline transition">Mark Unused</button>
+                            <span class="text-green-500 font-bold text-xs uppercase px-3 ml-2">Used</span>
+                        `;
+                    }
+                }
+
+                return `
+                    <tr class="hover:bg-gray-700/30 transition-colors">
+                        <td class="p-4">
+                            <div class="font-bold text-white">${p.studentName}</div>
+                            <div class="text-[10px] text-gray-400 uppercase tracking-tighter">${p.studentClass || 'Unassigned'}</div>
+                        </td>
+                        <td class="p-4">
+                            <div class="flex items-center gap-2">
+                                <span class="bg-gray-700 p-1.5 rounded text-lg mb-0.5">✨</span>
+                                <span class="text-gray-200 font-medium">${p.itemName}</span>
+                            </div>
+                        </td>
+                        <td class="p-4 font-mono text-yellow-400 font-bold">${p.cost} ✧</td>
+                        <td class="p-4 text-xs text-gray-400 font-mono">${date}</td>
+                        <td class="p-4 text-right">${actionBtns}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // --- Purchase Actions ---
+
+        async function approvePurchase(id) {
+            try {
+                await db.collection('auraPurchases').doc(id).update({
+                    status: 'approved'
+                });
+                showToast("Purchase Approved!", "green");
+            } catch (err) {
+                console.error("Approve error:", err);
+                showToast("Failed to approve.", "red");
+            }
+        }
+
+        async function denyPurchase(id, cost, studentEmail) {
+            showConfirm(
+                "Deny & Refund",
+                `Are you sure you want to deny this purchase? <br><br><b>${cost} Aura</b> will be refunded to <b>${studentEmail}</b>.`,
+                "bg-red-600 hover:bg-red-700",
+                async () => {
+                    try {
+                        // 1. Find student doc
+                        const q = await db.collection('students').where('email', '==', studentEmail.toLowerCase()).get();
+                        if (q.empty) throw new Error("Student not found");
+                        const studentDoc = q.docs[0];
+
+                        // 2. Refund
+                        await db.collection('students').doc(studentDoc.id).update({
+                            auraBalance: firebase.firestore.FieldValue.increment(cost)
+                        });
+
+                        // 3. Update purchase
+                        await db.collection('auraPurchases').doc(id).update({
+                            status: 'denied',
+                            used: false
+                        });
+
+                        showToast("Denied & Refunded!", "red");
+                    } catch (err) {
+                        console.error("Deny error:", err);
+                        showToast("Error processing refund.", "red");
+                    }
+                }
+            );
+        }
+
+        async function markUsed(id, usedStatus) {
+            try {
+                await db.collection('auraPurchases').doc(id).update({
+                    used: usedStatus
+                });
+                showToast(usedStatus ? "Marked as Used" : "Returned to Active", "blue");
+            } catch (err) {
+                console.error("Update error:", err);
+                showToast("Failed to update status.", "red");
+            }
+        }
+
+        // --- Helpers ---
+
+        function showConfirm(title, message, colorClass, onConfirm) {
+            document.getElementById('confirmTitle').textContent = title;
+            document.getElementById('confirmMessage').innerHTML = message;
+            const okBtn = document.getElementById('confirmOk');
+            okBtn.className = `px-4 py-2 rounded-lg font-bold text-white transition ${colorClass}`;
+            okBtn.onclick = () => {
+                onConfirm();
+                closeConfirm();
+            };
+            document.getElementById('confirmationModal').classList.remove('hidden');
+        }
+
+        function closeConfirm() {
+            document.getElementById('confirmationModal').classList.add('hidden');
+        }
+
+        function showToast(message, color) {
+            const wrapper = document.getElementById('toast-wrapper');
+            const toast = document.createElement('div');
+            toast.className = `flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm w-full animate-fade-in-up pointer-events-auto`;
+            const colors = { green: 'bg-green-600', red: 'bg-red-600', blue: 'bg-blue-600', yellow: 'bg-yellow-500' };
+            toast.classList.add(colors[color] || 'bg-gray-700');
+            toast.innerHTML = `<span>${message}</span><button class="ml-4 text-2xl font-bold leading-none">&times;</button>`;
+            
+            toast.querySelector('button').onclick = () => toast.remove();
+            wrapper.appendChild(toast);
+            setTimeout(() => toast.remove(), 4000);
+        }
+
+        function handleSignOut() {
+            auth.signOut().then(() => window.location.reload());
+        }
+
+        function handleCredentialResponse(response) {
+            const credential = firebase.auth.GoogleAuthProvider.credential(response.credential);
+            auth.signInWithCredential(credential);
+        }
+
+        // Initialize first tab
+        switchTab('pending');
+
+    </script>
+</body>
+
+</html>
