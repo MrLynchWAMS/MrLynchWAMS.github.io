@@ -5,8 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Aura Purchase Management - IterātED</title>
-    <link rel="icon"
-        href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✧/text></svg>">
+ <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✧</text></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
@@ -197,30 +197,52 @@
                 let email = user.email;
                 const impersonated = localStorage.getItem('impersonatedUserEmail');
                 if (impersonated) email = impersonated;
+                
                 currentUserEmail = normalizeTeacherEmail(email);
+                
+                console.log("Teacher Identity Logged In:", email);
+                console.log("Current User Email (Normalized):", currentUserEmail);
+                
+                // Track multiple variants to account for legacy data mismatches
+                const emailVariants = [...new Set([
+                    email,
+                    email.toLowerCase(),
+                    email.toLowerCase().trim(),
+                    currentUserEmail
+                ])].filter(Boolean);
 
-                // Load class list for dropdown
-                initializeClasses();
-
-                // Start real-time listener
-                listenToPurchases();
+                // Load data
+                initializeClasses(emailVariants);
+                listenToPurchases(emailVariants);
 
                 document.getElementById('pageLoader').classList.add('hidden');
                 document.getElementById('dashboardContent').classList.remove('hidden');
             } else {
                 document.getElementById('signInButtonContainer').classList.remove('hidden');
+                document.getElementById('loading-text').textContent = "Please sign in as a teacher.";
             }
         });
 
-        async function initializeClasses() {
+        async function initializeClasses(emailVariants) {
+            console.log("Initializing classes for variants:", emailVariants);
             try {
-                const studentSnap = await db.collection("students").where("teacherEmail", "==", currentUserEmail).get();
+                // Fetch students matching ANY of the variants
+                const studentSnap = await db.collection("students")
+                    .where("teacherEmail", "in", emailVariants)
+                    .get();
+                
+                console.log(`Diagnostic: Found ${studentSnap.size} students associated with these emails.`);
+                
                 const classes = [...new Set(studentSnap.docs.map(doc => {
                     const data = doc.data();
                     return (data.class || "Unassigned").toString().trim();
                 }))].filter(Boolean).sort();
 
+                console.log("Classes found:", classes);
+
                 const selector = document.getElementById('classSelector');
+                // Clear existing except "All"
+                selector.innerHTML = '<option value="all">All Classes</option>';
                 classes.forEach(c => {
                     const opt = document.createElement('option');
                     opt.value = c;
@@ -229,26 +251,25 @@
                 });
             } catch (err) {
                 console.error("Error loading classes:", err);
+                showToast("Error loading classes. This might be a permission issue.", "red");
             }
         }
 
-        function listenToPurchases() {
+        function listenToPurchases(emailVariants) {
             if (purchaseListener) purchaseListener();
 
-            console.log("Listening for purchases for:", currentUserEmail);
+            console.log("Setting up purchase listener for variants:", emailVariants);
 
-            // Removed orderBy('timestamp') to ensure legacy purchases without timestamps are captured
-            // We will sort in-memory instead.
+            // Fetch purchases matching ANY of the variants
             purchaseListener = db.collection('auraPurchases')
-                .where('teacherEmail', '==', currentUserEmail)
+                .where('teacherEmail', 'in', emailVariants)
                 .onSnapshot(snapshot => {
-                    console.log(`Fetched ${snapshot.size} purchases`);
+                    console.log(`Fetched ${snapshot.size} purchases total.`);
                     allPurchases = snapshot.docs.map(doc => {
                         const data = doc.data();
                         return { 
                             id: doc.id, 
                             ...data,
-                            // Ensure studentName exists for legacy
                             studentName: data.studentName || data.studentEmail || "Unknown Student"
                         };
                     });
@@ -266,7 +287,11 @@
                     document.getElementById('lastSync').textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
                 }, err => {
                     console.error("Purchase listener error:", err);
-                    showToast("Error syncing purchases. Try refreshing.", "red");
+                    if (err.code === 'failed-precondition') {
+                        showToast("Server internal error: Indexing might be in progress.", "red");
+                    } else {
+                        showToast("Error syncing purchases. Check permissions.", "red");
+                    }
                 });
         }
 
@@ -318,8 +343,21 @@
             console.log(`Filter results: ${filtered.length} matches`);
             document.getElementById('table-loading').classList.add('hidden');
 
+            if (allPurchases.length === 0) {
+                document.getElementById('table-wrapper').classList.add('hidden');
+                document.getElementById('no-purchases').innerHTML = `
+                    <div class="flex flex-col items-center gap-2">
+                        <p class="text-xl">No purchases tracked for this teacher.</p>
+                        <p class="text-sm opacity-60">Verified Identity: ${currentUserEmail}</p>
+                    </div>
+                `;
+                document.getElementById('no-purchases').classList.remove('hidden');
+                return;
+            }
+
             if (filtered.length === 0) {
                 document.getElementById('table-wrapper').classList.add('hidden');
+                document.getElementById('no-purchases').textContent = `No purchases found matching "${search}" in ${selectedClass === 'all' ? 'any class' : selectedClass}.`;
                 document.getElementById('no-purchases').classList.remove('hidden');
                 return;
             }
