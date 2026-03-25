@@ -1822,11 +1822,21 @@
 
             if (attemptsConfig.enabled && attemptsConfig.retainBestScore !== false) {
                 if (finalScore >= bestScore) {
+                    // True improvement in total score
                     bestScore = finalScore;
                     bestAnswer = studentAnswer;
                     scoreToPersist = finalScore;
+                } else if (baseScore >= bestScore) {
+                    // Current total score is lower (due to penalties), 
+                    // but raw quality is still >= the previous best penalized score.
+                    // Retain the higher previous bestScore.
+                    scoreToPersist = bestScore;
                 } else {
-                    scoreToPersist = bestScore; // Keep best score
+                    // Quality dropped below the previous high score.
+                    // Student loses their "banked" high score.
+                    bestScore = finalScore;
+                    bestAnswer = studentAnswer;
+                    scoreToPersist = finalScore;
                 }
             } else {
                 bestScore = finalScore;
@@ -2360,10 +2370,12 @@
                     await db.collection('auraPurchases').add({
                         studentEmail: userProfile.email,
                         studentName: userProfile.name,
+                        studentClass: userProfile.class || 'Unassigned',
                         itemName: itemName,
                         cost: cost,
                         timestamp: firebase.firestore.FieldValue.serverTimestamp(),
                         teacherEmail: teacherEmail,
+                        status: 'pending',
                         used: false
                     });
 
