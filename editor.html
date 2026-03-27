@@ -1067,6 +1067,10 @@
             if (type === 'text') {
               const textBoolEl = cond.querySelector('.text-bool');
               if (textBoolEl) condConfig.textBool = textBoolEl.value || '||';
+              if (op === 'count') {
+                const countVal = cond.querySelector('.cond-count')?.value;
+                condConfig.count = countVal ? parseInt(countVal, 10) : 1;
+              }
             } else if (type === 'number') {
               const pickModeEl = cond.querySelector('.number-pick-mode');
               const idxEl = cond.querySelector('.number-index');
@@ -1076,6 +1080,10 @@
               condConfig.index = idxEl ? parseInt(idxEl.value || '1', 10) : 1;
               if (val2Input) condConfig.value2 = val2Input.value;
               if (inclusiveEl) condConfig.inclusive = inclusiveEl.checked;
+              if (op === 'count') {
+                const countVal = cond.querySelector('.cond-count')?.value;
+                condConfig.count = countVal ? parseInt(countVal, 10) : 1;
+              }
             }
 
             conditions.push(condConfig);
@@ -1157,6 +1165,7 @@
                 }
                 const val2Input = condEl.querySelector('.cond-value-2');
                 const inclusiveEl = condEl.querySelector('.cond-inclusive');
+                const countInput = condEl.querySelector('.cond-count');
                 if (val2Input && c.value2 !== undefined) {
                   val2Input.value = c.value2;
                   if (c.op === 'between') val2Input.classList.remove('hidden');
@@ -1166,6 +1175,18 @@
                   if (['>', '<', 'between'].includes(c.op)) {
                     inclusiveEl.closest('label').classList.remove('hidden');
                   }
+                }
+                if (countInput && c.count !== undefined) {
+                  countInput.value = c.count;
+                  if (c.op === 'count') countInput.classList.remove('hidden');
+                }
+              }
+
+              if (c.type === 'text' && c.op === 'count') {
+                const countInput = condEl.querySelector('.cond-count');
+                if (countInput && c.count !== undefined) {
+                  countInput.value = c.count;
+                  countInput.classList.remove('hidden');
                 }
               }
 
@@ -1682,6 +1703,11 @@
                 if (op === 'contains') groupConditions.push(`answerStr.includes("${keyword.replace(/"/g, '\\"')}")`);
                 else if (op === 'not_contains') groupConditions.push(`!answerStr.includes("${keyword.replace(/"/g, '\\"')}")`);
                 else if (op === 'equals_str') groupConditions.push(`answerStr === "${keyword.replace(/"/g, '\\"')}"`);
+                else if (op === 'count') {
+                  const countEl = cond.querySelector('.cond-count');
+                  const count = countEl ? (parseInt(countEl.value, 10) || 1) : 1;
+                  groupConditions.push(`(answerStr.split("${keyword.replace(/"/g, '\\"')}").length - 1 >= ${count})`);
+                }
               }
             } else if (type === 'number') {
               const numericVal = parseFloat(val);
@@ -1709,6 +1735,10 @@
                   } else {
                     return `(${numVar} > ${Math.min(numericVal, val2)} && ${numVar} < ${Math.max(numericVal, val2)})`;
                   }
+                } else if (op === 'count') {
+                  const countEl = cond.querySelector('.cond-count');
+                  const count = countEl ? (parseInt(countEl.value, 10) || 1) : 1;
+                  return `(answerNums.filter(n => n === ${numericVal}).length >= ${count})`;
                 }
                 return 'false';
               };
@@ -1795,9 +1825,7 @@
         <option value="||">Any to be true (OR)</option>
       </select>
     </div>
-    <div class="conditions-container space-y-2">
-      ${createConditionElement().outerHTML}
-    </div>
+    <div class="conditions-container space-y-2"></div>
     <button class="add-condition-btn text-sm text-blue-400 hover:text-blue-300">+ Add Condition</button>
     <div class="mt-2 pt-2 border-t border-gray-700 space-y-2">
     <div class="mt-2 pt-2 border-t border-gray-700 space-y-2">
@@ -1823,6 +1851,7 @@
       </div>
     </div>
   `;
+        div.querySelector('.conditions-container').appendChild(createConditionElement());
         return div;
       }
 
@@ -1839,9 +1868,13 @@
       <option value="not_contains">does not contain</option>
       <option value="equals_str">is exactly</option>
       <option value="ordered">contains in order</option>
+      <option value="count">count instances</option>
     </select>
-    <div class="cond-value-wrapper flex-grow">
-      <input type="text" class="cond-value w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="keyword(s), comma-separated">
+    <div class="cond-value-wrapper flex-grow flex flex-col">
+      <div class="flex items-center space-x-2">
+        <input type="text" class="cond-value w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="keyword(s), comma-separated">
+        <input type="number" class="cond-count hidden w-20 bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="count" min="1" value="1">
+      </div>
       <div class="text-options hidden text-xs mt-1">
         <label>Require: </label>
         <select class="text-bool bg-gray-700 border border-gray-600 rounded-md p-0.5 text-sm">
@@ -1866,6 +1899,7 @@
             <option value="<">is less than</option>
             <option value="between">is between</option>
             <option value="ordered">contains in order</option>
+            <option value="count">count instances</option>
           `;
             valueWrapper.innerHTML = `
         <div class="flex flex-col space-y-1">
@@ -1881,6 +1915,7 @@
             <input type="number" class="cond-value w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="a number" step="any">
             <span class="cond-between-and hidden text-sm text-gray-400">and</span>
             <input type="number" class="cond-value-2 hidden w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="a number" step="any">
+            <input type="number" class="cond-count hidden w-20 bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="count" min="1" value="1">
           </div>
           <label class="cond-inclusive-label hidden flex items-center text-xs text-gray-400 cursor-pointer">
             <input type="checkbox" class="cond-inclusive mr-1"> Inclusive (e.g. >=)
@@ -1897,9 +1932,12 @@
             });
 
           } else {
-            operatorSelect.innerHTML = `<option value="contains">contains</option><option value="not_contains">does not contain</option><option value="equals_str">is exactly</option><option value="ordered">contains in order</option>`;
+            operatorSelect.innerHTML = `<option value="contains">contains</option><option value="not_contains">does not contain</option><option value="equals_str">is exactly</option><option value="ordered">contains in order</option><option value="count">count instances</option>`;
             valueWrapper.innerHTML = `
-        <input type="text" class="cond-value w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="keyword(s), comma-separated">
+        <div class="flex items-center space-x-2">
+          <input type="text" class="cond-value w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="keyword(s), comma-separated">
+          <input type="number" class="cond-count hidden w-20 bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="count" min="1" value="1">
+        </div>
         <div class="text-options hidden text-xs mt-1">
           <label>Require: </label>
           <select class="text-bool bg-gray-700 border border-gray-600 rounded-md p-0.5 text-sm">
@@ -1922,6 +1960,7 @@
             const andSpan = div.querySelector('.cond-between-and');
             const inclusiveLabel = div.querySelector('.cond-inclusive-label');
             const pickModeSelect = div.querySelector('.number-pick-mode');
+            const countInput = div.querySelector('.cond-count');
 
             // Handle 'between' visibility
             if (operator === 'between') {
@@ -1937,6 +1976,13 @@
               inclusiveLabel?.classList.remove('hidden');
             } else {
               inclusiveLabel?.classList.add('hidden');
+            }
+
+            // Handle 'count' visibility
+            if (operator === 'count') {
+              countInput?.classList.remove('hidden');
+            } else {
+              countInput?.classList.add('hidden');
             }
 
             // Handle 'ordered' (contains in order) behavior
@@ -1955,11 +2001,23 @@
             }
           }
 
-          if (type === 'text' && textOptions && valueInput) {
-            if ((operator === 'contains' || operator === 'not_contains') && valueInput.value.includes(',')) {
-              textOptions.classList.remove('hidden');
+          if (type === 'text') {
+            const countInput = div.querySelector('.cond-count');
+            const textOptions = div.querySelector('.text-options');
+            const valueInput = div.querySelector('.cond-value');
+
+            if (operator === 'count') {
+              countInput?.classList.remove('hidden');
             } else {
-              textOptions.classList.add('hidden');
+              countInput?.classList.add('hidden');
+            }
+
+            if (textOptions && valueInput) {
+              if ((operator === 'contains' || operator === 'not_contains') && valueInput.value.includes(',')) {
+                textOptions.classList.remove('hidden');
+              } else {
+                textOptions.classList.add('hidden');
+              }
             }
           }
         });
