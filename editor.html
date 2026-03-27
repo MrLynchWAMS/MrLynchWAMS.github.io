@@ -1055,6 +1055,8 @@
           const toastColor = group.querySelector('.rule-toast-color')?.value || 'default';
           const toastTarget = group.querySelector('.rule-toast-target')?.value || 'all';
 
+          const toastTrigger = group.querySelector('.rule-toast-trigger')?.value || 'success';
+
           const conditions = [];
           group.querySelectorAll('.condition-row').forEach(cond => {
             const type = cond.querySelector('.cond-type')?.value || 'text';
@@ -1099,6 +1101,7 @@
             toastMessage,
             toastColor,
             toastTarget,
+            toastTrigger,
             conditions
           });
         });
@@ -1125,12 +1128,14 @@
           const toastMessageInput = groupEl.querySelector('.rule-toast-message');
           const toastColorSelect = groupEl.querySelector('.rule-toast-color');
           const toastTargetSelect = groupEl.querySelector('.rule-toast-target');
+          const toastTriggerSelect = groupEl.querySelector('.rule-toast-trigger');
 
           if (pointsInput) pointsInput.value = g.points ?? 0;
           if (connectorSelect) connectorSelect.value = g.groupConnector || '&&';
           if (toastMessageInput) toastMessageInput.value = g.toastMessage || '';
           if (toastColorSelect) toastColorSelect.value = g.toastColor || 'default';
           if (toastTargetSelect) toastTargetSelect.value = g.toastTarget || 'all';
+          if (toastTriggerSelect) toastTriggerSelect.value = g.toastTrigger || 'success';
 
           const condContainer = groupEl.querySelector('.conditions-container');
           if (condContainer) {
@@ -1596,11 +1601,12 @@
         }
 
         function updateCodeFromSimple() {
-          code = generateCodeFromUI(container);
-          livePreview.textContent = code;
+          const newCode = generateCodeFromUI(container);
+          livePreview.textContent = newCode;
+          code = newCode;
           if (!advancedEdited) {
-            advTextarea.value = code;
-            initialAdvancedText = code;
+            advTextarea.value = newCode;
+            initialAdvancedText = newCode;
           }
         }
       }
@@ -1677,6 +1683,7 @@
           const toastMessage = toastMessageEl ? (toastMessageEl.value.trim() || '') : '';
           const toastColor = toastColorEl ? (toastColorEl.value || 'default') : 'default';
           const toastTarget = toastTargetEl ? (toastTargetEl.value || 'all') : 'all';
+          const toastTrigger = group.querySelector('.rule-toast-trigger')?.value || 'success';
 
           // Collect condition expressions for this group (to be combined with && or ||)
           let groupConditions = [];
@@ -1792,31 +1799,41 @@
             }
           });
 
+          // Helper for toast generation in JS
+          const getToastJS = (msg, color, target) => {
+            let block = `        if (typeof showToast === "function") {\n`;
+            if (target === 'mods_only') {
+              block += `            if (userProfile && userProfile.hasModifications) {\n`;
+              block += `                try { showToast(${JSON.stringify(msg)}, { color: ${JSON.stringify(color)} }); } catch (_) {}\n`;
+              block += `            }\n`;
+            } else {
+              block += `            try { showToast(${JSON.stringify(msg)}, { color: ${JSON.stringify(color)} }); } catch (_) {}\n`;
+            }
+            block += `        }\n`;
+            return block;
+          };
+
           // Emit the group-level scoring logic if there are any conditions
-          // Each group awards points exactly once if its combined condition is true
           if (groupConditions.length > 0) {
             let ifStatement = 'if';
-            // In exclusive scoring mode, only the first matching group awards points (using if/else if chain)
-            // In non-exclusive mode, all matching groups award points (using independent if statements)
             if (isExclusive) {
               ifStatement = wroteIf ? 'else if' : 'if';
               wroteIf = true;
             }
 
-            code += `    ${ifStatement} (${groupConditions.join(` ${groupConnector} `)}) {\n`;
+            const combinedCond = groupConditions.join(` ${groupConnector} `);
+            code += `    ${ifStatement} (${combinedCond}) {\n`;
             code += `        score += ${points};\n`;
-            if (toastMessage) {
-              code += `        if (typeof showToast === "function") {\n`;
-              if (toastTarget === 'mods_only') {
-                code += `            if (userProfile && userProfile.hasModifications) {\n`;
-                code += `                try { showToast(${JSON.stringify(toastMessage)}, { color: ${JSON.stringify(toastColor)} }); } catch (_) {}\n`;
-                code += `            }\n`;
-              } else {
-                code += `            try { showToast(${JSON.stringify(toastMessage)}, { color: ${JSON.stringify(toastColor)} }); } catch (_) {}\n`;
-              }
-              code += `        }\n`;
+            if (toastMessage && toastTrigger === 'success') {
+              code += getToastJS(toastMessage, toastColor, toastTarget);
             }
             code += `    }\n`;
+
+            if (toastMessage && toastTrigger === 'failure') {
+              code += `    if (!(${combinedCond})) {\n`;
+              code += getToastJS(toastMessage, toastColor, toastTarget);
+              code += `    }\n`;
+            }
           }
         });
 
@@ -1848,24 +1865,31 @@
     <div class="conditions-container space-y-2"></div>
     <button class="add-condition-btn text-sm text-blue-400 hover:text-blue-300">+ Add Condition</button>
     <div class="mt-2 pt-2 border-t border-gray-700 space-y-2">
-    <div class="mt-2 pt-2 border-t border-gray-700 space-y-2">
-      <label class="block text-xs font-medium text-gray-400">Optional: Toast notification when this group matches</label>
-      <input type="text" class="rule-toast-message w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="Optional toast message to show when this group matches">
+      <label class="block text-xs font-medium text-gray-400">Optional Toast Notification</label>
+      <input type="text" class="rule-toast-message w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="Message content...">
       <div class="flex items-center space-x-4">
         <div class="flex items-center space-x-2">
-            <label class="text-xs text-gray-400">Color:</label>
-            <select class="rule-toast-color bg-gray-700 border border-gray-600 rounded-md p-1 text-xs">
-            <option value="default">Default</option>
-            <option value="blue">Info (Blue)</option>
-            <option value="green">Success (Green)</option>
-            <option value="red">Error (Red)</option>
+            <label class="text-xs text-gray-400">Trigger:</label>
+            <select class="rule-toast-trigger bg-gray-700 border border-gray-600 rounded-md p-1 text-xs">
+              <option value="success">On Success</option>
+              <option value="failure">On Failure</option>
             </select>
         </div>
         <div class="flex items-center space-x-2">
-            <label class="text-xs text-gray-400">Target:</label>
+            <label class="text-xs text-gray-400">Color:</label>
+            <select class="rule-toast-color bg-gray-700 border border-gray-600 rounded-md p-1 text-xs">
+              <option value="default">Default</option>
+              <option value="blue">Info (Blue)</option>
+              <option value="green">Success (Green)</option>
+              <option value="red">Warning (Red)</option>
+              <option value="yellow">Alert (Yellow)</option>
+            </select>
+        </div>
+        <div class="flex items-center space-x-2">
+            <label class="text-xs text-gray-400">Show to:</label>
             <select class="rule-toast-target bg-gray-700 border border-gray-600 rounded-md p-1 text-xs">
-            <option value="all">Everyone</option>
-            <option value="mods_only">Modified Students Only</option>
+              <option value="all">All Students</option>
+              <option value="mods_only">Modified Only</option>
             </select>
         </div>
       </div>
