@@ -12,6 +12,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <style>
         .hidden {
             display: none;
@@ -280,6 +281,62 @@
                 bottom: 120px;
             }
         }
+
+        /* ===== PDF Student View Styles ===== */
+        .pdf-student-page {
+            position: relative;
+            margin-bottom: 2rem;
+            display: inline-block;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+        }
+        .pdf-student-canvas { display: block; max-width: 100%; }
+        .pdf-student-zone {
+            position: absolute;
+            border: 2px solid rgba(251, 191, 36, 0.7);
+            background: rgba(255, 255, 255, 0.92);
+            box-sizing: border-box;
+            padding: 4px 6px;
+            display: flex;
+            flex-direction: column;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .pdf-student-zone textarea {
+            width: 100%;
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            resize: none;
+            font-size: 13px;
+            color: #1f2937;
+            font-family: inherit;
+            line-height: 1.4;
+        }
+        .pdf-student-zone .zone-q-label {
+            font-size: 10px;
+            font-weight: bold;
+            color: #6b7280;
+            line-height: 1;
+            margin-bottom: 2px;
+            flex-shrink: 0;
+        }
+        .pdf-student-zone.active {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59,130,246,0.35);
+        }
+        .pdf-student-zone.zone-correct {
+            border-color: #22c55e;
+            background: rgba(220, 252, 231, 0.92);
+        }
+        .pdf-student-zone.zone-partial {
+            border-color: #f97316;
+            background: rgba(255, 237, 213, 0.92);
+        }
+        .pdf-student-zone.zone-locked textarea { cursor: not-allowed; opacity: 0.6; }
+        #pdf-check-panel {
+            width: 220px;
+        }
+        /* ===== END PDF Student Styles ===== */
     </style>
 </head>
 
@@ -324,7 +381,9 @@
                         class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Sign Out</button>
                 </div>
             </div>
-            <div class="main-content-grid grid grid-cols-1 md:grid-cols-3 gap-8">
+
+            <!-- Slides UI -->
+            <div id="slides-ui" class="main-content-grid grid grid-cols-1 md:grid-cols-3 gap-8">
                 <div class="slides-column md:col-span-2 bg-gray-800 p-4 rounded-lg flex flex-col">
                     <div class="flex-grow flex items-center justify-center">
                         <div id="slide-loader" class="text-center py-10">
@@ -368,6 +427,24 @@
                         & Save Answer</button>
                     <p id="result" class="mt-4 text-xl font-bold text-center"></p>
                 </div>
+            </div>
+
+            <!-- PDF Student UI -->
+            <div id="pdf-student-content" class="hidden">
+                <div id="pdf-check-panel" class="fixed right-4 top-1/2 -translate-y-1/2 z-50 bg-gray-800 border border-gray-700 rounded-xl p-4 shadow-2xl space-y-3">
+                    <p class="text-xs font-bold text-gray-500 uppercase tracking-wide">Active Question</p>
+                    <p id="pdf-active-q-label" class="text-yellow-400 font-bold text-sm">Click a box to answer</p>
+                    <p id="pdf-result-display" class="text-sm font-bold min-h-[1.25rem]"></p>
+                    <button id="pdf-check-btn" onclick="pdfCheckAndSave()" disabled
+                        class="w-full bg-green-600 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-2 px-3 rounded-lg text-sm transition-colors">
+                        ✓ Check & Save
+                    </button>
+                    <button onclick="showSummary()"
+                        class="w-full bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-3 rounded-lg text-sm">
+                        View Summary
+                    </button>
+                </div>
+                <div id="pdf-student-pages" class="text-center pb-24"></div>
             </div>
         </div>
 
@@ -554,8 +631,14 @@
                     }
 
                     // If slides changed, re-init slideStates
-                    if (!oldData || assignmentData.slideIds.length !== oldData.slideIds.length) {
-                        slideStates = new Array(assignmentData.slideIds.length).fill(null);
+                    const newCount = (assignmentData.type === 'pdf'
+                        ? (assignmentData.questionZones || [])
+                        : (assignmentData.slideIds || [])).length;
+                    const oldCount = (oldData?.type === 'pdf'
+                        ? (oldData?.questionZones || [])
+                        : (oldData?.slideIds || [])).length;
+                    if (!oldData || newCount !== oldCount) {
+                        slideStates = new Array(newCount).fill(null);
                     }
 
                     if (userProfile) {
@@ -899,9 +982,17 @@
                 showSummary(); // Directly show summary if submitted and hidden
             } else {
                 loader.classList.add('hidden');
-                document.getElementById('mainContainer').classList.remove('hidden');
-                updateSlideDisplay();
-                initTools();
+                if (assignmentData.type === 'pdf') {
+                    document.getElementById('mainContainer').classList.remove('hidden');
+                    document.getElementById('slides-ui').classList.add('hidden');
+                    document.getElementById('pdf-student-content').classList.remove('hidden');
+                    initializePDFStudentView();
+                    initTools();
+                } else {
+                    document.getElementById('mainContainer').classList.remove('hidden');
+                    updateSlideDisplay();
+                    initTools();
+                }
             }
         }
 
@@ -1135,7 +1226,10 @@
                             totalScore += state.score;
                         }
                     });
-                    const overallAverage = assignmentData.slideIds.length > 0 ? totalScore / assignmentData.slideIds.length : 0;
+                    const qCountFV = (assignmentData.type === 'pdf'
+                        ? (assignmentData.questionZones || [])
+                        : (assignmentData.slideIds || [])).length;
+                    const overallAverage = qCountFV > 0 ? totalScore / qCountFV : 0;
 
                     // Read assignment-level Aura config
                     // Calculate Aura Eligibility (New Rule-Based System)
@@ -1481,7 +1575,12 @@
             const postRule = assignmentData.postSubmissionRule || 'open';
             const shouldDisableLinks = isSubmitted && postRule === 'hide';
 
-            for (let index = 0; index < assignmentData.slideIds.length; index++) {
+            const isPDF = assignmentData.type === 'pdf';
+            const questionCount = isPDF
+                ? (assignmentData.questionZones || []).length
+                : (assignmentData.slideIds || []).length;
+
+            for (let index = 0; index < questionCount; index++) {
                 const state = slideStates[index];
                 let score = (state && state.score !== undefined) ? state.score : 0;
                 totalScore += score;
@@ -1492,14 +1591,14 @@
                     color = displayScore >= 90 ? 'text-green-400' : 'text-yellow-400';
                 }
 
-                const clickHandler = shouldDisableLinks ? '' : `onclick="jumpToSlide(${index})"`;
+                const clickHandler = shouldDisableLinks ? '' : (isPDF ? `onclick="focusPDFZone(${index})"` : `onclick="jumpToSlide(${index})"`);
                 const cursorClass = shouldDisableLinks ? 'cursor-not-allowed' : 'cursor-pointer';
                 const hoverClass = shouldDisableLinks ? '' : 'hover:bg-gray-600';
                 const opacityClass = shouldDisableLinks ? 'opacity-50' : '';
 
                 perQuestionHTML += `<div ${clickHandler} class="flex justify-between items-center bg-gray-700 p-3 rounded-lg ${cursorClass} ${hoverClass} ${opacityClass} transition-colors"><span class="font-medium">Question ${index + 1}</span><span class="font-bold ${color}">${displayScore}</span></div>`;
             }
-            const overallAverage = (totalScore / assignmentData.slideIds.length).toFixed(1);
+            const overallAverage = questionCount > 0 ? (totalScore / questionCount).toFixed(1) : '0.0';
             const overallColor = overallAverage >= 90 ? 'text-green-400' : overallAverage >= 60 ? 'text-yellow-400' : 'text-red-400';
             document.getElementById('overallScore').innerHTML = `<span class="${overallColor}">${overallAverage}%</span>`;
             document.getElementById('perQuestionScores').innerHTML = perQuestionHTML;
@@ -1993,6 +2092,175 @@
         }
 
         // Helper for Text Conditions (called by generated checker code)
+        // =======================================
+        // PDF STUDENT VIEW FUNCTIONS
+        // =======================================
+
+        let activePdfZoneIndex = -1;
+
+        function initializePDFStudentView() {
+            const numZones = (assignmentData.questionZones || []).length;
+            if (slideStates.length !== numZones) {
+                slideStates = new Array(numZones).fill(null);
+            }
+            // Init pdfjsLib worker
+            const pdfLib = window['pdfjs-dist/build/pdf'];
+            if (pdfLib) pdfLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+            renderPDFStudentView(assignmentData.pdfUrl);
+        }
+
+        async function renderPDFStudentView(url) {
+            const container = document.getElementById('pdf-student-pages');
+            container.innerHTML = '<p class="text-gray-400 py-8">Loading PDF...</p>';
+
+            const pdfLib = window['pdfjs-dist/build/pdf'];
+            if (!pdfLib) {
+                container.innerHTML = '<p class="text-red-400">PDF.js not loaded. Please refresh.</p>';
+                return;
+            }
+            try {
+                const pdf = await pdfLib.getDocument(url).promise;
+                container.innerHTML = '';
+
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const viewport = page.getViewport({ scale: 1.5 });
+
+                    const pageDiv = document.createElement('div');
+                    pageDiv.className = 'pdf-student-page';
+                    pageDiv.style.width = viewport.width + 'px';
+                    pageDiv.style.height = viewport.height + 'px';
+                    pageDiv.dataset.pageNumber = i;
+
+                    const canvas = document.createElement('canvas');
+                    canvas.className = 'pdf-student-canvas';
+                    canvas.width = viewport.width;
+                    canvas.height = viewport.height;
+                    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+
+                    pageDiv.appendChild(canvas);
+                    container.appendChild(pageDiv);
+                }
+
+                renderStudentZones();
+            } catch (err) {
+                console.error('Error rendering PDF for student:', err);
+                container.innerHTML = '<p class="text-red-400 py-8">Failed to load PDF. Please refresh.</p>';
+            }
+        }
+
+        function renderStudentZones() {
+            const zones = assignmentData.questionZones || [];
+            document.querySelectorAll('.pdf-student-zone').forEach(z => z.remove());
+
+            zones.forEach((zone, index) => {
+                const pageEl = document.querySelector(`.pdf-student-page[data-page-number="${zone.page}"]`);
+                if (!pageEl) return;
+
+                const qNum = index + 1;
+                const qPolicy = (assignmentData.deadlinePolicy || {})[`q${qNum}`] || {};
+                const attemptsConfig = qPolicy.attempts || { enabled: false };
+                const qProgress = questionProgressData[index];
+                const isLocked = (isSubmitted && (assignmentData.postSubmissionRule === 'lock' || assignmentData.postSubmissionRule === 'hide'))
+                    || (attemptsConfig.enabled && qProgress?.locked);
+
+                const zoneDiv = document.createElement('div');
+                zoneDiv.className = 'pdf-student-zone' + (isLocked ? ' zone-locked' : '');
+                zoneDiv.id = `student-zone-${index}`;
+                zoneDiv.style.left = zone.x + '%';
+                zoneDiv.style.top = zone.y + '%';
+                zoneDiv.style.width = zone.w + '%';
+                zoneDiv.style.height = zone.h + '%';
+
+                const label = document.createElement('div');
+                label.className = 'zone-q-label';
+                label.textContent = `Q${qNum}`;
+
+                const ta = document.createElement('textarea');
+                ta.id = `pdf-zone-input-${index}`;
+                ta.placeholder = 'Type answer...';
+                ta.disabled = isLocked;
+
+                // Restore saved answer and visual state
+                const savedState = slideStates[index];
+                if (savedState && savedState.answer) {
+                    ta.value = savedState.answer;
+                    if (savedState.score !== undefined) {
+                        zoneDiv.classList.add(savedState.score >= 90 ? 'zone-correct' : 'zone-partial');
+                    }
+                }
+
+                ta.addEventListener('focus', () => {
+                    activePdfZoneIndex = index;
+                    currentSlideIndex = index;
+                    // Sync value to the hidden #inputbox so myfunction() reads correct answer
+                    document.getElementById('inputbox').value = ta.value;
+                    // Update check panel
+                    document.getElementById('pdf-active-q-label').textContent = `Question ${qNum}`;
+                    document.getElementById('pdf-check-btn').disabled = isLocked;
+                    const state = slideStates[index];
+                    const resultEl = document.getElementById('pdf-result-display');
+                    if (state && state.score !== undefined) {
+                        resultEl.textContent = `Score: ${state.score}%`;
+                        resultEl.style.color = state.score >= 90 ? '#4ade80' : '#fb923c';
+                    } else {
+                        resultEl.textContent = '';
+                    }
+                    // Highlight active zone
+                    document.querySelectorAll('.pdf-student-zone').forEach(z => z.classList.remove('active'));
+                    zoneDiv.classList.add('active');
+                });
+
+                ta.addEventListener('input', () => {
+                    document.getElementById('inputbox').value = ta.value;
+                });
+
+                zoneDiv.appendChild(label);
+                zoneDiv.appendChild(ta);
+                pageEl.appendChild(zoneDiv);
+            });
+        }
+
+        async function pdfCheckAndSave() {
+            if (activePdfZoneIndex < 0) {
+                showToast('Click on a question box first!', { color: 'red' });
+                return;
+            }
+            const ta = document.getElementById(`pdf-zone-input-${activePdfZoneIndex}`);
+            if (!ta) return;
+
+            // Ensure inputbox is synced
+            document.getElementById('inputbox').value = ta.value;
+
+            // Call the existing check-and-save (reads currentSlideIndex & #inputbox)
+            await myfunction();
+
+            // After save, style the zone based on score
+            const state = slideStates[activePdfZoneIndex];
+            const zoneDiv = document.getElementById(`student-zone-${activePdfZoneIndex}`);
+            if (state && state.score !== undefined && zoneDiv) {
+                zoneDiv.classList.remove('zone-correct', 'zone-partial', 'active');
+                zoneDiv.classList.add(state.score >= 90 ? 'zone-correct' : 'zone-partial');
+                const resultEl = document.getElementById('pdf-result-display');
+                resultEl.textContent = `Score: ${state.score}%`;
+                resultEl.style.color = state.score >= 90 ? '#4ade80' : '#fb923c';
+            }
+        }
+
+        function focusPDFZone(index) {
+            // Called from summary screen to jump back and focus a zone
+            hideSummary();
+            setTimeout(() => {
+                const ta = document.getElementById(`pdf-zone-input-${index}`);
+                if (ta) { ta.focus(); ta.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+            }, 100);
+        }
+
+        // =======================================
+        // END PDF STUDENT VIEW FUNCTIONS
+        // =======================================
+
         function checkTextCondition(studentVal, targetVal, op) {
             const userText = (studentVal || "").toLowerCase().trim();
             const targetText = (targetVal || "").toLowerCase().trim();
