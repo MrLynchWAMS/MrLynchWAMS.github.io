@@ -894,7 +894,6 @@
 
           if (assignmentData.type === 'pdf') {
             loadingText.textContent = "Loading PDF Assignment...";
-            document.getElementById('slidesContainer').classList.add('hidden');
             document.getElementById('pdf-viewer-container').classList.remove('hidden');
             
             // Load existing zones
@@ -908,7 +907,6 @@
             const slides = response.result.slides;
             if (!slides || slides.length === 0) { loadingText.textContent = "Error: No slides found in the presentation."; return; }
             assignmentData.slideIds = slides.map(slide => slide.objectId);
-            document.getElementById('slidesContainer').classList.remove('hidden');
             document.getElementById('pdf-viewer-container').classList.add('hidden');
           }
           document.getElementById('page-loader').classList.add('hidden');
@@ -1164,12 +1162,22 @@
 
           const div = document.createElement('div');
           div.className = 'question-zone';
+          div.id = `zone-box-${index}`;
           div.style.left = zone.x + '%';
           div.style.top = zone.y + '%';
           div.style.width = zone.w + '%';
           div.style.height = zone.h + '%';
           div.innerHTML = `<span>Q${index + 1}</span><div class="resize-handle"></div>`;
-          
+
+          // Click to highlight + scroll to corresponding checker
+          div.addEventListener('click', e => {
+            if (e.target.classList.contains('resize-handle')) return;
+            document.querySelectorAll('.question-zone').forEach(z => z.classList.remove('active'));
+            div.classList.add('active');
+            const checkerBox = document.getElementById(`slide-editor-box-${index}`);
+            if (checkerBox) checkerBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          });
+
           div.addEventListener('mousedown', e => {
             e.stopPropagation();
             if (e.target.classList.contains('resize-handle')) {
@@ -1299,6 +1307,18 @@
         const container = document.getElementById('slidesContainer');
         container.innerHTML = '';
         
+        // Add section heading for PDF
+        if (assignmentData.type === 'pdf') {
+          if (questionZones.length === 0) {
+            container.innerHTML = '<div class="bg-gray-800 rounded-lg p-6 text-center border border-dashed border-gray-600"><p class="text-gray-400">Draw question zones on the PDF above to configure checker settings for each one.</p></div>';
+            return;
+          }
+          const heading = document.createElement('div');
+          heading.className = 'mb-4 pb-3 border-b border-gray-700';
+          heading.innerHTML = `<h2 class="text-2xl font-bold text-yellow-400">📝 Question Configuration</h2><p class="text-gray-400 text-sm mt-1">Configure checker settings for each question zone you drew on the PDF. Click a zone on the PDF to jump to its settings.</p>`;
+          container.appendChild(heading);
+        }
+        
         let identifiers = [];
         if (assignmentData.type === 'pdf') {
           identifiers = questionZones.map((z, i) => `q${i+1}`);
@@ -1315,6 +1335,13 @@
           const slidePolicy = deadlinePolicy[`q${qNum}`] || {};
           const editorBox = document.createElement('div');
           editorBox.className = "slide-editor-box grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-800 p-4 rounded-lg";
+          editorBox.id = `slide-editor-box-${index}`;
+
+          // Clicking the header scrolls to the zone on the PDF
+          let scrollToPDFZone = '';
+          if (assignmentData.type === 'pdf') {
+            scrollToPDFZone = `onclick="highlightZone(${index})"`;
+          }
           
           let backgroundHTML = "";
           if (assignmentData.type === 'pdf') {
