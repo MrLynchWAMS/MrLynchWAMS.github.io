@@ -275,13 +275,7 @@
 
         <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
         <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-storage-compat.js"></script>
-    <style>
-    /* ... (rest of style) */
-    </style>
-</head>
-<body class="bg-gray-900 text-white font-sans">
-    <!-- ... (body content) -->
-    <script>
+<script>
         const firebaseConfig = {
             apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
             authDomain: "mrlynch-slides-app.firebaseapp.com",
@@ -294,7 +288,7 @@
         const db = firebase.firestore();
         const auth = firebase.auth();
         const storage = firebase.storage();
-        const DEFAULT_TEACHER_EMAIL = "klynch@mtps.us"; // Default for migrating existing assignments
+        const DEFAULT_TEACHER_EMAIL = "klynch@mtps.us";
         let activeAssignmentId = null;
         let allClassNames = [];
         let allAssignments = [];
@@ -304,7 +298,12 @@
         let currentUserIsAdmin = false;
         let currentUserDefaultCoTeachers = [];
 
-        // --- Impersonation Logic ---
+        const createModal = document.getElementById('createModal');
+        const statusModal = document.getElementById('statusModal');
+        const coTeacherModal = document.getElementById('coTeacherModal');
+        const defaultCoTeacherModal = document.getElementById('defaultCoTeacherModal');
+        const shareModal = document.getElementById('shareModal');
+
         function checkImpersonation() {
             const impersonatedEmail = localStorage.getItem('impersonatedUserEmail');
             if (impersonatedEmail) {
@@ -317,11 +316,11 @@
             }
             return null;
         }
+
         function stopImpersonating() {
             localStorage.removeItem('impersonatedUserEmail');
             window.location.reload();
         }
-        // ---------------------------
 
         auth.onAuthStateChanged(async user => {
             if (user) {
@@ -330,24 +329,15 @@
                     const impersonated = checkImpersonation();
                     if (impersonated) emailToCheck = impersonated;
 
-                    // 1. Check if user is an explicit teacher
                     const teacherDoc = await db.collection("teachers").doc(emailToCheck).get();
                     let isTeacher = teacherDoc.exists;
                     let teacherData = isTeacher ? teacherDoc.data() : {};
 
-                    // 2. If not explicit, check if they are an implicit co-teacher (listed in ANY teacher's coTeachingFor)
                     if (!isTeacher) {
                         const implicitQuery = await db.collection("teachers").where("coTeachingFor", "array-contains", emailToCheck).get();
                         if (!implicitQuery.empty) {
                             isTeacher = true;
-                            teacherData = {
-                                email: emailToCheck,
-                                isAdmin: false,
-                                defaultCoTeachers: [],
-                                isImplicit: true
-                            };
-                            // Optional: Implicit teachers might default to being "co-teachers" of everyone who listed them?
-                            // For now we just grant access to the page.
+                            teacherData = { email: emailToCheck, isAdmin: false, defaultCoTeachers: [], isImplicit: true };
                         }
                     }
 
@@ -356,13 +346,9 @@
                         const data = teacherData;
                         currentUserIsAdmin = data.isAdmin || false;
                         currentUserDefaultCoTeachers = data.defaultCoTeachers || [];
-
                         document.getElementById('pageLoader').classList.add('hidden');
                         document.getElementById('assignmentContent').classList.remove('hidden');
-
-                        // If we need to perform any data migrations
                         await runMigration();
-
                         loadInitialData();
                     } else {
                         document.getElementById('loading-text').textContent = `Access Denied: You (${emailToCheck}) are not registered as a teacher.`;
@@ -372,7 +358,6 @@
                 } catch (error) {
                     console.error("Error checking teacher status:", error);
                     document.getElementById('loading-text').textContent = "Error verifying access.";
-                    document.getElementById('auth-error').innerText = "Network or permission error.";
                 }
             } else {
                 document.getElementById('pageLoader').classList.remove('hidden');
@@ -382,119 +367,54 @@
             }
         });
 
-        function handleCredentialResponse(response) {
-            const credential = firebase.auth.GoogleAuthProvider.credential(response.credential);
-            auth.signInWithCredential(credential).catch(error => {
-                console.error("Firebase sign-in error", error);
-                document.getElementById('auth-error').innerText = "Firebase sign-in failed. Please try again.";
-            });
-        }
-
         async function runMigration() {
             try {
                 const snapshot = await db.collection("assignments").get();
                 const docsToMigrate = snapshot.docs.filter(doc => !doc.data().teacherEmail);
-
                 if (docsToMigrate.length === 0) return;
-
                 const batch = db.batch();
                 docsToMigrate.forEach(doc => {
-                    batch.update(doc.ref, {
-                        teacherEmail: DEFAULT_TEACHER_EMAIL,
-                        coTeachers: [],
-                        isPublic: false
-                    });
+                    batch.update(doc.ref, { teacherEmail: DEFAULT_TEACHER_EMAIL, coTeachers: [], isPublic: false });
                 });
                 await batch.commit();
-                console.log(`Migrated ${docsToMigrate.length} assignments to have teacherEmail field`);
-            } catch (error) {
-                console.error("Migration error:", error);
-            }
+            } catch (error) { console.error("Migration error:", error); }
         }
 
         async function loadInitialData() {
             try {
-                // Filter students by current teacher to ensure Class Dropdown only shows THEIR classes
-                // NOTE: If implicit co-teacher, they might want to see Parent's classes?
-                // For now, simpler: Only show my classes. Co-teachers usually don't roster students themselves?
-                // But if I am co-teaching for Klynch, I might want to see Klynch's students.
-                // Let's broaden student search if implicit?
                 let studentQuery = db.collection("students").where("teacherEmail", "==", currentUserEmail);
-
-                // If I am implicit, also fetch my "parents" students?
-                // This is getting complex. Let's stick to basic access first.
-
                 const studentSnapshot = await studentQuery.get();
                 studentRoster = studentSnapshot.docs.map(doc => doc.data());
                 allClassNames = [...new Set(studentRoster.map(s => String(s.class)))].sort();
-            } catch (error) {
-                console.error("Could not load class roster:", error);
-                showToast("Error: Could not load class roster.", { color: 'red' });
-            }
+            } catch (error) { console.error("Could not load class roster:", error); }
 
-            // --- FIXED ASSIGNMENT LOADING STRATEGY ---
-
-            // Strategy:
-            // EVERYONE (Admin, Teacher, Co-Teacher) sees only:
-            // 1. Assignments they own (teacherEmail == currentUserEmail)
-            // 2. Assignments they co-teach (coTeachers contains currentUserEmail)
-            // 3. Assignments from their "Parent" teachers (if they are implicit co-teachers)
-
-            // This ensures Admins don't see a cluttered list of EVERY assignment in the system
-            // unless they explicit impersonate a specific user.
-
-            // Listener 1: Owned by me
             db.collection("assignments").where("teacherEmail", "==", currentUserEmail)
                 .onSnapshot(snapshot => handleAssignmentsUpdate(snapshot, 'owned'), handleError);
-
-            // Listener 2: Explicit Co-Teacher (array-contains)
             db.collection("assignments").where("coTeachers", "array-contains", currentUserEmail)
                 .onSnapshot(snapshot => handleAssignmentsUpdate(snapshot, 'coTaught'), handleError);
-
-            // Listener 3: Implicit "Parent" Assignments
             try {
                 const parentsSnapshot = await db.collection("teachers").where("coTeachingFor", "array-contains", currentUserEmail).get();
                 parentsSnapshot.docs.forEach(doc => {
-                    const parentEmail = doc.id;
-                    // Listen to their assignments (unordered to avoid index issues)
-                    db.collection("assignments").where("teacherEmail", "==", parentEmail)
-                        .onSnapshot(snapshot => handleAssignmentsUpdate(snapshot, `parent-${parentEmail}`), handleError);
+                    db.collection("assignments").where("teacherEmail", "==", doc.id)
+                        .onSnapshot(snapshot => handleAssignmentsUpdate(snapshot, `parent-${doc.id}`), handleError);
                 });
-            } catch (e) {
-                console.error("Error fetching parent teachers for co-teaching:", e);
-            }
-
+            } catch (e) { console.error("Error fetching parent teachers:", e); }
             db.collection("submissionStatus").onSnapshot(handleStatusUpdate, handleError);
         }
 
-        let assignmentsBySource = {}; // New global variable to store assignments from different sources
-
+        let assignmentsBySource = {};
         function handleAssignmentsUpdate(snapshot, sourceName) {
             assignmentsBySource[sourceName] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-            // Combine all sources, remove duplicates (if an assignment appears in multiple sources)
-            const combinedAssignments = new Map(); // Use Map to ensure uniqueness by ID
+            const combinedAssignments = new Map();
             for (const sourceKey in assignmentsBySource) {
-                assignmentsBySource[sourceKey].forEach(assignment => {
-                    combinedAssignments.set(assignment.id, assignment);
-                });
+                assignmentsBySource[sourceKey].forEach(assignment => combinedAssignments.set(assignment.id, assignment));
             }
             allAssignments = Array.from(combinedAssignments.values());
-
-            // Client-side Sort (descending by createdAt)
-            // Needed because we removed orderBy from some Firestore queries
             allAssignments.sort((a, b) => {
                 const ta = a.createdAt ? (a.createdAt.seconds || 0) : 0;
                 const tb = b.createdAt ? (b.createdAt.seconds || 0) : 0;
                 return tb - ta;
             });
-
-            // Filter assignments based on permissions (Double check for Admin view)
-            // If Admin, show all (no filter needed)
-            // If Non-Admin, the listeners already filtered by source, but we can double check logic.
-            // Actually, for implicit Co-teachers, we are fetching ALL of parent's assignments.
-            // That is correct behavior (co-teacher sees everything of parent).
-
             displayFilteredAssignments();
         }
 
@@ -502,18 +422,13 @@
             submissionStatuses = {};
             snapshot.forEach(doc => {
                 const data = doc.data();
-                if (!submissionStatuses[data.assignmentId]) {
-                    submissionStatuses[data.assignmentId] = {};
-                }
+                if (!submissionStatuses[data.assignmentId]) submissionStatuses[data.assignmentId] = {};
                 submissionStatuses[data.assignmentId][data.studentEmail] = data.status;
             });
-            displayFilteredAssignments(); // Re-render to update submission counts
+            displayFilteredAssignments();
         }
 
-        function handleError(error) {
-            console.error("Real-time listener failed:", error);
-            document.getElementById('loadingState').innerText = "Error loading data. See console for details.";
-        }
+        function handleError(error) { console.error("Real-time listener failed:", error); }
 
         function escapeHtml(text) {
             const div = document.createElement('div');
@@ -525,13 +440,11 @@
             const listContainer = document.getElementById('assignmentsList');
             const loadingState = document.getElementById('loadingState');
             const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-            const filteredAssignments = allAssignments.filter(assignment =>
-                assignment.name.toLowerCase().includes(searchTerm)
-            );
+            const filteredAssignments = allAssignments.filter(a => a.name.toLowerCase().includes(searchTerm));
 
             listContainer.innerHTML = '';
             if (filteredAssignments.length === 0) {
-                loadingState.innerText = searchTerm ? "No assignments found matching your search." : "No assignments found. Click '+ New Assignment' to create your first one!";
+                loadingState.innerText = searchTerm ? "No assignments found matching your search." : "No assignments found.";
                 loadingState.classList.remove('hidden');
             } else {
                 loadingState.classList.add('hidden');
@@ -547,10 +460,7 @@
                 if (assignedClasses.length > 0) {
                     assignedClasses.sort().forEach(className => {
                         const status = assignment.classStatus?.[className] || 'closed';
-                        let color = 'text-red-400';
-                        if (status === 'open') color = 'text-green-400';
-                        else if (status === 'scheduled') color = 'text-blue-400';
-
+                        let color = status === 'open' ? 'text-green-400' : (status === 'scheduled' ? 'text-blue-400' : 'text-red-400');
                         const studentsInClass = studentRoster.filter(s => String(s.class) === className);
                         const submissionCount = Object.keys(submissionStatuses[assignment.id] || {}).filter(email =>
                             studentsInClass.some(s => s.email === email)
@@ -560,15 +470,13 @@
                         <div class="flex justify-between items-center">
                             <div><span class="font-semibold">${className}:</span> <span class="${color}">${status}</span></div>
                             <div class="text-gray-400">${submissionCount} / ${studentsInClass.length} Submitted</div>
-                        </div>
-                    `;
+                        </div>`;
                     });
-                } else {
-                    statusHTML += '<span class="text-gray-400">Not yet assigned.</span>';
-                }
+                } else { statusHTML += '<span class="text-gray-400">Not yet assigned.</span>'; }
                 statusHTML += '</div>';
 
                 const escapedName = escapeHtml(assignment.name);
+                const editUrl = assignment.type === 'pdf' ? `pdf-editor.html?id=${assignment.id}` : `editor.html?id=${assignment.id}`;
 
                 card.innerHTML = `
                 <div>
@@ -580,7 +488,7 @@
                 <div class="mt-4 pt-4 border-t border-gray-700 flex flex-col gap-2">
                     <div class="flex justify-between gap-2">
                         <a href="./dashboard.html?assignmentId=${assignment.id}" class="flex-1 text-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-2 rounded-lg btn-action text-sm">Dashboard</a>
-                        <a href="./${assignment.type === 'pdf' ? 'pdf-editor.html' : 'editor.html'}?id=${assignment.id}" class="flex-1 text-center bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-2 rounded-lg btn-action text-sm">Edit</a>
+                        <a href="./${editUrl}" class="flex-1 text-center bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-2 rounded-lg btn-action text-sm">Edit</a>
                         <a href="./classroompicker.html?assignmentId=${assignment.id}" target="_blank" class="flex-1 text-center bg-green-700 hover:bg-green-800 text-white font-bold py-2 px-2 rounded-lg btn-action text-sm">Student View</a>
                     </div>
                     <div class="flex justify-between gap-2">
@@ -592,13 +500,19 @@
                         <button onclick="openShareModal('${assignment.id}')" class="flex-1 text-center bg-green-600 hover:bg-green-700 text-white text-sm font-bold py-2 px-2 rounded-lg btn-action">Share</button>
                         <button onclick="togglePublic('${assignment.id}', ${assignment.isPublic || false})" class="flex-1 text-center bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold py-2 px-2 rounded-lg btn-action">${assignment.isPublic ? 'Make Private' : 'Make Public'}</button>
                     </div>
-                </div>
-            `;
+                </div>`;
                 listContainer.appendChild(card);
             });
         }
 
         document.getElementById('searchInput').addEventListener('input', displayFilteredAssignments);
+
+        function openCreateModal() {
+            createModal.classList.remove('hidden');
+            const note = document.getElementById('create-note');
+            if (currentUserDefaultCoTeachers && currentUserDefaultCoTeachers.length > 0) note.classList.remove('hidden');
+            else note.classList.add('hidden');
+        }
 
         function toggleCreateFields() {
             const type = document.querySelector('input[name="assignmentType"]:checked').value;
@@ -615,6 +529,7 @@
             document.getElementById('isPublicCheckbox').checked = false;
             document.getElementById('modal-error').innerText = '';
         }
+
         async function handleCreateAssignment() {
             const nameInput = document.getElementById('assignmentName');
             const typeInput = document.querySelector('input[name="assignmentType"]:checked');
@@ -636,35 +551,29 @@
 
             if (type === 'slides') {
                 const link = slidesLinkInput.value.trim();
-                if (!link) { errorP.innerText = "Please enter a Google Slides link."; return; }
                 const match = link.match(/presentation\/d\/([a-zA-Z0-9-_]+)/);
-                if (!match || !match[1]) { errorP.innerText = "Invalid Google Slides URL."; return; }
+                if (!match) { errorP.innerText = "Invalid Google Slides URL."; return; }
                 presentationId = match[1];
             } else {
                 const file = pdfFileInput.files[0];
                 if (!file) { errorP.innerText = "Please select a PDF file."; return; }
-                
                 try {
                     btn.innerText = "Uploading PDF...";
                     btn.disabled = true;
                     document.getElementById('uploadProgress').classList.remove('hidden');
                     const progressBar = document.getElementById('uploadProgressBar');
-                    
                     const storageRef = storage.ref(`pdfs/${currentUserEmail}/${Date.now()}_${file.name}`);
                     const uploadTask = storageRef.put(file);
-                    
                     pdfUrl = await new Promise((resolve, reject) => {
                         uploadTask.on('state_changed', 
-                            (snapshot) => {
-                                progressBar.style.width = (snapshot.bytesTransferred / snapshot.totalBytes) * 100 + '%';
-                            },
+                            (snap) => { progressBar.style.width = (snap.bytesTransferred / snap.totalBytes) * 100 + '%'; },
                             reject,
                             async () => resolve(await uploadTask.snapshot.ref.getDownloadURL())
                         );
                     });
                 } catch (e) {
                     console.error("Upload error:", e);
-                    errorP.innerText = "File upload failed: " + e.message;
+                    errorP.innerText = "Upload failed: " + e.message;
                     btn.disabled = false;
                     btn.innerText = "Create Assignment";
                     return;
@@ -674,27 +583,14 @@
             try {
                 btn.innerText = "Creating...";
                 btn.disabled = true;
-
                 const newDoc = await db.collection("assignments").add({
-                    name: name,
-                    type: type,
-                    presentationId: presentationId || "",
-                    pdfUrl: pdfUrl || "",
-                    teacherEmail: currentUserEmail,
-                    coTeachers: currentUserDefaultCoTeachers || [],
-                    assignedClasses: [],
-                    classStatus: {},
-                    isPublic: isPublic,
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    slideIds: []
+                    name, type, presentationId: presentationId || "", pdfUrl: pdfUrl || "", teacherEmail: currentUserEmail,
+                    coTeachers: currentUserDefaultCoTeachers || [], assignedClasses: [], classStatus: {}, isPublic,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(), slideIds: []
                 });
-
-                showToast("Assignment created successfully!", { color: 'green' });
+                showToast("Assignment created!", { color: 'green' });
                 closeCreateModal();
-                // Redirect to editor
-                const editorPage = type === 'pdf' ? 'pdf-editor.html' : 'editor.html';
-                window.location.href = `./${editorPage}?id=${newDoc.id}`;
-
+                window.location.href = `./${type === 'pdf' ? 'pdf-editor.html' : 'editor.html'}?id=${newDoc.id}`;
             } catch (error) {
                 console.error("Error creating assignment:", error);
                 errorP.innerText = "Error: " + error.message;
@@ -703,18 +599,13 @@
             }
         }
 
-        const statusModal = document.getElementById('statusModal');
         function openStatusModal(assignmentId) {
             const assignment = allAssignments.find(a => a.id === assignmentId);
             if (!assignment) { showToast("Could not find assignment data.", { color: 'red' }); return; }
             activeAssignmentId = assignment.id;
-            const modalTitle = document.getElementById('statusModalTitle');
-            const modalContent = document.getElementById('statusModalContent');
-            const shareLinkInput = document.getElementById('studentShareLink');
-            const isPublicToggle = document.getElementById('isPublicToggle');
-            modalTitle.innerText = `Manage Status for: ${assignment.name}`;
-            shareLinkInput.value = `https://custom.scienceclass.rocks/classroompicker.html?assignmentId=${assignment.id}`;
-            isPublicToggle.checked = assignment.isPublic || false;
+            document.getElementById('statusModalTitle').innerText = `Manage Status for: ${assignment.name}`;
+            document.getElementById('studentShareLink').value = `https://custom.scienceclass.rocks/classroompicker.html?assignmentId=${assignment.id}`;
+            document.getElementById('isPublicToggle').checked = assignment.isPublic || false;
 
             let contentHTML = `
             <div class="flex justify-end gap-2 mb-4">
@@ -723,279 +614,175 @@
                 <button onclick="setAllStatuses('closed')" class="text-sm bg-yellow-600 hover:bg-yellow-700 px-3 py-1 rounded-md btn-action">Close All</button>
                 <button onclick="setAllStatuses('not-assigned')" class="text-sm bg-gray-600 hover:bg-gray-500 px-3 py-1 rounded-md btn-action">Unassign All</button>
             </div>
-            <div class="space-y-4">
-        `;
-            const classStatus = assignment.classStatus || {};
-            if (allClassNames.length === 0) {
-                contentHTML += '<p class="text-gray-400">No classes found in your roster.</p>';
-            } else {
-                allClassNames.forEach(className => {
-                    const isAssigned = (assignment.assignedClasses || []).includes(className);
-                    const currentStatus = isAssigned ? (classStatus[className] || 'closed') : 'not-assigned';
-                    const studentsInClass = studentRoster.filter(s => String(s.class) === className);
-                    const submissionCount = Object.keys(submissionStatuses[assignment.id] || {}).filter(email =>
-                        studentsInClass.some(s => s.email === email)
-                    ).length;
+            <div class="space-y-4">`;
 
-                    contentHTML += `
-                    <div class="bg-gray-700 p-3 rounded-lg">
-                        <div class="flex justify-between items-center">
-                            <label for="status-${className}" class="font-semibold">${className}</label>
-                            <select id="status-${className}" data-class-name="${className}" class="bg-gray-600 rounded p-2 border border-gray-500">
-                                <option value="open" ${currentStatus === 'open' ? 'selected' : ''}>Open</option>
-                                <option value="scheduled" ${currentStatus === 'scheduled' ? 'selected' : ''}>Scheduled</option>
-                                <option value="closed" ${currentStatus === 'closed' ? 'selected' : ''}>Closed</option>
-                                <option value="not-assigned" ${currentStatus === 'not-assigned' ? 'selected' : ''}>Not Assigned</option>
-                            </select>
-                        </div>
-                        <div class="mt-3 pt-3 border-t border-gray-600 flex justify-end gap-2 text-sm">
-                            <span class="text-gray-400">${submissionCount} / ${studentsInClass.length} Submitted</span>
-                            <button onclick="unsubmitClass('${assignment.id}', '${className}')" class="text-yellow-400 hover:text-yellow-300">Unsubmit All</button>
-                            <button onclick="forceSubmitClass('${assignment.id}', '${className}')" class="text-blue-400 hover:text-blue-300">Force Submit All</button>
-                        </div>
+            allClassNames.forEach(className => {
+                const isAssigned = (assignment.assignedClasses || []).includes(className);
+                const currentStatus = isAssigned ? (assignment.classStatus?.[className] || 'closed') : 'not-assigned';
+                const studentsInClass = studentRoster.filter(s => String(s.class) === className);
+                const submissionCount = Object.keys(submissionStatuses[assignment.id] || {}).filter(email =>
+                    studentsInClass.some(s => s.email === email)
+                ).length;
+
+                contentHTML += `
+                <div class="bg-gray-700 p-3 rounded-lg">
+                    <div class="flex justify-between items-center">
+                        <label class="font-semibold">${className}</label>
+                        <select data-class-name="${className}" class="bg-gray-600 rounded p-2 border border-gray-500">
+                            <option value="open" ${currentStatus === 'open' ? 'selected' : ''}>Open</option>
+                            <option value="scheduled" ${currentStatus === 'scheduled' ? 'selected' : ''}>Scheduled</option>
+                            <option value="closed" ${currentStatus === 'closed' ? 'selected' : ''}>Closed</option>
+                            <option value="not-assigned" ${currentStatus === 'not-assigned' ? 'selected' : ''}>Not Assigned</option>
+                        </select>
                     </div>
-                `;
-                });
-            }
-            contentHTML += '</div>';
-            modalContent.innerHTML = contentHTML;
+                    <div class="mt-3 pt-3 border-t border-gray-600 flex justify-end gap-2 text-sm">
+                        <span class="text-gray-400">${submissionCount} / ${studentsInClass.length} Submitted</span>
+                        <button onclick="unsubmitClass('${assignment.id}', '${className}')" class="text-yellow-400">Unsubmit All</button>
+                        <button onclick="forceSubmitClass('${assignment.id}', '${className}')" class="text-blue-400">Force Submit All</button>
+                    </div>
+                </div>`;
+            });
+            document.getElementById('statusModalContent').innerHTML = contentHTML + '</div>';
             statusModal.classList.remove('hidden');
         }
 
-        function setAllStatuses(status) { /* ... */ }
-        function closeStatusModal() { /* ... */ }
-        async function handleSaveAssignmentStatus() { /* ... */ }
-        async function deleteAssignment(id, name) { /* ... */ }
-        function copyShareLink() { /* ... */ }
+        function setAllStatuses(status) {
+            document.querySelectorAll('#statusModalContent select').forEach(s => s.value = status);
+        }
 
-        async function forceSubmitClass(assignmentId, className) {
-            if (!confirm(`Are you sure you want to force submit for all unsubmitted students in ${className}?`)) return;
-            const studentsToSubmit = studentRoster.filter(s => String(s.class) === className && !(submissionStatuses[assignmentId] && submissionStatuses[assignmentId][s.email]));
-            if (studentsToSubmit.length === 0) {
-                showToast("All students in this class have already submitted.", { color: 'blue' });
-                return;
-            }
-            const batch = db.batch();
-            studentsToSubmit.forEach(student => {
-                const docRef = db.collection("submissionStatus").doc(`${assignmentId}_${student.email}`);
-                batch.set(docRef, {
-                    assignmentId, studentEmail: student.email, studentName: student.name,
-                    status: 'submitted', submittedAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
+        function closeStatusModal() {
+            statusModal.classList.add('hidden');
+            activeAssignmentId = null;
+        }
+
+        async function handleSaveAssignmentStatus() {
+            if (!activeAssignmentId) return;
+            const newAssignedClasses = [];
+            const newClassStatus = {};
+            document.querySelectorAll('#statusModalContent select').forEach(s => {
+                newClassStatus[s.dataset.className] = s.value;
+                if (s.value !== 'not-assigned') newAssignedClasses.push(s.dataset.className);
             });
             try {
-                await batch.commit();
-                showToast(`Force submitted for ${studentsToSubmit.length} students in ${className}.`, { color: 'green' });
+                await db.collection("assignments").doc(activeAssignmentId).update({
+                    assignedClasses: newAssignedClasses,
+                    classStatus: newClassStatus,
+                    isPublic: document.getElementById('isPublicToggle').checked
+                });
+                showToast("Status updated!", { color: 'green' });
+                closeStatusModal();
             } catch (e) {
-                showToast("An error occurred.", { color: 'red' });
                 console.error(e);
+                showToast("Update failed.", { color: 'red' });
             }
+        }
+
+        async function deleteAssignment(id, name) {
+            if (confirm(`Delete "${name}"?`)) {
+                try {
+                    await db.collection("assignments").doc(id).delete();
+                    showToast("Deleted.", { color: 'blue' });
+                } catch (e) { console.error(e); }
+            }
+        }
+
+        function copyShareLink() {
+            const link = document.getElementById('studentShareLink');
+            link.select();
+            document.execCommand('copy');
+            showToast("Copied!", { color: 'blue' });
+        }
+
+        async function forceSubmitClass(assignmentId, className) {
+            if (!confirm(`Force submit for ${className}?`)) return;
+            const students = studentRoster.filter(s => String(s.class) === className && !(submissionStatuses[assignmentId] && submissionStatuses[assignmentId][s.email]));
+            const batch = db.batch();
+            students.forEach(s => {
+                batch.set(db.collection("submissionStatus").doc(`${assignmentId}_${s.email}`), {
+                    assignmentId, studentEmail: s.email, studentName: s.name, status: 'submitted', submittedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            });
+            await batch.commit();
+            showToast("Force submitted!", { color: 'green' });
         }
 
         async function unsubmitClass(assignmentId, className) {
-            if (!confirm(`Are you sure you want to un-submit for all students in ${className}? This will allow them to work on the assignment again.`)) return;
-            const studentsToUnsubmit = studentRoster.filter(s => String(s.class) === className && (submissionStatuses[assignmentId] && submissionStatuses[assignmentId][s.email]));
-            if (studentsToUnsubmit.length === 0) {
-                showToast("No students in this class have submitted yet.", { color: 'blue' });
-                return;
-            }
+            if (!confirm(`Un-submit for ${className}?`)) return;
+            const students = studentRoster.filter(s => String(s.class) === className && submissionStatuses[assignmentId] && submissionStatuses[assignmentId][s.email]);
             const batch = db.batch();
-            studentsToUnsubmit.forEach(student => {
-                const docRef = db.collection("submissionStatus").doc(`${assignmentId}_${student.email}`);
-                batch.delete(docRef);
-            });
-            try {
-                await batch.commit();
-                showToast(`Un-submitted for ${studentsToUnsubmit.length} students in ${className}.`, { color: 'green' });
-            } catch (e) {
-                showToast("An error occurred.", { color: 'red' });
-                console.error(e);
-            }
+            students.forEach(s => batch.delete(db.collection("submissionStatus").doc(`${assignmentId}_${s.email}`)));
+            await batch.commit();
+            showToast("Un-submitted!", { color: 'green' });
         }
 
-        document.getElementById('signOutButton').onclick = () => { auth.signOut(); };
-
-        // Co-Teacher Management
-        const coTeacherModal = document.getElementById('coTeacherModal');
         function openCoTeacherModal(assignmentId) {
             const assignment = allAssignments.find(a => a.id === assignmentId);
-            if (!assignment) { showToast("Could not find assignment data.", { color: 'red' }); return; }
+            if (!assignment) return;
             activeAssignmentId = assignment.id;
-            const coTeachers = assignment.coTeachers || [];
-            document.getElementById('coTeacherEmails').value = coTeachers.join(', ');
-            document.getElementById('coTeacher-error').innerText = '';
+            document.getElementById('coTeacherEmails').value = (assignment.coTeachers || []).join(', ');
             coTeacherModal.classList.remove('hidden');
         }
-
-        function closeCoTeacherModal() {
-            coTeacherModal.classList.add('hidden');
-            activeAssignmentId = null;
-            document.getElementById('coTeacherEmails').value = '';
-            document.getElementById('coTeacher-error').innerText = '';
-        }
-
+        function closeCoTeacherModal() { coTeacherModal.classList.add('hidden'); }
         async function handleSaveCoTeachers() {
-            if (!activeAssignmentId) return;
-            const emailsInput = document.getElementById('coTeacherEmails').value.trim();
-            const errorP = document.getElementById('coTeacher-error');
-            errorP.innerText = '';
-
-            const emails = emailsInput ? emailsInput.split(',').map(e => e.trim().toLowerCase()).filter(e => e) : [];
-
-            try {
-                document.getElementById('saveCoTeachersBtn').innerText = "Saving...";
-                await db.collection("assignments").doc(activeAssignmentId).update({
-                    coTeachers: emails
-                });
-                showToast("Co-teachers updated successfully!", { color: 'green' });
-                closeCoTeacherModal();
-            } catch (error) {
-                console.error("Error updating co-teachers:", error);
-                errorP.innerText = "Could not update co-teachers.";
-            } finally {
-                document.getElementById('saveCoTeachersBtn').innerText = "Save Co-Teachers";
-            }
+            const emails = document.getElementById('coTeacherEmails').value.split(',').map(e => e.trim().toLowerCase()).filter(e => e);
+            await db.collection("assignments").doc(activeAssignmentId).update({ coTeachers: emails });
+            showToast("Co-teachers updated!", { color: 'green' });
+            closeCoTeacherModal();
         }
 
-        // Global Default Co-Teachers
-        const defaultCoTeacherModal = document.getElementById('defaultCoTeacherModal');
         function openDefaultCoTeacherModal() {
-            document.getElementById('defaultCoTeacherEmails').value = currentUserDefaultCoTeachers.join(', ');
-            document.getElementById('default-coTeacher-error').innerText = '';
+            document.getElementById('defaultCoTeacherEmails').value = (currentUserDefaultCoTeachers || []).join(', ');
             defaultCoTeacherModal.classList.remove('hidden');
         }
-
-        function closeDefaultCoTeacherModal() {
-            defaultCoTeacherModal.classList.add('hidden');
-            document.getElementById('default-coTeacher-error').innerText = '';
-        }
-
+        function closeDefaultCoTeacherModal() { defaultCoTeacherModal.classList.add('hidden'); }
         async function handleSaveDefaultCoTeachers() {
-            const emailsInput = document.getElementById('defaultCoTeacherEmails').value.trim();
-            const errorP = document.getElementById('default-coTeacher-error');
-            const btn = document.getElementById('saveDefaultCoTeachersBtn');
-            errorP.innerText = '';
-
-            const emails = emailsInput ? emailsInput.split(',').map(e => e.trim().toLowerCase()).filter(e => e) : [];
-
-            try {
-                btn.innerText = "Saving...";
-                btn.disabled = true;
-
-                // Update Teacher Profile
-                // We update BOTH:
-                // 1. defaultCoTeachers: Used to pre-fill the "Co-Teachers" field on NEW assignments.
-                // 2. coTeachingFor: Used to grant GLOBAL retroactive access to these users (Implicit Co-Teachers).
-                //    (Note: Field name is slightly confusing, but it stores "List of people who co-teach FOR me")
-                await db.collection("teachers").doc(currentUserEmail).set({
-                    defaultCoTeachers: emails,
-                    coTeachingFor: emails
-                }, { merge: true });
-
-                currentUserDefaultCoTeachers = emails;
-
-                showToast("Default settings saved!", { color: 'green' });
-                closeDefaultCoTeacherModal();
-            } catch (error) {
-                console.error("Error saving defaults:", error);
-                errorP.innerText = "Error saving: " + error.message;
-            } finally {
-                btn.innerText = "Save Defaults";
-                btn.disabled = false;
-            }
+            const emails = document.getElementById('defaultCoTeacherEmails').value.split(',').map(e => e.trim().toLowerCase()).filter(e => e);
+            await db.collection("teachers").doc(currentUserEmail).set({ defaultCoTeachers: emails, coTeachingFor: emails }, { merge: true });
+            currentUserDefaultCoTeachers = emails;
+            showToast("Defaults saved!", { color: 'green' });
+            closeDefaultCoTeacherModal();
         }
 
-        // Share to Teacher
-        const shareModal = document.getElementById('shareModal');
         function openShareModal(assignmentId) {
-            const assignment = allAssignments.find(a => a.id === assignmentId);
-            if (!assignment) { showToast("Could not find assignment data.", { color: 'red' }); return; }
-            activeAssignmentId = assignment.id;
+            activeAssignmentId = assignmentId;
             document.getElementById('targetTeacherEmail').value = '';
-            document.getElementById('share-error').innerText = '';
             shareModal.classList.remove('hidden');
         }
-
-        function closeShareModal() {
-            shareModal.classList.add('hidden');
-            activeAssignmentId = null;
-            document.getElementById('targetTeacherEmail').value = '';
-            document.getElementById('share-error').innerText = '';
-        }
-
+        function closeShareModal() { shareModal.classList.add('hidden'); }
         async function handleShareToTeacher() {
-            if (!activeAssignmentId) return;
             const targetEmail = document.getElementById('targetTeacherEmail').value.trim().toLowerCase();
-            const errorP = document.getElementById('share-error');
-            errorP.innerText = '';
-
-            if (!targetEmail) {
-                errorP.innerText = "Please enter a teacher email.";
-                return;
-            }
-
-            // Verify teacher exists
+            const source = allAssignments.find(a => a.id === activeAssignmentId);
+            if (!targetEmail || !source) return;
             try {
-                const teacherDoc = await db.collection("teachers").doc(targetEmail).get();
-                if (!teacherDoc.exists) {
-                    errorP.innerText = "Teacher not found in the system.";
-                    return;
-                }
-            } catch (error) {
-                console.error("Error checking teacher:", error);
-                errorP.innerText = "Could not verify teacher.";
-                return;
-            }
-
-            // Get source assignment
-            const sourceAssignment = allAssignments.find(a => a.id === activeAssignmentId);
-            if (!sourceAssignment) {
-                errorP.innerText = "Could not find assignment data.";
-                return;
-            }
-
-            try {
-                document.getElementById('shareToTeacherBtn').innerText = "Sharing...";
-
-                // Create duplicate with new teacher
                 await db.collection("assignments").add({
-                    name: sourceAssignment.name + " (copy)",
-                    presentationId: sourceAssignment.presentationId,
-                    teacherEmail: targetEmail,
-                    coTeachers: [],
-                    assignedClasses: [],
-                    classStatus: {},
-                    isPublic: false,
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                    name: source.name + " (copy)", type: source.type || "slides", presentationId: source.presentationId || "",
+                    pdfUrl: source.pdfUrl || "", teacherEmail: targetEmail, coTeachers: [], assignedClasses: [],
+                    classStatus: {}, isPublic: false, createdAt: firebase.firestore.FieldValue.serverTimestamp()
                 });
-
-                showToast(`Assignment shared to ${targetEmail}!`, { color: 'green' });
+                showToast(`Shared with ${targetEmail}!`, { color: 'green' });
                 closeShareModal();
-            } catch (error) {
-                console.error("Error sharing assignment:", error);
-                errorP.innerText = "Could not share assignment.";
-            } finally {
-                document.getElementById('shareToTeacherBtn').innerText = "Share Assignment";
-            }
+            } catch (e) { console.error(e); }
         }
 
-        // Toggle Public
-        async function togglePublic(assignmentId, currentValue) {
-            const newValue = !currentValue;
-            try {
-                await db.collection("assignments").doc(assignmentId).update({
-                    isPublic: newValue
-                });
-                showToast(`Assignment is now ${newValue ? 'public' : 'private'}!`, { color: 'blue' });
-            } catch (error) {
-                console.error("Error toggling public status:", error);
-                showToast("Could not update public status.", { color: 'red' });
-            }
+        async function togglePublic(id, current) {
+            await db.collection("assignments").doc(id).update({ isPublic: !current });
+            showToast("Public status updated!", { color: 'blue' });
         }
 
-        function showToast(message, options = {}) { /* ... */ }
+        function showToast(message, options = {}) {
+            const { color = 'default', duration = 3000 } = options;
+            const wrapper = document.getElementById('toast-wrapper');
+            const toast = document.createElement('div');
+            toast.className = `flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm bg-gray-700`;
+            if (color === 'green') toast.classList.add('bg-green-600');
+            if (color === 'red') toast.classList.add('bg-red-600');
+            if (color === 'blue') toast.classList.add('bg-blue-600');
+            toast.innerHTML = `<span>${message}</span><button onclick="this.parentElement.remove()" class="ml-4 font-bold text-xl leading-none">&times;</button>`;
+            wrapper.appendChild(toast);
+            setTimeout(() => { if (toast.parentElement) toast.remove(); }, duration);
+        }
+
+        document.getElementById('signOutButton').onclick = () => auth.signOut();
     </script>
 </body>
-</html>/body>
-
 </html>
