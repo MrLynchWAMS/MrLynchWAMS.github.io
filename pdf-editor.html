@@ -2563,11 +2563,18 @@
             deadlinePolicy.earlyAccessPadding[String(className)] = paddingValue;
           });
 
-          assignmentData.slideIds.forEach((id, index) => {
+          // For PDF: iterate over zones; for Slides: iterate over slideIds
+          const questionIdentifiers = assignmentData.type === 'pdf'
+            ? questionZones.map((z, i) => `q${i + 1}`)
+            : (assignmentData.slideIds || []);
+
+          questionIdentifiers.forEach((id, index) => {
             const qNum = index + 1;
-            const checkerWidgetDiv = document
-              .getElementById(`checker-container-${qNum}`)
-              .querySelector('.checker-widget');
+            const checkerContainer = document.getElementById(`checker-container-${qNum}`);
+            if (!checkerContainer) return; // Safety guard
+
+            const checkerWidgetDiv = checkerContainer.querySelector('.checker-widget');
+            if (!checkerWidgetDiv) return;
 
             const funcName = `calc${qNum}`;
             const mode = checkerWidgetDiv.getMode();
@@ -2608,7 +2615,6 @@
                 lockOnMax: lockOnMax,
                 lockMessage: lockMessage || '',
                 showHelpAfter: showHelpAfter,
-                caseSensitive: caseSensitive,
                 caseSensitive: caseSensitive,
                 punctuationSensitive: punctuationSensitive
               };
