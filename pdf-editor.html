@@ -568,14 +568,13 @@
       </div>
 
       <div id="pdf-viewer-container" class="hidden">
-        <div class="mb-4 flex gap-4 sticky top-0 z-50 bg-gray-800 p-2 rounded border border-gray-700 shadow-lg justify-center">
-            <button id="add-zone-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
-                </svg>
-                Add Question
-            </button>
-            <p class="text-sm text-gray-400 self-center">Drag on the PDF to create a zone</p>
+        <div class="mb-4 flex gap-4 sticky top-0 z-50 bg-gray-800 p-2 rounded border border-gray-700 shadow-lg justify-center items-center">
+            <div class="flex bg-gray-700 rounded-lg overflow-hidden border border-gray-600">
+                <button onclick="setCurrentTool('question')" id="tool-btn-question" class="tool-btn active bg-blue-600 text-white px-4 py-2 text-sm font-bold border-r border-gray-600">✏️ Question</button>
+                <button onclick="setCurrentTool('text')" id="tool-btn-text" class="tool-btn hover:bg-gray-600 text-gray-300 px-4 py-2 text-sm font-bold border-r border-gray-600">🏷️ Text</button>
+                <button onclick="setCurrentTool('arrow')" id="tool-btn-arrow" class="tool-btn hover:bg-gray-600 text-gray-300 px-4 py-2 text-sm font-bold">↘️ Arrow</button>
+            </div>
+            <p id="tool-hint" class="text-sm text-gray-400 self-center">Drag on PDF to create a Question box</p>
         </div>
         <div id="pdf-pages-list"></div>
       </div>
@@ -686,10 +685,30 @@
 
       // PDF Zone State
       let questionZones = []; // Array of { id, page, x, y, w, h }
+      let annotationElements = []; // Array of { id, type, page, x, y, w, h, text?, direction? }
       let isDrawing = false;
       let startX, startY;
       let activeZone = null;
       let currentOverlay = null;
+      let currentTool = 'question';
+
+      function setCurrentTool(tool) {
+        currentTool = tool;
+        document.querySelectorAll('.tool-btn').forEach(btn => {
+          btn.classList.remove('bg-blue-600', 'text-white');
+          btn.classList.add('hover:bg-gray-600', 'text-gray-300');
+        });
+        const activeBtn = document.getElementById(`tool-btn-${tool}`);
+        activeBtn.classList.add('bg-blue-600', 'text-white');
+        activeBtn.classList.remove('hover:bg-gray-600', 'text-gray-300');
+        
+        const hints = {
+            'question': 'Drag on PDF to create a Question box',
+            'text': 'Drag on PDF to create a Text Label, then double-click to edit',
+            'arrow': 'Drag on PDF to create an Arrow, double-click to rotate direction'
+        };
+        document.getElementById('tool-hint').textContent = hints[tool] || '';
+      }
 
       // --- Impersonation Logic ---
       function checkImpersonation() {
@@ -898,6 +917,7 @@
             
             // Load existing zones
             questionZones = assignmentData.questionZones || [];
+            annotationElements = assignmentData.annotationElements || [];
             
             await renderPDFView(assignmentData.pdfUrl);
             initZoneDrawing();
@@ -1102,14 +1122,18 @@
             startY = e.clientY - rect.top;
 
             const qNum = questionZones.length + 1;
+            const aNum = annotationElements.length + 1;
             activeZone = {
-              id: `q${qNum}`,
+              id: currentTool === 'question' ? `q${qNum}` : `a${aNum}`,
+              type: currentTool,
               page: parseInt(overlay.dataset.pageNumber),
               x: (startX / rect.width) * 100,
               y: (startY / rect.height) * 100,
               w: 0,
               h: 0
             };
+            if (currentTool === 'text') activeZone.text = 'Double-click to edit text';
+            if (currentTool === 'arrow') activeZone.direction = 'right';
           });
         });
 
@@ -1127,7 +1151,11 @@
 
         window.addEventListener('mouseup', () => {
           if (isDrawing && activeZone && activeZone.w > 1 && activeZone.h > 1) {
-            questionZones.push(activeZone);
+            if (activeZone.type === 'question') {
+                questionZones.push(activeZone);
+            } else {
+                annotationElements.push(activeZone);
+            }
             renderZones();
           }
           isDrawing = false;
@@ -1146,6 +1174,12 @@
           temp.className = 'question-zone';
           overlay.appendChild(temp);
         }
+        
+        // Simple distinct style for temp based on type
+        if (zone.type === 'text') temp.style.border = '2px dashed #eab308'; // yellow-500
+        else if (zone.type === 'arrow') temp.style.border = '2px dashed #9ca3af'; // gray-400
+        else temp.style.border = '2px dashed #3b82f6'; // blue-500
+        
         temp.style.left = zone.x + '%';
         temp.style.top = zone.y + '%';
         temp.style.width = zone.w + '%';
@@ -1184,6 +1218,81 @@
                 startResizing(e, zone, div);
             } else {
                 startDragging(e, zone, div);
+            }
+          });
+
+          overlay.appendChild(div);
+        });
+        
+        annotationElements.forEach((ann, index) => {
+          const overlay = document.querySelector(`.pdf-overlay[data-page-number="${ann.page}"]`);
+          if (!overlay) return;
+
+          const div = document.createElement('div');
+          div.className = 'question-zone flex items-center justify-center relative cursor-move';
+          div.style.left = ann.x + '%';
+          div.style.top = ann.y + '%';
+          div.style.width = ann.w + '%';
+          div.style.height = ann.h + '%';
+          
+          if (ann.type === 'text') {
+              div.style.border = '2px dashed #f59e0b'; // amber-500
+              div.style.backgroundColor = 'rgba(253, 230, 138, 0.9)'; // amber-200
+              const textSpan = document.createElement('span');
+              textSpan.textContent = ann.text;
+              textSpan.className = "text-yellow-900 font-bold select-none text-center p-1 overflow-hidden w-full h-full flex items-center justify-center";
+              // Dynamically size font based on height
+              textSpan.style.fontSize = Math.max(10, ann.h * 1.5) + 'px';
+              div.appendChild(textSpan);
+
+              div.addEventListener('dblclick', () => {
+                  const newText = prompt("Enter text for this label:", ann.text);
+                  if (newText !== null) {
+                      ann.text = newText;
+                      renderZones();
+                  }
+              });
+          } else if (ann.type === 'arrow') {
+              div.style.border = '2px dashed #9ca3af'; // gray-400
+              div.style.backgroundColor = 'transparent';
+              const svgContent = {
+                  'right': '<path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />',
+                  'down': '<path stroke-linecap="round" stroke-linejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />',
+                  'left': '<path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />',
+                  'up': '<path stroke-linecap="round" stroke-linejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" />'
+              };
+              div.innerHTML = `<svg class="w-full h-full text-blue-500 drop-shadow-md" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">${svgContent[ann.direction]}</svg>`;
+
+              div.addEventListener('dblclick', () => {
+                  const dirs = ['right', 'down', 'left', 'up'];
+                  ann.direction = dirs[(dirs.indexOf(ann.direction) + 1) % 4];
+                  renderZones();
+              });
+          }
+
+          // Delete button
+          const delBtn = document.createElement('button');
+          delBtn.innerHTML = '×';
+          delBtn.className = 'absolute -top-3 -right-3 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold shadow-md hover:bg-red-700 z-10';
+          delBtn.onclick = (e) => {
+              e.stopPropagation();
+              annotationElements.splice(index, 1);
+              renderZones();
+          };
+          div.appendChild(delBtn);
+
+          // Resize Handle
+          const resizeHandle = document.createElement('div');
+          resizeHandle.className = 'resize-handle absolute bottom-0 right-0 w-3 h-3 bg-gray-500 cursor-se-resize';
+          div.appendChild(resizeHandle);
+
+          div.addEventListener('mousedown', e => {
+            e.stopPropagation();
+            if (e.target === delBtn) return;
+            if (e.target === resizeHandle || e.target.classList.contains('resize-handle')) {
+                startResizing(e, ann, div);
+            } else {
+                startDragging(e, ann, div);
             }
           });
 
@@ -2683,7 +2792,8 @@
             focusModeEnabled: focusModeEnabled,
             focusModeAction: focusModeAction,
             toolsConfig: toolsConfig,
-            questionZones: questionZones || [] // Save PDF Zones
+            questionZones: questionZones || [], // Save PDF Zones
+            annotationElements: annotationElements || [] // Save PDF Annotations
           };
 
           // Use dot notation to avoid nested FieldValue.delete() errors
