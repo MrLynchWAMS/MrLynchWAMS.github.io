@@ -87,6 +87,9 @@
                 <a href="./roster.html"
                     class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Manage
                     Roster</a>
+                <a href="./aura-purchases.html"
+                    class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Aura
+                    Purchases</a>
                 <a href="./class-dashboard.html"
                     class="bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Class
                     Overview</a>
@@ -246,6 +249,14 @@
 
     <div id="toast-wrapper" class="fixed top-4 right-4 z-[100] space-y-3 w-full max-w-sm"></div>
 
+        <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
+        <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-storage-compat.js"></script>
+    <style>
+    /* ... (rest of style) */
+    </style>
+</head>
+<body class="bg-gray-900 text-white font-sans">
+    <!-- ... (body content) -->
     <script>
         const firebaseConfig = {
             apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
@@ -258,6 +269,7 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
         const auth = firebase.auth();
+        const storage = firebase.storage();
         const DEFAULT_TEACHER_EMAIL = "klynch@mtps.us"; // Default for migrating existing assignments
         let activeAssignmentId = null;
         let allClassNames = [];
