@@ -127,10 +127,34 @@
                 <label for="assignmentName" class="block text-sm font-medium text-gray-300 mb-2">Assignment Name</label>
                 <input type="text" id="assignmentName" placeholder="e.g., Chapter 5 Review"
                     class="w-full p-3 mb-4 bg-gray-700 rounded border border-gray-600">
-                <label for="slidesLink" class="block text-sm font-medium text-gray-300 mb-2">Google Slides Share
-                    Link</label>
-                <input type="text" id="slidesLink" placeholder="Paste the full URL from Google Slides"
-                    class="w-full p-3 mb-4 bg-gray-700 rounded border border-gray-600">
+                <div class="flex gap-4 mb-4">
+                    <label class="flex items-center cursor-pointer">
+                        <input type="radio" name="assignmentType" value="slides" checked onchange="toggleCreateFields()" class="mr-2">
+                        <span>Google Slides</span>
+                    </label>
+                    <label class="flex items-center cursor-pointer">
+                        <input type="radio" name="assignmentType" value="pdf" onchange="toggleCreateFields()" class="mr-2">
+                        <span>PDF Document</span>
+                    </label>
+                </div>
+
+                <div id="slidesFields">
+                    <label for="slidesLink" class="block text-sm font-medium text-gray-300 mb-2">Google Slides Share Link</label>
+                    <input type="text" id="slidesLink" placeholder="Paste the full URL from Google Slides"
+                        class="w-full p-3 mb-4 bg-gray-700 rounded border border-gray-600">
+                </div>
+
+                <div id="pdfFields" class="hidden">
+                    <label for="pdfFile" class="block text-sm font-medium text-gray-300 mb-2">Upload PDF File</label>
+                    <input type="file" id="pdfFile" accept="application/pdf"
+                        class="w-full p-3 mb-4 bg-gray-700 rounded border border-gray-600">
+                    <div id="uploadProgress" class="hidden mb-4">
+                        <div class="w-full bg-gray-700 rounded-full h-2">
+                            <div id="uploadProgressBar" class="bg-blue-600 h-2 rounded-full" style="width: 0%"></div>
+                        </div>
+                        <p class="text-[10px] text-gray-400 mt-1">Uploading PDF...</p>
+                    </div>
+                </div>
                 <div class="flex items-center mb-4">
                     <input type="checkbox" id="isPublicCheckbox" class="mr-2 w-4 h-4">
                     <label for="isPublicCheckbox" class="text-sm text-gray-300">Make this assignment public (visible in
@@ -556,7 +580,7 @@
                 <div class="mt-4 pt-4 border-t border-gray-700 flex flex-col gap-2">
                     <div class="flex justify-between gap-2">
                         <a href="./dashboard.html?assignmentId=${assignment.id}" class="flex-1 text-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-2 rounded-lg btn-action text-sm">Dashboard</a>
-                        <a href="./editor.html?id=${assignment.id}" class="flex-1 text-center bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-2 rounded-lg btn-action text-sm">Edit</a>
+                        <a href="./${assignment.type === 'pdf' ? 'pdf-editor.html' : 'editor.html'}?id=${assignment.id}" class="flex-1 text-center bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-2 rounded-lg btn-action text-sm">Edit</a>
                         <a href="./classroompicker.html?assignmentId=${assignment.id}" target="_blank" class="flex-1 text-center bg-green-700 hover:bg-green-800 text-white font-bold py-2 px-2 rounded-lg btn-action text-sm">Student View</a>
                     </div>
                     <div class="flex justify-between gap-2">
@@ -576,71 +600,106 @@
 
         document.getElementById('searchInput').addEventListener('input', displayFilteredAssignments);
 
-        const createModal = document.getElementById('createModal');
-        function openCreateModal() {
-            createModal.classList.remove('hidden');
-            const note = document.getElementById('create-note');
-            if (currentUserDefaultCoTeachers && currentUserDefaultCoTeachers.length > 0) {
-                note.classList.remove('hidden');
-            } else {
-                note.classList.add('hidden');
-            }
+        function toggleCreateFields() {
+            const type = document.querySelector('input[name="assignmentType"]:checked').value;
+            document.getElementById('slidesFields').classList.toggle('hidden', type !== 'slides');
+            document.getElementById('pdfFields').classList.toggle('hidden', type !== 'pdf');
         }
-        function closeCreateModal() { /* ... */ }
+
+        function closeCreateModal() {
+            createModal.classList.add('hidden');
+            document.getElementById('assignmentName').value = '';
+            document.getElementById('slidesLink').value = '';
+            document.getElementById('pdfFile').value = '';
+            document.getElementById('uploadProgress').classList.add('hidden');
+            document.getElementById('isPublicCheckbox').checked = false;
+            document.getElementById('modal-error').innerText = '';
+        }
         async function handleCreateAssignment() {
             const nameInput = document.getElementById('assignmentName');
-            const linkInput = document.getElementById('slidesLink');
+            const typeInput = document.querySelector('input[name="assignmentType"]:checked');
+            const slidesLinkInput = document.getElementById('slidesLink');
+            const pdfFileInput = document.getElementById('pdfFile');
             const isPublicInput = document.getElementById('isPublicCheckbox');
             const errorP = document.getElementById('modal-error');
             const btn = document.getElementById('createAssignmentBtn');
 
             const name = nameInput.value.trim();
-            const link = linkInput.value.trim();
+            const type = typeInput.value;
             const isPublic = isPublicInput.checked;
 
             errorP.innerText = '';
-
             if (!name) { errorP.innerText = "Please enter an assignment name."; return; }
-            if (!link) { errorP.innerText = "Please enter a Google Slides link."; return; }
 
-            // Extract Presentation ID
-            const match = link.match(/presentation\/d\/([a-zA-Z0-9-_]+)/);
-            if (!match || !match[1]) {
-                errorP.innerText = "Invalid Google Slides URL. Could not find presentation ID.";
-                return;
+            let presentationId = null;
+            let pdfUrl = null;
+
+            if (type === 'slides') {
+                const link = slidesLinkInput.value.trim();
+                if (!link) { errorP.innerText = "Please enter a Google Slides link."; return; }
+                const match = link.match(/presentation\/d\/([a-zA-Z0-9-_]+)/);
+                if (!match || !match[1]) { errorP.innerText = "Invalid Google Slides URL."; return; }
+                presentationId = match[1];
+            } else {
+                const file = pdfFileInput.files[0];
+                if (!file) { errorP.innerText = "Please select a PDF file."; return; }
+                
+                try {
+                    btn.innerText = "Uploading PDF...";
+                    btn.disabled = true;
+                    document.getElementById('uploadProgress').classList.remove('hidden');
+                    const progressBar = document.getElementById('uploadProgressBar');
+                    
+                    const storageRef = storage.ref(`pdfs/${currentUserEmail}/${Date.now()}_${file.name}`);
+                    const uploadTask = storageRef.put(file);
+                    
+                    pdfUrl = await new Promise((resolve, reject) => {
+                        uploadTask.on('state_changed', 
+                            (snapshot) => {
+                                progressBar.style.width = (snapshot.bytesTransferred / snapshot.totalBytes) * 100 + '%';
+                            },
+                            reject,
+                            async () => resolve(await uploadTask.snapshot.ref.getDownloadURL())
+                        );
+                    });
+                } catch (e) {
+                    console.error("Upload error:", e);
+                    errorP.innerText = "File upload failed: " + e.message;
+                    btn.disabled = false;
+                    btn.innerText = "Create Assignment";
+                    return;
+                }
             }
-            const presentationId = match[1];
 
             try {
                 btn.innerText = "Creating...";
                 btn.disabled = true;
 
-                await db.collection("assignments").add({
+                const newDoc = await db.collection("assignments").add({
                     name: name,
-                    presentationId: presentationId,
+                    type: type,
+                    presentationId: presentationId || "",
+                    pdfUrl: pdfUrl || "",
                     teacherEmail: currentUserEmail,
-                    coTeachers: currentUserDefaultCoTeachers || [], // Use the defaults!
+                    coTeachers: currentUserDefaultCoTeachers || [],
                     assignedClasses: [],
                     classStatus: {},
                     isPublic: isPublic,
                     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    slideIds: [] // Initialize empty, will be populated by editor or fetch? 
-                    // Wait, original app likely fetched slides?
-                    // Without the original code, I don't know if it fetched metadata on create.
-                    // Let's assume basic create is enough, and Editor handles the rest.
+                    slideIds: []
                 });
 
                 showToast("Assignment created successfully!", { color: 'green' });
                 closeCreateModal();
-                nameInput.value = '';
-                linkInput.value = '';
-                isPublicInput.checked = false;
+                // Redirect to editor
+                const editorPage = type === 'pdf' ? 'pdf-editor.html' : 'editor.html';
+                window.location.href = `./${editorPage}?id=${newDoc.id}`;
+
             } catch (error) {
                 console.error("Error creating assignment:", error);
-                errorP.innerText = "Error creating assignment: " + error.message;
-            } finally {
-                btn.innerText = "Create Assignment";
+                errorP.innerText = "Error: " + error.message;
                 btn.disabled = false;
+                btn.innerText = "Create Assignment";
             }
         }
 
@@ -936,105 +995,7 @@
 
         function showToast(message, options = {}) { /* ... */ }
     </script>
-
-    <script>
-        // Unchanged utility functions
-        function closeCreateModal() {
-            createModal.classList.add('hidden');
-            document.getElementById('assignmentName').value = '';
-            document.getElementById('slidesLink').value = '';
-            document.getElementById('isPublicCheckbox').checked = false;
-            document.getElementById('modal-error').innerText = '';
-        }
-        async function handleCreateAssignment() {
-            const name = document.getElementById('assignmentName').value.trim();
-            const link = document.getElementById('slidesLink').value.trim();
-            const isPublic = document.getElementById('isPublicCheckbox').checked;
-            const errorP = document.getElementById('modal-error');
-            errorP.innerText = '';
-            if (!name || !link) {
-                errorP.innerText = "Please fill out both fields."; return;
-            }
-            const presentationIdRegex = /presentation\/d\/([a-zA-Z0-9-_]+)/;
-            const match = link.match(presentationIdRegex);
-            if (!match || !match[1]) {
-                errorP.innerText = "Invalid Google Slides link."; return;
-            }
-            const presentationId = match[1];
-            try {
-                document.getElementById('createAssignmentBtn').innerText = "Creating...";
-                await db.collection("assignments").add({
-                    name: name,
-                    presentationId: presentationId,
-                    teacherEmail: currentUserEmail,
-                    coTeachers: [],
-                    assignedClasses: [],
-                    classStatus: {},
-                    isPublic: isPublic,
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
-                closeCreateModal();
-            } catch (error) {
-                console.error("Error creating assignment:", error);
-                errorP.innerText = "Could not create assignment.";
-            } finally {
-                document.getElementById('createAssignmentBtn').innerText = "Create Assignment";
-            }
-        }
-        function setAllStatuses(status) {
-            document.querySelectorAll('#statusModalContent select').forEach(select => {
-                select.value = status;
-            });
-        }
-        function closeStatusModal() {
-            statusModal.classList.add('hidden');
-            activeAssignmentId = null;
-        }
-        async function handleSaveAssignmentStatus() {
-            if (!activeAssignmentId) return;
-            const newAssignedClasses = [];
-            const newClassStatus = {};
-            const isPublic = document.getElementById('isPublicToggle').checked;
-            document.querySelectorAll('#statusModalContent select').forEach(select => {
-                const className = select.dataset.className;
-                const status = select.value;
-                newClassStatus[className] = status;
-                if (status !== 'not-assigned') {
-                    newAssignedClasses.push(className);
-                }
-            });
-            try {
-                await db.collection("assignments").doc(activeAssignmentId).update({
-                    assignedClasses: newAssignedClasses,
-                    classStatus: newClassStatus,
-                    isPublic: isPublic
-                });
-                showToast("Assignment updated successfully!", { color: 'green' });
-                closeStatusModal();
-            } catch (error) {
-                console.error("Error updating assignment:", error);
-                showToast("Failed to update assignment.", { color: 'red' });
-            }
-        }
-        async function deleteAssignment(id, name) {
-            if (confirm(`Are you sure you want to permanently delete the assignment "${name}"? This action cannot be undone.`)) {
-                try {
-                    await db.collection("assignments").doc(id).delete();
-                    showToast("Assignment deleted.", { color: 'blue' });
-                } catch (error) {
-                    console.error("Error deleting assignment:", error);
-                    showToast("Could not delete assignment.", { color: 'red' });
-                }
-            }
-        }
-        function copyShareLink() {
-            const linkInput = document.getElementById('studentShareLink');
-            linkInput.select();
-            document.execCommand('copy');
-            showToast("Link copied to clipboard!", { color: 'blue' });
-        }
-        function showToast(message, options = {}) { const { color = 'default', duration = 3000 } = options; const wrapper = document.getElementById('toast-wrapper'); if (!wrapper) return; const toast = document.createElement('div'); toast.className = 'flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm animate-fade-in-right'; const colors = { default: 'bg-gray-700', green: 'bg-green-600', red: 'bg-red-600', blue: 'bg-blue-600' }; toast.classList.add(colors[color] || colors['default']); const messageSpan = document.createElement('span'); messageSpan.textContent = message; toast.appendChild(messageSpan); const closeButton = document.createElement('button'); closeButton.innerHTML = '&times;'; closeButton.className = 'ml-4 text-2xl font-bold leading-none hover:text-gray-300 focus:outline-none'; let timeoutId = null; const dismiss = () => { if (timeoutId) clearTimeout(timeoutId); toast.classList.remove('animate-fade-in-right'); toast.classList.add('animate-fade-out-right'); toast.addEventListener('animationend', () => toast.remove()); }; closeButton.onclick = dismiss; toast.appendChild(closeButton); wrapper.appendChild(toast); timeoutId = setTimeout(dismiss, duration); }
-    </script>
 </body>
+</html>/body>
 
 </html>
