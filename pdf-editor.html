@@ -14,6 +14,11 @@
   <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-storage-compat.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    const pdfjsLib = window['pdfjs-dist/build/pdf'];
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  </script>
   <style>
     .hidden {
       display: none;
@@ -128,6 +133,64 @@
     .reload-img-btn {
       z-index: 50;
       opacity: 0.95;
+    }
+
+    /* PDF Viewer Styles */
+    .pdf-page-container {
+      position: relative;
+      margin-bottom: 2rem;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      display: inline-block;
+    }
+    .pdf-canvas {
+      display: block;
+      max-width: 100%;
+    }
+    .pdf-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+      z-index: 10;
+    }
+    .question-zone {
+      position: absolute;
+      border: 2px solid #fbbf24;
+      background: rgba(251, 191, 36, 0.2);
+      box-sizing: border-box;
+      cursor: move;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #000;
+      font-weight: bold;
+      font-size: 14px;
+      user-select: none;
+    }
+    .question-zone.active {
+      border-color: #3b82f6;
+      background: rgba(59, 130, 246, 0.3);
+    }
+    .resize-handle {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      background: white;
+      border: 1px solid #333;
+      bottom: -5px;
+      right: -5px;
+      cursor: nwse-resize;
+      z-index: 20;
+    }
+    #pdf-viewer-container {
+      text-align: center;
+      overflow-y: auto;
+      max-height: 80vh;
+      background: #374151;
+      padding: 2rem;
+      border-radius: 0.75rem;
     }
   </style>
 </head>
@@ -504,6 +567,19 @@
         </div>
       </div>
 
+      <div id="pdf-viewer-container" class="hidden">
+        <div class="mb-4 flex gap-4 sticky top-0 z-50 bg-gray-800 p-2 rounded border border-gray-700 shadow-lg justify-center">
+            <button id="add-zone-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
+                </svg>
+                Add Question
+            </button>
+            <p class="text-sm text-gray-400 self-center">Drag on the PDF to create a zone</p>
+        </div>
+        <div id="pdf-pages-list"></div>
+      </div>
+
       <div id="slidesContainer" class="space-y-8"></div>
     </div>
 
@@ -608,6 +684,13 @@
       let teacherDefaults = {};
       let currentUserEmail = null;
 
+      // PDF Zone State
+      let questionZones = []; // Array of { id, page, x, y, w, h }
+      let isDrawing = false;
+      let startX, startY;
+      let activeZone = null;
+      let currentOverlay = null;
+
       // --- Impersonation Logic ---
       function checkImpersonation() {
         const impersonatedEmail = localStorage.getItem('impersonatedUserEmail');
@@ -685,7 +768,17 @@
 
             const teacherDoc = await db.collection("teachers").doc(emailToCheck).get();
             if (teacherDoc.exists) {
-              authorizeGapi();
+              currentUserEmail = emailToCheck;
+              teacherDefaults = teacherDoc.data() || {};
+              // Load the assignment header FIRST to check type before authorizeGapi
+              const urlParams = new URLSearchParams(window.location.search);
+              assignmentId = urlParams.get('id');
+              const previewDoc = await db.collection("assignments").doc(assignmentId).get();
+              if (previewDoc.exists && previewDoc.data().type === 'pdf') {
+                loadAssignment(); // Bypass GAPI for PDFs
+              } else {
+                authorizeGapi(); // Continue with GAPI for Slides
+              }
             } else {
               document.getElementById('loading-text').textContent = "Access denied: You are not registered as a teacher.";
               document.getElementById('auth-error').innerText = "Please contact an administrator for teacher access.";
@@ -798,11 +891,26 @@
           window.allTeacherStudents = teacherStudents;
 
           allClassNames = [...new Set(teacherStudents.map(s => String(s.class)))].sort();
-          loadingText.textContent = "Fetching slide information from Google...";
-          const response = await gapi.client.slides.presentations.get({ presentationId: assignmentData.presentationId });
-          const slides = response.result.slides;
-          if (!slides || slides.length === 0) { loadingText.textContent = "Error: No slides found in the presentation."; return; }
-          assignmentData.slideIds = slides.map(slide => slide.objectId);
+
+          if (assignmentData.type === 'pdf') {
+            loadingText.textContent = "Loading PDF Assignment...";
+            document.getElementById('slidesContainer').classList.add('hidden');
+            document.getElementById('pdf-viewer-container').classList.remove('hidden');
+            
+            // Load existing zones
+            questionZones = assignmentData.questionZones || [];
+            
+            await renderPDFView(assignmentData.pdfUrl);
+            initZoneDrawing();
+          } else {
+            loadingText.textContent = "Fetching slide information from Google...";
+            const response = await gapi.client.slides.presentations.get({ presentationId: assignmentData.presentationId });
+            const slides = response.result.slides;
+            if (!slides || slides.length === 0) { loadingText.textContent = "Error: No slides found in the presentation."; return; }
+            assignmentData.slideIds = slides.map(slide => slide.objectId);
+            document.getElementById('slidesContainer').classList.remove('hidden');
+            document.getElementById('pdf-viewer-container').classList.add('hidden');
+          }
           document.getElementById('page-loader').classList.add('hidden');
           document.getElementById('editorContent').classList.remove('hidden');
           document.getElementById('assignmentTitle').textContent = `Editing: ${assignmentData.name}`;
@@ -909,9 +1017,9 @@
 
           renderEditor();
         } catch (error) {
-          console.error("Error loading assignment or slides:", error);
-          const errorMessage = error.result?.error?.message || "An unknown error occurred.";
-          loadingText.textContent = `Error: ${errorMessage}. Please ensure Slides API is enabled and the presentation is shared with you.`;
+          console.error("Error loading assignment:", error);
+          const errorMessage = error.result?.error?.message || error.message || "An unknown error occurred.";
+          loadingText.textContent = `Error: ${errorMessage}. If using Google Slides, please ensure the Slides API is enabled and shared properly.`;
         }
       }
 
@@ -984,25 +1092,249 @@
         });
       }
 
+      function initZoneDrawing() {
+        const overlays = document.querySelectorAll('.pdf-overlay');
+        overlays.forEach(overlay => {
+          overlay.addEventListener('mousedown', e => {
+            if (e.target !== overlay) return;
+            isDrawing = true;
+            currentOverlay = overlay;
+            const rect = overlay.getBoundingClientRect();
+            startX = e.clientX - rect.left;
+            startY = e.clientY - rect.top;
+
+            const qNum = questionZones.length + 1;
+            activeZone = {
+              id: `q${qNum}`,
+              page: parseInt(overlay.dataset.pageNumber),
+              x: (startX / rect.width) * 100,
+              y: (startY / rect.height) * 100,
+              w: 0,
+              h: 0
+            };
+          });
+        });
+
+        window.addEventListener('mousemove', e => {
+          if (!isDrawing || !activeZone || !currentOverlay) return;
+          const rect = currentOverlay.getBoundingClientRect();
+          const currentX = e.clientX - rect.left;
+          const currentY = e.clientY - rect.top;
+
+          activeZone.w = ((currentX - (activeZone.x * rect.width / 100)) / rect.width) * 100;
+          activeZone.h = ((currentY - (activeZone.y * rect.height / 100)) / rect.height) * 100;
+
+          renderTemporaryZone(activeZone, currentOverlay);
+        });
+
+        window.addEventListener('mouseup', () => {
+          if (isDrawing && activeZone && activeZone.w > 1 && activeZone.h > 1) {
+            questionZones.push(activeZone);
+            renderZones();
+          }
+          isDrawing = false;
+          activeZone = null;
+          currentOverlay = null;
+          const temp = document.getElementById('temp-zone');
+          if (temp) temp.remove();
+        });
+      }
+
+      function renderTemporaryZone(zone, overlay) {
+        let temp = document.getElementById('temp-zone');
+        if (!temp) {
+          temp = document.createElement('div');
+          temp.id = 'temp-zone';
+          temp.className = 'question-zone';
+          overlay.appendChild(temp);
+        }
+        temp.style.left = zone.x + '%';
+        temp.style.top = zone.y + '%';
+        temp.style.width = zone.w + '%';
+        temp.style.height = zone.h + '%';
+      }
+
+      function renderZones() {
+        // Clear all existing zone elements
+        document.querySelectorAll('.question-zone:not(#temp-zone)').forEach(z => z.remove());
+
+        questionZones.forEach((zone, index) => {
+          const overlay = document.querySelector(`.pdf-overlay[data-page-number="${zone.page}"]`);
+          if (!overlay) return;
+
+          const div = document.createElement('div');
+          div.className = 'question-zone';
+          div.style.left = zone.x + '%';
+          div.style.top = zone.y + '%';
+          div.style.width = zone.w + '%';
+          div.style.height = zone.h + '%';
+          div.innerHTML = `<span>Q${index + 1}</span><div class="resize-handle"></div>`;
+          
+          div.addEventListener('mousedown', e => {
+            e.stopPropagation();
+            if (e.target.classList.contains('resize-handle')) {
+                startResizing(e, zone, div);
+            } else {
+                startDragging(e, zone, div);
+            }
+          });
+
+          overlay.appendChild(div);
+        });
+        
+        // Also update the checker UI
+        renderEditor();
+      }
+
+      function deleteZone(index) {
+          showDialog(
+              "Delete Question?",
+              `This will remove Question ${index + 1} and its checker settings.`,
+              () => {
+                  questionZones.splice(index, 1);
+                  renderZones();
+              }
+          );
+      }
+
+      function startDragging(e, zone, el) {
+        const overlay = el.parentElement;
+        const rect = overlay.getBoundingClientRect();
+        let lastX = e.clientX;
+        let lastY = e.clientY;
+
+        function onMove(me) {
+            const dx = me.clientX - lastX;
+            const dy = me.clientY - lastY;
+            zone.x += (dx / rect.width) * 100;
+            zone.y += (dy / rect.height) * 100;
+            el.style.left = zone.x + '%';
+            el.style.top = zone.y + '%';
+            lastX = me.clientX;
+            lastY = me.clientY;
+        }
+
+        function onUp() {
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+        }
+
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+      }
+
+      function startResizing(e, zone, el) {
+        const overlay = el.parentElement;
+        const rect = overlay.getBoundingClientRect();
+        let lastX = e.clientX;
+        let lastY = e.clientY;
+
+        function onMove(me) {
+            const dx = me.clientX - lastX;
+            const dy = me.clientY - lastY;
+            zone.w += (dx / rect.width) * 100;
+            zone.h += (dy / rect.height) * 100;
+            el.style.width = zone.w + '%';
+            el.style.height = zone.h + '%';
+            lastX = me.clientX;
+            lastY = me.clientY;
+        }
+
+        function onUp() {
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+        }
+
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+      }
+
+      async function renderPDFView(url) {
+        if (!url) return;
+        const container = document.getElementById('pdf-pages-list');
+        container.innerHTML = '';
+
+        try {
+          const loadingTask = pdfjsLib.getDocument(url);
+          const pdf = await loadingTask.promise;
+          const numPages = pdf.numPages;
+
+          for (let i = 1; i <= numPages; i++) {
+            const page = await pdf.getPage(i);
+            const viewport = page.getViewport({ scale: 1.5 });
+
+            const pageDiv = document.createElement('div');
+            pageDiv.className = 'pdf-page-container';
+            pageDiv.dataset.pageNumber = i;
+
+            const canvas = document.createElement('canvas');
+            canvas.className = 'pdf-canvas';
+            const context = canvas.getContext('2d');
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+
+            const renderContext = {
+              canvasContext: context,
+              viewport: viewport
+            };
+
+            const overlay = document.createElement('div');
+            overlay.className = 'pdf-overlay';
+            overlay.dataset.pageNumber = i;
+
+            pageDiv.appendChild(canvas);
+            pageDiv.appendChild(overlay);
+            container.appendChild(pageDiv);
+
+            await page.render(renderContext).promise;
+          }
+          initZoneDrawing();
+        } catch (error) {
+          console.error("Error rendering PDF:", error);
+          showToast("Failed to render PDF: " + error.message, { color: 'red' });
+        }
+      }
+
       function renderEditor() {
         const container = document.getElementById('slidesContainer');
         container.innerHTML = '';
-        let slideIds = assignmentData.slideIds || [];
+        
+        let identifiers = [];
+        if (assignmentData.type === 'pdf') {
+          identifiers = questionZones.map((z, i) => `q${i+1}`);
+        } else {
+          identifiers = assignmentData.slideIds || [];
+        }
+
         let checkerFunctions = assignmentData.checkerFunctions || {};
         let checkerMeta = assignmentData.checkerMeta || {};
         let deadlinePolicy = assignmentData.deadlinePolicy || {};
-        slideIds.forEach((slideId, index) => {
+
+        identifiers.forEach((id, index) => {
           const qNum = index + 1;
           const slidePolicy = deadlinePolicy[`q${qNum}`] || {};
           const editorBox = document.createElement('div');
           editorBox.className = "slide-editor-box grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-800 p-4 rounded-lg";
+          
+          let backgroundHTML = "";
+          if (assignmentData.type === 'pdf') {
+            backgroundHTML = `<div class="flex items-center justify-center bg-gray-700 rounded h-48 border border-gray-600">
+                <span class="text-yellow-400 font-bold text-xl">Question ${qNum} (Zone on PDF)</span>
+            </div>`;
+          } else {
+            backgroundHTML = `<div class="relative">
+              <img id="img-${id}" src="" class="w-full rounded border border-gray-700">
+              <button id="reload-btn-${id}" title="Reload image" aria-label="Reload image" class="reload-img-btn hidden absolute top-2 right-2 bg-yellow-400 text-black py-1 px-2 rounded text-sm">Reload</button>
+            </div>`;
+          }
+
           editorBox.innerHTML = `
       <div>
-        <h3 class="text-xl font-semibold mb-2">Slide ${qNum}</h3>
-        <div class="relative">
-          <img id="img-${slideId}" src="" class="w-full rounded border border-gray-700">
-          <button id="reload-btn-${slideId}" title="Reload image" aria-label="Reload image" class="reload-img-btn hidden absolute top-2 right-2 bg-yellow-400 text-black py-1 px-2 rounded text-sm">Reload</button>
+        <div class="flex justify-between items-center mb-2">
+            <h3 class="text-xl font-semibold">${assignmentData.type === 'pdf' ? 'Zone' : 'Slide'} ${qNum}</h3>
+            ${assignmentData.type === 'pdf' ? `<button onclick="deleteZone(${index})" class="text-red-400 hover:text-red-300 text-sm font-bold">Delete Question</button>` : ''}
         </div>
+        ${backgroundHTML}
       </div>
       <div id="checker-container-${qNum}"></div>
       <div class="mt-4 border-t border-gray-700 pt-4">
@@ -1099,18 +1431,20 @@
           editorBox.querySelector(`#checker-container-${qNum}`).appendChild(checkerWidgetDiv);
           container.appendChild(editorBox);
 
-          const imgElement = document.getElementById(`img-${slideId}`);
-          const reloadBtn = document.getElementById(`reload-btn-${slideId}`);
-          const imageUrl = `https://docs.google.com/presentation/d/${assignmentData.presentationId}/export/png?id=${assignmentData.presentationId}&pageid=${slideId}`;
+          if (assignmentData.type !== 'pdf') {
+            const imgElement = document.getElementById(`img-${id}`);
+            const reloadBtn = document.getElementById(`reload-btn-${id}`);
+            const imageUrl = `https://docs.google.com/presentation/d/${assignmentData.presentationId}/export/png?id=${assignmentData.presentationId}&pageid=${id}`;
 
-          loadImageWithRetries(imgElement, imageUrl, 2, reloadBtn);
+            loadImageWithRetries(imgElement, imageUrl, 2, reloadBtn);
 
-          if (reloadBtn) {
-            reloadBtn.addEventListener('click', () => {
-              reloadBtn.classList.add('hidden');
-              if (imgElement && imgElement.dataset) imgElement.dataset.isPlaceholder = 'false';
-              loadImageWithRetries(imgElement, imageUrl, 2, reloadBtn);
-            });
+            if (reloadBtn) {
+              reloadBtn.addEventListener('click', () => {
+                reloadBtn.classList.add('hidden');
+                if (imgElement && imgElement.dataset) imgElement.dataset.isPlaceholder = 'false';
+                loadImageWithRetries(imgElement, imageUrl, 2, reloadBtn);
+              });
+            }
           }
         });
       }
@@ -2315,7 +2649,8 @@
             auraRules: auraRules.map(({ id, ...rest }) => rest), // Remove internal IDs
             focusModeEnabled: focusModeEnabled,
             focusModeAction: focusModeAction,
-            toolsConfig: toolsConfig
+            toolsConfig: toolsConfig,
+            questionZones: questionZones || [] // Save PDF Zones
           };
 
           // Use dot notation to avoid nested FieldValue.delete() errors
