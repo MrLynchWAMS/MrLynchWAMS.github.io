@@ -2100,8 +2100,8 @@
 
         function initializePDFStudentView() {
             const numZones = (assignmentData.questionZones || []).length;
-            if (slideStates.length !== numZones) {
-                slideStates = new Array(numZones).fill(null);
+            if (slideStates.length < numZones) {
+                slideStates.length = numZones;
             }
             // Init pdfjsLib worker
             const pdfLib = window['pdfjs-dist/build/pdf'];
