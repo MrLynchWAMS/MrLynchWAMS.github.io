@@ -2435,7 +2435,10 @@
                                 totalScore += state.score;
                             }
                         });
-                        const overallAverage = assignmentData.slideIds.length > 0 ? totalScore / assignmentData.slideIds.length : 0;
+                        const qCountSubmit = (assignmentData.type === 'pdf'
+                            ? (assignmentData.questionZones || [])
+                            : (assignmentData.slideIds || [])).length;
+                        const overallAverage = qCountSubmit > 0 ? totalScore / qCountSubmit : 0;
 
                         // Read assignment-level Aura config
                         // Calculate Aura Eligibility (New Rule-Based System)
