@@ -307,7 +307,7 @@
             border: none;
             outline: none;
             resize: none;
-            font-size: 13px;
+            font-size: 14px;
             color: #1f2937;
             font-family: inherit;
             line-height: 1.4;
@@ -2129,8 +2129,6 @@
 
                     const pageDiv = document.createElement('div');
                     pageDiv.className = 'pdf-student-page';
-                    pageDiv.style.width = viewport.width + 'px';
-                    pageDiv.style.height = viewport.height + 'px';
                     pageDiv.dataset.pageNumber = i;
 
                     const canvas = document.createElement('canvas');
@@ -2241,7 +2239,7 @@
                     const textSpan = document.createElement('span');
                     textSpan.textContent = ann.text;
                     textSpan.className = "text-yellow-900 font-bold select-none text-center p-1 overflow-hidden w-full h-full flex items-center justify-center pointer-events-none";
-                    textSpan.style.fontSize = Math.max(10, ann.h * 1.5) + 'px';
+                    textSpan.style.fontSize = (ann.fontSize || 14) + 'px';
                     div.appendChild(textSpan);
                 } else if (ann.type === 'arrow') {
                     const svgContent = {
