@@ -1206,6 +1206,11 @@
           // Click to highlight + scroll to corresponding checker
           div.addEventListener('click', e => {
             if (e.target.classList.contains('resize-handle')) return;
+            if (window._isDraggingZone) {
+                // If it was a deep click rather than drag wait until next tick to reset.
+                setTimeout(() => window._isDraggingZone = false, 50);
+                return;
+            }
             document.querySelectorAll('.question-zone').forEach(z => z.classList.remove('active'));
             div.classList.add('active');
             const checkerBox = document.getElementById(`slide-editor-box-${index}`);
@@ -1214,6 +1219,10 @@
 
           div.addEventListener('mousedown', e => {
             e.stopPropagation();
+            window._isDraggingZone = false;
+            // Also close other active zones so it feels like a normal selection start
+            document.querySelectorAll('.question-zone').forEach(z => z.classList.remove('active'));
+            div.classList.add('active');
             if (e.target.classList.contains('resize-handle')) {
                 startResizing(e, zone, div);
             } else {
@@ -1241,7 +1250,7 @@
               ta.value = ann.text === 'Double-click to edit text' ? '' : ann.text;
               if (ann.text === 'Double-click to edit text') ta.placeholder = 'Type here...';
               ta.className = "text-yellow-900 font-bold text-center w-full h-full bg-transparent border-0 outline-none resize-none overflow-hidden p-1";
-              if (!ann.fontSize) ann.fontSize = Math.max(10, Math.round(ann.h * 1.5));
+              if (!ann.fontSize) ann.fontSize = 14;
               ta.style.fontSize = ann.fontSize + 'px';
               ta.oninput = (e) => ann.text = e.target.value;
               ta.onmousedown = (e) => e.stopPropagation();
@@ -1316,6 +1325,7 @@
 
           div.addEventListener('mousedown', e => {
             e.stopPropagation();
+            window._isDraggingZone = false;
             if (e.target === delBtn) return;
             if (e.target === resizeHandle || e.target.classList.contains('resize-handle')) {
                 startResizing(e, ann, div);
@@ -1349,6 +1359,7 @@
         let lastY = e.clientY;
 
         function onMove(me) {
+            window._isDraggingZone = true;
             const dx = me.clientX - lastX;
             const dy = me.clientY - lastY;
             zone.x += (dx / rect.width) * 100;
@@ -1375,6 +1386,7 @@
         let lastY = e.clientY;
 
         function onMove(me) {
+            window._isDraggingZone = true;
             const dx = me.clientX - lastX;
             const dy = me.clientY - lastY;
             zone.w += (dx / rect.width) * 100;
@@ -1440,6 +1452,15 @@
         }
       }
 
+      function highlightZone(index) {
+        document.querySelectorAll('.question-zone').forEach(z => z.classList.remove('active'));
+        const zoneDiv = document.getElementById(`zone-box-${index}`);
+        if (zoneDiv) {
+            zoneDiv.classList.add('active');
+            zoneDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }
+
       function renderEditor() {
         const container = document.getElementById('slidesContainer');
         container.innerHTML = '';
@@ -1482,8 +1503,8 @@
           
           let backgroundHTML = "";
           if (assignmentData.type === 'pdf') {
-            backgroundHTML = `<div class="flex items-center justify-center bg-gray-700 rounded h-48 border border-gray-600">
-                <span class="text-yellow-400 font-bold text-xl">Question ${qNum} (Zone on PDF)</span>
+            backgroundHTML = `<div ${scrollToPDFZone} class="flex items-center justify-center bg-gray-700 rounded h-48 border border-gray-600 cursor-pointer hover:bg-gray-600 transition-colors">
+                <span class="text-yellow-400 font-bold text-xl pointer-events-none">Question ${qNum} (Zone on PDF)</span>
             </div>`;
           } else {
             backgroundHTML = `<div class="relative">
