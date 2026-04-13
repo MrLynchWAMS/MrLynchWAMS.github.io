@@ -145,6 +145,7 @@
     .pdf-canvas {
       display: block;
       max-width: 100%;
+      height: auto;
     }
     .pdf-overlay {
       position: absolute;
@@ -1238,7 +1239,7 @@
           if (!overlay) return;
 
           const div = document.createElement('div');
-          div.className = 'question-zone flex items-center justify-center relative cursor-move';
+          div.className = 'question-zone flex items-center justify-center absolute cursor-move';
           div.style.left = ann.x + '%';
           div.style.top = ann.y + '%';
           div.style.width = ann.w + '%';
@@ -1446,6 +1447,7 @@
             await page.render(renderContext).promise;
           }
           initZoneDrawing();
+          renderZones();
         } catch (error) {
           console.error("Error rendering PDF:", error);
           showToast("Failed to render PDF: " + error.message, { color: 'red' });
