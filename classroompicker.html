@@ -2098,6 +2098,29 @@
 
         let activePdfZoneIndex = -1;
 
+        function autoExpandZone(textarea, zoneDiv, zone, pageEl) {
+            // Measure how tall the content wants to be
+            textarea.style.height = '0';
+            const scrollH = textarea.scrollHeight;
+            textarea.style.height = '';
+            
+            // Get the page height (for percentage conversion)
+            const pageH = pageEl.offsetHeight || 1;
+            // The label takes about 14px
+            const labelH = 14;
+            const paddingH = 12; // top + bottom padding (4px + 6px approx)
+            const neededPx = scrollH + labelH + paddingH;
+            const neededPct = (neededPx / pageH) * 100;
+            
+            // Only grow, never shrink below original saved height
+            const originalH = zone.h;
+            if (neededPct > originalH) {
+                zoneDiv.style.height = neededPct + '%';
+            } else {
+                zoneDiv.style.height = originalH + '%';
+            }
+        }
+
         function initializePDFStudentView() {
             const numZones = (assignmentData.questionZones || []).length;
             if (slideStates.length < numZones) {
@@ -2213,11 +2236,17 @@
 
                 ta.addEventListener('input', () => {
                     document.getElementById('inputbox').value = ta.value;
+                    autoExpandZone(ta, zoneDiv, zone, pageEl);
                 });
 
                 zoneDiv.appendChild(label);
                 zoneDiv.appendChild(ta);
                 pageEl.appendChild(zoneDiv);
+
+                // Auto-expand on initial load if text exists
+                if (savedState && savedState.answer) {
+                    setTimeout(() => autoExpandZone(ta, zoneDiv, zone, pageEl), 50);
+                }
             });
             
             const annotations = assignmentData.annotationElements || [];
@@ -2234,21 +2263,20 @@
                 div.style.zIndex = '10';
                 
                 if (ann.type === 'text') {
-                    div.style.backgroundColor = 'rgba(253, 230, 138, 0.95)'; // amber-200
-                    div.style.border = '1px solid #f59e0b'; // amber-500
+                    const bgColor = ann.bgColor || 'rgba(253, 230, 138, 0.95)';
+                    div.style.backgroundColor = bgColor;
+                    div.style.border = '1px solid #f59e0b';
                     const textSpan = document.createElement('span');
                     textSpan.textContent = ann.text;
-                    textSpan.className = "text-yellow-900 font-bold select-none text-center p-1 overflow-hidden w-full h-full flex items-center justify-center pointer-events-none";
+                    textSpan.className = "select-none text-center p-1 overflow-hidden w-full h-full flex items-center justify-center pointer-events-none";
                     textSpan.style.fontSize = (ann.fontSize || 14) + 'px';
+                    textSpan.style.fontWeight = ann.fontWeight || 'bold';
+                    textSpan.style.fontStyle = ann.fontStyle || 'normal';
+                    textSpan.style.color = ann.textColor || '#78350f';
                     div.appendChild(textSpan);
                 } else if (ann.type === 'arrow') {
-                    const svgContent = {
-                        'right': '<path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />',
-                        'down': '<path stroke-linecap="round" stroke-linejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />',
-                        'left': '<path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />',
-                        'up': '<path stroke-linecap="round" stroke-linejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" />'
-                    };
-                    div.innerHTML = `<svg class="w-full h-full text-blue-500 drop-shadow-md pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">${svgContent[ann.direction]}</svg>`;
+                    const rotation = ann.rotation !== undefined ? ann.rotation : ({'right':0,'down':90,'left':180,'up':270}[ann.direction] || 0);
+                    div.innerHTML = `<div style="width:100%;height:100%;transform:rotate(${rotation}deg)"><svg class="w-full h-full text-blue-500 drop-shadow-md pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg></div>`;
                 }
                 
                 pageEl.appendChild(div);
