@@ -250,6 +250,15 @@
         if (!assignmentDoc.exists) { loadingText.textContent = "Error: Assignment not found."; return; }
         assignmentData = { id: assignmentDoc.id, ...assignmentDoc.data() };
 
+        // Auto-repair and redirect if this assignment is actually a Slides or PDF assignment
+        if (assignmentData.type === 'slides' || (!assignmentData.type && assignmentData.presentationId && !assignmentData.videoUrl)) {
+            window.location.href = `./editor.html?id=${assignmentId}`;
+            return;
+        } else if (assignmentData.type === 'pdf') {
+            window.location.href = `./pdf-editor.html?id=${assignmentId}`;
+            return;
+        }
+
         // Access control
         const isOwner = assignmentData.teacherEmail === currentUserEmail;
         const isCoTeacher = (assignmentData.coTeachers || []).includes(currentUserEmail);
