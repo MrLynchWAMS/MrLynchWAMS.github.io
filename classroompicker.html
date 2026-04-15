@@ -13,6 +13,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://www.youtube.com/iframe_api"></script>
     <style>
         .hidden {
             display: none;
@@ -445,6 +446,36 @@
                     </button>
                 </div>
                 <div id="pdf-student-pages" class="text-center pb-24"></div>
+            </div>
+
+            <!-- Video Student UI -->
+            <div id="video-student-content" class="hidden main-content-grid grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div class="video-column md:col-span-2 bg-gray-800 p-4 rounded-lg flex flex-col items-center justify-center">
+                    <div id="video-wrapper" class="w-full relative aspect-video bg-black rounded-lg overflow-hidden border border-gray-700 shadow-lg">
+                        <div id="video-player"></div>
+                        <div id="video-overlay" class="absolute inset-0 bg-gray-900 bg-opacity-90 flex flex-col items-center justify-center hidden z-20 p-6">
+                            <!-- Overlay content populated via JS -->
+                            <p class="text-xl font-bold mb-4 text-center text-yellow-400" id="video-q-label">Question</p>
+                            <p id="video-q-body" class="text-lg text-white mb-6 text-center max-w-2xl"></p>
+                            <div id="video-q-interactive" class="w-full max-w-2xl flex flex-col gap-4"></div>
+                        </div>
+                    </div>
+                    <div class="mt-4 flex gap-4 w-full">
+                         <div id="video-timeline-markers" class="flex-grow bg-gray-700 h-2 rounded relative"></div>
+                    </div>
+                </div>
+                <div class="interactive-column bg-gray-800 p-4 rounded-lg flex flex-col">
+                    <h3 class="text-xl font-bold text-yellow-400 mb-4 border-b border-gray-700 pb-2">Questions & Notes</h3>
+                    <div id="video-sidebar-list" class="flex-grow overflow-y-auto space-y-3 pr-2">
+                        <!-- Polled from video tracking -->
+                    </div>
+                    <button onclick="showSummary()" class="w-full mt-4 bg-gray-600 hover:bg-gray-500 text-white font-bold py-3 rounded-lg transition-colors border border-gray-500">
+                        View Summary
+                    </button>
+                    <button id="video-submit-final" onclick="handleSubmitAssignment()" class="hidden w-full mt-2 bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition-colors shadow-lg">
+                        Submit Final Assignment
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -982,14 +1013,23 @@
                 showSummary(); // Directly show summary if submitted and hidden
             } else {
                 loader.classList.add('hidden');
-                if (assignmentData.type === 'pdf') {
-                    document.getElementById('mainContainer').classList.remove('hidden');
+                document.getElementById('mainContainer').classList.remove('hidden');
+                
+                if (assignmentData.type === 'video') {
                     document.getElementById('slides-ui').classList.add('hidden');
+                    document.getElementById('pdf-student-content').classList.add('hidden');
+                    document.getElementById('video-student-content').classList.remove('hidden');
+                    initializeVideoStudentView();
+                    initTools();
+                } else if (assignmentData.type === 'pdf') {
+                    document.getElementById('slides-ui').classList.add('hidden');
+                    document.getElementById('video-student-content').classList.add('hidden');
                     document.getElementById('pdf-student-content').classList.remove('hidden');
                     initializePDFStudentView();
                     initTools();
                 } else {
-                    document.getElementById('mainContainer').classList.remove('hidden');
+                    document.getElementById('pdf-student-content').classList.add('hidden');
+                    document.getElementById('video-student-content').classList.add('hidden');
                     updateSlideDisplay();
                     initTools();
                 }
@@ -2982,6 +3022,271 @@
                 div.onclick = () => div.classList.toggle('crossed-off');
                 container.appendChild(div);
             });
+        // ==========================================
+        // VIDEO STUDENT VIEW LOGIC
+        // ==========================================
+        let videoPlayer = null;
+        let ytPlayerInterval = null;
+        let sortedVideoItems = [];
+        let currentVideoItemIndex = 0;
+        let isVideoPausedForQuestion = false;
+
+        function initializeVideoStudentView() {
+            const questions = (assignmentData.videoQuestions || []).map((q, i) => ({ ...q, _kind: 'question', _index: i, id: q.id || `vq${i}` }));
+            const notes = (assignmentData.videoNotes || []).map((n, i) => ({ ...n, _kind: 'note', id: n.id || `vn${i}` }));
+            
+            sortedVideoItems = [...questions, ...notes].sort((a, b) => a.time - b.time);
+            currentVideoItemIndex = 0;
+
+            const sidebarList = document.getElementById('video-sidebar-list');
+            sidebarList.innerHTML = sortedVideoItems.map(item => {
+                const icon = item._kind === 'note' ? '📌' : '❓';
+                const mmss = Math.floor(item.time / 60) + ':' + String(Math.floor(item.time % 60)).padStart(2, '0');
+                const title = item._kind === 'note' ? 'Note' : `Q${item._index + 1}`;
+                return `<div id="vsb_${item.id}" class="p-3 bg-gray-700/50 border border-gray-600 rounded-lg text-sm mb-2 text-gray-300 transition-colors">
+                    <span class="font-bold text-yellow-400 mr-2">${title}</span> 
+                    <span class="text-xs text-gray-400 opacity-70">[${mmss}]</span>
+                    <span class="status-icon ml-2 inline-block"></span>
+                </div>`;
+            }).join('');
+
+            // Restore checkmarks from previous sessions if answered
+            sortedVideoItems.forEach(item => {
+                if (item._kind === 'question' && slideStates[item._index] && slideStates[item._index].answer) {
+                    const sbItemIcon = document.querySelector(`#vsb_${item.id} .status-icon`);
+                    if (sbItemIcon) sbItemIcon.innerHTML = '✅';
+                }
+            });
+
+            const playerContainer = document.getElementById('video-player');
+            if (assignmentData.videoSourceType === 'youtube') {
+                if (typeof YT !== 'undefined' && YT.Player) {
+                    setupYouTubePlayer(assignmentData.videoSourceId);
+                } else {
+                    window.onYouTubeIframeAPIReady = () => setupYouTubePlayer(assignmentData.videoSourceId);
+                }
+            } else if (assignmentData.videoSourceType === 'gdrive') {
+                playerContainer.innerHTML = `<iframe src="https://drive.google.com/file/d/${assignmentData.videoSourceId}/preview" class="w-full h-full" allow="autoplay" frameborder="0" style="position: absolute; top:0; left:0;"></iframe>`;
+                sidebarList.innerHTML = `<p class="text-sm text-gray-400 mb-4 italic p-2 border border-gray-600 rounded">Google Drive videos cannot automatically pause. Please watch the video and answer the questions interactively below.</p>`;
+                sortedVideoItems.forEach(item => {
+                    const existingAnswerHtml = (item._kind === 'question' && slideStates[item._index] && slideStates[item._index].answer) ? `<span class="ml-2 text-green-400 text-xs">✅ Answered</span>` : '';
+                    sidebarList.innerHTML += `<div class="mb-4 bg-gray-700/60 border border-gray-600 p-4 rounded-lg shadow-sm">
+                        <p class="text-sm font-bold text-yellow-500 mb-2">${item._kind === 'note' ? '📌 Note' : '❓ Q' + (item._index+1)} <span class="text-gray-400 text-xs ml-1">[${Math.floor(item.time/60)}:${String(Math.floor(item.time%60)).padStart(2,'0')}]</span>${existingAnswerHtml}</p>
+                        <p class="text-sm text-gray-200 mb-3 leading-relaxed">${escapeHtml(item.body)}</p>
+                        ${item._kind==='question' ? `<button onclick="showVideoOverlay('${item.id}', true)" class="w-full bg-blue-600 hover:bg-blue-700 font-bold px-3 py-2 rounded text-sm text-white transition-colors">Answer Question</button>` : ''}
+                    </div>`;
+                });
+                document.getElementById('video-submit-final').classList.remove('hidden');
+            }
+        }
+
+        function setupYouTubePlayer(videoId) {
+            videoPlayer = new YT.Player('video-player', {
+                height: '100%',
+                width: '100%',
+                videoId: videoId,
+                playerVars: { 'playsinline': 1, 'rel': 0, 'modestbranding': 1 },
+                events: {
+                    'onReady': () => {
+                        ytPlayerInterval = setInterval(checkVideoTime, 500);
+                        document.getElementById('video-submit-final').classList.remove('hidden'); 
+                    },
+                    'onStateChange': (e) => {
+                        if (e.data == YT.PlayerState.PLAYING && isVideoPausedForQuestion) {
+                            videoPlayer.pauseVideo();
+                        }
+                    }
+                }
+            });
+        }
+
+        function checkVideoTime() {
+            if (!videoPlayer || typeof videoPlayer.getCurrentTime !== 'function') return;
+            if (isVideoPausedForQuestion) return; 
+
+            const currentTime = videoPlayer.getCurrentTime();
+            if (currentVideoItemIndex < sortedVideoItems.length) {
+                const nextItem = sortedVideoItems[currentVideoItemIndex];
+                if (currentTime >= nextItem.time) {
+                    showVideoOverlay(nextItem.id);
+                }
+            } 
+        }
+
+        function showVideoOverlay(itemId, isManual = false) {
+            const item = sortedVideoItems.find(i => i.id === itemId);
+            if (!item) return;
+
+            isVideoPausedForQuestion = true;
+            if (videoPlayer && typeof videoPlayer.pauseVideo === 'function') {
+                videoPlayer.pauseVideo();
+            }
+
+            const overlay = document.getElementById('video-overlay');
+            const label = document.getElementById('video-q-label');
+            const body = document.getElementById('video-q-body');
+            const interactive = document.getElementById('video-q-interactive');
+
+            overlay.classList.remove('hidden');
+            body.innerHTML = escapeHtml(item.body);
+
+            // Hide the wrapper's pointer events if YouTube so they cant unpause by clicking behind the transparent UI
+            document.getElementById('video-wrapper').classList.add('pointer-events-auto');
+
+            if (item._kind === 'note') {
+                label.textContent = "📌 Note";
+                interactive.innerHTML = `<button onclick="continueVideoFromItem(${isManual})" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2"><span>Continue Video</span> <span>▶</span></button>`;
+            } else {
+                label.textContent = `Question ${item._index + 1}`;
+                
+                const existingAnswer = (slideStates[item._index] && slideStates[item._index].answer) ? slideStates[item._index].answer : '';
+
+                if (item.type === 'multiple-choice') {
+                    const isMultiple = item.selectionType === 'multiple';
+                    const typeAttr = isMultiple ? 'checkbox' : 'radio';
+                    const existingAnswers = existingAnswer.split("||");
+
+                    const choicesHtml = (item.choices || []).map((c, i) => {
+                        const checked = existingAnswers.includes(c.text) ? 'checked' : '';
+                        return `<label class="flex items-center gap-3 p-4 bg-gray-800 border-2 ${checked ? 'border-yellow-500' : 'border-gray-700'} rounded-lg cursor-pointer hover:bg-gray-700 transition-colors">
+                            <input type="${typeAttr}" name="vq_${item.id}" value="${escapeAttr(c.text)}" class="w-6 h-6 text-blue-500 bg-gray-900 border-gray-600 focus:ring-yellow-500" ${checked} onchange="this.parentElement.classList.toggle('border-yellow-500', this.checked); if(!${isMultiple}) { document.querySelectorAll('input[name=\\'vq_${item.id}\\']').forEach(inp => { if(inp!==this) inp.parentElement.classList.remove('border-yellow-500'); }); }">
+                            <span class="text-lg">${escapeHtml(c.text)}</span>
+                        </label>`;
+                    }).join('');
+
+                    interactive.innerHTML = `
+                        <div class="space-y-3 mb-6 w-full text-left">${choicesHtml}</div>
+                        <button onclick="submitVideoQuestion('${item.id}', ${isManual})" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-lg shadow-lg text-lg flex justify-center items-center gap-2"><span>Check & Save</span> <span>✓</span></button>
+                        ${isManual ? `<button onclick="continueVideoFromItem(true)" class="w-full text-gray-400 mt-3 text-sm underline hover:text-white">Cancel</button>` : ''}
+                    `;
+                } else {
+                    interactive.innerHTML = `
+                        <textarea id="vq_${item.id}_input" class="w-full p-4 bg-gray-800 border-2 border-gray-600 rounded-xl text-white mb-6 focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 text-lg shadow-inner" rows="4" placeholder="Type your answer here...">${escapeHtml(existingAnswer)}</textarea>
+                        <button onclick="submitVideoQuestion('${item.id}', ${isManual})" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-lg shadow-lg text-lg flex justify-center items-center gap-2"><span>Check & Save</span> <span>✓</span></button>
+                        ${isManual ? `<button onclick="continueVideoFromItem(true)" class="w-full text-gray-400 mt-3 text-sm underline hover:text-white">Cancel</button>` : ''}
+                    `;
+                }
+            }
+        }
+
+        async function submitVideoQuestion(itemId, isManual = false) {
+            const item = sortedVideoItems.find(i => i.id === itemId);
+            if (!item) return;
+
+            let studentAnswer = "";
+
+            if (item.type === 'multiple-choice') {
+                const inputs = document.querySelectorAll(`input[name="vq_${item.id}"]:checked`);
+                const answers = Array.from(inputs).map(inp => inp.value);
+                if (answers.length === 0) {
+                    showToast("Please select an answer.", { color: 'red' });
+                    return;
+                }
+                studentAnswer = answers.join("||");
+            } else {
+                const ta = document.getElementById(`vq_${item.id}_input`);
+                studentAnswer = ta.value.trim();
+                if (!studentAnswer) {
+                    showToast("Please type an answer.", { color: 'red' });
+                    return;
+                }
+            }
+
+            const btn = document.querySelector(`#video-q-interactive button.bg-green-600`);
+            const prevText = btn.innerHTML;
+            btn.innerHTML = `<span class="animate-pulse">Checking...</span>`;
+            btn.disabled = true;
+
+            // Offline Evaluation
+            let score = 0;
+            if (item.type === 'multiple-choice') {
+                const correctAnswers = item.choices.filter(c => c.isCorrect).map(c => c.text);
+                const selectedSet = new Set(studentAnswer.split("||"));
+                const correctSet = new Set(correctAnswers);
+
+                let allCorrect = true;
+                if (selectedSet.size !== correctSet.size) allCorrect = false;
+                else {
+                    for (let sel of selectedSet) if (!correctSet.has(sel)) allCorrect = false;
+                }
+                score = allCorrect ? 100 : 0;
+            } else {
+               const oldIndex = currentSlideIndex;
+               currentSlideIndex = item._index;
+               try {
+                  score = await checkCurrentSlideAnswer(studentAnswer, { attemptCount: 1 });
+                  if (typeof score !== 'number' || isNaN(score)) score = 0;
+               } catch(e) {
+                  score = 0;
+               }
+               currentSlideIndex = oldIndex;
+            }
+
+            slideStates[item._index] = { ...slideStates[item._index], answer: studentAnswer, score: score };
+
+            try {
+                // Ensure sub collection structure matching standard implementation
+                await db.collection("submissions").add({
+                    assignmentId: assignmentData.id,
+                    studentEmail: userProfile.email,
+                    studentName: userProfile.name,
+                    slideIndex: item._index, 
+                    answer: studentAnswer,
+                    score: score,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                showToast(score >= 90 ? "Excellent!" : "Answer saved.", { color: 'green' });
+                
+                const sbItemIcon = document.querySelector(`#vsb_${item.id} .status-icon`);
+                if (sbItemIcon && sbItemIcon.innerHTML === '') {
+                    sbItemIcon.innerHTML = '✅';
+                    document.getElementById(`vsb_${item.id}`).classList.replace('border-gray-600', 'border-green-600');
+                }
+                
+                // For GDrive manual mode, update the sidebar list directly without closing modal since they manually opened it
+                if (isManual) {
+                     // The sidebar might be entirely redrawn or we just update the specific button.
+                     // The re-rendering in initialize is overkill so we'll just show prompt
+                }
+                
+                continueVideoFromItem(isManual);
+            } catch (e) {
+                console.error("Save error: ", e);
+                showToast("Failed to save. Check your connection.", { color: 'red' });
+                btn.innerHTML = prevText;
+                btn.disabled = false;
+            }
+        }
+
+        function continueVideoFromItem(isManual = false) {
+            document.getElementById('video-overlay').classList.add('hidden');
+            isVideoPausedForQuestion = false;
+            
+            if (!isManual && assignmentData.videoSourceType === 'youtube' && currentVideoItemIndex < sortedVideoItems.length) {
+                currentVideoItemIndex++;
+            }
+
+            if (videoPlayer && typeof videoPlayer.playVideo === 'function') {
+                videoPlayer.playVideo();
+            }
+            
+            if (currentVideoItemIndex >= sortedVideoItems.length) {
+                document.getElementById('video-submit-final').classList.remove('hidden');
+            }
+            
+            // Re-render Google Drive sidebar if it's manual mode to show updated checks
+            if (isManual && assignmentData.videoSourceType === 'gdrive'){
+               initializeVideoStudentView(); // Simple trick to redraw marks
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text || '';
+            return div.innerHTML;
+        }
+        function escapeAttr(text) {
+            return (text || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         }
     </script>
     <!-- Floating Tools UI -->
