@@ -2099,21 +2099,16 @@
         let activePdfZoneIndex = -1;
 
         function autoExpandZone(textarea, zoneDiv, zone, pageEl) {
-            // Measure how tall the content wants to be
-            textarea.style.height = '0';
-            const scrollH = textarea.scrollHeight;
-            textarea.style.height = '';
+            // Only expand when text actually overflows the visible area
+            if (textarea.scrollHeight <= textarea.clientHeight) return;
             
-            // Get the page height (for percentage conversion)
             const pageH = pageEl.offsetHeight || 1;
             const labelH = 14;
             const paddingH = 12;
-            const neededPx = scrollH + labelH + paddingH;
+            const neededPx = textarea.scrollHeight + labelH + paddingH;
             const neededPct = (neededPx / pageH) * 100;
             
-            // Grow or shrink to fit content, but never below the original saved height
-            const originalH = zone.h;
-            zoneDiv.style.height = Math.max(neededPct, originalH) + '%';
+            zoneDiv.style.height = Math.max(neededPct, zone.h) + '%';
         }
 
         function collapseZone(zoneDiv, zone) {
