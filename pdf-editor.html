@@ -1133,7 +1133,13 @@
               w: 0,
               h: 0
             };
-            if (currentTool === 'text') activeZone.text = 'Double-click to edit text';
+            if (currentTool === 'text') {
+              activeZone.text = 'Double-click to edit text';
+              activeZone.fontWeight = 'bold';
+              activeZone.fontStyle = 'normal';
+              activeZone.textColor = '#78350f'; // yellow-900
+              activeZone.bgColor = 'rgba(253, 230, 138, 0.9)'; // amber-200
+            }
             if (currentTool === 'arrow') activeZone.direction = 'right';
           });
         });
@@ -1244,32 +1250,76 @@
           div.style.top = ann.y + '%';
           div.style.width = ann.w + '%';
                  if (ann.type === 'text') {
-              div.style.border = '2px dashed #f59e0b'; // amber-500
-              div.style.backgroundColor = 'rgba(253, 230, 138, 0.9)'; // amber-200
+              // Apply defaults for legacy annotations missing new props
+              if (!ann.fontWeight) ann.fontWeight = 'bold';
+              if (!ann.fontStyle) ann.fontStyle = 'normal';
+              if (!ann.textColor) ann.textColor = '#78350f';
+              if (!ann.bgColor) ann.bgColor = 'rgba(253, 230, 138, 0.9)';
+              if (!ann.fontSize) ann.fontSize = 14;
+
+              div.style.border = '2px dashed #f59e0b';
+              div.style.backgroundColor = ann.bgColor;
               
               const ta = document.createElement('textarea');
               ta.value = ann.text === 'Double-click to edit text' ? '' : ann.text;
               if (ann.text === 'Double-click to edit text') ta.placeholder = 'Type here...';
-              ta.className = "text-yellow-900 font-bold text-center w-full h-full bg-transparent border-0 outline-none resize-none overflow-hidden p-1";
-              if (!ann.fontSize) ann.fontSize = 14;
+              ta.className = "text-center w-full h-full bg-transparent border-0 outline-none resize-none overflow-hidden p-1";
               ta.style.fontSize = ann.fontSize + 'px';
+              ta.style.fontWeight = ann.fontWeight;
+              ta.style.fontStyle = ann.fontStyle;
+              ta.style.color = ann.textColor;
               ta.oninput = (e) => ann.text = e.target.value;
               ta.onmousedown = (e) => e.stopPropagation();
               div.appendChild(ta);
 
               div.classList.add('group');
               const controls = document.createElement('div');
-              controls.className = "absolute -bottom-8 left-0 flex bg-gray-800 text-white rounded shadow text-xs opacity-0 group-hover:opacity-100 transition-opacity z-50 cursor-default";
+              controls.className = "absolute -bottom-9 left-0 flex items-center bg-gray-800 text-white rounded shadow text-xs opacity-0 group-hover:opacity-100 transition-opacity z-50 cursor-default gap-0";
               controls.onmousedown = (e) => e.stopPropagation();
               controls.innerHTML = `
-                <button class="px-2 py-1 hover:bg-gray-700 border-r border-gray-600 rounded-l font-bold" title="Decrease font" onclick="this.nextElementSibling.stepDown(); this.nextElementSibling.dispatchEvent(new Event('input'))">-A</button>
-                <input type="number" class="w-12 bg-gray-800 text-center text-white border-0 outline-none m-0 p-0" value="${ann.fontSize}" min="8" step="1" />
-                <button class="px-2 py-1 hover:bg-gray-700 border-l border-gray-600 rounded-r font-bold" title="Increase font" onclick="this.previousElementSibling.stepUp(); this.previousElementSibling.dispatchEvent(new Event('input'))">+A</button>
+                <button class="ann-bold-btn px-2 py-1 hover:bg-gray-700 border-r border-gray-600 rounded-l" style="font-weight:bold;${ann.fontWeight === 'bold' ? 'background:#4b5563;' : ''}" title="Bold">B</button>
+                <button class="ann-italic-btn px-2 py-1 hover:bg-gray-700 border-r border-gray-600" style="font-style:italic;${ann.fontStyle === 'italic' ? 'background:#4b5563;' : ''}" title="Italic">I</button>
+                <button class="px-2 py-1 hover:bg-gray-700 border-r border-gray-600" title="Decrease font" onclick="this.nextElementSibling.stepDown(); this.nextElementSibling.dispatchEvent(new Event('input'))">-A</button>
+                <input type="number" class="w-10 bg-gray-800 text-center text-white border-0 outline-none m-0 p-0" value="${ann.fontSize}" min="8" step="1" />
+                <button class="px-2 py-1 hover:bg-gray-700 border-r border-gray-600" title="Increase font" onclick="this.previousElementSibling.stepUp(); this.previousElementSibling.dispatchEvent(new Event('input'))">+A</button>
+                <label class="px-1 py-1 hover:bg-gray-700 border-r border-gray-600 cursor-pointer flex items-center gap-1" title="Text Color">
+                  <span style="font-size:11px">A</span><input type="color" value="${ann.textColor}" class="ann-text-color w-4 h-4 border-0 p-0 m-0 cursor-pointer" style="background:transparent;">
+                </label>
+                <label class="px-1 py-1 hover:bg-gray-700 rounded-r cursor-pointer flex items-center gap-1" title="Background Color">
+                  <span style="font-size:11px">⬛</span><input type="color" value="${ann.bgColor.startsWith('rgba') ? '#fde68a' : ann.bgColor}" class="ann-bg-color w-4 h-4 border-0 p-0 m-0 cursor-pointer" style="background:transparent;">
+                </label>
               `;
-              const input = controls.querySelector('input');
-              input.oninput = (e) => {
-                  ann.fontSize = parseInt(e.target.value) || 16;
+              // Font size
+              const sizeInput = controls.querySelector('input[type="number"]');
+              sizeInput.oninput = (e) => {
+                  ann.fontSize = parseInt(e.target.value) || 14;
                   ta.style.fontSize = ann.fontSize + 'px';
+              };
+              // Bold toggle
+              const boldBtn = controls.querySelector('.ann-bold-btn');
+              boldBtn.onclick = () => {
+                  ann.fontWeight = ann.fontWeight === 'bold' ? 'normal' : 'bold';
+                  ta.style.fontWeight = ann.fontWeight;
+                  boldBtn.style.background = ann.fontWeight === 'bold' ? '#4b5563' : '';
+              };
+              // Italic toggle
+              const italicBtn = controls.querySelector('.ann-italic-btn');
+              italicBtn.onclick = () => {
+                  ann.fontStyle = ann.fontStyle === 'italic' ? 'normal' : 'italic';
+                  ta.style.fontStyle = ann.fontStyle;
+                  italicBtn.style.background = ann.fontStyle === 'italic' ? '#4b5563' : '';
+              };
+              // Text color
+              const textColorInput = controls.querySelector('.ann-text-color');
+              textColorInput.oninput = (e) => {
+                  ann.textColor = e.target.value;
+                  ta.style.color = ann.textColor;
+              };
+              // Background color
+              const bgColorInput = controls.querySelector('.ann-bg-color');
+              bgColorInput.oninput = (e) => {
+                  ann.bgColor = e.target.value;
+                  div.style.backgroundColor = ann.bgColor;
               };
               div.appendChild(controls);
 
