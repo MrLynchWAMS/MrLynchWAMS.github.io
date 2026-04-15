@@ -684,6 +684,30 @@
           if (!assignmentDoc.exists) { loadingText.textContent = "Error: Assignment not found."; return; }
           assignmentData = { id: assignmentDoc.id, ...assignmentDoc.data() };
 
+          // Auto-repair and redirect if this assignment is actually a Video or PDF assignment
+          if (!assignmentData.type || assignmentData.type === 'slides') {
+              if (assignmentData.videoUrl && !assignmentData.presentationId) {
+                  assignmentData.type = 'video';
+                  await db.collection("assignments").doc(assignmentId).update({ type: 'video' });
+              } else if (assignmentData.pdfUrl && !assignmentData.presentationId) {
+                  assignmentData.type = 'pdf';
+                  await db.collection("assignments").doc(assignmentId).update({ type: 'pdf' });
+              }
+          }
+
+          if (assignmentData.type === 'video') {
+              window.location.href = `./video-editor.html?id=${assignmentId}`;
+              return;
+          } else if (assignmentData.type === 'pdf') {
+              window.location.href = `./pdf-editor.html?id=${assignmentId}`;
+              return;
+          }
+
+          if (!assignmentData.presentationId) {
+             loadingText.textContent = "Error: This Slides assignment has an invalid or missing Presentation ID.";
+             return;
+          }
+
           // Check access control
           // Check access control
           const isOwner = assignmentData.teacherEmail === currentUserEmail;
