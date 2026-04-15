@@ -2106,19 +2106,19 @@
             
             // Get the page height (for percentage conversion)
             const pageH = pageEl.offsetHeight || 1;
-            // The label takes about 14px
             const labelH = 14;
-            const paddingH = 12; // top + bottom padding (4px + 6px approx)
+            const paddingH = 12;
             const neededPx = scrollH + labelH + paddingH;
             const neededPct = (neededPx / pageH) * 100;
             
-            // Only grow, never shrink below original saved height
+            // Grow or shrink to fit content, but never below the original saved height
             const originalH = zone.h;
-            if (neededPct > originalH) {
-                zoneDiv.style.height = neededPct + '%';
-            } else {
-                zoneDiv.style.height = originalH + '%';
-            }
+            zoneDiv.style.height = Math.max(neededPct, originalH) + '%';
+        }
+
+        function collapseZone(zoneDiv, zone) {
+            // Snap back to original saved height
+            zoneDiv.style.height = zone.h + '%';
         }
 
         function initializePDFStudentView() {
@@ -2213,6 +2213,9 @@
                     }
                 }
 
+                // Default: clip overflow so collapsed box doesn't leak text over PDF
+                zoneDiv.style.overflow = 'hidden';
+
                 ta.addEventListener('focus', () => {
                     activePdfZoneIndex = index;
                     currentSlideIndex = index;
@@ -2232,6 +2235,17 @@
                     // Highlight active zone
                     document.querySelectorAll('.pdf-student-zone').forEach(z => z.classList.remove('active'));
                     zoneDiv.classList.add('active');
+                    // Expand to fit content while focused
+                    zoneDiv.style.overflow = 'visible';
+                    zoneDiv.style.zIndex = '20';
+                    autoExpandZone(ta, zoneDiv, zone, pageEl);
+                });
+
+                ta.addEventListener('blur', () => {
+                    // Collapse back to original size so PDF is visible
+                    collapseZone(zoneDiv, zone);
+                    zoneDiv.style.overflow = 'hidden';
+                    zoneDiv.style.zIndex = '';
                 });
 
                 ta.addEventListener('input', () => {
@@ -2242,11 +2256,6 @@
                 zoneDiv.appendChild(label);
                 zoneDiv.appendChild(ta);
                 pageEl.appendChild(zoneDiv);
-
-                // Auto-expand on initial load if text exists
-                if (savedState && savedState.answer) {
-                    setTimeout(() => autoExpandZone(ta, zoneDiv, zone, pageEl), 50);
-                }
             });
             
             const annotations = assignmentData.annotationElements || [];
