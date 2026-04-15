@@ -591,7 +591,7 @@
             const averages = {};
             const assignedClasses = assignmentData.assignedClasses || [];
             const studentsInAssignment = allStudentData.filter(s => assignedClasses.includes(String(s.class)));
-            const numQuestions = assignmentData.type === 'pdf' ? (assignmentData.questionZones ? assignmentData.questionZones.length : 0) : (assignmentData.slideIds ? assignmentData.slideIds.length : 0);
+            const numQuestions = assignmentData.type === 'pdf' ? (assignmentData.questionZones ? assignmentData.questionZones.length : 0) : assignmentData.type === 'video' ? (assignmentData.videoQuestions ? assignmentData.videoQuestions.length : 0) : (assignmentData.slideIds ? assignmentData.slideIds.length : 0);
 
             const classes = [...new Set(studentsInAssignment.map(s => String(s.class)))];
             classes.forEach(c => {
@@ -705,7 +705,7 @@
         function displayStudentData() {
             const tableHeader = document.getElementById('tableHeader');
             const studentList = document.getElementById('studentData');
-            const numQuestions = assignmentData.type === 'pdf' ? (assignmentData.questionZones ? assignmentData.questionZones.length : 0) : (assignmentData.slideIds ? assignmentData.slideIds.length : 0);
+            const numQuestions = assignmentData.type === 'pdf' ? (assignmentData.questionZones ? assignmentData.questionZones.length : 0) : assignmentData.type === 'video' ? (assignmentData.videoQuestions ? assignmentData.videoQuestions.length : 0) : (assignmentData.slideIds ? assignmentData.slideIds.length : 0);
             const sortedStudents = getCurrentlySortedStudents();
             const hasFocusMode = assignmentData.focusModeEnabled;
 
@@ -1311,7 +1311,7 @@
             const maxPoints = parseFloat(document.getElementById('maxPoints').value) || 100;
             const decimalPlaces = parseInt(document.getElementById('decimalPlaces').value, 10) || 0;
             const studentsToExport = getCurrentlySortedStudents();
-            const numQuestions = assignmentData.type === 'pdf' ? (assignmentData.questionZones ? assignmentData.questionZones.length : 0) : (assignmentData.slideIds ? assignmentData.slideIds.length : 0);
+            const numQuestions = assignmentData.type === 'pdf' ? (assignmentData.questionZones ? assignmentData.questionZones.length : 0) : assignmentData.type === 'video' ? (assignmentData.videoQuestions ? assignmentData.videoQuestions.length : 0) : (assignmentData.slideIds ? assignmentData.slideIds.length : 0);
 
             const outputData = studentsToExport.map(student => {
                 const nameParts = student.name.split(' ').filter(Boolean);
@@ -1351,7 +1351,7 @@
 
         function exportToCSV() {
             let csvContent = "\uFEFF"; // Add BOM for Excel UTF-8 support
-            const numQuestions = assignmentData.type === 'pdf' ? (assignmentData.questionZones ? assignmentData.questionZones.length : 0) : (assignmentData.slideIds ? assignmentData.slideIds.length : 0);
+            const numQuestions = assignmentData.type === 'pdf' ? (assignmentData.questionZones ? assignmentData.questionZones.length : 0) : assignmentData.type === 'video' ? (assignmentData.videoQuestions ? assignmentData.videoQuestions.length : 0) : (assignmentData.slideIds ? assignmentData.slideIds.length : 0);
             const hasFocusMode = assignmentData.focusModeEnabled;
 
             let headers = ["Email", "Last Name", "First Name", "Full Name (Last, First)", "Class", "Average Score %", "Completion %"];
