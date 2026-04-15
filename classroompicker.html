@@ -1641,9 +1641,12 @@
             const shouldDisableLinks = isSubmitted && postRule === 'hide';
 
             const isPDF = assignmentData.type === 'pdf';
+            const isVideo = assignmentData.type === 'video';
             const questionCount = isPDF
                 ? (assignmentData.questionZones || []).length
-                : (assignmentData.slideIds || []).length;
+                : isVideo 
+                    ? (assignmentData.videoQuestions || []).length
+                    : (assignmentData.slideIds || []).length;
 
             for (let index = 0; index < questionCount; index++) {
                 const state = slideStates[index];
