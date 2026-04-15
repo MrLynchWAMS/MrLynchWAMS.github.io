@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assignment Dashboard</title>
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👩‍🚀</text></svg>">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
+    <style>
+        .hidden {
+            display: none;
+        }
+
+        .btn-action {
+            transition: background-color 0.2s, transform 0.1s;
+        }
+
+        .btn-action:active {
+            transform: scale(0.95);
+        }
+
+        @keyframes fade-in-right {
+            from {
+                opacity: 0;
+                transform: translateX(100%);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes fade-out-right {
+            from {
+                opacity: 1;
+                transform: translateX(0);
+            }
+
+            to {
+                opacity: 0;
+                transform: translateX(100%);
+            }
+        }
+
+        .animate-fade-in-right {
+            animation: fade-in-right 0.5s ease-out forwards;
+        }
+
+        .animate-fade-out-right {
+            animation: fade-out-right 0.5s ease-in forwards;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-900 text-white font-sans">
+
+    <div id="pageLoader" class="flex flex-col items-center justify-center h-screen">
+        <h1 class="text-4xl font-bold text-yellow-400 mb-4">Assignment Management</h1>
+        <p id="loading-text" class="text-lg text-gray-300">Initializing...</p>
+        <div id="signInButtonContainer" class="hidden mt-8">
+            <div id="g_id_onload"
+                data-client_id="1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com"
+                data-callback="handleCredentialResponse"></div>
+            <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_black"
+                data-text="signin_with" data-shape="rectangular" data-logo_alignment="left"></div>
+            <p id="auth-error" class="text-red-500 mt-4"></p>
+        </div>
+    </div>
+
+    <div id="assignmentContent" class="hidden container mx-auto p-4 md:p-8">
+        <div class="flex justify-between items-center mb-6 flex-wrap gap-4">
+            <h1 class="text-3xl font-bold text-yellow-400">Your Assignments</h1>
+            <div>
+                <button onclick="openCreateModal()"
+                    class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg btn-action">+ New
+                    Assignment</button>
+                <button onclick="openDefaultCoTeacherModal()"
+                    class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Co-Teacher
+                    Settings</button>
+                <a href="./roster.html"
+                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Manage
+                    Roster</a>
+                <a href="./aura-purchases.html"
+                    class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Aura
+                    Purchases</a>
+                <a href="./class-dashboard.html"
+                    class="bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Class
+                    Overview</a>
+                <a href="./public-library.html"
+                    class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Public
+                    Library</a>
+                <button id="signOutButton"
+                    class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Sign
+                    Out</button>
+            </div>
+        </div>
+
+        <div class="mb-6">
+            <input type="search" id="searchInput" placeholder="Search assignments by name..."
+                class="w-full p-3 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500">
+        </div>
+
+        <div id="loadingState" class="text-center py-10">
+            <p class="text-xl">Loading assignments...</p>
+        </div>
+
+        <div id="assignmentsList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- Assignment cards will be dynamically added here -->
+        </div>
+    </div>
+
+    <!-- Create Assignment Modal -->
+    <div id="createModal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
+        <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-lg">
+            <div class="flex justify-between items-center p-4 border-b border-gray-700">
+                <h2 class="text-2xl font-bold text-yellow-400">Create New Assignment</h2>
+                <button onclick="closeCreateModal()" class="text-gray-400 hover:text-white text-3xl">&times;</button>
+            </div>
+            <div class="p-6">
+                <label for="assignmentName" class="block text-sm font-medium text-gray-300 mb-2">Assignment Name</label>
+                <input type="text" id="assignmentName" placeholder="e.g., Chapter 5 Review"
+                    class="w-full p-3 mb-4 bg-gray-700 rounded border border-gray-600">
+                <div class="flex gap-4 mb-4 flex-wrap">
+                    <label class="flex items-center cursor-pointer">
+                        <input type="radio" name="assignmentType" value="slides" checked onchange="toggleCreateFields()"
+                            class="mr-2">
+                        <span>Google Slides</span>
+                    </label>
+                    <label class="flex items-center cursor-pointer">
+                        <input type="radio" name="assignmentType" value="pdf" onchange="toggleCreateFields()"
+                            class="mr-2">
+                        <span>PDF Document</span>
+                    </label>
+                    <label class="flex items-center cursor-pointer">
+                        <input type="radio" name="assignmentType" value="video" onchange="toggleCreateFields()"
+                            class="mr-2">
+                        <span>Video (YouTube / Google Drive)</span>
+                    </label>
+                </div>
+
+                <div id="slidesFields">
+                    <label for="slidesLink" class="block text-sm font-medium text-gray-300 mb-2">Google Slides Share
+                        Link</label>
+                    <input type="text" id="slidesLink" placeholder="Paste the full URL from Google Slides"
+                        class="w-full p-3 mb-4 bg-gray-700 rounded border border-gray-600">
+                </div>
+
+                <div id="pdfFields" class="hidden">
+                    <label for="pdfFile" class="block text-sm font-medium text-gray-300 mb-2">Upload PDF File</label>
+                    <input type="file" id="pdfFile" accept="application/pdf"
+                        class="w-full p-3 mb-4 bg-gray-700 rounded border border-gray-600">
+                    <div id="uploadProgress" class="hidden mb-4">
+                        <div class="w-full bg-gray-700 rounded-full h-2">
+                            <div id="uploadProgressBar" class="bg-blue-600 h-2 rounded-full" style="width: 0%"></div>
+                        </div>
+                        <p class="text-[10px] text-gray-400 mt-1">Uploading PDF...</p>
+                    </div>
+                </div>
+
+                <div id="videoFields" class="hidden">
+                    <label for="videoLink" class="block text-sm font-medium text-gray-300 mb-2">Video URL (YouTube or Google Drive share link)</label>
+                    <input type="text" id="videoLink" placeholder="https://www.youtube.com/watch?v=... or Google Drive link"
+                        class="w-full p-3 mb-4 bg-gray-700 rounded border border-gray-600">
+                </div>
+                <div class="flex items-center mb-4">
+                    <input type="checkbox" id="isPublicCheckbox" class="mr-2 w-4 h-4">
+                    <label for="isPublicCheckbox" class="text-sm text-gray-300">Make this assignment public (visible in
+                        Public Library)</label>
+                </div>
+                <!-- Pre-filled Co-Teachers Warning/Info -->
+                <p id="create-note" class="text-xs text-gray-400 mb-4 hidden">Note: Your default co-teachers will be
+                    added automatically.</p>
+
+                <p id="modal-error" class="text-red-500 mb-4"></p>
+                <button onclick="handleCreateAssignment()" id="createAssignmentBtn"
+                    class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg btn-action">Create
+                    Assignment</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status/Scheduling Modal -->
+    <div id="statusModal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
+        <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-2xl">
+            <div class="flex justify-between items-center p-4 border-b border-gray-700">
+                <h2 id="statusModalTitle" class="text-2xl font-bold text-yellow-400">Manage Status</h2>
+                <button onclick="closeStatusModal()" class="text-gray-400 hover:text-white text-3xl">&times;</button>
+            </div>
+            <div class="p-6 border-b border-gray-700">
+                <div class="flex items-center mb-4">
+                    <input type="checkbox" id="isPublicToggle" class="mr-2 w-4 h-4">
+                    <label for="isPublicToggle" class="text-sm text-gray-300">Public (visible in Public Library)</label>
+                </div>
+                <label for="studentShareLink" class="block text-sm font-medium text-gray-300 mb-2">Student Share
+                    Link</label>
+                <div class="flex gap-2">
+                    <input id="studentShareLink" type="text" readonly
+                        class="w-full p-2 bg-gray-700 border border-gray-600 rounded">
+                    <button onclick="copyShareLink()"
+                        class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-3 rounded-lg btn-action">Copy</button>
+                </div>
+            </div>
+            <div id="statusModalContent" class="p-6 max-h-[50vh] overflow-y-auto"></div>
+            <div class="p-4 bg-gray-700/50 flex justify-end">
+                <button onclick="handleSaveAssignmentStatus()"
+                    class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Save
+                    Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Default Co-Teacher Modal -->
+    <div id="defaultCoTeacherModal"
+        class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
+        <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-lg">
+            <div class="flex justify-between items-center p-4 border-b border-gray-700">
+                <h2 class="text-2xl font-bold text-yellow-400">Global Co-Teacher Settings</h2>
+                <button onclick="closeDefaultCoTeacherModal()"
+                    class="text-gray-400 hover:text-white text-3xl">&times;</button>
+            </div>
+            <div class="p-6">
+                <p class="text-sm text-gray-300 mb-4">These teachers will be automatically added to any
+                    <strong>NEW</strong> assignments you create. They will have full access to view and manage those
+                    assignments.
+                </p>
+
+                <label for="defaultCoTeacherEmails" class="block text-sm font-medium text-gray-300 mb-2">Default
+                    Co-Teacher Emails (comma-separated)</label>
+                <textarea id="defaultCoTeacherEmails" rows="4" placeholder="e.g., teacher1@mtps.us, teacher2@mtps.us"
+                    class="w-full p-3 mb-4 bg-gray-700 rounded border border-gray-600"></textarea>
+
+                <p id="default-coTeacher-error" class="text-red-500 mb-4"></p>
+                <button onclick="handleSaveDefaultCoTeachers()" id="saveDefaultCoTeachersBtn"
+                    class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg btn-action">Save
+                    Defaults</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Per-Assignment Co-Teacher Management Modal -->
+    <div id="coTeacherModal"
+        class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
+        <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-lg">
+            <div class="flex justify-between items-center p-4 border-b border-gray-700">
+                <h2 class="text-2xl font-bold text-yellow-400">Manage Co-Teachers</h2>
+                <button onclick="closeCoTeacherModal()" class="text-gray-400 hover:text-white text-3xl">&times;</button>
+            </div>
+            <div class="p-6">
+                <label for="coTeacherEmails" class="block text-sm font-medium text-gray-300 mb-2">Co-Teacher Emails
+                    (comma-separated)</label>
+                <textarea id="coTeacherEmails" rows="4" placeholder="e.g., teacher1@example.com, teacher2@example.com"
+                    class="w-full p-3 mb-4 bg-gray-700 rounded border border-gray-600"></textarea>
+                <p id="coTeacher-error" class="text-red-500 mb-4"></p>
+                <button onclick="handleSaveCoTeachers()" id="saveCoTeachersBtn"
+                    class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg btn-action">Save
+                    Co-Teachers</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Share to Teacher Modal -->
+    <div id="shareModal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
+        <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-lg">
+            <div class="flex justify-between items-center p-4 border-b border-gray-700">
+                <h2 class="text-2xl font-bold text-yellow-400">Share to Teacher</h2>
+                <button onclick="closeShareModal()" class="text-gray-400 hover:text-white text-3xl">&times;</button>
+            </div>
+            <div class="p-6">
+                <label for="targetTeacherEmail" class="block text-sm font-medium text-gray-300 mb-2">Teacher
+                    Email</label>
+                <input type="email" id="targetTeacherEmail" placeholder="teacher@example.com"
+                    class="w-full p-3 mb-4 bg-gray-700 rounded border border-gray-600">
+                <p id="share-error" class="text-red-500 mb-4"></p>
+                <button onclick="handleShareToTeacher()" id="shareToTeacherBtn"
+                    class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg btn-action">Share
+                    Assignment</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast-wrapper" class="fixed top-4 right-4 z-[100] space-y-3 w-full max-w-sm"></div>
+
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-storage-compat.js"></script>
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
+            authDomain: "mrlynch-slides-app.firebaseapp.com",
+            projectId: "mrlynch-slides-app",
+            storageBucket: "mrlynch-slides-app.firebasestorage.app",
+            messagingSenderId: "223179627035",
+            appId: "1:223179627035:web:ff0f538f3029d829c3f6be"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const auth = firebase.auth();
+        const storage = firebase.storage();
+        const DEFAULT_TEACHER_EMAIL = "klynch@mtps.us";
+        let activeAssignmentId = null;
+        let allClassNames = [];
+        let allAssignments = [];
+        let studentRoster = [];
+        let submissionStatuses = {};
+        let currentUserEmail = null;
+        let currentUserIsAdmin = false;
+        let currentUserDefaultCoTeachers = [];
+
+        const createModal = document.getElementById('createModal');
+        const statusModal = document.getElementById('statusModal');
+        const coTeacherModal = document.getElementById('coTeacherModal');
+        const defaultCoTeacherModal = document.getElementById('defaultCoTeacherModal');
+        const shareModal = document.getElementById('shareModal');
+
+        function checkImpersonation() {
+            const impersonatedEmail = localStorage.getItem('impersonatedUserEmail');
+            if (impersonatedEmail) {
+                const banner = document.createElement('div');
+                banner.className = 'bg-red-600 text-white text-center p-2 font-bold fixed top-0 w-full z-[200] flex justify-center items-center gap-4';
+                banner.innerHTML = `<span>⚠️ IMPERSONATING: ${impersonatedEmail}</span><button onclick="stopImpersonating()" class="bg-white text-red-600 px-3 py-1 rounded text-xs hover:bg-gray-200">Stop</button>`;
+                document.body.prepend(banner);
+                document.body.style.paddingTop = '40px';
+                return impersonatedEmail;
+            }
+            return null;
+        }
+
+        function stopImpersonating() {
+            localStorage.removeItem('impersonatedUserEmail');
+            window.location.reload();
+        }
+
+        auth.onAuthStateChanged(async user => {
+            if (user) {
+                try {
+                    let emailToCheck = user.email.toLowerCase();
+                    const impersonated = checkImpersonation();
+                    if (impersonated) emailToCheck = impersonated;
+
+                    const teacherDoc = await db.collection("teachers").doc(emailToCheck).get();
+                    let isTeacher = teacherDoc.exists;
+                    let teacherData = isTeacher ? teacherDoc.data() : {};
+
+                    if (!isTeacher) {
+                        const implicitQuery = await db.collection("teachers").where("coTeachingFor", "array-contains", emailToCheck).get();
+                        if (!implicitQuery.empty) {
+                            isTeacher = true;
+                            teacherData = { email: emailToCheck, isAdmin: false, defaultCoTeachers: [], isImplicit: true };
+                        }
+                    }
+
+                    if (isTeacher) {
+                        currentUserEmail = emailToCheck;
+                        const data = teacherData;
+                        currentUserIsAdmin = data.isAdmin || false;
+                        currentUserDefaultCoTeachers = data.defaultCoTeachers || [];
+                        document.getElementById('pageLoader').classList.add('hidden');
+                        document.getElementById('assignmentContent').classList.remove('hidden');
+                        await runMigration();
+                        loadInitialData();
+                    } else {
+                        document.getElementById('loading-text').textContent = `Access Denied: You (${emailToCheck}) are not registered as a teacher.`;
+                        document.getElementById('auth-error').textContent = "Please contact an administrator.";
+                        document.getElementById('signInButtonContainer').classList.add('hidden');
+                    }
+                } catch (error) {
+                    console.error("Error checking teacher status:", error);
+                    document.getElementById('loading-text').textContent = "Error verifying access.";
+                }
+            } else {
+                document.getElementById('pageLoader').classList.remove('hidden');
+                document.getElementById('assignmentContent').classList.add('hidden');
+                document.getElementById('loading-text').textContent = "Please sign in to continue.";
+                document.getElementById('signInButtonContainer').classList.remove('hidden');
+            }
+        });
+
+        async function runMigration() {
+            try {
+                const snapshot = await db.collection("assignments").get();
+                const docsToMigrate = snapshot.docs.filter(doc => !doc.data().teacherEmail);
+                if (docsToMigrate.length === 0) return;
+                const batch = db.batch();
+                docsToMigrate.forEach(doc => {
+                    batch.update(doc.ref, { teacherEmail: DEFAULT_TEACHER_EMAIL, coTeachers: [], isPublic: false });
+                });
+                await batch.commit();
+            } catch (error) { console.error("Migration error:", error); }
+        }
+
+        async function loadInitialData() {
+            try {
+                let studentQuery = db.collection("students").where("teacherEmail", "==", currentUserEmail);
+                const studentSnapshot = await studentQuery.get();
+                studentRoster = studentSnapshot.docs.map(doc => doc.data());
+                allClassNames = [...new Set(studentRoster.map(s => String(s.class)))].sort();
+            } catch (error) { console.error("Could not load class roster:", error); }
+
+            db.collection("assignments").where("teacherEmail", "==", currentUserEmail)
+                .onSnapshot(snapshot => handleAssignmentsUpdate(snapshot, 'owned'), handleError);
+            db.collection("assignments").where("coTeachers", "array-contains", currentUserEmail)
+                .onSnapshot(snapshot => handleAssignmentsUpdate(snapshot, 'coTaught'), handleError);
+            try {
+                const parentsSnapshot = await db.collection("teachers").where("coTeachingFor", "array-contains", currentUserEmail).get();
+                parentsSnapshot.docs.forEach(doc => {
+                    db.collection("assignments").where("teacherEmail", "==", doc.id)
+                        .onSnapshot(snapshot => handleAssignmentsUpdate(snapshot, `parent-${doc.id}`), handleError);
+                });
+            } catch (e) { console.error("Error fetching parent teachers:", e); }
+            db.collection("submissionStatus").onSnapshot(handleStatusUpdate, handleError);
+        }
+
+        let assignmentsBySource = {};
+        function handleAssignmentsUpdate(snapshot, sourceName) {
+            assignmentsBySource[sourceName] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const combinedAssignments = new Map();
+            for (const sourceKey in assignmentsBySource) {
+                assignmentsBySource[sourceKey].forEach(assignment => combinedAssignments.set(assignment.id, assignment));
+            }
+            allAssignments = Array.from(combinedAssignments.values());
+            allAssignments.sort((a, b) => {
+                const ta = a.createdAt ? (a.createdAt.seconds || 0) : 0;
+                const tb = b.createdAt ? (b.createdAt.seconds || 0) : 0;
+                return tb - ta;
+            });
+            displayFilteredAssignments();
+        }
+
+        function handleStatusUpdate(snapshot) {
+            submissionStatuses = {};
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                if (!submissionStatuses[data.assignmentId]) submissionStatuses[data.assignmentId] = {};
+                submissionStatuses[data.assignmentId][data.studentEmail] = data.status;
+            });
+            displayFilteredAssignments();
+        }
+
+        function handleError(error) { console.error("Real-time listener failed:", error); }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function displayFilteredAssignments() {
+            const listContainer = document.getElementById('assignmentsList');
+            const loadingState = document.getElementById('loadingState');
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const filteredAssignments = allAssignments.filter(a => a.name.toLowerCase().includes(searchTerm));
+
+            listContainer.innerHTML = '';
+            if (filteredAssignments.length === 0) {
+                loadingState.innerText = searchTerm ? "No assignments found matching your search." : "No assignments found.";
+                loadingState.classList.remove('hidden');
+            } else {
+                loadingState.classList.add('hidden');
+            }
+
+            filteredAssignments.forEach(assignment => {
+                const card = document.createElement('div');
+                card.className = "bg-gray-800 rounded-lg p-6 shadow-lg flex flex-col justify-between";
+                const date = assignment.createdAt ? new Date(assignment.createdAt.seconds * 1000).toLocaleDateString() : 'No date';
+
+                let statusHTML = '<div class="space-y-2 text-xs">';
+                const assignedClasses = assignment.assignedClasses || [];
+                if (assignedClasses.length > 0) {
+                    assignedClasses.sort().forEach(className => {
+                        const status = assignment.classStatus?.[className] || 'closed';
+                        let color = status === 'open' ? 'text-green-400' : (status === 'scheduled' ? 'text-blue-400' : 'text-red-400');
+                        const studentsInClass = studentRoster.filter(s => String(s.class) === className);
+                        const submissionCount = Object.keys(submissionStatuses[assignment.id] || {}).filter(email =>
+                            studentsInClass.some(s => s.email === email)
+                        ).length;
+
+                        statusHTML += `
+                        <div class="flex justify-between items-center">
+                            <div><span class="font-semibold">${className}:</span> <span class="${color}">${status}</span></div>
+                            <div class="text-gray-400">${submissionCount} / ${studentsInClass.length} Submitted</div>
+                        </div>`;
+                    });
+                } else { statusHTML += '<span class="text-gray-400">Not yet assigned.</span>'; }
+                statusHTML += '</div>';
+
+                const escapedName = escapeHtml(assignment.name);
+                const editUrl = assignment.type === 'pdf' ? `pdf-editor.html?id=${assignment.id}` : assignment.type === 'video' ? `video-editor.html?id=${assignment.id}` : `editor.html?id=${assignment.id}`;
+
+                card.innerHTML = `
+                <div>
+                    <h3 class="text-2xl font-bold text-yellow-400 mb-2">${escapedName}</h3>
+                    <div class="mb-2">${statusHTML}</div>
+                    <p class="text-gray-500 text-xs mt-2">Created: ${date}</p>
+                    ${assignment.isPublic ? '<p class="text-purple-400 text-xs">🌐 Public</p>' : ''}
+                </div>
+                <div class="mt-4 pt-4 border-t border-gray-700 flex flex-col gap-2">
+                    <div class="flex justify-between gap-2">
+                        <a href="./dashboard.html?assignmentId=${assignment.id}" class="flex-1 text-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-2 rounded-lg btn-action text-sm">Dashboard</a>
+                        <a href="./${editUrl}" class="flex-1 text-center bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-2 rounded-lg btn-action text-sm">Edit</a>
+                        <a href="./classroompicker.html?assignmentId=${assignment.id}" target="_blank" class="flex-1 text-center bg-green-700 hover:bg-green-800 text-white font-bold py-2 px-2 rounded-lg btn-action text-sm">Student View</a>
+                    </div>
+                    <div class="flex justify-between gap-2">
+                         <button onclick="openStatusModal('${assignment.id}')" class="flex-1 text-center bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-3 rounded-lg btn-action">Assign & Schedule</button>
+                         <button onclick="deleteAssignment('${assignment.id}', '${escapedName}')" class="flex-1 text-center bg-red-700 hover:bg-red-800 text-white font-bold py-2 px-3 rounded-lg btn-action">Delete</button>
+                    </div>
+                    <div class="flex justify-between gap-2">
+                        <button onclick="openCoTeacherModal('${assignment.id}')" class="flex-1 text-center bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold py-2 px-2 rounded-lg btn-action">Co-Teachers</button>
+                        <button onclick="openShareModal('${assignment.id}')" class="flex-1 text-center bg-green-600 hover:bg-green-700 text-white text-sm font-bold py-2 px-2 rounded-lg btn-action">Share</button>
+                        <button onclick="togglePublic('${assignment.id}', ${assignment.isPublic || false})" class="flex-1 text-center bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold py-2 px-2 rounded-lg btn-action">${assignment.isPublic ? 'Make Private' : 'Make Public'}</button>
+                    </div>
+                </div>`;
+                listContainer.appendChild(card);
+            });
+        }
+
+        document.getElementById('searchInput').addEventListener('input', displayFilteredAssignments);
+
+        function openCreateModal() {
+            createModal.classList.remove('hidden');
+            const note = document.getElementById('create-note');
+            if (currentUserDefaultCoTeachers && currentUserDefaultCoTeachers.length > 0) note.classList.remove('hidden');
+            else note.classList.add('hidden');
+        }
+
+        function toggleCreateFields() {
+            const type = document.querySelector('input[name="assignmentType"]:checked').value;
+            document.getElementById('slidesFields').classList.toggle('hidden', type !== 'slides');
+            document.getElementById('pdfFields').classList.toggle('hidden', type !== 'pdf');
+            document.getElementById('videoFields').classList.toggle('hidden', type !== 'video');
+        }
+
+        function closeCreateModal() {
+            createModal.classList.add('hidden');
+            document.getElementById('assignmentName').value = '';
+            document.getElementById('slidesLink').value = '';
+            document.getElementById('pdfFile').value = '';
+            document.getElementById('videoLink').value = '';
+            document.getElementById('uploadProgress').classList.add('hidden');
+            document.getElementById('isPublicCheckbox').checked = false;
+            document.getElementById('modal-error').innerText = '';
+        }
+
+        async function handleCreateAssignment() {
+            const nameInput = document.getElementById('assignmentName');
+            const typeInput = document.querySelector('input[name="assignmentType"]:checked');
+            const slidesLinkInput = document.getElementById('slidesLink');
+            const pdfFileInput = document.getElementById('pdfFile');
+            const isPublicInput = document.getElementById('isPublicCheckbox');
+            const errorP = document.getElementById('modal-error');
+            const btn = document.getElementById('createAssignmentBtn');
+
+            const name = nameInput.value.trim();
+            const type = typeInput.value;
+            const isPublic = isPublicInput.checked;
+
+            errorP.innerText = '';
+            if (!name) { errorP.innerText = "Please enter an assignment name."; return; }
+
+            let presentationId = null;
+            let pdfUrl = null;
+            let videoUrl = null;
+            let assignmentVideoId = "";
+            let assignmentVideoType = "";
+
+            if (type === 'slides') {
+                const link = slidesLinkInput.value.trim();
+                const match = link.match(/presentation\/d\/([a-zA-Z0-9-_]+)/);
+                if (!match) { errorP.innerText = "Invalid Google Slides URL."; return; }
+                presentationId = match[1];
+            } else if (type === 'pdf') {
+                const file = pdfFileInput.files[0];
+                if (!file) { errorP.innerText = "Please select a PDF file."; return; }
+                try {
+                    btn.innerText = "Uploading PDF...";
+                    btn.disabled = true;
+                    document.getElementById('uploadProgress').classList.remove('hidden');
+                    const progressBar = document.getElementById('uploadProgressBar');
+                    const storageRef = storage.ref(`pdfs/${currentUserEmail}/${Date.now()}_${file.name}`);
+                    const uploadTask = storageRef.put(file);
+                    pdfUrl = await new Promise((resolve, reject) => {
+                        uploadTask.on('state_changed',
+                            (snap) => { progressBar.style.width = (snap.bytesTransferred / snap.totalBytes) * 100 + '%'; },
+                            reject,
+                            async () => resolve(await uploadTask.snapshot.ref.getDownloadURL())
+                        );
+                    });
+                } catch (e) {
+                    console.error("Upload error:", e);
+                    errorP.innerText = "Upload failed: " + e.message;
+                    btn.disabled = false;
+                    btn.innerText = "Create Assignment";
+                    return;
+                }
+            } else if (type === 'video') {
+                videoUrl = document.getElementById('videoLink').value.trim();
+                if (!videoUrl) { errorP.innerText = "Please enter a video URL."; return; }
+                
+                // Detection logic simplified for creation
+                const ytMatch = videoUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/);
+                const driveMatch = videoUrl.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/) || videoUrl.match(/drive\.google\.com\/open\?id=([a-zA-Z0-9_-]+)/);
+                
+                if (!ytMatch && !driveMatch) { 
+                    errorP.innerText = "Please enter a valid YouTube or Google Drive video URL."; 
+                    return; 
+                }
+                
+                assignmentVideoId = ytMatch ? ytMatch[1] : driveMatch[1];
+                assignmentVideoType = ytMatch ? 'youtube' : 'gdrive';
+            }
+
+            try {
+                btn.innerText = "Creating...";
+                btn.disabled = true;
+                const docData = {
+                    name, type, 
+                    presentationId: presentationId || "", 
+                    pdfUrl: pdfUrl || "",
+                    videoUrl: videoUrl || "", 
+                    videoSourceType: (type === 'video' && typeof assignmentVideoType !== 'undefined') ? assignmentVideoType : "",
+                    videoSourceId: (type === 'video' && typeof assignmentVideoId !== 'undefined') ? assignmentVideoId : "",
+                    teacherEmail: currentUserEmail,
+                    coTeachers: currentUserDefaultCoTeachers || [], 
+                    assignedClasses: [], 
+                    classStatus: {}, 
+                    isPublic,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(), 
+                    slideIds: [],
+                    postSubmissionRule: 'open',
+                    scoringMode: 'instant'
+                };
+
+                if (type === 'video') {
+                    docData.videoQuestions = [];
+                    docData.videoNotes = [];
+                    docData.checkerFunctions = {};
+                } else if (type === 'pdf') {
+                    docData.questionZones = [];
+                    docData.annotations = [];
+                } else {
+                    docData.checkerCode = {};
+                    docData.checkerMeta = {};
+                }
+
+                const newDoc = await db.collection("assignments").add(docData);
+                showToast("Assignment created!", { color: 'green' });
+                closeCreateModal();
+                const editorPage = type === 'pdf' ? 'pdf-editor.html' : type === 'video' ? 'video-editor.html' : 'editor.html';
+                window.location.href = `./${editorPage}?id=${newDoc.id}`;
+            } catch (error) {
+                console.error("Error creating assignment:", error);
+                errorP.innerText = "Error: " + error.message;
+                btn.disabled = false;
+                btn.innerText = "Create Assignment";
+            }
+        }
+
+        function openStatusModal(assignmentId) {
+            const assignment = allAssignments.find(a => a.id === assignmentId);
+            if (!assignment) { showToast("Could not find assignment data.", { color: 'red' }); return; }
+            activeAssignmentId = assignment.id;
+            document.getElementById('statusModalTitle').innerText = `Manage Status for: ${assignment.name}`;
+            document.getElementById('studentShareLink').value = `https://custom.scienceclass.rocks/classroompicker.html?assignmentId=${assignment.id}`;
+            document.getElementById('isPublicToggle').checked = assignment.isPublic || false;
+
+            let contentHTML = `
+            <div class="flex justify-end gap-2 mb-4">
+                <button onclick="setAllStatuses('open')" class="text-sm bg-green-600 hover:bg-green-700 px-3 py-1 rounded-md btn-action">Open All</button>
+                <button onclick="setAllStatuses('scheduled')" class="text-sm bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded-md btn-action">Schedule All</button>
+                <button onclick="setAllStatuses('closed')" class="text-sm bg-yellow-600 hover:bg-yellow-700 px-3 py-1 rounded-md btn-action">Close All</button>
+                <button onclick="setAllStatuses('not-assigned')" class="text-sm bg-gray-600 hover:bg-gray-500 px-3 py-1 rounded-md btn-action">Unassign All</button>
+            </div>
+            <div class="space-y-4">`;
+
+            allClassNames.forEach(className => {
+                const isAssigned = (assignment.assignedClasses || []).includes(className);
+                const currentStatus = isAssigned ? (assignment.classStatus?.[className] || 'closed') : 'not-assigned';
+                const studentsInClass = studentRoster.filter(s => String(s.class) === className);
+                const submissionCount = Object.keys(submissionStatuses[assignment.id] || {}).filter(email =>
+                    studentsInClass.some(s => s.email === email)
+                ).length;
+
+                contentHTML += `
+                <div class="bg-gray-700 p-3 rounded-lg">
+                    <div class="flex justify-between items-center">
+                        <label class="font-semibold">${className}</label>
+                        <select data-class-name="${className}" class="bg-gray-600 rounded p-2 border border-gray-500">
+                            <option value="open" ${currentStatus === 'open' ? 'selected' : ''}>Open</option>
+                            <option value="scheduled" ${currentStatus === 'scheduled' ? 'selected' : ''}>Scheduled</option>
+                            <option value="closed" ${currentStatus === 'closed' ? 'selected' : ''}>Closed</option>
+                            <option value="not-assigned" ${currentStatus === 'not-assigned' ? 'selected' : ''}>Not Assigned</option>
+                        </select>
+                    </div>
+                    <div class="mt-3 pt-3 border-t border-gray-600 flex justify-end gap-2 text-sm">
+                        <span class="text-gray-400">${submissionCount} / ${studentsInClass.length} Submitted</span>
+                        <button onclick="unsubmitClass('${assignment.id}', '${className}')" class="text-yellow-400">Unsubmit All</button>
+                        <button onclick="forceSubmitClass('${assignment.id}', '${className}')" class="text-blue-400">Force Submit All</button>
+                    </div>
+                </div>`;
+            });
+            document.getElementById('statusModalContent').innerHTML = contentHTML + '</div>';
+            statusModal.classList.remove('hidden');
+        }
+
+        function setAllStatuses(status) {
+            document.querySelectorAll('#statusModalContent select').forEach(s => s.value = status);
+        }
+
+        function closeStatusModal() {
+            statusModal.classList.add('hidden');
+            activeAssignmentId = null;
+        }
+
+        async function handleSaveAssignmentStatus() {
+            if (!activeAssignmentId) return;
+            const newAssignedClasses = [];
+            const newClassStatus = {};
+            document.querySelectorAll('#statusModalContent select').forEach(s => {
+                newClassStatus[s.dataset.className] = s.value;
+                if (s.value !== 'not-assigned') newAssignedClasses.push(s.dataset.className);
+            });
+            try {
+                await db.collection("assignments").doc(activeAssignmentId).update({
+                    assignedClasses: newAssignedClasses,
+                    classStatus: newClassStatus,
+                    isPublic: document.getElementById('isPublicToggle').checked
+                });
+                showToast("Status updated!", { color: 'green' });
+                closeStatusModal();
+            } catch (e) {
+                console.error(e);
+                showToast("Update failed.", { color: 'red' });
+            }
+        }
+
+        async function deleteAssignment(id, name) {
+            if (confirm(`Delete "${name}"?`)) {
+                try {
+                    await db.collection("assignments").doc(id).delete();
+                    showToast("Deleted.", { color: 'blue' });
+                } catch (e) { console.error(e); }
+            }
+        }
+
+        function copyShareLink() {
+            const link = document.getElementById('studentShareLink');
+            link.select();
+            document.execCommand('copy');
+            showToast("Copied!", { color: 'blue' });
+        }
+
+        async function forceSubmitClass(assignmentId, className) {
+            if (!confirm(`Force submit for ${className}?`)) return;
+            const students = studentRoster.filter(s => String(s.class) === className && !(submissionStatuses[assignmentId] && submissionStatuses[assignmentId][s.email]));
+            const batch = db.batch();
+            students.forEach(s => {
+                batch.set(db.collection("submissionStatus").doc(`${assignmentId}_${s.email}`), {
+                    assignmentId, studentEmail: s.email, studentName: s.name, status: 'submitted', submittedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            });
+            await batch.commit();
+            showToast("Force submitted!", { color: 'green' });
+        }
+
+        async function unsubmitClass(assignmentId, className) {
+            if (!confirm(`Un-submit for ${className}?`)) return;
+            const students = studentRoster.filter(s => String(s.class) === className && submissionStatuses[assignmentId] && submissionStatuses[assignmentId][s.email]);
+            const batch = db.batch();
+            students.forEach(s => batch.delete(db.collection("submissionStatus").doc(`${assignmentId}_${s.email}`)));
+            await batch.commit();
+            showToast("Un-submitted!", { color: 'green' });
+        }
+
+        function openCoTeacherModal(assignmentId) {
+            const assignment = allAssignments.find(a => a.id === assignmentId);
+            if (!assignment) return;
+            activeAssignmentId = assignment.id;
+            document.getElementById('coTeacherEmails').value = (assignment.coTeachers || []).join(', ');
+            coTeacherModal.classList.remove('hidden');
+        }
+        function closeCoTeacherModal() { coTeacherModal.classList.add('hidden'); }
+        async function handleSaveCoTeachers() {
+            const emails = document.getElementById('coTeacherEmails').value.split(',').map(e => e.trim().toLowerCase()).filter(e => e);
+            await db.collection("assignments").doc(activeAssignmentId).update({ coTeachers: emails });
+            showToast("Co-teachers updated!", { color: 'green' });
+            closeCoTeacherModal();
+        }
+
+        function openDefaultCoTeacherModal() {
+            document.getElementById('defaultCoTeacherEmails').value = (currentUserDefaultCoTeachers || []).join(', ');
+            defaultCoTeacherModal.classList.remove('hidden');
+        }
+        function closeDefaultCoTeacherModal() { defaultCoTeacherModal.classList.add('hidden'); }
+        async function handleSaveDefaultCoTeachers() {
+            const emails = document.getElementById('defaultCoTeacherEmails').value.split(',').map(e => e.trim().toLowerCase()).filter(e => e);
+            await db.collection("teachers").doc(currentUserEmail).set({ defaultCoTeachers: emails, coTeachingFor: emails }, { merge: true });
+            currentUserDefaultCoTeachers = emails;
+            showToast("Defaults saved!", { color: 'green' });
+            closeDefaultCoTeacherModal();
+        }
+
+        function openShareModal(assignmentId) {
+            activeAssignmentId = assignmentId;
+            document.getElementById('targetTeacherEmail').value = '';
+            shareModal.classList.remove('hidden');
+        }
+        function closeShareModal() { shareModal.classList.add('hidden'); }
+        async function handleShareToTeacher() {
+            const targetEmail = document.getElementById('targetTeacherEmail').value.trim().toLowerCase();
+            const source = allAssignments.find(a => a.id === activeAssignmentId);
+            if (!targetEmail || !source) return;
+            try {
+                const shareData = {
+                    name: source.name + " (copy)", 
+                    type: source.type || "slides", 
+                    teacherEmail: targetEmail, 
+                    coTeachers: [], 
+                    assignedClasses: [],
+                    classStatus: {}, 
+                    isPublic: false, 
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    // Common fields
+                    postSubmissionRule: source.postSubmissionRule || 'open',
+                    scoringMode: source.scoringMode || 'instant',
+                    allowEarlyAccess: source.allowEarlyAccess || false,
+                    toolsConfig: source.toolsConfig || {},
+                    modifications: source.modifications || {},
+                    deadlinePolicy: source.deadlinePolicy || {}, 
+                    auraRules: source.auraRules || [],
+                    auraOnTime: source.auraOnTime || false,
+                    auraDueAt: source.auraDueAt || null,
+                    focusModeEnabled: source.focusModeEnabled || false,
+                    focusModeAction: source.focusModeAction || 'log'
+                };
+
+                // Type-specific field copies
+                if (source.type === 'video') {
+                    shareData.videoUrl = source.videoUrl || "";
+                    shareData.videoSourceType = source.videoSourceType || "";
+                    shareData.videoSourceId = source.videoSourceId || "";
+                    shareData.videoQuestions = source.videoQuestions || [];
+                    shareData.videoNotes = source.videoNotes || [];
+                    shareData.checkerFunctions = source.checkerFunctions || {};
+                } else if (source.type === 'pdf') {
+                    shareData.pdfUrl = source.pdfUrl || "";
+                    shareData.questionZones = source.questionZones || [];
+                    shareData.annotations = source.annotations || [];
+                } else {
+                    // Slides
+                    shareData.presentationId = source.presentationId || "";
+                    shareData.slideIds = source.slideIds || [];
+                    shareData.checkerCode = source.checkerCode || {};
+                    shareData.checkerMeta = source.checkerMeta || {};
+                }
+                await db.collection("assignments").add(shareData);
+                showToast(`Shared with ${targetEmail}!`, { color: 'green' });
+                closeShareModal();
+            } catch (e) { console.error(e); }
+        }
+
+        async function togglePublic(id, current) {
+            await db.collection("assignments").doc(id).update({ isPublic: !current });
+            showToast("Public status updated!", { color: 'blue' });
+        }
+
+        function showToast(message, options = {}) {
+            const { color = 'default', duration = 3000 } = options;
+            const wrapper = document.getElementById('toast-wrapper');
+            const toast = document.createElement('div');
+            toast.className = `flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm bg-gray-700`;
+            if (color === 'green') toast.classList.add('bg-green-600');
+            if (color === 'red') toast.classList.add('bg-red-600');
+            if (color === 'blue') toast.classList.add('bg-blue-600');
+            toast.innerHTML = `<span>${message}</span><button onclick="this.parentElement.remove()" class="ml-4 font-bold text-xl leading-none">&times;</button>`;
+            wrapper.appendChild(toast);
+            setTimeout(() => { if (toast.parentElement) toast.remove(); }, duration);
+        }
+
+        document.getElementById('signOutButton').onclick = () => auth.signOut();
+    </script>
+</body>
+
+</html>
