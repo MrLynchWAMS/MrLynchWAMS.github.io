@@ -870,6 +870,15 @@
           if (!assignmentDoc.exists) { loadingText.textContent = "Error: Assignment not found."; return; }
           assignmentData = { id: assignmentDoc.id, ...assignmentDoc.data() };
 
+          // Auto-repair and redirect if this assignment is actually a Slides or Video assignment
+          if (assignmentData.type === 'slides' || (!assignmentData.type && assignmentData.presentationId && !assignmentData.pdfUrl)) {
+              window.location.href = `./editor.html?id=${assignmentId}`;
+              return;
+          } else if (assignmentData.type === 'video') {
+              window.location.href = `./video-editor.html?id=${assignmentId}`;
+              return;
+          }
+
           // Check access control
           // Check access control
           const isOwner = assignmentData.teacherEmail === currentUserEmail;
