@@ -175,6 +175,8 @@
     let lastKnownUserEmail = null;
     let gisInitialized = false;
     let signInWatchdog = null;
+    const SIGN_IN_TIMEOUT_MS = 8000;
+    const FALLBACK_SIGN_IN_DELAY_MS = 2500;
 
     // Video state
     let videoQuestions = [];  // { id, type, time, body, choices?, checkerCode? }
@@ -224,7 +226,7 @@
       });
     }
 
-    function waitForGIS(timeoutMs = 8000) {
+    function waitForGIS(timeoutMs = SIGN_IN_TIMEOUT_MS) {
       return new Promise(resolve => {
         const started = Date.now();
         const poll = setInterval(() => {
@@ -238,6 +240,28 @@
             resolve(false);
           }
         }, 100);
+      });
+    }
+
+    function revokeGoogleCredential(email, timeoutMs = 3000) {
+      return new Promise(resolve => {
+        if (!email || !window.google?.accounts?.id?.revoke) {
+          resolve();
+          return;
+        }
+        let settled = false;
+        const done = () => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          resolve();
+        };
+        const timer = setTimeout(done, timeoutMs);
+        try {
+          google.accounts.id.revoke(email, done);
+        } catch {
+          done();
+        }
       });
     }
 
@@ -271,9 +295,7 @@
       document.getElementById('editorContent').classList.add('hidden');
       document.getElementById('page-loader').classList.remove('hidden');
 
-      if (lastKnownUserEmail && window.google?.accounts?.id?.revoke) {
-        await new Promise(resolve => google.accounts.id.revoke(lastKnownUserEmail, () => resolve()));
-      }
+      await revokeGoogleCredential(lastKnownUserEmail);
 
       await auth.signOut().catch(() => {});
       gisInitialized = false;
@@ -296,7 +318,7 @@
             google.accounts.id.prompt();
           }
         }
-      }, 8000);
+      }, SIGN_IN_TIMEOUT_MS);
     }
 
     async function handleCredentialResponse(response) {
@@ -378,7 +400,7 @@
           document.getElementById('signInButtonContainer').classList.remove('hidden');
           initializeGoogleSignIn(true);
         }
-      }, 2500);
+      }, FALLBACK_SIGN_IN_DELAY_MS);
     };
 
     async function loadAssignment() {
