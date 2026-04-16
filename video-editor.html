@@ -38,7 +38,7 @@
     <p id="loading-text" class="text-lg text-gray-300">Initializing...</p>
     <div id="signInButtonContainer" class="hidden mt-8 text-center">
       <div id="googleSignInButton" class="flex justify-center"></div>
-      <button id="retrySignInButton" class="hidden mt-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Retry Sign In</button>
+      <button id="retrySignInButton" aria-label="Retry Google sign in" class="hidden mt-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Retry Sign In</button>
     </div>
     <p id="auth-error" class="text-red-500 mt-4"></p>
   </div>
@@ -177,6 +177,8 @@
     let signInWatchdog = null;
     const SIGN_IN_TIMEOUT_MS = 8000;
     const FALLBACK_SIGN_IN_DELAY_MS = 2500;
+    const GIS_POLL_INTERVAL_MS = 100;
+    const REVOKE_TIMEOUT_MS = 3000;
 
     // Video state
     let videoQuestions = [];  // { id, type, time, body, choices?, checkerCode? }
@@ -239,11 +241,11 @@
             clearInterval(poll);
             resolve(false);
           }
-        }, 100);
+        }, GIS_POLL_INTERVAL_MS);
       });
     }
 
-    function revokeGoogleCredential(email, timeoutMs = 3000) {
+    function revokeGoogleCredential(email, timeoutMs = REVOKE_TIMEOUT_MS) {
       return new Promise(resolve => {
         if (!email || !window.google?.accounts?.id?.revoke) {
           resolve();
