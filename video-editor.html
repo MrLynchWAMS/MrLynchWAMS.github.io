@@ -38,7 +38,7 @@
     <p id="loading-text" class="text-lg text-gray-300">Initializing...</p>
     <div id="signInButtonContainer" class="hidden mt-8 text-center">
       <div id="googleSignInButton" class="flex justify-center"></div>
-      <button id="retrySignInButton" aria-label="Retry Google sign in" class="hidden mt-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Retry Sign In</button>
+      <button id="retrySignInButton" aria-label="Retry Google sign in" class="hidden mt-4 bg-blue-600 hover:bg-blue-700 focus:ring-2 focus:ring-blue-400 text-white font-bold py-2 px-4 rounded-lg">Retry Sign In</button>
     </div>
     <p id="auth-error" class="text-red-500 mt-4"></p>
   </div>
@@ -261,7 +261,8 @@
         const timer = setTimeout(done, timeoutMs);
         try {
           google.accounts.id.revoke(email, done);
-        } catch {
+        } catch (error) {
+          console.warn("Google credential revoke failed:", error);
           done();
         }
       });
@@ -299,7 +300,7 @@
 
       await revokeGoogleCredential(lastKnownUserEmail);
 
-      await auth.signOut().catch(() => {});
+      await auth.signOut().catch(error => console.warn("Sign-out during retry failed:", error));
       gisInitialized = false;
       const initialized = await initializeGoogleSignIn(true);
       if (initialized) {
@@ -369,7 +370,7 @@
           console.error("Error checking teacher status/session:", error);
           document.getElementById('loading-text').textContent = "Session expired. Please sign in again.";
           showAuthError("Your previous sign-in session expired. Please retry sign-in.", true);
-          await auth.signOut().catch(() => {});
+          await auth.signOut().catch(error => console.warn("Sign-out after stale session failed:", error));
           document.getElementById('signInButtonContainer').classList.remove('hidden');
           initializeGoogleSignIn(true);
         }
