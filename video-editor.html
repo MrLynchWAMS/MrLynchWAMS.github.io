@@ -363,6 +363,7 @@
             clearSignInWatchdog();
             loadAssignment();
           } else {
+            clearSignInWatchdog();
             document.getElementById('loading-text').textContent = "Access denied: You are not registered as a teacher.";
             document.getElementById('signInButtonContainer').classList.add('hidden');
           }
