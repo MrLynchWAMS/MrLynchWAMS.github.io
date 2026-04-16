@@ -36,9 +36,9 @@
   <div id="page-loader" class="flex flex-col items-center justify-center h-screen">
     <h1 class="text-4xl font-bold text-yellow-400 mb-4">Video Assignment Editor</h1>
     <p id="loading-text" class="text-lg text-gray-300">Initializing...</p>
-    <div id="signInButtonContainer" class="hidden mt-8">
-      <div id="g_id_onload" data-client_id="1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com" data-callback="handleCredentialResponse"></div>
-      <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_black" data-text="signin_with" data-shape="rectangular" data-logo_alignment="left"></div>
+    <div id="signInButtonContainer" class="hidden mt-8 text-center">
+      <div id="googleSignInButton" class="flex justify-center"></div>
+      <button id="retrySignInButton" class="hidden mt-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Retry Sign In</button>
     </div>
     <p id="auth-error" class="text-red-500 mt-4"></p>
   </div>
@@ -172,6 +172,9 @@
     let assignmentId = null;
     let assignmentData = null;
     let currentUserEmail = null;
+    let lastKnownUserEmail = null;
+    let gisInitialized = false;
+    let signInWatchdog = null;
 
     // Video state
     let videoQuestions = [];  // { id, type, time, body, choices?, checkerCode? }
@@ -195,36 +198,164 @@
     }
     function stopImpersonating() { localStorage.removeItem('impersonatedUserEmail'); window.location.reload(); }
 
-    function handleCredentialResponse(response) {
-      const credential = firebase.auth.GoogleAuthProvider.credential(response.credential);
-      auth.signInWithCredential(credential).catch(error => {
-        console.error("Firebase sign-in error", error);
-        document.getElementById('auth-error').innerText = "Firebase sign-in failed.";
+    function clearSignInWatchdog() {
+      if (signInWatchdog) {
+        clearTimeout(signInWatchdog);
+        signInWatchdog = null;
+      }
+    }
+
+    function showAuthError(message, showRetry = false) {
+      document.getElementById('auth-error').innerText = message || "";
+      document.getElementById('retrySignInButton').classList.toggle('hidden', !showRetry);
+    }
+
+    function renderGoogleSignInButton() {
+      if (!window.google?.accounts?.id) return;
+      const buttonRoot = document.getElementById('googleSignInButton');
+      buttonRoot.innerHTML = '';
+      google.accounts.id.renderButton(buttonRoot, {
+        type: "standard",
+        size: "large",
+        theme: "filled_black",
+        text: "signin_with",
+        shape: "rectangular",
+        logo_alignment: "left"
       });
+    }
+
+    function waitForGIS(timeoutMs = 8000) {
+      return new Promise(resolve => {
+        const started = Date.now();
+        const poll = setInterval(() => {
+          if (window.google?.accounts?.id) {
+            clearInterval(poll);
+            resolve(true);
+            return;
+          }
+          if (Date.now() - started >= timeoutMs) {
+            clearInterval(poll);
+            resolve(false);
+          }
+        }, 100);
+      });
+    }
+
+    async function initializeGoogleSignIn(force = false) {
+      if (gisInitialized && !force) {
+        renderGoogleSignInButton();
+        return true;
+      }
+
+      const gisReady = await waitForGIS();
+      if (!gisReady) {
+        document.getElementById('loading-text').textContent = "Google Sign-In is taking longer than expected.";
+        showAuthError("Could not initialize Google Sign-In. Please retry.", true);
+        document.getElementById('signInButtonContainer').classList.remove('hidden');
+        return false;
+      }
+
+      google.accounts.id.initialize({
+        client_id: "1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com",
+        callback: handleCredentialResponse
+      });
+      gisInitialized = true;
+      renderGoogleSignInButton();
+      return true;
+    }
+
+    async function retrySignIn() {
+      showAuthError("");
+      document.getElementById('loading-text').textContent = "Retrying sign-in...";
+      document.getElementById('signInButtonContainer').classList.remove('hidden');
+      document.getElementById('editorContent').classList.add('hidden');
+      document.getElementById('page-loader').classList.remove('hidden');
+
+      if (lastKnownUserEmail && window.google?.accounts?.id?.revoke) {
+        await new Promise(resolve => google.accounts.id.revoke(lastKnownUserEmail, () => resolve()));
+      }
+
+      await auth.signOut().catch(() => {});
+      gisInitialized = false;
+      const initialized = await initializeGoogleSignIn(true);
+      if (initialized) {
+        google.accounts.id.prompt();
+      }
+      startSignInWatchdog();
+    }
+
+    function startSignInWatchdog() {
+      clearSignInWatchdog();
+      signInWatchdog = setTimeout(() => {
+        if (document.getElementById('editorContent').classList.contains('hidden')) {
+          document.getElementById('loading-text').textContent = "Sign-in is taking longer than expected.";
+          showAuthError("If sign-in did not appear, try again.", true);
+          document.getElementById('signInButtonContainer').classList.remove('hidden');
+          if (window.google?.accounts?.id) {
+            renderGoogleSignInButton();
+            google.accounts.id.prompt();
+          }
+        }
+      }, 8000);
+    }
+
+    async function handleCredentialResponse(response) {
+      showAuthError("");
+      if (!response?.credential) {
+        showAuthError("Google sign-in did not return a credential. Please try again.", true);
+        document.getElementById('signInButtonContainer').classList.remove('hidden');
+        return;
+      }
+
+      try {
+        document.getElementById('loading-text').textContent = "Signing you in...";
+        const credential = firebase.auth.GoogleAuthProvider.credential(response.credential);
+        await auth.signInWithCredential(credential);
+      } catch (error) {
+        console.error("Firebase sign-in error", error);
+        document.getElementById('loading-text').textContent = "Please sign in to continue.";
+        showAuthError(`Firebase sign-in failed: ${error.message}`, true);
+        document.getElementById('signInButtonContainer').classList.remove('hidden');
+        if (window.google?.accounts?.id) {
+          renderGoogleSignInButton();
+        }
+      }
     }
 
     auth.onAuthStateChanged(async user => {
       if (user) {
         try {
+          await user.getIdToken(true);
+          lastKnownUserEmail = user.email ? user.email.toLowerCase() : null;
           let emailToCheck = user.email.toLowerCase();
           const impersonated = checkImpersonation();
           if (impersonated) emailToCheck = impersonated;
           currentUserEmail = emailToCheck;
+          showAuthError("");
 
           const teacherDoc = await db.collection("teachers").doc(emailToCheck).get();
           if (teacherDoc.exists) {
+            clearSignInWatchdog();
             loadAssignment();
           } else {
             document.getElementById('loading-text').textContent = "Access denied: You are not registered as a teacher.";
             document.getElementById('signInButtonContainer').classList.add('hidden');
           }
         } catch (error) {
-          console.error("Error checking teacher status:", error);
-          document.getElementById('loading-text').textContent = "Error verifying access.";
+          console.error("Error checking teacher status/session:", error);
+          document.getElementById('loading-text').textContent = "Session expired. Please sign in again.";
+          showAuthError("Your previous sign-in session expired. Please retry sign-in.", true);
+          await auth.signOut().catch(() => {});
+          document.getElementById('signInButtonContainer').classList.remove('hidden');
+          initializeGoogleSignIn(true);
         }
       } else {
         document.getElementById('loading-text').textContent = "Please sign in to continue.";
+        document.getElementById('page-loader').classList.remove('hidden');
+        document.getElementById('editorContent').classList.add('hidden');
         document.getElementById('signInButtonContainer').classList.remove('hidden');
+        initializeGoogleSignIn();
+        startSignInWatchdog();
       }
     });
 
@@ -234,7 +365,20 @@
       if (!assignmentId) {
         document.getElementById('loading-text').textContent = "Error: No assignment ID provided in the URL.";
         document.getElementById('signInButtonContainer').classList.add('hidden');
+        clearSignInWatchdog();
+        return;
       }
+      initializeGoogleSignIn();
+      startSignInWatchdog();
+      setTimeout(() => {
+        const editorVisible = !document.getElementById('editorContent').classList.contains('hidden');
+        const signInVisible = !document.getElementById('signInButtonContainer').classList.contains('hidden');
+        if (!editorVisible && !signInVisible) {
+          document.getElementById('loading-text').textContent = "Please sign in to continue.";
+          document.getElementById('signInButtonContainer').classList.remove('hidden');
+          initializeGoogleSignIn(true);
+        }
+      }, 2500);
     };
 
     async function loadAssignment() {
@@ -284,7 +428,9 @@
         }
 
         // Populate UI
+        clearSignInWatchdog();
         document.getElementById('page-loader').classList.add('hidden');
+        document.getElementById('signInButtonContainer').classList.add('hidden');
         document.getElementById('editorContent').classList.remove('hidden');
         document.getElementById('assignmentTitle').textContent = `Editing: ${assignmentData.name}`;
         document.getElementById('shareLink').value = `https://custom.scienceclass.rocks/classroompicker.html?assignmentId=${assignmentId}`;
@@ -817,6 +963,7 @@
       setTimeout(() => { if (toast.parentElement) toast.remove(); }, duration);
     }
 
+    document.getElementById('retrySignInButton').onclick = retrySignIn;
     document.getElementById('signOutButton').onclick = () => auth.signOut().then(() => window.location.href = './assignments.html');
   </script>
 </body>
