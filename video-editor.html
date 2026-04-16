@@ -38,7 +38,7 @@
     <p id="loading-text" class="text-lg text-gray-300">Initializing...</p>
     <div id="signInButtonContainer" class="hidden mt-8 text-center">
       <div id="googleSignInButton" class="flex justify-center"></div>
-      <button id="retrySignInButton" aria-label="Retry Google sign in" class="hidden mt-4 bg-blue-600 hover:bg-blue-700 focus:ring-2 focus:ring-blue-400 text-white font-bold py-2 px-4 rounded-lg">Retry Sign In</button>
+      <button id="retrySignInButton" aria-label="Retry Google sign in" class="hidden mt-4 bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 text-white font-bold py-2 px-4 rounded-lg">Retry Sign In</button>
     </div>
     <p id="auth-error" class="text-red-500 mt-4"></p>
   </div>
@@ -175,6 +175,7 @@
     let lastKnownUserEmail = null;
     let gisInitialized = false;
     let signInWatchdog = null;
+    let signInFallbackTimer = null;
     const SIGN_IN_TIMEOUT_MS = 8000;
     const FALLBACK_SIGN_IN_DELAY_MS = 2500;
     const GIS_POLL_INTERVAL_MS = 100;
@@ -206,6 +207,13 @@
       if (signInWatchdog) {
         clearTimeout(signInWatchdog);
         signInWatchdog = null;
+      }
+    }
+
+    function clearSignInFallbackTimer() {
+      if (signInFallbackTimer) {
+        clearTimeout(signInFallbackTimer);
+        signInFallbackTimer = null;
       }
     }
 
@@ -361,9 +369,11 @@
           const teacherDoc = await db.collection("teachers").doc(emailToCheck).get();
           if (teacherDoc.exists) {
             clearSignInWatchdog();
+            clearSignInFallbackTimer();
             loadAssignment();
           } else {
             clearSignInWatchdog();
+            clearSignInFallbackTimer();
             document.getElementById('loading-text').textContent = "Access denied: You are not registered as a teacher.";
             document.getElementById('signInButtonContainer').classList.add('hidden');
           }
@@ -392,11 +402,13 @@
         document.getElementById('loading-text').textContent = "Error: No assignment ID provided in the URL.";
         document.getElementById('signInButtonContainer').classList.add('hidden');
         clearSignInWatchdog();
+        clearSignInFallbackTimer();
         return;
       }
       initializeGoogleSignIn();
       startSignInWatchdog();
-      setTimeout(() => {
+      clearSignInFallbackTimer();
+      signInFallbackTimer = setTimeout(() => {
         const editorVisible = !document.getElementById('editorContent').classList.contains('hidden');
         const signInVisible = !document.getElementById('signInButtonContainer').classList.contains('hidden');
         if (!editorVisible && !signInVisible) {
@@ -404,6 +416,7 @@
           document.getElementById('signInButtonContainer').classList.remove('hidden');
           initializeGoogleSignIn(true);
         }
+        signInFallbackTimer = null;
       }, FALLBACK_SIGN_IN_DELAY_MS);
     };
 
@@ -455,6 +468,7 @@
 
         // Populate UI
         clearSignInWatchdog();
+        clearSignInFallbackTimer();
         document.getElementById('page-loader').classList.add('hidden');
         document.getElementById('signInButtonContainer').classList.add('hidden');
         document.getElementById('editorContent').classList.remove('hidden');
