@@ -1,36 +1,158 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Video Assignment Editor</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎬</text></svg>">
+  <link rel="icon"
+    href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎬</text></svg>">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
   <style>
-    .hidden { display: none; }
-    textarea { font-family: monospace; resize: vertical; }
-    @keyframes fade-in-right { from { opacity:0; transform:translateX(100%); } to { opacity:1; transform:translateX(0); } }
-    @keyframes fade-out-right { from { opacity:1; transform:translateX(0); } to { opacity:0; transform:translateX(100%); } }
-    .animate-fade-in-right { animation: fade-in-right 0.5s ease-out forwards; }
-    .animate-fade-out-right { animation: fade-out-right 0.5s ease-in forwards; }
-    .collapsible-content { max-height:0; overflow:hidden; transition: max-height 0.3s ease-out; }
-    .sticky-header { position:sticky; top:0; z-index:100; background:rgba(17,24,39,0.95); backdrop-filter:blur(8px); border-bottom:1px solid #374151; padding:1rem 0; }
-    #toast-wrapper { position:fixed; top:1rem; right:1rem; z-index:50; display:flex; flex-direction:column; gap:0.5rem; }
-    .dialog-backdrop { position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(31,41,55,0.85); z-index:1000; display:flex; align-items:center; justify-content:center; }
-    .dialog-box { background:#1f2937; color:#fff; border-radius:0.75rem; box-shadow:0 6px 32px rgba(0,0,0,0.22); padding:2rem; min-width:320px; max-width:96vw; z-index:1001; text-align:center; animation: fade-in-right 0.35s; }
-    .dialog-box h3 { color:#fde68a; }
-    .dialog-box button { margin:0 0.5rem; }
-    .question-card { background:#1f2937; border:1px solid #374151; border-radius:0.75rem; padding:1.25rem; transition: border-color 0.2s; }
-    .question-card:hover { border-color:#fbbf24; }
-    .question-card.active { border-color:#3b82f6; box-shadow:0 0 0 2px rgba(59,130,246,0.3); }
-    .choice-row { display:flex; align-items:center; gap:0.5rem; }
-    .choice-row.correct { background: rgba(34,197,94,0.1); border-radius:0.5rem; padding:0.25rem 0.5rem; }
+    .hidden {
+      display: none;
+    }
+
+    textarea {
+      font-family: monospace;
+      resize: vertical;
+    }
+
+    @keyframes fade-in-right {
+      from {
+        opacity: 0;
+        transform: translateX(100%);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    @keyframes fade-out-right {
+      from {
+        opacity: 1;
+        transform: translateX(0);
+      }
+
+      to {
+        opacity: 0;
+        transform: translateX(100%);
+      }
+    }
+
+    .animate-fade-in-right {
+      animation: fade-in-right 0.5s ease-out forwards;
+    }
+
+    .animate-fade-out-right {
+      animation: fade-out-right 0.5s ease-in forwards;
+    }
+
+    .collapsible-content {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease-out;
+    }
+
+    .sticky-header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(17, 24, 39, 0.95);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid #374151;
+      padding: 1rem 0;
+    }
+
+    #toast-wrapper {
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      z-index: 50;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .dialog-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(31, 41, 55, 0.85);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .dialog-box {
+      background: #1f2937;
+      color: #fff;
+      border-radius: 0.75rem;
+      box-shadow: 0 6px 32px rgba(0, 0, 0, 0.22);
+      padding: 2rem;
+      min-width: 320px;
+      max-width: 96vw;
+      z-index: 1001;
+      text-align: center;
+      animation: fade-in-right 0.35s;
+    }
+
+    .dialog-box h3 {
+      color: #fde68a;
+    }
+
+    .dialog-box button {
+      margin: 0 0.5rem;
+    }
+
+    .question-card {
+      background: #1f2937;
+      border: 1px solid #374151;
+      border-radius: 0.75rem;
+      padding: 1.25rem;
+      transition: border-color 0.2s;
+    }
+
+    .question-card:hover {
+      border-color: #fbbf24;
+    }
+
+    .question-card.active {
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+    }
+
+    .choice-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .choice-row.correct {
+      background: rgba(34, 197, 94, 0.1);
+      border-radius: 0.5rem;
+      padding: 0.25rem 0.5rem;
+    }
+
+    .simple-disabled-notice {
+      background: #fee2e2;
+      color: #991b1b;
+      padding: 0.5rem;
+      border-radius: 0.375rem;
+      margin-top: 0.5rem;
+    }
   </style>
 </head>
+
 <body class="bg-gray-900 text-white font-sans">
 
   <div id="page-loader" class="flex flex-col items-center justify-center h-screen">
@@ -38,7 +160,9 @@
     <p id="loading-text" class="text-lg text-gray-300">Initializing...</p>
     <div id="signInButtonContainer" class="hidden mt-8 text-center">
       <div id="googleSignInButton" class="flex justify-center"></div>
-      <button id="retrySignInButton" aria-label="Retry Google sign in" class="hidden mt-4 bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 text-white font-bold py-2 px-4 rounded-lg">Retry Sign In</button>
+      <button id="retrySignInButton" aria-label="Retry Google sign in"
+        class="hidden mt-4 bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 text-white font-bold py-2 px-4 rounded-lg">Retry
+        Sign In</button>
     </div>
     <p id="auth-error" class="text-red-500 mt-4"></p>
   </div>
@@ -49,20 +173,30 @@
         <div class="flex items-center gap-3">
           <div id="titleDisplay" class="flex items-center gap-2">
             <h1 id="assignmentTitle" class="text-3xl font-bold text-yellow-400"></h1>
-            <button onclick="startEditingTitle()" class="text-gray-400 hover:text-white transition-colors" title="Rename Assignment">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+            <button onclick="startEditingTitle()" class="text-gray-400 hover:text-white transition-colors"
+              title="Rename Assignment">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+              </svg>
             </button>
           </div>
           <div id="titleEditor" class="hidden flex items-center gap-2">
-            <input type="text" id="titleInput" class="bg-gray-700 text-white text-xl p-1 rounded border border-gray-600 focus:outline-none focus:border-yellow-400">
+            <input type="text" id="titleInput"
+              class="bg-gray-700 text-white text-xl p-1 rounded border border-gray-600 focus:outline-none focus:border-yellow-400">
             <button onclick="saveTitle()" class="text-green-400 hover:text-green-300" title="Save">✓</button>
             <button onclick="cancelEditingTitle()" class="text-red-400 hover:text-red-300" title="Cancel">✕</button>
           </div>
         </div>
         <div>
-          <a href="./assignments.html" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg">&larr; Back to Assignments</a>
-          <button onclick="saveAssignment()" id="saveBtn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg">Save Assignment</button>
-          <button id="signOutButton" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Sign Out</button>
+          <a href="./assignments.html"
+            class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg">&larr; Back to
+            Assignments</a>
+          <button onclick="saveAssignment()" id="saveBtn"
+            class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg">Save Assignment</button>
+          <button id="signOutButton" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Sign
+            Out</button>
         </div>
       </div>
     </div>
@@ -72,7 +206,8 @@
       <h2 class="text-xl font-semibold mb-2">Student Link</h2>
       <div class="flex gap-2">
         <input id="shareLink" type="text" readonly class="w-full p-2 bg-gray-700 border border-gray-600 rounded">
-        <button onclick="copyShareLink()" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-3 rounded-lg">Copy</button>
+        <button onclick="copyShareLink()"
+          class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-3 rounded-lg">Copy</button>
       </div>
     </div>
 
@@ -82,11 +217,13 @@
       <p class="text-gray-400 mb-4">Paste a YouTube or Google Drive share link.</p>
       <div class="flex gap-3 items-end">
         <div class="flex-1">
-          <input type="text" id="videoUrlInput" placeholder="https://www.youtube.com/watch?v=... or Google Drive share link"
+          <input type="text" id="videoUrlInput"
+            placeholder="https://www.youtube.com/watch?v=... or Google Drive share link"
             class="w-full p-3 bg-gray-700 rounded border border-gray-600 focus:border-yellow-400 focus:outline-none">
           <p id="videoSourceType" class="text-xs text-gray-500 mt-1"></p>
         </div>
-        <button onclick="loadVideoPreview()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg">Load Preview</button>
+        <button onclick="loadVideoPreview()"
+          class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg">Load Preview</button>
       </div>
       <div id="videoPreviewContainer" class="mt-4 hidden">
         <div class="bg-black rounded-lg overflow-hidden" style="max-width:640px; margin:0 auto;">
@@ -99,7 +236,8 @@
     <div class="bg-gray-800 p-6 rounded-lg mb-8">
       <label for="scoringMode" class="block text-2xl font-bold text-yellow-400 mb-2">Scoring Mode</label>
       <p class="text-gray-400 mb-4">Choose when students see their scores.</p>
-      <select id="scoringMode" class="w-full md:w-1/2 p-2 bg-gray-700 rounded border border-gray-600 focus:border-yellow-400 focus:outline-none">
+      <select id="scoringMode"
+        class="w-full md:w-1/2 p-2 bg-gray-700 rounded border border-gray-600 focus:border-yellow-400 focus:outline-none">
         <option value="instant">Instant (scores shown immediately after checking)</option>
         <option value="after-submit">After Submission (scores hidden until student submits)</option>
       </select>
@@ -107,13 +245,63 @@
 
     <!-- Post Submission Policy -->
     <div class="bg-gray-800 p-6 rounded-lg mb-8">
-      <label for="postSubmissionRule" class="block text-2xl font-bold text-yellow-400 mb-2">Post-Submission Policy</label>
+      <label for="postSubmissionRule" class="block text-2xl font-bold text-yellow-400 mb-2">Post-Submission
+        Policy</label>
       <p class="text-gray-400 mb-4">Choose what happens after a student officially submits this assignment.</p>
-      <select id="postSubmissionRule" class="w-full md:w-1/2 p-2 bg-gray-700 rounded border border-gray-600 focus:border-yellow-400 focus:outline-none">
+      <select id="postSubmissionRule"
+        class="w-full md:w-1/2 p-2 bg-gray-700 rounded border border-gray-600 focus:border-yellow-400 focus:outline-none">
         <option value="open">Remain Open (Students can review and resubmit)</option>
         <option value="lock">Lock (Students can review but not edit)</option>
         <option value="hide">Lock & Hide (Students cannot see answers or scores)</option>
       </select>
+    </div>
+    <!-- Playback Restrictions -->
+    <div class="bg-gray-800 p-6 rounded-lg mb-8">
+      <h2 class="text-2xl font-bold text-yellow-400 mb-4">Playback Restrictions</h2>
+      <div class="space-y-4">
+        <label class="flex items-center gap-3 cursor-pointer">
+          <input type="checkbox" id="preventSkipping" class="w-5 h-5 bg-gray-700 border-gray-600 rounded text-yellow-500 focus:ring-yellow-500">
+          <span class="text-lg text-gray-200">Prevent students from skipping & seeking ahead</span>
+        </label>
+        <label class="flex items-center gap-3 cursor-pointer">
+          <input type="checkbox" id="lockPlaybackSpeed" class="w-5 h-5 bg-gray-700 border-gray-600 rounded text-yellow-500 focus:ring-yellow-500">
+          <span class="text-lg text-gray-200">Lock playback speed (No speeding up/slowing down)</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Aura Rewards Section -->
+    <div id="aura-section" class="bg-gray-800 rounded-lg mb-8 overflow-hidden border border-yellow-900/30">
+      <div id="aura-header" class="p-6 cursor-pointer" onclick="toggleAuraSection()">
+        <div class="flex justify-between items-center">
+          <h2 class="text-2xl font-bold text-yellow-400">✧ Aura Rewards</h2>
+          <span id="aura-chevron" class="text-2xl transform transition-transform">▶</span>
+        </div>
+        <p class="text-gray-400 mt-2">Set up automatic behaviors to reward student performance with extra Aura points upon submission.</p>
+      </div>
+      <div id="aura-content" class="collapsible-content border-t border-gray-700">
+        <div class="px-6 pb-6">
+          <p class="text-gray-400 mb-4 mt-4 text-sm">Aura is awarded once per assignment at submit time, based on the overall assignment average. If multiple rules match, the highest matching reward is given (non-cumulative).</p>
+          <div id="aura-rules-container" class="space-y-4"></div>
+          <div class="mt-6 flex justify-between items-center">
+            <button onclick="addAuraRule()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm">+ Add Aura Condition</button>
+            <div class="flex items-center">
+              <input type="checkbox" id="auraOnTime" class="w-4 h-4 text-yellow-500 rounded focus:ring-yellow-500 bg-gray-700 border-gray-500">
+              <label for="auraOnTime" class="ml-2 text-sm text-gray-300">"Must be on time" applies to ALL rules</label>
+            </div>
+          </div>
+          <div id="aura-global-deadline" class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6 p-4 bg-gray-700/30 rounded-lg border border-gray-700 hidden">
+            <div>
+              <label class="block text-sm text-gray-400 mb-1">Global Aura Deadline Date</label>
+              <input type="date" id="auraDueDate" class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none">
+            </div>
+            <div>
+              <label class="block text-sm text-gray-400 mb-1">Global Aura Deadline Time</label>
+              <input type="time" id="auraDueTime" class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none">
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Questions Timeline -->
@@ -124,14 +312,22 @@
           <p class="text-gray-400 mt-1">Questions appear at specific timestamps during the video.</p>
         </div>
         <div class="flex gap-2">
-          <button onclick="openImportModal()" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg text-sm">📥 Import EdPuzzle</button>
-          <button onclick="addQuestion('multiple-choice')" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm">+ MC Question</button>
-          <button onclick="addQuestion('open-ended')" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg text-sm">+ Open-Ended</button>
-          <button onclick="addNote()" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg text-sm">+ Note</button>
+          <button onclick="openImportModal()"
+            class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg text-sm">📥 Import
+            EdPuzzle</button>
+          <button onclick="addQuestion('multiple-choice')"
+            class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm">+ MC
+            Question</button>
+          <button onclick="addQuestion('open-ended')"
+            class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg text-sm">+
+            Open-Ended</button>
+          <button onclick="addNote()"
+            class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg text-sm">+ Note</button>
         </div>
       </div>
       <div id="questionsContainer" class="space-y-4"></div>
-      <p id="noQuestionsMsg" class="text-gray-500 italic text-center py-8">No questions yet. Add questions using the buttons above, or import from EdPuzzle.</p>
+      <p id="noQuestionsMsg" class="text-gray-500 italic text-center py-8">No questions yet. Add questions using the
+        buttons above, or import from EdPuzzle.</p>
     </div>
   </div>
 
@@ -143,17 +339,70 @@
         <button onclick="closeImportModal()" class="text-gray-400 hover:text-white text-3xl">&times;</button>
       </div>
       <div class="p-6">
-        <p class="text-gray-400 mb-4">Export your EdPuzzle assignment as JSON and paste the contents below. Questions and notes will be imported with their timestamps.</p>
-        <textarea id="edpuzzleJson" rows="12" placeholder="Paste EdPuzzle JSON here..." class="w-full p-3 bg-gray-700 rounded border border-gray-600 focus:border-yellow-400 focus:outline-none text-sm"></textarea>
+        <p class="text-gray-400 mb-4">Export your EdPuzzle assignment as JSON and paste the contents below. Questions
+          and notes will be imported with their timestamps.</p>
+        <textarea id="edpuzzleJson" rows="12" placeholder="Paste EdPuzzle JSON here..."
+          class="w-full p-3 bg-gray-700 rounded border border-gray-600 focus:border-yellow-400 focus:outline-none text-sm"></textarea>
         <p id="import-error" class="text-red-500 mt-2"></p>
         <div class="flex justify-end mt-4 gap-2">
-          <button onclick="closeImportModal()" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg">Cancel</button>
-          <button onclick="handleImport()" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-6 rounded-lg">Import</button>
+          <button onclick="closeImportModal()"
+            class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg">Cancel</button>
+          <button onclick="handleImport()"
+            class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-6 rounded-lg">Import</button>
         </div>
       </div>
     </div>
   </div>
 
+    <template id="checkerTemplate">
+      <div class="checker-widget">
+        <div class="flex items-center justify-between mb-2">
+          <label class="block font-semibold">Checker Function</label>
+          <div class="flex items-center space-x-1 p-1 bg-gray-700 rounded-lg">
+            <button class="mode-toggle-btn simple-mode-btn bg-indigo-600 text-white rounded-md px-3 py-1 text-sm font-semibold">Simple</button>
+            <button class="mode-toggle-btn advanced-mode-btn bg-transparent text-gray-300 rounded-md px-3 py-1 text-sm font-semibold">Advanced</button>
+          </div>
+        </div>
+        <div class="simple-mode-ui mt-2 p-3 bg-gray-700/50 border border-gray-600 rounded-lg space-y-4">
+          <div class="grid grid-cols-2 gap-4 text-sm border-b border-gray-700 pb-4">
+            <div>
+              <label class="flex items-center space-x-2 cursor-pointer">
+                <input type="checkbox" class="exclusive-scoring-toggle bg-gray-700 border-gray-600 rounded text-indigo-500 focus:ring-indigo-600">
+                <span>Exclusive scoring (stop at first match)</span>
+              </label>
+            </div>
+            <div class="flex items-center space-x-2">
+              <label class="whitespace-nowrap">Numeric equality tolerance (±)</label>
+              <input type="number" class="numeric-tolerance-input w-20 bg-gray-700 border border-gray-600 rounded-md p-1 text-center" value="0" min="0" step="any">
+            </div>
+          </div>
+          <div class="rule-groups-container space-y-4"></div>
+          <button class="add-rule-group-btn mt-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm">+ Add Rule Group</button>
+          <div class="mt-4">
+            <label class="block text-xs font-medium text-gray-500">Live Code Preview (read-only)</label>
+            <pre class="bg-gray-900 text-white p-2 rounded-md text-xs overflow-x-auto h-32"><code class="live-code-preview"></code></pre>
+          </div>
+        </div>
+        <div class="advanced-mode-ui hidden">
+          <textarea class="checker-textarea w-full h-64 p-2 bg-gray-700 rounded" placeholder="// Write your checker function here"></textarea>
+          <div class="flex justify-between mt-2">
+            <button class="convert-to-simple-btn bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded-md text-sm">Convert back to Simple</button>
+            <button class="delete-advanced-btn bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-3 rounded-md text-sm">Delete Advanced Code</button>
+          </div>
+        </div>
+        <div class="universal-quick-test mt-2 pt-2 border-t border-gray-700 space-y-2">
+          <label class="block text-xs font-medium text-gray-400">Quick Test</label>
+          <div class="flex items-center space-x-2">
+            <input type="text" class="quick-test-input w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="Enter a sample answer...">
+            <button class="quick-test-btn bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1 px-3 rounded-md text-sm">Run</button>
+            <span class="quick-test-result text-sm font-semibold text-gray-300"></span>
+          </div>
+        </div>
+        <div class="simple-disabled-notice hidden">
+          <b>Advanced code exists.</b> Delete advanced code to use Simple Mode.
+        </div>
+      </div>
+    </template>
   <div id="toast-wrapper"></div>
 
   <script>
@@ -284,19 +533,26 @@
 
       const gisReady = await waitForGIS();
       if (!gisReady) {
-        document.getElementById('loading-text').textContent = "Google Sign-In is taking longer than expected.";
-        showAuthError("Could not initialize Google Sign-In. Please retry.", true);
+        document.getElementById('loading-text').textContent = "Google Sign-In script did not load.";
+        showAuthError("Google Sign-In failed to load. Please check your connection and refresh.", true);
         document.getElementById('signInButtonContainer').classList.remove('hidden');
         return false;
       }
 
-      google.accounts.id.initialize({
-        client_id: "1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com",
-        callback: handleCredentialResponse
-      });
-      gisInitialized = true;
-      renderGoogleSignInButton();
-      return true;
+      try {
+          google.accounts.id.initialize({
+            client_id: "1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com",
+            callback: handleCredentialResponse,
+            auto_select: false,
+            itp_support: true
+          });
+          gisInitialized = true;
+          renderGoogleSignInButton();
+          return true;
+      } catch (e) {
+          console.error("GIS initialization error:", e);
+          return false;
+      }
     }
 
     async function retrySignIn() {
@@ -395,7 +651,7 @@
       }
     });
 
-    window.onload = function() {
+    window.onload = function () {
       const urlParams = new URLSearchParams(window.location.search);
       assignmentId = urlParams.get('id');
       if (!assignmentId) {
@@ -435,11 +691,11 @@
 
         // Auto-repair and redirect if this assignment is actually a Slides or PDF assignment
         if (assignmentData.type === 'slides' || (!assignmentData.type && assignmentData.presentationId && !assignmentData.videoUrl)) {
-            window.location.href = `./editor.html?id=${assignmentId}`;
-            return;
+          window.location.href = `./editor.html?id=${assignmentId}`;
+          return;
         } else if (assignmentData.type === 'pdf') {
-            window.location.href = `./pdf-editor.html?id=${assignmentId}`;
-            return;
+          window.location.href = `./pdf-editor.html?id=${assignmentId}`;
+          return;
         }
 
         // Access control
@@ -485,19 +741,29 @@
         }
 
         // Load questions & notes
-        videoQuestions = (assignmentData.videoQuestions || []).map((q, i) => ({ ...q, id: q.id || `vq${i+1}` }));
-        videoNotes = (assignmentData.videoNotes || []).map((n, i) => ({ ...n, id: n.id || `vn${i+1}` }));
+        videoQuestions = (assignmentData.videoQuestions || []).map((q, i) => ({ ...q, id: q.id || `vq${i + 1}` }));
+        videoNotes = (assignmentData.videoNotes || []).map((n, i) => ({ ...n, id: n.id || `vn${i + 1}` }));
         nextQId = videoQuestions.length + 1;
         nextNId = videoNotes.length + 1;
 
-        // Load checker functions for open-ended questions
-        if (assignmentData.checkerFunctions) {
-          videoQuestions.forEach((q, i) => {
-            if (q.type === 'open-ended') {
-              q.checkerCode = assignmentData.checkerFunctions[`calc${i+1}`] || '';
-            }
-          });
+        // Load aura rules
+        auraRules = assignmentData.auraRules || [];
+        renderAuraRules();
+
+        // Load playback settings
+        if (assignmentData.playbackSettings) {
+          document.getElementById('skipPrevention').checked = !!assignmentData.playbackSettings.skipPrevention;
+          document.getElementById('speedLock').checked = !!assignmentData.playbackSettings.speedLock;
         }
+
+        // Load checker functions & meta
+        videoQuestions.forEach((q, i) => {
+          if (q.type === 'open-ended') {
+            const key = `calc${i + 1}`;
+            q.checkerCode = (assignmentData.checkerFunctions && assignmentData.checkerFunctions[key]) || '';
+            q.checkerMeta = (assignmentData.checkerMeta && assignmentData.checkerMeta[key]) || null;
+          }
+        });
 
         renderQuestions();
       } catch (error) {
@@ -557,19 +823,618 @@
       document.getElementById('titleDisplay').classList.remove('hidden');
       document.getElementById('titleEditor').classList.add('hidden');
     }
+    // --- Aura Management ---
+    let auraRules = [];
+    function toggleAuraSection(forceOpen = false) {
+      const content = document.getElementById('aura-content');
+      const chevron = document.getElementById('aura-chevron');
+      const isOpen = content.style.maxHeight && content.style.maxHeight !== '0px';
+      if (isOpen && !forceOpen) {
+        content.style.maxHeight = '0';
+        chevron.style.transform = 'rotate(0deg)';
+      } else {
+        content.style.maxHeight = '2000px';
+        chevron.style.transform = 'rotate(90deg)';
+      }
+    }
+
+    function addAuraRule(ruleData = { amount: 1, minScore: 0 }) {
+      const id = Date.now() + Math.random().toString(36).substr(2, 9);
+      const rule = { id, ...ruleData };
+      auraRules.push(rule);
+      renderAuraRules();
+    }
+
+    function removeAuraRule(id) {
+      auraRules = auraRules.filter(r => r.id !== id);
+      renderAuraRules();
+    }
+
+    function renderAuraRules() {
+      const container = document.getElementById('aura-rules-container');
+      container.innerHTML = '';
+      if (auraRules.length === 0) {
+        container.innerHTML = '<p class="text-gray-500 italic text-sm">No aura rewards configured. Click "Add Aura Condition" to start.</p>';
+        return;
+      }
+      auraRules.forEach((rule, index) => {
+        const div = document.createElement('div');
+        div.className = "grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-700/50 rounded-lg border border-gray-600 relative animate-fade-in-right";
+        div.innerHTML = `
+          <div>
+            <label class="block text-xs text-gray-400 mb-1">Aura Points</label>
+            <input type="number" value="${rule.amount}" step="0.1" onchange="updateRule(${index}, 'amount', this.value)" class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none text-sm">
+          </div>
+          <div>
+            <label class="block text-xs text-gray-400 mb-1">Min Score %</label>
+            <input type="number" value="${rule.minScore}" min="0" max="100" onchange="updateRule(${index}, 'minScore', this.value)" class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none text-sm">
+          </div>
+          <div class="flex items-end justify-between">
+            <p class="text-[10px] text-gray-500 mb-2">Rule #${index + 1}</p>
+            <button onclick="removeAuraRule('${rule.id}')" class="text-red-400 hover:text-red-300 text-sm font-bold mb-1">Remove</button>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function updateRule(index, field, value) {
+      if (auraRules[index]) auraRules[index][field] = parseFloat(value) || 0;
+    }
+
+    // --- Simple Mode Port Logic ---
+    function serializeSimpleConfig(container) {
+      const isExclusive = container.querySelector('.exclusive-scoring-toggle')?.checked || false;
+      const tolerance = parseFloat(container.querySelector('.numeric-tolerance-input')?.value) || 0;
+      const groups = [];
+      container.querySelectorAll('.rule-group').forEach(group => {
+        const points = Number(group.querySelector('.rule-points')?.value) || 0;
+        const groupConnector = group.querySelector('.group-connector')?.value || '&&';
+        const toastMessage = group.querySelector('.rule-toast-message')?.value || '';
+        const toastColor = group.querySelector('.rule-toast-color')?.value || 'default';
+        const toastTarget = group.querySelector('.rule-toast-target')?.value || 'all';
+        const toastTrigger = group.querySelector('.rule-toast-trigger')?.value || 'success';
+        const conditions = [];
+        group.querySelectorAll('.condition-row').forEach(cond => {
+          const type = cond.querySelector('.cond-type')?.value || 'text';
+          const op = cond.querySelector('.cond-operator')?.value || 'contains';
+          const valInput = cond.querySelector('.cond-value');
+          const value = valInput ? valInput.value : '';
+          const condConfig = { type, op, value };
+          if (type === 'text') {
+            const textBoolEl = cond.querySelector('.text-bool');
+            if (textBoolEl) condConfig.textBool = textBoolEl.value || '||';
+            if (op === 'count') {
+              const countVal = cond.querySelector('.cond-count')?.value;
+              const countOp = cond.querySelector('.cond-count-op')?.value;
+              condConfig.count = countVal ? parseInt(countVal, 10) : 1;
+              condConfig.countOp = countOp || '>=';
+            }
+          } else if (type === 'number') {
+            const pickModeEl = cond.querySelector('.number-pick-mode');
+            const idxEl = cond.querySelector('.number-index');
+            const val2Input = cond.querySelector('.cond-value-2');
+            const inclusiveEl = cond.querySelector('.cond-inclusive');
+            condConfig.pickMode = pickModeEl ? pickModeEl.value : 'first';
+            condConfig.index = idxEl ? parseInt(idxEl.value || '1', 10) : 1;
+            if (val2Input) condConfig.value2 = val2Input.value;
+            if (inclusiveEl) condConfig.inclusive = inclusiveEl.checked;
+            if (op === 'count') {
+              const countVal = cond.querySelector('.cond-count')?.value;
+              const countOp = cond.querySelector('.cond-count-op')?.value;
+              condConfig.count = countVal ? parseInt(countVal, 10) : 1;
+              condConfig.countOp = countOp || '>=';
+            }
+          }
+          conditions.push(condConfig);
+        });
+        groups.push({ points, groupConnector, toastMessage, toastColor, toastTarget, toastTrigger, conditions });
+      });
+      return { isExclusive, tolerance, groups };
+    }
+
+    function buildUIFromSimpleConfig(container, config) {
+      const exclusiveToggle = container.querySelector('.exclusive-scoring-toggle');
+      const toleranceInput = container.querySelector('.numeric-tolerance-input');
+      const ruleGroupsContainer = container.querySelector('.rule-groups-container');
+      if (exclusiveToggle) exclusiveToggle.checked = !!config.isExclusive;
+      if (toleranceInput) toleranceInput.value = config.tolerance ?? 0;
+      ruleGroupsContainer.innerHTML = '';
+      (config.groups || []).forEach((g, idx) => {
+        const groupEl = createRuleGroupElement(idx + 1);
+        const pointsInput = groupEl.querySelector('.rule-points');
+        const connectorSelect = groupEl.querySelector('.group-connector');
+        const toastMessageInput = groupEl.querySelector('.rule-toast-message');
+        const toastColorSelect = groupEl.querySelector('.rule-toast-color');
+        const toastTargetSelect = groupEl.querySelector('.rule-toast-target');
+        const toastTriggerSelect = groupEl.querySelector('.rule-toast-trigger');
+        if (pointsInput) pointsInput.value = g.points ?? 0;
+        if (connectorSelect) connectorSelect.value = g.groupConnector || '&&';
+        if (toastMessageInput) toastMessageInput.value = g.toastMessage || '';
+        if (toastColorSelect) toastColorSelect.value = g.toastColor || 'default';
+        if (toastTargetSelect) toastTargetSelect.value = g.toastTarget || 'all';
+        if (toastTriggerSelect) toastTriggerSelect.value = g.toastTrigger || 'success';
+        const condContainer = groupEl.querySelector('.conditions-container');
+        if (condContainer) {
+          condContainer.innerHTML = '';
+          (g.conditions || []).forEach(c => {
+            const condEl = createConditionElement();
+            const typeSelect = condEl.querySelector('.cond-type');
+            const opSelect = condEl.querySelector('.cond-operator');
+            if (typeSelect) typeSelect.value = c.type || 'text';
+            typeSelect.dispatchEvent(new Event('change'));
+            if (opSelect) {
+              opSelect.value = c.op || (c.type === 'number' ? '==' : 'contains');
+              opSelect.dispatchEvent(new Event('change'));
+            }
+            if (c.type === 'text') {
+              const valueInput = condEl.querySelector('.cond-value');
+              const textBoolEl = condEl.querySelector('.text-bool');
+              if (valueInput) valueInput.value = c.value || '';
+              if (textBoolEl && c.textBool) textBoolEl.value = c.textBool;
+            } else if (c.type === 'number') {
+              const valueInput = condEl.querySelector('.cond-value');
+              const pickModeEl = condEl.querySelector('.number-pick-mode');
+              const idxEl = condEl.querySelector('.number-index');
+              if (valueInput) valueInput.value = c.value || '';
+              if (pickModeEl && c.pickMode) pickModeEl.value = c.pickMode;
+              if (idxEl && typeof c.index === 'number') {
+                idxEl.value = String(c.index);
+                idxEl.style.display = c.pickMode === 'nth' ? 'inline-block' : 'none';
+              }
+              const val2Input = condEl.querySelector('.cond-value-2');
+              const inclusiveEl = condEl.querySelector('.cond-inclusive');
+              const countInput = condEl.querySelector('.cond-count');
+              if (val2Input && c.value2 !== undefined) {
+                val2Input.value = c.value2;
+                val2Input.style.display = c.op === 'between' ? 'inline-block' : 'none';
+              }
+              if (inclusiveEl && c.inclusive !== undefined) {
+                inclusiveEl.checked = c.inclusive;
+                inclusiveEl.closest('label').style.display = ['>', '<', 'between'].includes(c.op) ? 'flex' : 'none';
+              }
+              if (countInput && c.count !== undefined) {
+                countInput.value = c.count;
+                const countOpEl = condEl.querySelector('.cond-count-op');
+                if (countOpEl && c.countOp) countOpEl.value = c.countOp;
+                if (c.op === 'count') {
+                  countInput.style.display = 'inline-block';
+                  if (countOpEl) countOpEl.style.display = 'inline-block';
+                }
+              }
+            }
+            if (c.type === 'text' && c.op === 'count') {
+              const countInput = condEl.querySelector('.cond-count');
+              const countOpEl = condEl.querySelector('.cond-count-op');
+              if (countInput && c.count !== undefined) {
+                countInput.value = c.count;
+                countInput.style.display = 'inline-block';
+              }
+              if (countOpEl && c.countOp !== undefined) {
+                countOpEl.value = c.countOp;
+                countOpEl.style.display = 'inline-block';
+              }
+            }
+            condContainer.appendChild(condEl);
+          });
+        }
+        ruleGroupsContainer.appendChild(groupEl);
+      });
+      if (!ruleGroupsContainer.children.length) {
+        ruleGroupsContainer.appendChild(createRuleGroupElement(1));
+      }
+    }
+
+    function CheckerWidget(container, initialCode = "", initialMeta = null) {
+      let mode = "simple";
+      let simpleDisabled = false;
+      let code = initialCode || getDefaultCheckerCode();
+      let advancedEdited = false;
+      let initialAdvancedText = initialCode || "";
+      let lastSavedSimpleConfig = initialMeta && initialMeta.simpleConfig ? initialMeta.simpleConfig : null;
+
+      const simpleBtn = container.querySelector('.simple-mode-btn');
+      const advBtn = container.querySelector('.advanced-mode-btn');
+      const simpleUI = container.querySelector('.simple-mode-ui');
+      const advUI = container.querySelector('.advanced-mode-ui');
+      const ruleGroupsContainer = container.querySelector('.rule-groups-container');
+      const livePreview = container.querySelector('.live-code-preview');
+      const advTextarea = container.querySelector('.checker-textarea');
+      const simpleDisabledNotice = container.querySelector('.simple-disabled-notice');
+      const deleteAdvBtn = container.querySelector('.delete-advanced-btn');
+      const convertToSimpleBtn = container.querySelector('.convert-to-simple-btn');
+      const exclusiveToggle = container.querySelector('.exclusive-scoring-toggle');
+      const toleranceInput = container.querySelector('.numeric-tolerance-input');
+      const quickTestInput = container.querySelector('.quick-test-input');
+      const quickTestBtn = container.querySelector('.quick-test-btn');
+      const quickTestResult = container.querySelector('.quick-test-result');
+
+      container.getCode = () => (mode === "simple" ? generateCodeFromUI(container) : advTextarea.value);
+      container.getMode = () => mode;
+
+      const hasInitialCode = !!initialCode && initialCode.trim().length > 0;
+      const initialMode = initialMeta && initialMeta.mode ? initialMeta.mode : null;
+      const initialSimpleConfig = initialMeta && initialMeta.simpleConfig ? initialMeta.simpleConfig : null;
+
+      if (!hasInitialCode) {
+        mode = "simple";
+        if (ruleGroupsContainer.children.length === 0) ruleGroupsContainer.appendChild(createRuleGroupElement(1));
+        updateCodeFromSimple();
+        showSimpleMode();
+      } else if (initialMode === "simple") {
+        mode = "simple";
+        if (initialSimpleConfig) {
+          buildUIFromSimpleConfig(container, initialSimpleConfig);
+          lastSavedSimpleConfig = initialSimpleConfig;
+        } else if (ruleGroupsContainer.children.length === 0) {
+          ruleGroupsContainer.appendChild(createRuleGroupElement(1));
+        }
+        updateCodeFromSimple();
+        showSimpleMode();
+      } else {
+        mode = "advanced";
+        simpleDisabled = true;
+        advancedEdited = true;
+        showAdvancedMode();
+        advTextarea.value = initialCode;
+        simpleDisabledNotice.classList.remove('hidden');
+      }
+
+      simpleBtn.onclick = () => {
+        if (simpleDisabled) {
+          simpleDisabledNotice.classList.remove('hidden');
+          return;
+        }
+        mode = "simple";
+        showSimpleMode();
+        simpleDisabledNotice.classList.add('hidden');
+      };
+
+      advBtn.onclick = () => {
+        mode = "advanced";
+        showAdvancedMode();
+        if (!hasInitialCode || initialMode === "simple" || !advancedEdited) {
+          advTextarea.value = generateCodeFromUI(container);
+        }
+      };
+
+      advTextarea.oninput = () => {
+        advancedEdited = true;
+        simpleDisabled = true;
+        simpleDisabledNotice.classList.remove('hidden');
+      };
+
+      deleteAdvBtn.onclick = () => {
+        showDialog("Delete advanced code?", "Discard custom edits and restore Simple editor.", () => {
+          advTextarea.value = "";
+          mode = "simple";
+          advancedEdited = false;
+          simpleDisabled = false;
+          showSimpleMode();
+          simpleDisabledNotice.classList.add('hidden');
+          ruleGroupsContainer.innerHTML = "";
+          ruleGroupsContainer.appendChild(createRuleGroupElement(1));
+          updateCodeFromSimple();
+        });
+      };
+
+      if (convertToSimpleBtn) {
+        convertToSimpleBtn.onclick = () => {
+          if (!lastSavedSimpleConfig) return showToast("No simple config found.", { color: "red" });
+          showDialog("Convert back to Simple?", "This will discard any custom advanced edits.", () => {
+            mode = "simple";
+            simpleDisabled = false;
+            advancedEdited = false;
+            buildUIFromSimpleConfig(container, lastSavedSimpleConfig);
+            updateCodeFromSimple();
+            showSimpleMode();
+            simpleDisabledNotice.classList.add('hidden');
+          });
+        };
+      }
+
+      container.querySelector('.add-rule-group-btn').onclick = () => {
+        ruleGroupsContainer.appendChild(createRuleGroupElement(ruleGroupsContainer.children.length + 1));
+        updateCodeFromSimple();
+      };
+
+      ruleGroupsContainer.addEventListener('click', (e) => {
+        const target = e.target;
+        if (target.classList.contains('delete-group-btn')) {
+          target.closest('.rule-group').remove();
+          Array.from(ruleGroupsContainer.querySelectorAll('.rule-group')).forEach((g, idx) => {
+            const title = g.querySelector('h4');
+            if (title) title.textContent = `Rule Group ${idx + 1}`;
+          });
+          updateCodeFromSimple();
+        } else if (target.classList.contains('add-condition-btn')) {
+          target.closest('.rule-group').querySelector('.conditions-container').appendChild(createConditionElement());
+          updateCodeFromSimple();
+        } else if (target.classList.contains('delete-btn')) {
+          target.closest('.condition-row').remove();
+          updateCodeFromSimple();
+        }
+      });
+
+      quickTestBtn.onclick = () => {
+        const codeToTest = container.getCode();
+        const testAnswerRaw = quickTestInput.value;
+        const frame = document.createElement('iframe');
+        frame.style.display = 'none';
+        document.body.appendChild(frame);
+        try {
+          const win = frame.contentWindow;
+          win.eval(codeToTest);
+          const funcNames = Object.getOwnPropertyNames(win).filter(p => typeof win[p] === 'function');
+          const chosenName = funcNames.find(n => n === 'checkAnswer') || funcNames[0];
+          if (!chosenName) throw new Error("No function found.");
+          const result = win[chosenName](testAnswerRaw, (m, o) => console.log(m, o), { name: 'Test User' });
+          quickTestResult.textContent = `Result: ${JSON.stringify(result)}`;
+          quickTestResult.style.color = '#d1d5db';
+        } catch (e) {
+          quickTestResult.textContent = `Error: ${e.message}`;
+          quickTestResult.style.color = '#f87171';
+        } finally {
+          document.body.removeChild(frame);
+        }
+      };
+
+      ruleGroupsContainer.addEventListener('change', updateCodeFromSimple);
+      ruleGroupsContainer.addEventListener('keyup', updateCodeFromSimple);
+      exclusiveToggle.addEventListener('change', updateCodeFromSimple);
+      toleranceInput.addEventListener('input', updateCodeFromSimple);
+
+      function showSimpleMode() {
+        simpleUI.classList.remove('hidden');
+        advUI.classList.add('hidden');
+        simpleBtn.classList.add('bg-indigo-600', 'text-white');
+        simpleBtn.classList.remove('bg-transparent', 'text-gray-300');
+        advBtn.classList.add('bg-transparent', 'text-gray-300');
+        advBtn.classList.remove('bg-indigo-600', 'text-white');
+        livePreview.textContent = generateCodeFromUI(container);
+      }
+      function showAdvancedMode() {
+        simpleUI.classList.add('hidden');
+        advUI.classList.remove('hidden');
+        simpleBtn.classList.add('bg-transparent', 'text-gray-300');
+        simpleBtn.classList.remove('bg-indigo-600', 'text-white');
+        advBtn.classList.add('bg-indigo-600', 'text-white');
+        advBtn.classList.remove('bg-transparent', 'text-gray-300');
+      }
+      function updateCodeFromSimple() {
+        const newCode = generateCodeFromUI(container);
+        livePreview.textContent = newCode;
+        if (!advancedEdited) advTextarea.value = newCode;
+      }
+    }
+
+    function showDialog(title, message, onConfirm) {
+      const wrapper = document.getElementById('toast-wrapper');
+      const backdrop = document.createElement('div');
+      backdrop.className = 'dialog-backdrop';
+      const dialog = document.createElement('div');
+      dialog.className = 'dialog-box';
+      dialog.innerHTML = `<h3 class="text-xl font-bold mb-2">${title}</h3><p class="mb-4 text-gray-300">${message}</p><div class="flex justify-end gap-2"><button class="dialog-confirm bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-4 rounded">Confirm</button><button class="dialog-cancel bg-gray-600 hover:bg-gray-700 text-white font-bold py-1 px-4 rounded">Cancel</button></div>`;
+      backdrop.appendChild(dialog);
+      wrapper.appendChild(backdrop);
+      dialog.querySelector('.dialog-confirm').onclick = () => { backdrop.remove(); onConfirm(); };
+      dialog.querySelector('.dialog-cancel').onclick = () => { backdrop.remove(); };
+    }
+
+    function generateCodeFromUI(container) {
+      const isExclusive = container.querySelector('.exclusive-scoring-toggle')?.checked || false;
+      const tolerance = parseFloat(container.querySelector('.numeric-tolerance-input')?.value) || 0;
+      const ruleGroups = container.querySelectorAll('.rule-group');
+      let code = `function checkAnswer(studentAnswer) {\n    let score = 0;\n`;
+      let totalMaxScore = 0;
+      ruleGroups.forEach(g => totalMaxScore += (Number(g.querySelector('.rule-points')?.value) || 0));
+      code += `    const maxScore = ${totalMaxScore || 100};\n    const answerStr = String(studentAnswer).toLowerCase();\n    const numMatches = answerStr.match(/-?(?:\\d{1,3}(?:,\\d{3})+|\\d+)(?:\\.\\d+)?/g) || [];\n    const answerNums = numMatches.map(s => parseFloat(s.replace(/,/g, '')));\n    const answerNum = answerNums.length ? answerNums[0] : NaN;\n`;
+      if (tolerance > 0) code += `    function isNear(a, b, t) { if (isNaN(a) || isNaN(b)) return false; return Math.abs(a - b) <= t; }\n`;
+      let wroteIf = false;
+      ruleGroups.forEach((group) => {
+        const points = Number(group.querySelector('.rule-points')?.value) || 0;
+        const groupConnector = group.querySelector('.group-connector')?.value || '&&';
+        const toastMessage = group.querySelector('.rule-toast-message')?.value.trim() || '';
+        const toastColor = group.querySelector('.rule-toast-color')?.value || 'default';
+        const toastTarget = group.querySelector('.rule-toast-target')?.value || 'all';
+        const toastTrigger = group.querySelector('.rule-toast-trigger')?.value || 'success';
+        let groupConditions = [];
+        group.querySelectorAll('.condition-row').forEach(cond => {
+          const type = cond.querySelector('.cond-type').value;
+          const op = cond.querySelector('.cond-operator').value;
+          const val = cond.querySelector('.cond-value').value.trim();
+          if (!val) return;
+          if (type === 'text') {
+            const keywords = val.split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
+            if (op === 'ordered') {
+              groupConditions.push(`(function(){ const _kws = ${JSON.stringify(keywords)}; let _pos = 0; for (let _i = 0; _i < _kws.length; _i++){ const _p = answerStr.indexOf(_kws[_i], _pos); if (_p === -1) return false; _pos = _p + _kws[_i].length; } return true; })()`);
+            } else if (keywords.length > 1 && (op === 'contains' || op === 'not_contains')) {
+              const textBool = cond.querySelector('.text-bool')?.value || '||';
+              groupConditions.push(`(${keywords.map(k => `${op === 'not_contains' ? '!' : ''}answerStr.includes("${k.replace(/"/g, '\\"')}")`).join(` ${textBool} `)})`);
+            } else if (keywords.length > 0) {
+              const k = keywords[0].replace(/"/g, '\\"');
+              if (op === 'contains') groupConditions.push(`answerStr.includes("${k}")`);
+              else if (op === 'not_contains') groupConditions.push(`!answerStr.includes("${k}")`);
+              else if (op === 'equals_str') groupConditions.push(`answerStr === "${k}"`);
+              else if (op === 'count') {
+                const cVal = parseInt(cond.querySelector('.cond-count').value, 10) || 1;
+                const cOp = cond.querySelector('.cond-count-op').value;
+                groupConditions.push(`(answerStr.split("${k}").length - 1 ${cOp} ${cVal})`);
+              }
+            }
+          } else if (type === 'number') {
+            const nVal = parseFloat(val);
+            if (isNaN(nVal)) return;
+            const pm = cond.querySelector('.number-pick-mode').value;
+            const nIdx = parseInt(cond.querySelector('.number-index').value, 10) || 1;
+            const createComp = (v) => {
+              const inc = cond.querySelector('.cond-inclusive')?.checked || false;
+              if (op === '==') return tolerance > 0 ? `isNear(${v}, ${nVal}, ${tolerance})` : `(${v} == ${nVal})`;
+              if (op === '!=') return tolerance > 0 ? `!isNear(${v}, ${nVal}, ${tolerance})` : `(${v} != ${nVal})`;
+              if (op === '>') return inc ? `(${v} >= ${nVal})` : `(${v} > ${nVal})`;
+              if (op === '<') return inc ? `(${v} <= ${nVal})` : `(${v} < ${nVal})`;
+              if (op === 'between') {
+                const v2 = parseFloat(cond.querySelector('.cond-value-2').value || 0);
+                return inc ? `(${v} >= ${Math.min(nVal, v2)} && ${v} <= ${Math.max(nVal, v2)})` : `(${v} > ${Math.min(nVal, v2)} && ${v} < ${Math.max(nVal, v2)})`;
+              }
+              if (op === 'count') {
+                const cVal = parseInt(cond.querySelector('.cond-count').value, 10) || 1;
+                const cOp = cond.querySelector('.cond-count-op').value;
+                return `(answerNums.filter(n => n === ${nVal}).length ${cOp} ${cVal})`;
+              }
+              return 'false';
+            };
+            if (op === 'ordered') {
+              const targets = val.split(',').map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
+              groupConditions.push(`(function(){ const _t = ${JSON.stringify(targets)}; let _ai = 0; for (const _tn of _t) { const _foundIdx = answerNums.slice(_ai).indexOf(_tn); if (_foundIdx === -1) return false; _ai += _foundIdx + 1; } return true; })()`);
+            } else if (op === 'count') {
+              groupConditions.push(createComp(''));
+            } else {
+              let expr = 'false';
+              if (pm === 'first') expr = `(answerNums.length > 0 && ${createComp('answerNums[0]')})`;
+              else if (pm === 'last') expr = `(answerNums.length > 0 && ${createComp('answerNums[answerNums.length - 1]')})`;
+              else if (pm === 'nth') expr = `(answerNums.length >= ${nIdx} && ${createComp(`answerNums[${nIdx - 1}]`)})`;
+              else if (pm === 'any') expr = `(answerNums.some(num => ${createComp('num')}))`;
+              groupConditions.push(expr);
+            }
+          }
+        });
+        if (groupConditions.length > 0) {
+          const ifStmt = isExclusive ? (wroteIf ? 'else if' : 'if') : 'if';
+          wroteIf = true;
+          const combined = groupConditions.join(` ${groupConnector} `);
+          code += `    ${ifStmt} (${combined}) {\n        score += ${points};\n`;
+          if (toastMessage && toastTrigger === 'success') code += `        if (typeof showToast === "function") { try { showToast(${JSON.stringify(toastMessage)}, { color: ${JSON.stringify(toastColor)} }); } catch(_) {} }\n`;
+          code += `    }\n`;
+          if (toastMessage && toastTrigger === 'failure') code += `    if (!(${combined})) { if (typeof showToast === "function") { try { showToast(${JSON.stringify(toastMessage)}, { color: ${JSON.stringify(toastColor)} }); } catch(_) {} } }\n`;
+        }
+      });
+      code += `    return score;\n}`;
+      return code;
+    }
+
+    function createRuleGroupElement(number) {
+      const div = document.createElement('div');
+      div.className = 'rule-group bg-gray-800 p-3 rounded-lg border border-gray-600 space-y-3';
+      div.innerHTML = `
+        <div class="flex justify-between items-center"><h4 class="font-semibold text-white text-xs">Rule Group ${number}</h4><button class="delete-group-btn text-red-400 hover:text-red-300 font-bold text-xs uppercase">Remove Group</button></div>
+        <div class="flex items-center space-x-2 text-xs"><label>Award</label><input type="number" class="rule-points w-20 bg-gray-700 border border-gray-600 rounded-md p-1 text-center" value="100"><label>points.</label></div>
+        <div class="flex items-center space-x-2 text-xs"><label>Require:</label><select class="group-connector bg-gray-700 border border-gray-600 rounded-md p-1">
+          <option value="&&">All True (AND)</option><option value="||">Any True (OR)</option>
+        </select></div>
+        <div class="conditions-container space-y-2"></div><button class="add-condition-btn text-[10px] text-blue-400 hover:text-blue-300 uppercase tracking-wider font-bold">+ Add Condition</button>
+        <div class="mt-2 pt-2 border-t border-gray-700 space-y-2">
+          <label class="block text-[10px] uppercase font-bold text-gray-400">Optional Toast Notification</label>
+          <input type="text" class="rule-toast-message w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="Message content...">
+          <div class="flex items-center space-x-4 text-[10px]">
+            <div class="flex items-center space-x-2"><label>Trigger:</label><select class="rule-toast-trigger bg-gray-700 border border-gray-600 rounded-md p-1"><option value="success">On Success</option><option value="failure">On Failure</option></select></div>
+            <div class="flex items-center space-x-2"><label>Color:</label><select class="rule-toast-color bg-gray-700 border border-gray-600 rounded-md p-1"><option value="default">Gray</option><option value="blue">Blue</option><option value="green">Green</option><option value="red">Red</option><option value="yellow">Yellow</option></select></div>
+            <div class="flex items-center space-x-2"><label>Target:</label><select class="rule-toast-target bg-gray-700 border border-gray-600 rounded-md p-1"><option value="all">All</option><option value="mods_only">Modified Only</option></select></div>
+          </div>
+        </div>
+      `;
+      div.querySelector('.conditions-container').appendChild(createConditionElement());
+      return div;
+    }
+
+    function createConditionElement() {
+      const div = document.createElement('div');
+      div.className = 'condition-row flex items-center space-x-2 bg-gray-900/50 p-2 rounded-md';
+      div.innerHTML = `
+        <select class="cond-type bg-gray-700 border border-gray-600 rounded-md p-1 text-xs"><option value="text">Text</option><option value="number">Number</option></select>
+        <select class="cond-operator bg-gray-700 border border-gray-600 rounded-md p-1 text-xs"><option value="contains">contains</option><option value="not_contains">does not contain</option><option value="equals_str">is exactly</option><option value="ordered">contains in order</option><option value="count">count instances</option></select>
+        <div class="cond-value-wrapper flex-grow flex flex-col">
+          <div class="flex items-center space-x-2">
+            <select class="number-pick-mode bg-gray-700 border border-gray-600 rounded-md p-1 text-xs"><option value="first">First</option><option value="last">Last</option><option value="nth">Nth</option><option value="any">Any</option></select>
+            <input type="number" class="number-index w-12 bg-gray-700 border border-gray-600 rounded-md p-1 text-xs hidden" value="1" min="1" step="1">
+            <input type="text" class="cond-value w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-xs" placeholder="keyword(s)">
+            <span class="cond-between-and text-[10px] text-gray-500 hidden">and</span>
+            <input type="number" class="cond-value-2 w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-xs hidden" placeholder="number" step="any">
+            <select class="cond-count-op bg-gray-700 border border-gray-600 rounded-md p-1 text-xs hidden"><option value="==">exactly</option><option value=">=">at least</option><option value="<=">at most</option><option value=">">more than</option><option value="<">fewer than</option></select>
+            <input type="number" class="cond-count w-16 bg-gray-700 border border-gray-600 rounded-md p-1 text-xs hidden" placeholder="count" min="1" value="1">
+          </div>
+          <label class="cond-inclusive-label flex items-center text-[10px] text-gray-500 cursor-pointer hidden"><input type="checkbox" class="cond-inclusive mr-1"> Inclusive (>=)</label>
+          <div class="text-options text-[10px] mt-1 hidden"><label>Require: </label><select class="text-bool bg-gray-700 border border-gray-600 rounded-md p-0.5"><option value="||">Any (OR)</option><option value="&&">All (AND)</option></select></div>
+        </div>
+        <button class="delete-btn text-red-400 hover:text-red-300 font-bold text-lg leading-none">&times;</button>
+      `;
+      const typeSelect = div.querySelector('.cond-type');
+      const operatorSelect = div.querySelector('.cond-operator');
+      const pmSelect = div.querySelector('.number-pick-mode');
+      const updateRowVisibility = () => {
+        const type = typeSelect.value;
+        const op = operatorSelect.value;
+        const isCount = (op === 'count');
+        const isOrdered = (op === 'ordered');
+        const isNum = (type === 'number');
+        const v2 = div.querySelector('.cond-value-2');
+        const and = div.querySelector('.cond-between-and');
+        const inc = div.querySelector('.cond-inclusive-label');
+        const cInp = div.querySelector('.cond-count');
+        const cOp = div.querySelector('.cond-count-op');
+        const v1 = div.querySelector('.cond-value');
+        const textOpt = div.querySelector('.text-options');
+        const setVisible = (el, v, d='inline-block') => { if(el) el.style.display = v ? d : 'none'; };
+        setVisible(cInp, isCount);
+        setVisible(cOp, isCount);
+        setVisible(pmSelect, isNum && !isCount && !isOrdered);
+        if (isNum) {
+          setVisible(v2, op === 'between');
+          setVisible(and, op === 'between');
+          setVisible(inc, ['>', '<', 'between'].includes(op), 'flex');
+          if (v1) { v1.type = "number"; v1.placeholder = isOrdered ? "1,2,3..." : (isCount ? "to count" : "number"); }
+        } else {
+          setVisible(v2, false); setVisible(and, false); setVisible(inc, false);
+          if (v1) { v1.type = "text"; v1.placeholder = isCount ? "to count" : "keyword(s)"; }
+          if (textOpt) setVisible(textOpt, (op==='contains'||op==='not_contains') && v1.value.includes(','), 'block');
+        }
+      };
+      typeSelect.onchange = () => {
+        if (typeSelect.value === 'number') {
+          operatorSelect.innerHTML = `<option value="==">is exactly</option><option value="!=">is not</option><option value=">">is greater than</option><option value="<">is less than</option><option value="between">is between</option><option value="ordered">contains in order</option><option value="count">count instances</option>`;
+        } else {
+          operatorSelect.innerHTML = `<option value="contains">contains</option><option value="not_contains">does not contain</option><option value="equals_str">is exactly</option><option value="ordered">contains in order</option><option value="count">count instances</option>`;
+        }
+        updateRowVisibility();
+      };
+      operatorSelect.onchange = updateRowVisibility;
+      div.oninput = updateRowVisibility;
+      pmSelect.onchange = () => { div.querySelector('.number-index').style.display = pmSelect.value === 'nth' ? 'inline-block' : 'none'; };
+      updateRowVisibility();
+      return div;
+    }
+
+    function getDefaultCheckerCode() {
+      return `function checkAnswer(studentAnswer) {\n    let score = 0;\n    const maxScore = 100;\n    const answerStr = String(studentAnswer).toLowerCase();\n    const numMatches = answerStr.match(/-?(?:\\d{1,3}(?:,\\d{3})+|\\d+)(?:\\.\\d+)?/g) || [];\n    const answerNums = numMatches.map(s => parseFloat(s.replace(/,/g, '')));\n    const answerNum = answerNums.length ? answerNums[0] : NaN;\n    return score;\n}`;
+    }
+
+    // --- Title Editing ---
+    function startEditingTitle() {
+      document.getElementById('titleDisplay').classList.add('hidden');
+      document.getElementById('titleEditor').classList.remove('hidden');
+      document.getElementById('titleInput').value = assignmentData.name;
+      document.getElementById('titleInput').focus();
+    }
+    function cancelEditingTitle() {
+      document.getElementById('titleDisplay').classList.remove('hidden');
+      document.getElementById('titleEditor').classList.add('hidden');
+    }
     async function saveTitle() {
       const newName = document.getElementById('titleInput').value.trim();
-      if (!newName) { showToast("Name cannot be empty.", {color:'red'}); return; }
+      if (!newName) { showToast("Name cannot be empty.", { color: 'red' }); return; }
       try {
         await db.collection("assignments").doc(assignmentId).update({ name: newName });
         assignmentData.name = newName;
         document.getElementById('assignmentTitle').textContent = `Editing: ${newName}`;
         cancelEditingTitle();
-        showToast("Title updated!", {color:'green'});
-      } catch(e) { console.error(e); showToast("Failed to update title.", {color:'red'}); }
+        showToast("Title updated!", { color: 'green' });
+      } catch (e) {
+        console.error(e);
+        showToast("Failed to update title.", { color: 'red' });
+      }
     }
 
-    // --- Questions ---
+    // --- Question & Note Management ---
     function addQuestion(type) {
       const q = {
         id: `vq${nextQId++}`,
@@ -630,8 +1495,8 @@
 
     function parseTime(str) {
       const parts = str.split(':');
-      if (parts.length === 2) return parseInt(parts[0])*60 + parseInt(parts[1]);
-      if (parts.length === 3) return parseInt(parts[0])*3600 + parseInt(parts[1])*60 + parseInt(parts[2]);
+      if (parts.length === 2) return parseInt(parts[0]) * 60 + parseInt(parts[1]);
+      if (parts.length === 3) return parseInt(parts[0]) * 3600 + parseInt(parts[1]) * 60 + parseInt(parts[2]);
       return parseFloat(str) || 0;
     }
 
@@ -681,8 +1546,8 @@
             <div class="flex items-center gap-2 mb-2">
               <label class="text-xs text-gray-400">Selection:</label>
               <select data-qid="${q.id}" class="selection-type-select bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs">
-                <option value="single" ${selType==='single'?'selected':''}>Single answer</option>
-                <option value="multiple" ${selType==='multiple'?'selected':''}>Select all that apply</option>
+                <option value="single" ${selType === 'single' ? 'selected' : ''}>Single answer</option>
+                <option value="multiple" ${selType === 'multiple' ? 'selected' : ''}>Select all that apply</option>
               </select>
             </div>
             ${q.choices.map((c, ci) => `
@@ -700,9 +1565,10 @@
       let checkerHTML = '';
       if (!isMC) {
         checkerHTML = `
-          <div class="mt-3">
-            <label class="block text-xs font-medium text-gray-400 mb-1">Checker Code (optional — leave blank for manual grading)</label>
-            <textarea data-qid="${q.id}" class="checker-code-input w-full h-32 p-2 bg-gray-700 rounded border border-gray-600 text-sm font-mono" placeholder="function checkAnswer(studentAnswer, showToast, userProfile, attemptInfo) {&#10;  // return score 0-100&#10;}">${escapeHtml(q.checkerCode || '')}</textarea>
+          <div class="mt-3 overflow-hidden">
+            <div id="checker-container-${q.id}" class="checker-widget-container bg-gray-800/80 rounded-lg p-3 border border-gray-600/50">
+              <!-- CheckerWidget will be injected here -->
+            </div>
           </div>
         `;
       }
@@ -796,12 +1662,16 @@
           if (q) q.selectionType = e.target.value;
         });
       });
-      // Checker code textareas
-      document.querySelectorAll('.checker-code-input').forEach(ta => {
-        ta.addEventListener('input', e => {
-          const q = videoQuestions.find(q => q.id === e.target.dataset.qid);
-          if (q) q.checkerCode = e.target.value;
-        });
+      // Checker widgets for open-ended questions
+      const template = document.getElementById('checkerTemplate');
+      document.querySelectorAll('.checker-widget-container').forEach(container => {
+        const qId = container.id.replace('checker-container-', '');
+        const q = videoQuestions.find(it => it.id === qId);
+        if (q && template) {
+          container.innerHTML = '';
+          container.appendChild(template.content.cloneNode(true));
+          CheckerWidget(container, q.checkerCode || "", q.checkerMeta || null);
+        }
       });
     }
 
@@ -891,27 +1761,37 @@
         const url = document.getElementById('videoUrlInput').value.trim();
         const source = detectVideoSource(url);
 
-        // Build checker functions for open-ended questions
+        // Build checker functions and meta
         const checkerFunctions = {};
+        const checkerMeta = {};
         let qIdx = 0;
         videoQuestions.forEach(q => {
           qIdx++;
-          if (q.type === 'open-ended' && q.checkerCode) {
-            checkerFunctions[`calc${qIdx}`] = q.checkerCode;
+          if (q.type === 'open-ended') {
+            if (q.checkerCode) checkerFunctions[`calc${qIdx}`] = q.checkerCode;
+            if (q.checkerMeta) checkerMeta[`calc${qIdx}`] = q.checkerMeta;
           }
         });
 
-        // Clean questions for storage (strip internal IDs for safety)
+        // Clean questions for storage
         const cleanQuestions = videoQuestions.map(q => {
           const clean = { id: q.id, type: q.type, time: q.time, body: q.body };
           if (q.type === 'multiple-choice') {
             clean.choices = q.choices;
             clean.selectionType = q.selectionType || 'single';
+          } else {
+             clean.checkerCode = q.checkerCode || '';
+             clean.checkerMeta = q.checkerMeta || null;
           }
           return clean;
         });
 
         const cleanNotes = videoNotes.map(n => ({ id: n.id, time: n.time, body: n.body }));
+
+        const playbackSettings = {
+          skipPrevention: document.getElementById('skipPrevention').checked,
+          speedLock: document.getElementById('speedLock').checked
+        };
 
         const updatePayload = {
           videoUrl: url,
@@ -920,6 +1800,9 @@
           videoQuestions: cleanQuestions,
           videoNotes: cleanNotes,
           checkerFunctions: checkerFunctions,
+          checkerMeta: checkerMeta,
+          auraRules: auraRules,
+          playbackSettings: playbackSettings,
           scoringMode: document.getElementById('scoringMode').value,
           postSubmissionRule: document.getElementById('postSubmissionRule').value
         };
@@ -967,9 +1850,17 @@
         const q = videoQuestions.find(q => q.id === sel.dataset.qid);
         if (q) q.selectionType = sel.value;
       });
-      document.querySelectorAll('.checker-code-input').forEach(ta => {
-        const q = videoQuestions.find(q => q.id === ta.dataset.qid);
-        if (q) q.checkerCode = ta.value;
+      // Checker widgets
+      document.querySelectorAll('.checker-widget-container').forEach(container => {
+        const qId = container.id.replace('checker-container-', '');
+        const q = videoQuestions.find(it => it.id === qId);
+        if (q && typeof container.getCode === 'function') {
+          q.checkerCode = container.getCode();
+          q.checkerMeta = {
+            mode: container.getMode(),
+            simpleConfig: serializeSimpleConfig(container)
+          };
+        }
       });
     }
 
@@ -1007,4 +1898,5 @@
     document.getElementById('signOutButton').onclick = () => auth.signOut().then(() => window.location.href = './assignments.html');
   </script>
 </body>
+
 </html>
