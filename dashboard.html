@@ -247,7 +247,9 @@
         let showAllAttempts = localStorage.getItem('dashboardShowAllAttempts') === 'true';
         let currentModalView = null;
 
-        // Question progress data - per student, per question
+        let auraByStudent = new Map();
+        let submittedStatusByStudent = new Map();
+        let submittedEmails = new Set();
         let questionProgressByStudent = new Map(); // Key: studentEmail, Value: Map of slideIndex -> progressData
 
         // --- Impersonation Logic ---
@@ -410,6 +412,7 @@
                 .onSnapshot(statusSnapshot => {
                     submittedEmails.clear();
                     auraByStudent.clear();
+                    submittedStatusByStudent.clear();
 
                     // Aggregate all docs per student to select the "best" one for Aura
                     const docsByStudent = new Map();
@@ -450,6 +453,9 @@
                             auraAwarded: !!bestDoc.auraAwarded,
                             auraAmount: typeof bestDoc.auraAmount === 'number' ? bestDoc.auraAmount : 0
                         });
+
+                        // Populate submittedStatusByStudent for Watch Time, etc.
+                        submittedStatusByStudent.set(email, bestDoc);
                     });
 
                     rebuildAllStudentData();
