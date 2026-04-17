@@ -838,7 +838,7 @@
       }
     }
 
-    function addAuraRule(ruleData = { amount: 1, minScore: 0 }) {
+    function addAuraRule(ruleData = { amount: 1, minScore: 0, trigger: 'assignment_submitted' }) {
       const id = Date.now() + Math.random().toString(36).substr(2, 9);
       const rule = { id, ...ruleData };
       auraRules.push(rule);
@@ -859,19 +859,51 @@
       }
       auraRules.forEach((rule, index) => {
         const div = document.createElement('div');
-        div.className = "grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-700/50 rounded-lg border border-gray-600 relative animate-fade-in-right";
+        div.className = "flex flex-col gap-4 p-4 bg-gray-700/50 rounded-lg border border-gray-600 relative animate-fade-in-right";
+        
+        const isWatchTime = rule.trigger === 'watch_time_reached';
+        const isQuestionCorrect = rule.trigger === 'question_correct';
+
         div.innerHTML = `
-          <div>
-            <label class="block text-xs text-gray-400 mb-1">Aura Points</label>
-            <input type="number" value="${rule.amount}" step="0.1" onchange="updateRule(${index}, 'amount', this.value)" class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none text-sm">
-          </div>
-          <div>
-            <label class="block text-xs text-gray-400 mb-1">Min Score %</label>
-            <input type="number" value="${rule.minScore}" min="0" max="100" onchange="updateRule(${index}, 'minScore', this.value)" class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none text-sm">
-          </div>
-          <div class="flex items-end justify-between">
-            <p class="text-[10px] text-gray-500 mb-2">Rule #${index + 1}</p>
-            <button onclick="removeAuraRule('${rule.id}')" class="text-red-400 hover:text-red-300 text-sm font-bold mb-1">Remove</button>
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">Aura Points</label>
+              <input type="number" value="${rule.amount}" step="0.1" onchange="updateRule(${index}, 'amount', this.value)" class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none text-sm">
+            </div>
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">Trigger Condition</label>
+              <select onchange="updateRule(${index}, 'trigger', this.value); renderAuraRules();" class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none text-sm">
+                <option value="assignment_submitted" ${rule.trigger === 'assignment_submitted' ? 'selected' : ''}>Assignment Submitted</option>
+                <option value="question_correct" ${rule.trigger === 'question_correct' ? 'selected' : ''}>Question Corrected</option>
+                <option value="watch_time_reached" ${rule.trigger === 'watch_time_reached' ? 'selected' : ''}>Watch Time Reached</option>
+              </select>
+            </div>
+            
+            ${isWatchTime ? `
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">Minutes Required</label>
+              <input type="number" value="${rule.minutesRequired || 1}" min="1" onchange="updateRule(${index}, 'minutesRequired', this.value)" class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none text-sm">
+            </div>
+            ` : `
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">Min Score %</label>
+              <input type="number" value="${rule.minScore}" min="0" max="100" onchange="updateRule(${index}, 'minScore', this.value)" class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none text-sm">
+            </div>
+            `}
+
+            ${isQuestionCorrect ? `
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">Target</label>
+              <select onchange="updateRule(${index}, 'target', this.value)" class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none text-sm">
+                <option value="all" ${rule.target === 'all' ? 'selected' : ''}>Any Question</option>
+                ${videoQuestions.map((q, i) => `<option value="q${i+1}" ${rule.target === `q${i+1}` ? 'selected' : ''}>Question ${i+1}</option>`).join('')}
+              </select>
+            </div>
+            ` : ''}
+
+            <div class="flex justify-end lg:col-start-4">
+              <button onclick="removeAuraRule('${rule.id}')" class="text-red-400 hover:text-red-300 text-sm font-bold">Remove</button>
+            </div>
           </div>
         `;
         container.appendChild(div);
@@ -879,7 +911,12 @@
     }
 
     function updateRule(index, field, value) {
-      if (auraRules[index]) auraRules[index][field] = parseFloat(value) || 0;
+      if (!auraRules[index]) return;
+      if (field === 'amount' || field === 'minScore' || field === 'minutesRequired') {
+          auraRules[index][field] = parseFloat(value) || 0;
+      } else {
+          auraRules[index][field] = value;
+      }
     }
 
     // --- Simple Mode Port Logic ---
@@ -1618,8 +1655,8 @@
             </div>
             <div class="flex items-center gap-2">
               <div class="flex flex-col">
-                <button onclick="moveItem('${item._kind}', ${item._srcIdx}, -1, ${sortedIdx})" class="text-gray-400 hover:text-white leading-none ${sortedIdx === 0 ? 'opacity-20 cursor-not-allowed' : ''}" ${sortedIdx === 0 ? 'disabled' : ''} title="Move Up">▲</button>
-                <button onclick="moveItem('${item._kind}', ${item._srcIdx}, 1, ${sortedIdx})" class="text-gray-400 hover:text-white leading-none ${sortedIdx === total - 1 ? 'opacity-20 cursor-not-allowed' : ''}" ${sortedIdx === total - 1 ? 'disabled' : ''} title="Move Down">▼</button>
+                <button onclick="moveItem('${q._kind}', ${q._srcIdx}, -1, ${sortedIdx})" class="text-gray-400 hover:text-white leading-none ${sortedIdx === 0 ? 'opacity-20 cursor-not-allowed' : ''}" ${sortedIdx === 0 ? 'disabled' : ''} title="Move Up">▲</button>
+                <button onclick="moveItem('${q._kind}', ${q._srcIdx}, 1, ${sortedIdx})" class="text-gray-400 hover:text-white leading-none ${sortedIdx === total - 1 ? 'opacity-20 cursor-not-allowed' : ''}" ${sortedIdx === total - 1 ? 'disabled' : ''} title="Move Down">▼</button>
               </div>
               <button onclick="deleteQuestion('${q.id}')" class="text-red-400 hover:text-red-300 font-bold text-lg leading-none" title="Delete question">&times;</button>
             </div>
