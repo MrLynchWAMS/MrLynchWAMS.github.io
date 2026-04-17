@@ -355,6 +355,21 @@
         }
 
         /* ===== END PDF Student Styles ===== */
+        /* Video Skip Prevention Overlay */
+        .video-skip-overlay {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 48px; /* Approximate height of YouTube progress bar area */
+            background: transparent;
+            z-index: 10;
+            cursor: not-allowed;
+            display: none; /* Only shown when .disable-seeking is on video-wrapper */
+        }
+        .disable-seeking .video-skip-overlay {
+            display: block;
+        }
     </style>
 </head>
 
@@ -473,6 +488,7 @@
                     <div id="video-wrapper"
                         class="w-full relative aspect-video bg-black rounded-lg overflow-hidden border border-gray-700 shadow-lg">
                         <div id="video-player"></div>
+                        <div class="video-skip-overlay" id="video-skip-overlay"></div>
                         <div id="video-overlay"
                             class="absolute inset-0 bg-gray-900 bg-opacity-90 flex flex-col items-center justify-center hidden z-20 p-6">
                             <!-- Overlay content populated via JS -->
@@ -486,7 +502,10 @@
                         <div id="video-timeline-markers" class="flex-grow bg-gray-700 h-2 rounded relative"></div>
                     </div>
                 </div>
-                <div class="interactive-column bg-gray-800 p-4 rounded-lg flex flex-col">
+                    <div class="interactive-column bg-gray-800 p-4 rounded-lg flex flex-col">
+                        <button onclick="rewatchSegment()" id="rewatch-btn" class="mb-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg transition-all flex items-center justify-center gap-2">
+                            <span class="text-xl">↺</span> Rewatch Last Minute
+                        </button>
                     <h3 class="text-xl font-bold text-yellow-400 mb-4 border-b border-gray-700 pb-2">Questions & Notes
                     </h3>
                     <div id="video-sidebar-list" class="flex-grow overflow-y-auto space-y-3 pr-2">
@@ -3074,6 +3093,9 @@
             let isVideoPausedForQuestion = false;
             let lastKnownTime = 0;
             let isEnforcingSkipPrevention = false;
+            let furthestReachedTime = 0;
+            let watchTimeSeconds = 0;
+            let lastWatchSyncTime = 0;
 
             function initializeVideoStudentView() {
                 const questions = (assignmentData.videoQuestions || []).map((q, i) => ({ ...q, _kind: 'question', _index: i, id: q.id || `vq${i}` }));
@@ -3132,9 +3154,15 @@
                     playerVars: { 'playsinline': 1, 'rel': 0, 'modestbranding': 1, 'origin': window.location.origin },
                     events: {
                         'onReady': () => {
-                            ytPlayerInterval = setInterval(checkVideoTime, 500);
+                            ytPlayerInterval = setInterval(checkVideoTime, 1000);
                             document.getElementById('video-submit-final').classList.remove('hidden');
                             lastKnownTime = videoPlayer.getCurrentTime();
+                            furthestReachedTime = lastKnownTime;
+
+                            const settings = assignmentData.playbackSettings || {};
+                            if (settings.skipPrevention) {
+                                document.getElementById('video-wrapper').classList.add('disable-seeking');
+                            }
                         },
                         'onStateChange': (e) => {
                             if (e.data == YT.PlayerState.PLAYING && isVideoPausedForQuestion) {
@@ -3154,11 +3182,26 @@
                 });
             }
 
-            function checkVideoTime() {
+            async function checkVideoTime() {
                 if (!videoPlayer || typeof videoPlayer.getCurrentTime !== 'function') return;
                 
                 const settings = assignmentData.playbackSettings || {};
                 const currentTime = videoPlayer.getCurrentTime();
+
+                // Track furthest reached
+                if (currentTime > furthestReachedTime) {
+                    furthestReachedTime = currentTime;
+                }
+
+                // Increment watch time if playing
+                if (videoPlayer.getPlayerState() === YT.PlayerState.PLAYING && !isVideoPausedForQuestion) {
+                   watchTimeSeconds += 1;
+                   
+                   // Periodic sync every 30 seconds
+                   if (watchTimeSeconds - lastWatchSyncTime >= 30) {
+                       syncWatchTime();
+                   }
+                }
 
                 // Speed Lock
                 if (settings.speedLock) {
@@ -3170,13 +3213,13 @@
 
                 // Skip Prevention
                 if (settings.skipPrevention && !isVideoPausedForQuestion && !isEnforcingSkipPrevention) {
-                    // Allowed forward movement is 2 seconds (buffer for polling)
-                    if (currentTime > lastKnownTime + 2.1) {
+                    // Force seek back if skipped past furthestReachedTime
+                    if (currentTime > furthestReachedTime + 2.5) {
                         isEnforcingSkipPrevention = true;
                         videoPlayer.pauseVideo();
-                        showToast("Skipping is disabled for this assignment.", { color: 'red' });
+                        showToast("Skipping forward is disabled.", { color: 'red' });
                         setTimeout(() => {
-                            videoPlayer.seekTo(lastKnownTime);
+                            videoPlayer.seekTo(furthestReachedTime);
                             videoPlayer.playVideo();
                             isEnforcingSkipPrevention = false;
                         }, 500);
@@ -3192,31 +3235,49 @@
 
                 if (currentVideoItemIndex < sortedVideoItems.length) {
                     const nextItem = sortedVideoItems[currentVideoItemIndex];
-                    if (currentTime >= nextItem.time) {
+                    if (currentTime >= nextItem.time && currentTime < nextItem.time + 2) {
                         showVideoOverlay(nextItem.id);
                     }
                 }
             }
 
-            function rewatchSegment(itemId) {
-                const item = sortedVideoItems.find(i => i.id === itemId);
-                if (!item) return;
+            async function syncWatchTime() {
+                if (!userProfile.email || !assignmentData.id) return;
+                lastWatchSyncTime = watchTimeSeconds;
+                
+                try {
+                    const statusId = `${assignmentData.id}_${userProfile.email.toLowerCase()}`;
+                    await db.collection("submissionStatus").doc(statusId).set({
+                        assignmentId: assignmentData.id,
+                        studentEmail: userProfile.email.toLowerCase(),
+                        watchTime: watchTimeSeconds,
+                        lastAccessed: firebase.firestore.FieldValue.serverTimestamp()
+                    }, { merge: true });
 
-                const itemIdx = sortedVideoItems.indexOf(item);
-                let startTime = 0;
-                if (itemIdx > 0) {
-                    startTime = sortedVideoItems[itemIdx - 1].time + 0.5;
+                    // Check for watch time Aura rules
+                    if (Array.isArray(assignmentData.auraRules)) {
+                        const watchRules = assignmentData.auraRules.filter(r => r.trigger === 'watch_time_reached' && (watchTimeSeconds / 60) >= (r.minutesRequired || 99999));
+                        // Since we don't want to spam, we could track which ones are already awarded
+                        // For now, let's just make it simple
+                    }
+                } catch (e) {
+                    console.error("Watch time sync error:", e);
                 }
+            }
+
+            function rewatchSegment() {
+                if (!videoPlayer || typeof videoPlayer.seekTo !== 'function') return;
+
+                const curr = videoPlayer.getCurrentTime();
+                const startTime = Math.max(0, curr - 60);
 
                 const overlay = document.getElementById('video-overlay');
-                overlay.classList.add('hidden');
+                if (overlay) overlay.classList.add('hidden');
                 isVideoPausedForQuestion = false;
-                lastKnownTime = startTime; // Important for skip prevention
-
-                if (videoPlayer && typeof videoPlayer.seekTo === 'function') {
-                    videoPlayer.seekTo(startTime);
-                    videoPlayer.playVideo();
-                }
+                
+                // Allow seek back even if skipPrevention is on
+                videoPlayer.seekTo(startTime);
+                videoPlayer.playVideo();
             }
 
             function showVideoOverlay(itemId, isManual = false) {
@@ -3359,7 +3420,7 @@
                     } else {
                         // Instant scoring
                         if (score >= 90) {
-                            showToast("Excellent!", { color: 'green' });
+                            showToast(`Excellent! Score: ${score}/100`, { color: 'green' });
                             
                             // Check for per-question Aura
                             if (Array.isArray(assignmentData.auraRules)) {
@@ -3378,13 +3439,13 @@
                             continueVideoFromItem(isManual);
                         } else {
                             // Question incorrect or partial
-                            showToast("Answer saved.", { color: 'blue' });
+                            showToast(`Score: ${score}/100`, { color: 'blue' });
                             
                             interactive.innerHTML = `
                                 <div class="bg-gray-700/80 p-6 rounded-xl border border-gray-600 shadow-2xl text-center">
                                     <div class="text-4xl mb-3">📝</div>
-                                    <p class="text-xl font-bold text-white mb-2">Answer Saved</p>
-                                    <p class="text-gray-300 mb-6">You can revise your answer now or continue with the video.</p>
+                                    <p class="text-xl font-bold text-white mb-2">Score: ${score}/100</p>
+                                    <p class="text-gray-300 mb-6">You can revise your answer now to improve your score, or continue with the video.</p>
                                     <div class="flex flex-col gap-3">
                                         <button onclick="showVideoOverlay('${item.id}', ${isManual})" class="w-full bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-3 rounded-lg transition-colors">Revise Answer</button>
                                         <button onclick="continueVideoFromItem(${isManual})" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-colors">Continue Video ▶</button>
