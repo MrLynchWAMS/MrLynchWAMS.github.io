@@ -490,12 +490,12 @@
                         <div id="video-player"></div>
                         <div class="video-skip-overlay" id="video-skip-overlay"></div>
                         <div id="video-overlay"
-                            class="absolute inset-0 bg-gray-900 bg-opacity-90 flex flex-col items-center justify-center hidden z-20 p-6">
+                            class="absolute inset-0 bg-gray-900 bg-opacity-90 flex flex-col items-center justify-center hidden z-20 p-6 overflow-y-auto">
                             <!-- Overlay content populated via JS -->
                             <p class="text-xl font-bold mb-4 text-center text-yellow-400" id="video-q-label">Question
                             </p>
                             <p id="video-q-body" class="text-lg text-white mb-6 text-center max-w-2xl"></p>
-                            <div id="video-q-interactive" class="w-full max-w-2xl flex flex-col gap-4"></div>
+                            <div id="video-q-interactive" class="w-full max-w-2xl flex flex-col gap-4 max-h-[55vh] overflow-y-auto"></div>
                         </div>
                     </div>
                     <div class="mt-4 flex gap-4 w-full">
@@ -708,10 +708,14 @@
                     // If slides changed, re-init slideStates
                     const newCount = (assignmentData.type === 'pdf'
                         ? (assignmentData.questionZones || [])
-                        : (assignmentData.slideIds || [])).length;
+                        : assignmentData.type === 'video'
+                            ? (assignmentData.videoQuestions || [])
+                            : (assignmentData.slideIds || [])).length;
                     const oldCount = (oldData?.type === 'pdf'
                         ? (oldData?.questionZones || [])
-                        : (oldData?.slideIds || [])).length;
+                        : oldData?.type === 'video'
+                            ? (oldData?.videoQuestions || [])
+                            : (oldData?.slideIds || [])).length;
                     if (!oldData || newCount !== oldCount) {
                         slideStates = new Array(newCount).fill(null);
                     }
@@ -2469,10 +2473,11 @@
         }
 
         function checkCurrentSlideAnswer(studentAnswer, info) {
-            // Use the global currentSlideIndex variable
-            // Editor saves checkers with keys like "calc1", "calc2" (1-based)
-            const funcKey = `calc${currentSlideIndex + 1}`;
-            const checkerCode = assignmentData.checkerFunctions?.[funcKey];
+            const isVideoAssignment = assignmentData?.type === 'video';
+            const currentVideoQuestion = isVideoAssignment ? assignmentData?.videoQuestions?.[currentSlideIndex] : null;
+            const checkerIdKey = currentVideoQuestion?.id;
+            const legacyKey = `calc${currentSlideIndex + 1}`;
+            const checkerCode = assignmentData.checkerFunctions?.[checkerIdKey] || assignmentData.checkerFunctions?.[legacyKey];
             const funcString = checkerCode;
             if (funcString) {
                 try {
@@ -3235,7 +3240,7 @@
 
                 if (currentVideoItemIndex < sortedVideoItems.length) {
                     const nextItem = sortedVideoItems[currentVideoItemIndex];
-                    if (currentTime >= nextItem.time && currentTime < nextItem.time + 2) {
+                    if (currentTime >= nextItem.time) {
                         showVideoOverlay(nextItem.id);
                     }
                 }

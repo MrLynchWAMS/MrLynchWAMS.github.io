@@ -762,9 +762,10 @@
         // Load checker functions & meta
         videoQuestions.forEach((q, i) => {
           if (q.type === 'open-ended') {
-            const key = `calc${i + 1}`;
-            q.checkerCode = (assignmentData.checkerFunctions && assignmentData.checkerFunctions[key]) || '';
-            q.checkerMeta = (assignmentData.checkerMeta && assignmentData.checkerMeta[key]) || null;
+            const idKey = q.id;
+            const legacyKey = `calc${i + 1}`;
+            q.checkerCode = (assignmentData.checkerFunctions && (assignmentData.checkerFunctions[idKey] || assignmentData.checkerFunctions[legacyKey])) || q.checkerCode || '';
+            q.checkerMeta = (assignmentData.checkerMeta && (assignmentData.checkerMeta[idKey] || assignmentData.checkerMeta[legacyKey])) || q.checkerMeta || null;
           }
         });
 
@@ -1875,12 +1876,11 @@
         // Build checker functions and meta
         const checkerFunctions = {};
         const checkerMeta = {};
-        let qIdx = 0;
         videoQuestions.forEach(q => {
-          qIdx++;
           if (q.type === 'open-ended') {
-            if (q.checkerCode) checkerFunctions[`calc${qIdx}`] = q.checkerCode;
-            if (q.checkerMeta) checkerMeta[`calc${qIdx}`] = q.checkerMeta;
+            const key = q.id;
+            if (q.checkerCode) checkerFunctions[key] = q.checkerCode;
+            if (q.checkerMeta) checkerMeta[key] = q.checkerMeta;
           }
         });
 
