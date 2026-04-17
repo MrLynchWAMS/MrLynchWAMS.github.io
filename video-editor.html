@@ -434,6 +434,7 @@
     let videoQuestions = [];  // { id, type, time, body, choices?, checkerCode? }
     let videoNotes = [];      // { id, time, body }
     let videoSource = null;   // { type: 'youtube'|'gdrive', id: '...' }
+    let videoPlayer = null;
     let nextQId = 1;
     let nextNId = 1;
 
@@ -752,8 +753,10 @@
 
         // Load playback settings
         if (assignmentData.playbackSettings) {
-          document.getElementById('skipPrevention').checked = !!assignmentData.playbackSettings.skipPrevention;
-          document.getElementById('speedLock').checked = !!assignmentData.playbackSettings.speedLock;
+          const skipEl = document.getElementById('preventSkipping');
+          const speedEl = document.getElementById('lockPlaybackSpeed');
+          if (skipEl) skipEl.checked = !!assignmentData.playbackSettings.skipPrevention;
+          if (speedEl) speedEl.checked = !!assignmentData.playbackSettings.speedLock;
         }
 
         // Load checker functions & meta
