@@ -1436,10 +1436,16 @@
 
     // --- Question & Note Management ---
     function addQuestion(type) {
+      // Use current video time if player is ready, else 0
+      let startTime = 0;
+      if (videoPlayer && typeof videoPlayer.getCurrentTime === 'function') {
+        startTime = Math.floor(videoPlayer.getCurrentTime());
+      }
+
       const q = {
         id: `vq${nextQId++}`,
         type: type,
-        time: 0,
+        time: startTime,
         body: '',
         choices: type === 'multiple-choice' ? [
           { text: '', isCorrect: true },
@@ -1504,11 +1510,15 @@
       const container = document.getElementById('questionsContainer');
       const noMsg = document.getElementById('noQuestionsMsg');
 
-      // Combine questions and notes, sort by time
+      // Combine questions and notes
+      // We'll use a secondary sort key (array position) to keep order stable for items at same time
       const allItems = [
-        ...videoQuestions.map(q => ({ ...q, _kind: 'question' })),
-        ...videoNotes.map(n => ({ ...n, _kind: 'note' }))
-      ].sort((a, b) => a.time - b.time);
+        ...videoQuestions.map((q, idx) => ({ ...q, _kind: 'question', _srcIdx: idx })),
+        ...videoNotes.map((n, idx) => ({ ...n, _kind: 'note', _srcIdx: idx }))
+      ].sort((a, b) => {
+        if (a.time !== b.time) return a.time - b.time;
+        return a._srcIdx - b._srcIdx;
+      });
 
       if (allItems.length === 0) {
         container.innerHTML = '';
@@ -1518,21 +1528,43 @@
       noMsg.classList.add('hidden');
 
       // Track question number (notes don't count)
-      let qIndex = 0;
-      container.innerHTML = allItems.map(item => {
+      let qNum = 0;
+      container.innerHTML = allItems.map((item, sortedIdx) => {
         if (item._kind === 'note') {
-          return renderNoteCard(item);
+          return renderNoteCard(item, sortedIdx, allItems.length);
         } else {
-          qIndex++;
-          return renderQuestionCard(item, qIndex);
+          qNum++;
+          return renderQuestionCard(item, qNum, sortedIdx, allItems.length);
         }
       }).join('');
+
+      // Initialize CheckerWidgets for each question
+      allItems.forEach(item => {
+        if (item._kind === 'question' && item.type === 'open-ended') {
+          const qid = item.id;
+          const containerId = `checker-container-${qid}`;
+          const checkerContainer = document.getElementById(containerId);
+          if (checkerContainer) {
+            new CheckerWidget(containerId, {
+              meta: item.checkerMeta,
+              code: item.checkerCode,
+              onChange: (data) => {
+                const q = videoQuestions.find(v => v.id === qid);
+                if (q) {
+                  q.checkerCode = data.code;
+                  q.checkerMeta = data.meta;
+                }
+              }
+            });
+          }
+        }
+      });
 
       // Bind events after render
       bindQuestionEvents();
     }
 
-    function renderQuestionCard(q, qNum) {
+    function renderQuestionCard(q, qNum, sortedIdx, total) {
       const timeStr = formatTime(q.time);
       const isMC = q.type === 'multiple-choice';
       const typeLabel = isMC ? '🔘 Multiple Choice' : '✏️ Open-Ended';
@@ -1584,7 +1616,13 @@
                 <input type="text" value="${timeStr}" data-qid="${q.id}" class="time-input w-16 bg-gray-700 border border-gray-600 rounded text-center text-sm p-1" placeholder="0:00">
               </div>
             </div>
-            <button onclick="deleteQuestion('${q.id}')" class="text-red-400 hover:text-red-300 font-bold text-lg" title="Delete question">&times;</button>
+            <div class="flex items-center gap-2">
+              <div class="flex flex-col">
+                <button onclick="moveItem('${item._kind}', ${item._srcIdx}, -1, ${sortedIdx})" class="text-gray-400 hover:text-white leading-none ${sortedIdx === 0 ? 'opacity-20 cursor-not-allowed' : ''}" ${sortedIdx === 0 ? 'disabled' : ''} title="Move Up">▲</button>
+                <button onclick="moveItem('${item._kind}', ${item._srcIdx}, 1, ${sortedIdx})" class="text-gray-400 hover:text-white leading-none ${sortedIdx === total - 1 ? 'opacity-20 cursor-not-allowed' : ''}" ${sortedIdx === total - 1 ? 'disabled' : ''} title="Move Down">▼</button>
+              </div>
+              <button onclick="deleteQuestion('${q.id}')" class="text-red-400 hover:text-red-300 font-bold text-lg leading-none" title="Delete question">&times;</button>
+            </div>
           </div>
           <textarea data-qid="${q.id}" class="body-input w-full p-2 bg-gray-700 border border-gray-600 rounded text-sm" rows="2" placeholder="Question text...">${escapeHtml(q.body)}</textarea>
           ${choicesHTML}
@@ -1593,7 +1631,7 @@
       `;
     }
 
-    function renderNoteCard(n) {
+    function renderNoteCard(n, sortedIdx, total) {
       const timeStr = formatTime(n.time);
       return `
         <div class="question-card border-purple-800/50" id="ncard-${n.id}">
@@ -1605,11 +1643,65 @@
                 <input type="text" value="${timeStr}" data-nid="${n.id}" class="note-time-input w-16 bg-gray-700 border border-gray-600 rounded text-center text-sm p-1" placeholder="0:00">
               </div>
             </div>
-            <button onclick="deleteNote('${n.id}')" class="text-red-400 hover:text-red-300 font-bold text-lg" title="Delete note">&times;</button>
+            <div class="flex items-center gap-2">
+              <div class="flex flex-col">
+                <button onclick="moveItem('${n._kind}', ${n._srcIdx}, -1, ${sortedIdx})" class="text-gray-400 hover:text-white leading-none ${sortedIdx === 0 ? 'opacity-20 cursor-not-allowed' : ''}" ${sortedIdx === 0 ? 'disabled' : ''} title="Move Up">▲</button>
+                <button onclick="moveItem('${n._kind}', ${n._srcIdx}, 1, ${sortedIdx})" class="text-gray-400 hover:text-white leading-none ${sortedIdx === total - 1 ? 'opacity-20 cursor-not-allowed' : ''}" ${sortedIdx === total - 1 ? 'disabled' : ''} title="Move Down">▼</button>
+              </div>
+              <button onclick="deleteNote('${n.id}')" class="text-red-400 hover:text-red-300 font-bold text-lg leading-none" title="Delete note">&times;</button>
+            </div>
           </div>
           <textarea data-nid="${n.id}" class="note-body-input w-full p-2 bg-gray-700 border border-gray-600 rounded text-sm" rows="3" placeholder="Note text (shown to students as information, not graded)...">${escapeHtml(n.body)}</textarea>
         </div>
       `;
+    }
+
+    function moveItem(kind, srcIdx, direction, sortedIdx) {
+      // Find the items in common sorted view
+      const allItemsSorted = [
+        ...videoQuestions.map((q, idx) => ({ ...q, _kind: 'question', _srcIdx: idx })),
+        ...videoNotes.map((n, idx) => ({ ...n, _kind: 'note', _srcIdx: idx }))
+      ].sort((a, b) => {
+        if (a.time !== b.time) return a.time - b.time;
+        return a._srcIdx - b._srcIdx;
+      });
+
+      const targetSortedIdx = sortedIdx + direction;
+      if (targetSortedIdx < 0 || targetSortedIdx >= allItemsSorted.length) return;
+
+      const itemA = allItemsSorted[sortedIdx];
+      const itemB = allItemsSorted[targetSortedIdx];
+
+      // Strategy: 
+      // If times are different, we swap their times.
+      // If times are same, we swap their positions in the source array(s)
+      if (itemA.time === itemB.time) {
+        if (itemA._kind === itemB._kind) {
+          const arr = itemA._kind === 'question' ? videoQuestions : videoNotes;
+          const temp = arr[itemA._srcIdx];
+          arr[itemA._srcIdx] = arr[itemB._srcIdx];
+          arr[itemB._srcIdx] = temp;
+        } else {
+          // Different arrays but same time. Swapping array positions is not meaningful across arrays
+          // but we can swap their times slightly to force a sort change, or just accept that sort by time/index 
+          // makes them "stuck" unless they have different times.
+          // Better: swap their times by 1 ms if we have to, or just swap times.
+          const t = itemA.time;
+          const targetA = itemA._kind === 'question' ? videoQuestions[itemA._srcIdx] : videoNotes[itemA._srcIdx];
+          const targetB = itemB._kind === 'question' ? videoQuestions[itemB._srcIdx] : videoNotes[itemB._srcIdx];
+          targetA.time = itemB.time; // still same
+          // No-op for same time different kind unless we have a global order.
+        }
+      } else {
+        // Different times. Swap times to swap positions.
+        const t = itemA.time;
+        const targetA = itemA._kind === 'question' ? videoQuestions[itemA._srcIdx] : videoNotes[itemA._srcIdx];
+        const targetB = itemB._kind === 'question' ? videoQuestions[itemB._srcIdx] : videoNotes[itemB._srcIdx];
+        targetA.time = itemB.time;
+        targetB.time = t;
+      }
+
+      renderQuestions();
     }
 
     function bindQuestionEvents() {
@@ -1789,8 +1881,8 @@
         const cleanNotes = videoNotes.map(n => ({ id: n.id, time: n.time, body: n.body }));
 
         const playbackSettings = {
-          skipPrevention: document.getElementById('skipPrevention').checked,
-          speedLock: document.getElementById('speedLock').checked
+          skipPrevention: document.getElementById('preventSkipping').checked,
+          speedLock: document.getElementById('lockPlaybackSpeed').checked
         };
 
         const updatePayload = {
