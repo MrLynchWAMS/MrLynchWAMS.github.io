@@ -127,19 +127,27 @@
                 <label for="assignmentName" class="block text-sm font-medium text-gray-300 mb-2">Assignment Name</label>
                 <input type="text" id="assignmentName" placeholder="e.g., Chapter 5 Review"
                     class="w-full p-3 mb-4 bg-gray-700 rounded border border-gray-600">
-                <div class="flex gap-4 mb-4">
+                <div class="flex gap-4 mb-4 flex-wrap">
                     <label class="flex items-center cursor-pointer">
-                        <input type="radio" name="assignmentType" value="slides" checked onchange="toggleCreateFields()" class="mr-2">
+                        <input type="radio" name="assignmentType" value="slides" checked onchange="toggleCreateFields()"
+                            class="mr-2">
                         <span>Google Slides</span>
                     </label>
                     <label class="flex items-center cursor-pointer">
-                        <input type="radio" name="assignmentType" value="pdf" onchange="toggleCreateFields()" class="mr-2">
+                        <input type="radio" name="assignmentType" value="pdf" onchange="toggleCreateFields()"
+                            class="mr-2">
                         <span>PDF Document</span>
+                    </label>
+                    <label class="flex items-center cursor-pointer">
+                        <input type="radio" name="assignmentType" value="video" onchange="toggleCreateFields()"
+                            class="mr-2">
+                        <span>Video (YouTube / Google Drive)</span>
                     </label>
                 </div>
 
                 <div id="slidesFields">
-                    <label for="slidesLink" class="block text-sm font-medium text-gray-300 mb-2">Google Slides Share Link</label>
+                    <label for="slidesLink" class="block text-sm font-medium text-gray-300 mb-2">Google Slides Share
+                        Link</label>
                     <input type="text" id="slidesLink" placeholder="Paste the full URL from Google Slides"
                         class="w-full p-3 mb-4 bg-gray-700 rounded border border-gray-600">
                 </div>
@@ -154,6 +162,12 @@
                         </div>
                         <p class="text-[10px] text-gray-400 mt-1">Uploading PDF...</p>
                     </div>
+                </div>
+
+                <div id="videoFields" class="hidden">
+                    <label for="videoLink" class="block text-sm font-medium text-gray-300 mb-2">Video URL (YouTube or Google Drive share link)</label>
+                    <input type="text" id="videoLink" placeholder="https://www.youtube.com/watch?v=... or Google Drive link"
+                        class="w-full p-3 mb-4 bg-gray-700 rounded border border-gray-600">
                 </div>
                 <div class="flex items-center mb-4">
                     <input type="checkbox" id="isPublicCheckbox" class="mr-2 w-4 h-4">
@@ -273,9 +287,9 @@
 
     <div id="toast-wrapper" class="fixed top-4 right-4 z-[100] space-y-3 w-full max-w-sm"></div>
 
-        <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
-        <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-storage-compat.js"></script>
-<script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-storage-compat.js"></script>
+    <script>
         const firebaseConfig = {
             apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
             authDomain: "mrlynch-slides-app.firebaseapp.com",
@@ -476,7 +490,7 @@
                 statusHTML += '</div>';
 
                 const escapedName = escapeHtml(assignment.name);
-                const editUrl = assignment.type === 'pdf' ? `pdf-editor.html?id=${assignment.id}` : `editor.html?id=${assignment.id}`;
+                const editUrl = assignment.type === 'pdf' ? `pdf-editor.html?id=${assignment.id}` : assignment.type === 'video' ? `video-editor.html?id=${assignment.id}` : `editor.html?id=${assignment.id}`;
 
                 card.innerHTML = `
                 <div>
@@ -518,6 +532,7 @@
             const type = document.querySelector('input[name="assignmentType"]:checked').value;
             document.getElementById('slidesFields').classList.toggle('hidden', type !== 'slides');
             document.getElementById('pdfFields').classList.toggle('hidden', type !== 'pdf');
+            document.getElementById('videoFields').classList.toggle('hidden', type !== 'video');
         }
 
         function closeCreateModal() {
@@ -525,6 +540,7 @@
             document.getElementById('assignmentName').value = '';
             document.getElementById('slidesLink').value = '';
             document.getElementById('pdfFile').value = '';
+            document.getElementById('videoLink').value = '';
             document.getElementById('uploadProgress').classList.add('hidden');
             document.getElementById('isPublicCheckbox').checked = false;
             document.getElementById('modal-error').innerText = '';
@@ -548,13 +564,16 @@
 
             let presentationId = null;
             let pdfUrl = null;
+            let videoUrl = null;
+            let assignmentVideoId = "";
+            let assignmentVideoType = "";
 
             if (type === 'slides') {
                 const link = slidesLinkInput.value.trim();
                 const match = link.match(/presentation\/d\/([a-zA-Z0-9-_]+)/);
                 if (!match) { errorP.innerText = "Invalid Google Slides URL."; return; }
                 presentationId = match[1];
-            } else {
+            } else if (type === 'pdf') {
                 const file = pdfFileInput.files[0];
                 if (!file) { errorP.innerText = "Please select a PDF file."; return; }
                 try {
@@ -565,7 +584,7 @@
                     const storageRef = storage.ref(`pdfs/${currentUserEmail}/${Date.now()}_${file.name}`);
                     const uploadTask = storageRef.put(file);
                     pdfUrl = await new Promise((resolve, reject) => {
-                        uploadTask.on('state_changed', 
+                        uploadTask.on('state_changed',
                             (snap) => { progressBar.style.width = (snap.bytesTransferred / snap.totalBytes) * 100 + '%'; },
                             reject,
                             async () => resolve(await uploadTask.snapshot.ref.getDownloadURL())
@@ -578,19 +597,61 @@
                     btn.innerText = "Create Assignment";
                     return;
                 }
+            } else if (type === 'video') {
+                videoUrl = document.getElementById('videoLink').value.trim();
+                if (!videoUrl) { errorP.innerText = "Please enter a video URL."; return; }
+                
+                // Detection logic simplified for creation
+                const ytMatch = videoUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/);
+                const driveMatch = videoUrl.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/) || videoUrl.match(/drive\.google\.com\/open\?id=([a-zA-Z0-9_-]+)/);
+                
+                if (!ytMatch && !driveMatch) { 
+                    errorP.innerText = "Please enter a valid YouTube or Google Drive video URL."; 
+                    return; 
+                }
+                
+                assignmentVideoId = ytMatch ? ytMatch[1] : driveMatch[1];
+                assignmentVideoType = ytMatch ? 'youtube' : 'gdrive';
             }
 
             try {
                 btn.innerText = "Creating...";
                 btn.disabled = true;
-                const newDoc = await db.collection("assignments").add({
-                    name, type, presentationId: presentationId || "", pdfUrl: pdfUrl || "", teacherEmail: currentUserEmail,
-                    coTeachers: currentUserDefaultCoTeachers || [], assignedClasses: [], classStatus: {}, isPublic,
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp(), slideIds: []
-                });
+                const docData = {
+                    name, type, 
+                    presentationId: presentationId || "", 
+                    pdfUrl: pdfUrl || "",
+                    videoUrl: videoUrl || "", 
+                    videoSourceType: (type === 'video' && typeof assignmentVideoType !== 'undefined') ? assignmentVideoType : "",
+                    videoSourceId: (type === 'video' && typeof assignmentVideoId !== 'undefined') ? assignmentVideoId : "",
+                    teacherEmail: currentUserEmail,
+                    coTeachers: currentUserDefaultCoTeachers || [], 
+                    assignedClasses: [], 
+                    classStatus: {}, 
+                    isPublic,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(), 
+                    slideIds: [],
+                    postSubmissionRule: 'open',
+                    scoringMode: 'instant'
+                };
+
+                if (type === 'video') {
+                    docData.videoQuestions = [];
+                    docData.videoNotes = [];
+                    docData.checkerFunctions = {};
+                } else if (type === 'pdf') {
+                    docData.questionZones = [];
+                    docData.annotations = [];
+                } else {
+                    docData.checkerCode = {};
+                    docData.checkerMeta = {};
+                }
+
+                const newDoc = await db.collection("assignments").add(docData);
                 showToast("Assignment created!", { color: 'green' });
                 closeCreateModal();
-                window.location.href = `./${type === 'pdf' ? 'pdf-editor.html' : 'editor.html'}?id=${newDoc.id}`;
+                const editorPage = type === 'pdf' ? 'pdf-editor.html' : type === 'video' ? 'video-editor.html' : 'editor.html';
+                window.location.href = `./${editorPage}?id=${newDoc.id}`;
             } catch (error) {
                 console.error("Error creating assignment:", error);
                 errorP.innerText = "Error: " + error.message;
@@ -754,11 +815,49 @@
             const source = allAssignments.find(a => a.id === activeAssignmentId);
             if (!targetEmail || !source) return;
             try {
-                await db.collection("assignments").add({
-                    name: source.name + " (copy)", type: source.type || "slides", presentationId: source.presentationId || "",
-                    pdfUrl: source.pdfUrl || "", teacherEmail: targetEmail, coTeachers: [], assignedClasses: [],
-                    classStatus: {}, isPublic: false, createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
+                const shareData = {
+                    name: source.name + " (copy)", 
+                    type: source.type || "slides", 
+                    teacherEmail: targetEmail, 
+                    coTeachers: [], 
+                    assignedClasses: [],
+                    classStatus: {}, 
+                    isPublic: false, 
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    // Common fields
+                    postSubmissionRule: source.postSubmissionRule || 'open',
+                    scoringMode: source.scoringMode || 'instant',
+                    allowEarlyAccess: source.allowEarlyAccess || false,
+                    toolsConfig: source.toolsConfig || {},
+                    modifications: source.modifications || {},
+                    deadlinePolicy: source.deadlinePolicy || {}, 
+                    auraRules: source.auraRules || [],
+                    auraOnTime: source.auraOnTime || false,
+                    auraDueAt: source.auraDueAt || null,
+                    focusModeEnabled: source.focusModeEnabled || false,
+                    focusModeAction: source.focusModeAction || 'log'
+                };
+
+                // Type-specific field copies
+                if (source.type === 'video') {
+                    shareData.videoUrl = source.videoUrl || "";
+                    shareData.videoSourceType = source.videoSourceType || "";
+                    shareData.videoSourceId = source.videoSourceId || "";
+                    shareData.videoQuestions = source.videoQuestions || [];
+                    shareData.videoNotes = source.videoNotes || [];
+                    shareData.checkerFunctions = source.checkerFunctions || {};
+                } else if (source.type === 'pdf') {
+                    shareData.pdfUrl = source.pdfUrl || "";
+                    shareData.questionZones = source.questionZones || [];
+                    shareData.annotations = source.annotations || [];
+                } else {
+                    // Slides
+                    shareData.presentationId = source.presentationId || "";
+                    shareData.slideIds = source.slideIds || [];
+                    shareData.checkerCode = source.checkerCode || {};
+                    shareData.checkerMeta = source.checkerMeta || {};
+                }
+                await db.collection("assignments").add(shareData);
                 showToast(`Shared with ${targetEmail}!`, { color: 'green' });
                 closeShareModal();
             } catch (e) { console.error(e); }
@@ -785,4 +884,5 @@
         document.getElementById('signOutButton').onclick = () => auth.signOut();
     </script>
 </body>
+
 </html>
