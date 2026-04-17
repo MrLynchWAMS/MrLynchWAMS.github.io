@@ -1406,10 +1406,110 @@
               "Delete Question?",
               `This will remove Question ${index + 1} and its checker settings.`,
               () => {
+                  syncQuestionsData();
                   questionZones.splice(index, 1);
+                  // After delete, we need to shift all subsequent data down
+                  const identifiers = questionZones.map((z, i) => `q${i+1}`);
+                  const newFunctions = {};
+                  const newMeta = {};
+                  const newPolicy = { ...deadlinePolicy, earlyAccessPadding: deadlinePolicy.earlyAccessPadding, perClass: deadlinePolicy.perClass, globalDueAt: deadlinePolicy.globalDueAt };
+                  
+                  // Rebuild correctly indexed objects
+                  // This is complex because we just spliced the array, 
+                  // so data originally at index i+1 is now at index i.
+                  // But the keys were calc{i+1}.
+                  // This is why reordering/deleting is tricky with index-based keys.
+                  
                   renderZones();
               }
           );
+      }
+
+      function syncQuestionsData() {
+          const questionIdentifiers = assignmentData.type === 'pdf'
+            ? questionZones.map((z, i) => `q${i + 1}`)
+            : (assignmentData.slideIds || []);
+
+          questionIdentifiers.forEach((id, index) => {
+            const qNum = index + 1;
+            const checkerContainer = document.getElementById(`checker-container-${qNum}`);
+            if (!checkerContainer) return;
+
+            const checkerWidgetDiv = checkerContainer.querySelector('.checker-widget');
+            if (!checkerWidgetDiv) return;
+
+            const funcName = `calc${qNum}`;
+            const mode = checkerWidgetDiv.getMode();
+            const code = checkerWidgetDiv.getCode();
+
+            checkerFunctions[funcName] = code;
+            const metaForThis = { mode };
+            if (mode === "simple") {
+              metaForThis.simpleConfig = serializeSimpleConfig(checkerWidgetDiv);
+            }
+            checkerMeta[funcName] = metaForThis;
+
+            const dM = document.getElementById(`deadline-minutes-${index}`);
+            const pT = document.getElementById(`penalty-type-${index}`);
+            const pV = document.getElementById(`penalty-value-${index}`);
+            
+            deadlinePolicy[`q${qNum}`] = {
+              deadlineMinutes: dM ? parseInt(dM.value, 10) : 0,
+              penaltyType: pT ? pT.value : 'none',
+              penaltyValue: pV ? parseInt(pV.value, 10) : 0,
+            };
+
+            const attE = document.getElementById(`attempts-enabled-${index}`);
+            if (attE && attE.checked) {
+              deadlinePolicy[`q${qNum}`].attempts = {
+                enabled: true,
+                maxAttempts: parseInt(document.getElementById(`attempts-max-${index}`).value, 10) || 5,
+                deduction: parseInt(document.getElementById(`attempts-deduction-${index}`).value, 10) || 0,
+                retainBestScore: document.getElementById(`attempts-retain-best-${index}`).checked,
+                lockOnMax: document.getElementById(`attempts-lock-${index}`).checked,
+                lockMessage: document.getElementById(`attempts-lock-msg-${index}`).value,
+                showHelpAfter: parseInt(document.getElementById(`attempts-show-help-${index}`).value, 10) || null,
+                caseSensitive: document.getElementById(`attempts-case-sensitive-${index}`).checked,
+                punctuationSensitive: document.getElementById(`attempts-punctuation-sensitive-${index}`).checked
+              };
+            }
+            const wb = document.getElementById(`word-bank-list-${index}`);
+            if (wb) {
+              deadlinePolicy[`q${qNum}`].wordBankList = wb.value;
+            }
+          });
+      }
+
+      function moveZone(index, direction) {
+          const targetIndex = index + direction;
+          if (targetIndex < 0 || targetIndex >= questionZones.length) return;
+
+          syncQuestionsData();
+
+          // Swap zones
+          const tempZone = questionZones[index];
+          questionZones[index] = questionZones[targetIndex];
+          questionZones[targetIndex] = tempZone;
+
+          // Swap metadata
+          const qA = index + 1;
+          const qB = targetIndex + 1;
+          const funcA = `calc${qA}`;
+          const funcB = `calc${qB}`;
+
+          const tempFunc = checkerFunctions[funcA];
+          checkerFunctions[funcA] = checkerFunctions[funcB];
+          checkerFunctions[funcB] = tempFunc;
+
+          const tempMeta = checkerMeta[funcA];
+          checkerMeta[funcA] = checkerMeta[funcB];
+          checkerMeta[funcB] = tempMeta;
+
+          const tempPolicy = deadlinePolicy[`q${qA}`];
+          deadlinePolicy[`q${qA}`] = deadlinePolicy[`q${qB}`];
+          deadlinePolicy[`q${qB}`] = tempPolicy;
+
+          renderZones();
       }
 
       function startDragging(e, zone, el) {
@@ -1577,7 +1677,15 @@
           editorBox.innerHTML = `
       <div>
         <div class="flex justify-between items-center mb-2">
-            <h3 class="text-xl font-semibold">${assignmentData.type === 'pdf' ? 'Zone' : 'Slide'} ${qNum}</h3>
+            <div class="flex items-center gap-3">
+              <h3 class="text-xl font-semibold">${assignmentData.type === 'pdf' ? 'Zone' : 'Slide'} ${qNum}</h3>
+              ${assignmentData.type === 'pdf' ? `
+              <div class="flex gap-1 ml-2">
+                <button onclick="moveZone(${index}, -1)" class="text-gray-400 hover:text-white ${index === 0 ? 'opacity-20 cursor-not-allowed' : ''}" ${index === 0 ? 'disabled' : ''} title="Move Up">▲</button>
+                <button onclick="moveZone(${index}, 1)" class="text-gray-400 hover:text-white ${index === identifiers.length - 1 ? 'opacity-20 cursor-not-allowed' : ''}" ${index === identifiers.length - 1 ? 'disabled' : ''} title="Move Down">▼</button>
+              </div>
+              ` : ''}
+            </div>
             ${assignmentData.type === 'pdf' ? `<button onclick="deleteZone(${index})" class="text-red-400 hover:text-red-300 text-sm font-bold">Delete Question</button>` : ''}
         </div>
         ${backgroundHTML}
