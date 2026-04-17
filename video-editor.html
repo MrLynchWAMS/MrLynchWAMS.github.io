@@ -760,12 +760,13 @@
         }
 
         // Load checker functions & meta
+        const getCheckerValue = (map, idKey, legacyKey) => map ? ((idKey ? map[idKey] : undefined) || map[legacyKey]) : null;
         videoQuestions.forEach((q, i) => {
           if (q.type === 'open-ended') {
             const idKey = q.id;
             const legacyKey = `calc${i + 1}`;
-            q.checkerCode = (assignmentData.checkerFunctions && (assignmentData.checkerFunctions[idKey] || assignmentData.checkerFunctions[legacyKey])) || q.checkerCode || '';
-            q.checkerMeta = (assignmentData.checkerMeta && (assignmentData.checkerMeta[idKey] || assignmentData.checkerMeta[legacyKey])) || q.checkerMeta || null;
+            q.checkerCode = getCheckerValue(assignmentData.checkerFunctions, idKey, legacyKey) || q.checkerCode || '';
+            q.checkerMeta = getCheckerValue(assignmentData.checkerMeta, idKey, legacyKey) || q.checkerMeta || null;
           }
         });
 

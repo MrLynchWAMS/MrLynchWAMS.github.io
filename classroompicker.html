@@ -2477,7 +2477,7 @@
             const currentVideoQuestion = isVideoAssignment ? assignmentData?.videoQuestions?.[currentSlideIndex] : null;
             const checkerIdKey = currentVideoQuestion?.id;
             const legacyKey = `calc${currentSlideIndex + 1}`;
-            const checkerCode = assignmentData.checkerFunctions?.[checkerIdKey] || assignmentData.checkerFunctions?.[legacyKey];
+            const checkerCode = (checkerIdKey ? assignmentData.checkerFunctions?.[checkerIdKey] : undefined) || assignmentData.checkerFunctions?.[legacyKey];
             const funcString = checkerCode;
             if (funcString) {
                 try {
