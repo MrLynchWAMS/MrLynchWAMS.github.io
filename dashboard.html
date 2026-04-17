@@ -161,6 +161,10 @@
                                 onchange="toggleDisplayOptions()"
                                 class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"><span
                                 class="ml-2">Show Attempts</span></label>
+                        <label id="watchTimeToggleContainer" class="flex items-center hidden"><input type="checkbox" id="showWatchTime"
+                                onchange="toggleDisplayOptions()"
+                                class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"><span
+                                class="ml-2">Show Watch Time</span></label>
                     </div>
                     <div class="h-6 border-l border-gray-600 hidden md:block"></div>
                     <div class="flex items-center gap-4">
@@ -494,6 +498,7 @@
                 allStudentData = Array.from(studentsMap.values()).map(student => {
                     const auraData = auraByStudent.get(student.email) || { auraAwarded: false, auraAmount: 0 };
                     const questionProgress = questionProgressByStudent.get(student.email) || new Map();
+                    const statusData = submittedStatusByStudent.get(student.email) || { status: 'none', watchTime: 0 };
                     return {
                         ...student,
                         submissions: submissionsByStudent.get(student.email) || [],
@@ -501,6 +506,7 @@
                         violations: violationsByStudent.get(student.email) || [],
                         auraAwarded: auraData.auraAwarded,
                         auraAmount: auraData.auraAmount,
+                        watchTime: statusData.watchTime || 0,
                         questionProgress
                     };
                 });
@@ -572,6 +578,10 @@
 
                 setupLiveStudentData(); // <-- Live updates!
                 // No activeClass set here: handled in snapshot listener above
+
+                if (assignmentData.type === 'video') {
+                    document.getElementById('watchTimeToggleContainer').classList.remove('hidden');
+                }
 
                 document.getElementById('pageLoader').classList.add('hidden');
                 document.getElementById('mainContainer').classList.remove('hidden');
@@ -712,6 +722,12 @@
             let headerHtml = `<tr>
             <th class="px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-64">Student Name</th>
             <th class="px-2 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider w-20">Submitted</th>`;
+            
+            const showWatchTime = document.getElementById('showWatchTime')?.checked || false;
+            if (showWatchTime && assignmentData.type === 'video') {
+                headerHtml += `<th class="px-2 py-3 text-center text-xs font-medium text-blue-400 uppercase tracking-wider w-24">Watch Time</th>`;
+            }
+
             if (showBehavior) {
                 headerHtml += `<th class="px-2 py-3 text-center text-xs font-medium text-yellow-400 uppercase tracking-wider w-20" title="Aura earned from this assignment only">Aura (This)</th>`;
                 if (hasFocusMode) {
@@ -776,9 +792,19 @@
                 }
 
                 const escapedEmail = escapeHtml(student.email);
+                
+                let watchTimeCell = '';
+                if (showWatchTime && assignmentData.type === 'video') {
+                    const mins = Math.floor(student.watchTime / 60);
+                    const secs = student.watchTime % 60;
+                    const watchStr = `${mins}:${String(secs).padStart(2, '0')}`;
+                    watchTimeCell = `<td class="px-2 py-4 whitespace-nowrap text-center text-sm font-mono text-blue-400">${watchStr}</td>`;
+                }
+
                 tableHtml += `<tr class="hover:bg-gray-700">
                 <td class="px-3 py-4 whitespace-nowrap text-sm font-medium text-white cursor-pointer hover:text-yellow-400 truncate" onclick="showStudentSubmissions('${escapedEmail}')">${displayName}${avgScoreDisplay}</td>
                 <td class="px-2 py-4 whitespace-nowrap text-center"><input type="checkbox" onchange="toggleSubmissionStatus('${escapedEmail}', this.checked)" ${student.isSubmitted ? 'checked' : ''} class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"></td>
+                ${watchTimeCell}
                 ${auraCell}
                 ${violationsCell}
             `;
