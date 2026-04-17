@@ -1492,6 +1492,7 @@
           { text: '', isCorrect: false }
         ] : undefined,
         checkerCode: type === 'open-ended' ? '' : undefined,
+        checkerMeta: type === 'open-ended' ? null : undefined,
         selectionType: type === 'multiple-choice' ? 'single' : undefined
       };
       videoQuestions.push(q);
@@ -1577,28 +1578,6 @@
           return renderQuestionCard(item, qNum, sortedIdx, allItems.length);
         }
       }).join('');
-
-      // Initialize CheckerWidgets for each question
-      allItems.forEach(item => {
-        if (item._kind === 'question' && item.type === 'open-ended') {
-          const qid = item.id;
-          const containerId = `checker-container-${qid}`;
-          const checkerContainer = document.getElementById(containerId);
-          if (checkerContainer) {
-            new CheckerWidget(containerId, {
-              meta: item.checkerMeta,
-              code: item.checkerCode,
-              onChange: (data) => {
-                const q = videoQuestions.find(v => v.id === qid);
-                if (q) {
-                  q.checkerCode = data.code;
-                  q.checkerMeta = data.meta;
-                }
-              }
-            });
-          }
-        }
-      });
 
       // Bind events after render
       bindQuestionEvents();
