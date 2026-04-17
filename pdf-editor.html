@@ -1401,31 +1401,19 @@
         renderEditor();
       }
 
-      function deleteZone(index) {
+      window.deleteZone = function(index) {
           showDialog(
               "Delete Question?",
               `This will remove Question ${index + 1} and its checker settings.`,
               () => {
                   syncQuestionsData();
                   questionZones.splice(index, 1);
-                  // After delete, we need to shift all subsequent data down
-                  const identifiers = questionZones.map((z, i) => `q${i+1}`);
-                  const newFunctions = {};
-                  const newMeta = {};
-                  const newPolicy = { ...deadlinePolicy, earlyAccessPadding: deadlinePolicy.earlyAccessPadding, perClass: deadlinePolicy.perClass, globalDueAt: deadlinePolicy.globalDueAt };
-                  
-                  // Rebuild correctly indexed objects
-                  // This is complex because we just spliced the array, 
-                  // so data originally at index i+1 is now at index i.
-                  // But the keys were calc{i+1}.
-                  // This is why reordering/deleting is tricky with index-based keys.
-                  
                   renderZones();
               }
           );
       }
 
-      function syncQuestionsData() {
+      window.syncQuestionsData = function() {
           const questionIdentifiers = assignmentData.type === 'pdf'
             ? questionZones.map((z, i) => `q${i + 1}`)
             : (assignmentData.slideIds || []);
@@ -1480,7 +1468,7 @@
           });
       }
 
-      function moveZone(index, direction) {
+      window.moveZone = function(index, direction) {
           const targetIndex = index + direction;
           if (targetIndex < 0 || targetIndex >= questionZones.length) return;
 
