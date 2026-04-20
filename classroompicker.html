@@ -2650,10 +2650,18 @@
                         if ((!auraOnTime || isOnTimeAssignment) && !alreadyAwarded && userProfile.studentDocId) {
                             // Find highest matching rule
                             for (const rule of assignmentAuraRules) {
-                                if (overallAverage >= rule.minScore && rule.amount > auraAlgorithmAmount) {
+                                let matches = false;
+                                if (rule.trigger === 'watch_time_reached') {
+                                    matches = (watchTimeSeconds / 60) >= (rule.minutesRequired || 99999);
+                                } else {
+                                    matches = overallAverage >= (rule.minScore || 0);
+                                }
+
+                                if (matches && rule.amount > auraAlgorithmAmount) {
                                     auraAlgorithmAmount = rule.amount;
                                 }
                             }
+
                             if (auraAlgorithmAmount > 0) {
                                 shouldAward = true;
                                 // Override the const 'auraAmount' used in subsequent logic
@@ -3382,13 +3390,21 @@
                         lastKnownTime = videoPlayer.getCurrentTime();
                         // Only reset furthestReachedTime if it's 0 (new session)
                         if (!furthestReachedTime) furthestReachedTime = lastKnownTime;
-                        else videoPlayer.seekTo(furthestReachedTime);
-
+                        else {
+                            videoPlayer.seekTo(furthestReachedTime);
+                        }
 
                         const settings = assignmentData.playbackSettings || {};
                         if (settings.skipPrevention) {
                             document.getElementById('video-wrapper').classList.add('disable-seeking');
                         }
+
+                        // Final sync on page close
+                        window.addEventListener('beforeunload', () => {
+                            if (watchTimeSeconds > lastWatchSyncTime) {
+                                syncWatchTime();
+                            }
+                        });
                     },
                     'onStateChange': (e) => {
                         if (e.data == YT.PlayerState.PLAYING && isVideoPausedForQuestion) {
@@ -3413,11 +3429,6 @@
 
             const settings = assignmentData.playbackSettings || {};
             const currentTime = videoPlayer.getCurrentTime();
-
-            // Track furthest reached
-            if (currentTime > furthestReachedTime) {
-                furthestReachedTime = currentTime;
-            }
 
             // Increment watch time if playing
             if (videoPlayer.getPlayerState() === YT.PlayerState.PLAYING && !isVideoPausedForQuestion) {
@@ -3453,6 +3464,11 @@
                     }, 500);
                     return;
                 }
+            }
+
+            // Track furthest reached (only update AFTER skip prevention check)
+            if (currentTime > furthestReachedTime && !isEnforcingSkipPrevention) {
+                furthestReachedTime = currentTime;
             }
 
             if (!isEnforcingSkipPrevention && !isVideoPausedForQuestion) {
