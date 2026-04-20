@@ -165,6 +165,10 @@
                                 onchange="toggleDisplayOptions()"
                                 class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"><span
                                 class="ml-2">Show Watch Time</span></label>
+                        <label id="simDataToggleContainer" class="flex items-center hidden"><input type="checkbox" id="showSimData"
+                                onchange="toggleDisplayOptions()"
+                                class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"><span
+                                class="ml-2">Show Sim Data</span></label>
                     </div>
                     <div class="h-6 border-l border-gray-600 hidden md:block"></div>
                     <div class="flex items-center gap-4">
@@ -215,6 +219,17 @@
             <div id="modalContent" class="modal-content max-h-[70vh] overflow-y-auto pr-4"></div>
         </div>
     </div>
+    <div id="simDataModal"
+        class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50">
+        <div class="bg-gray-800 rounded-lg shadow-xl p-6 max-w-4xl w-full">
+            <div class="flex justify-between items-start mb-4">
+                <h2 id="simDataModalTitle" class="text-2xl font-bold text-yellow-400">Simulation Data</h2>
+                <button onclick="closeSimDataModal()"
+                    class="text-gray-400 hover:text-white text-3xl leading-none">&times;</button>
+            </div>
+            <div id="simDataModalContent" class="max-h-[70vh] overflow-y-auto pr-4"></div>
+        </div>
+    </div>
     <div id="toast-wrapper-top-right" class="toast-wrapper top-right space-y-3"></div>
     <script src="./shared/checker-runner.js"></script>
     <script>
@@ -252,6 +267,7 @@
         let submittedStatusByStudent = new Map();
         let submittedEmails = new Set();
         let questionProgressByStudent = new Map(); // Key: studentEmail, Value: Map of slideIndex -> progressData
+        let simDataByStudent = new Map();
 
         // --- Impersonation Logic ---
         function checkImpersonation() {
@@ -280,6 +296,7 @@
         let unsubscribeStatus = null;
         let unsubscribeViolations = null;
         let unsubscribeQuestionProgress = null;
+        let unsubscribeSimulationData = null;
 
         window.onload = function () {
             const urlParams = new URLSearchParams(window.location.search);
@@ -343,6 +360,8 @@
             if (unsubscribeSubmissions) unsubscribeSubmissions();
             if (unsubscribeStatus) unsubscribeStatus();
             if (unsubscribeViolations) unsubscribeViolations();
+            if (unsubscribeQuestionProgress) unsubscribeQuestionProgress();
+            if (unsubscribeSimulationData) unsubscribeSimulationData();
 
             // Initialize data structures
             const studentsMap = new Map();
@@ -350,6 +369,7 @@
             const submittedEmails = new Set();
             const violationsByStudent = new Map();
             const auraByStudent = new Map();
+            const simDataByStudentLocal = new Map();
 
             // Listener 1: Students collection (filtered by roster)
             unsubscribeStudents = db.collection("students")
@@ -501,6 +521,21 @@
                     rebuildAllStudentData();
                 });
 
+            // Listener 6: Simulation contextual data for this assignment
+            unsubscribeSimulationData = db.collection("simulationData")
+                .where("assignmentId", "==", assignmentId)
+                .onSnapshot(simSnapshot => {
+                    simDataByStudentLocal.clear();
+                    simSnapshot.forEach(doc => {
+                        const simDoc = doc.data();
+                        const studentEmail = simDoc.studentEmail ? simDoc.studentEmail.toLowerCase() : '';
+                        if (!studentEmail) return;
+                        simDataByStudentLocal.set(studentEmail, simDoc.simData);
+                    });
+                    simDataByStudent = simDataByStudentLocal;
+                    rebuildAllStudentData();
+                });
+
             function rebuildAllStudentData() {
                 allStudentData = Array.from(studentsMap.values()).map(student => {
                     const auraData = auraByStudent.get(student.email) || { auraAwarded: false, auraAmount: 0 };
@@ -514,7 +549,8 @@
                         auraAwarded: auraData.auraAwarded,
                         auraAmount: auraData.auraAmount,
                         watchTime: statusData.watchTime || 0,
-                        questionProgress
+                        questionProgress,
+                        simData: simDataByStudentLocal.get(student.email) || null
                     };
                 });
 
@@ -538,6 +574,7 @@
             if (unsubscribeStatus) unsubscribeStatus();
             if (unsubscribeViolations) unsubscribeViolations();
             if (unsubscribeQuestionProgress) unsubscribeQuestionProgress();
+            if (unsubscribeSimulationData) unsubscribeSimulationData();
         }
         window.addEventListener("beforeunload", cleanupListeners);
 
@@ -589,6 +626,9 @@
                 if (assignmentData.type === 'video') {
                     document.getElementById('watchTimeToggleContainer').classList.remove('hidden');
                 }
+                if (assignmentData.type === 'simulation') {
+                    document.getElementById('simDataToggleContainer').classList.remove('hidden');
+                }
 
                 document.getElementById('pageLoader').classList.add('hidden');
                 document.getElementById('mainContainer').classList.remove('hidden');
@@ -608,7 +648,7 @@
             const averages = {};
             const assignedClasses = assignmentData.assignedClasses || [];
             const studentsInAssignment = allStudentData.filter(s => assignedClasses.includes(String(s.class)));
-            const numQuestions = assignmentData.type === 'pdf' ? (assignmentData.questionZones ? assignmentData.questionZones.length : 0) : assignmentData.type === 'video' ? (assignmentData.videoQuestions ? assignmentData.videoQuestions.length : 0) : (assignmentData.slideIds ? assignmentData.slideIds.length : 0);
+            const numQuestions = assignmentData.type === 'pdf' ? (assignmentData.questionZones ? assignmentData.questionZones.length : 0) : assignmentData.type === 'video' ? (assignmentData.videoQuestions ? assignmentData.videoQuestions.length : 0) : assignmentData.type === 'simulation' ? (assignmentData.simQuestions ? assignmentData.simQuestions.length : 0) : (assignmentData.slideIds ? assignmentData.slideIds.length : 0);
 
             const classes = [...new Set(studentsInAssignment.map(s => String(s.class)))];
             classes.forEach(c => {
@@ -722,7 +762,7 @@
         function displayStudentData() {
             const tableHeader = document.getElementById('tableHeader');
             const studentList = document.getElementById('studentData');
-            const numQuestions = assignmentData.type === 'pdf' ? (assignmentData.questionZones ? assignmentData.questionZones.length : 0) : assignmentData.type === 'video' ? (assignmentData.videoQuestions ? assignmentData.videoQuestions.length : 0) : (assignmentData.slideIds ? assignmentData.slideIds.length : 0);
+            const numQuestions = assignmentData.type === 'pdf' ? (assignmentData.questionZones ? assignmentData.questionZones.length : 0) : assignmentData.type === 'video' ? (assignmentData.videoQuestions ? assignmentData.videoQuestions.length : 0) : assignmentData.type === 'simulation' ? (assignmentData.simQuestions ? assignmentData.simQuestions.length : 0) : (assignmentData.slideIds ? assignmentData.slideIds.length : 0);
             const sortedStudents = getCurrentlySortedStudents();
             const hasFocusMode = assignmentData.focusModeEnabled;
 
@@ -731,8 +771,12 @@
             <th class="px-2 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider w-20">Submitted</th>`;
             
             const showWatchTime = document.getElementById('showWatchTime')?.checked || false;
+            const showSimData = document.getElementById('showSimData')?.checked || false;
             if (showWatchTime && assignmentData.type === 'video') {
                 headerHtml += `<th class="px-2 py-3 text-center text-xs font-medium text-blue-400 uppercase tracking-wider w-24">Watch Time</th>`;
+            }
+            if (showSimData && assignmentData.type === 'simulation') {
+                headerHtml += `<th class="px-2 py-3 text-center text-xs font-medium text-cyan-400 uppercase tracking-wider w-24">Sim Data</th>`;
             }
 
             if (showBehavior) {
@@ -749,6 +793,12 @@
             let classAverageRowHtml = '';
             if (showScores) {
                 classAverageRowHtml = `<tr><td class="text-xs font-semibold text-cyan-400 px-3">Class Average:</td><td class="px-2"></td>`;
+                if (showWatchTime && assignmentData.type === 'video') {
+                    classAverageRowHtml += `<td class="px-2"></td>`;
+                }
+                if (showSimData && assignmentData.type === 'simulation') {
+                    classAverageRowHtml += `<td class="px-2"></td>`;
+                }
                 if (showBehavior) {
                     classAverageRowHtml += `<td class="px-2"></td>`;
                     if (hasFocusMode) {
@@ -807,11 +857,18 @@
                     const watchStr = `${mins}:${String(secs).padStart(2, '0')}`;
                     watchTimeCell = `<td class="px-2 py-4 whitespace-nowrap text-center text-sm font-mono text-blue-400">${watchStr}</td>`;
                 }
+                let simDataCell = '';
+                if (showSimData && assignmentData.type === 'simulation') {
+                    simDataCell = student.simData
+                        ? `<td class="px-2 py-4 whitespace-nowrap text-center text-sm"><button onclick="showSimulationData('${escapedEmail}')" class="text-cyan-300 hover:text-cyan-200 underline font-semibold">📊 View</button></td>`
+                        : `<td class="px-2 py-4 whitespace-nowrap text-center text-gray-600">-</td>`;
+                }
 
                 tableHtml += `<tr class="hover:bg-gray-700">
                 <td class="px-3 py-4 whitespace-nowrap text-sm font-medium text-white cursor-pointer hover:text-yellow-400 truncate" onclick="showStudentSubmissions('${escapedEmail}')">${displayName}${avgScoreDisplay}</td>
                 <td class="px-2 py-4 whitespace-nowrap text-center"><input type="checkbox" onchange="toggleSubmissionStatus('${escapedEmail}', this.checked)" ${student.isSubmitted ? 'checked' : ''} class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"></td>
                 ${watchTimeCell}
+                ${simDataCell}
                 ${auraCell}
                 ${violationsCell}
             `;
@@ -859,7 +916,13 @@
 
         function executeChecker(submission) {
             const slideIndex = submission.slideIndex;
-            const funcString = assignmentData.checkerFunctions?.[`calc${slideIndex + 1}`];
+            let checkerKey = `calc${slideIndex + 1}`;
+            if (assignmentData.type === 'video') {
+                checkerKey = assignmentData.videoQuestions?.[slideIndex]?.id || checkerKey;
+            } else if (assignmentData.type === 'simulation') {
+                checkerKey = assignmentData.simQuestions?.[slideIndex]?.id || checkerKey;
+            }
+            const funcString = assignmentData.checkerFunctions?.[checkerKey] || assignmentData.checkerFunctions?.[`calc${slideIndex + 1}`];
             if (!funcString) return 0;
             try {
                 const userProfile = { name: submission.studentName, email: submission.studentEmail };
@@ -1094,6 +1157,16 @@
 
         function showSubmissions(studentEmail, slideIndex) { showStudentSubmissions(studentEmail, slideIndex); }
 
+        function getQuestionLabel(slideIndex) {
+            if (assignmentData.type === 'video') {
+                return assignmentData.videoQuestions?.[slideIndex]?.body || `Question ${slideIndex + 1}`;
+            }
+            if (assignmentData.type === 'simulation') {
+                return assignmentData.simQuestions?.[slideIndex]?.body || `Question ${slideIndex + 1}`;
+            }
+            return `Question ${slideIndex + 1}`;
+        }
+
         function toggleShowAllAttempts(isChecked) {
             showAllAttempts = isChecked;
             localStorage.setItem('dashboardShowAllAttempts', isChecked);
@@ -1114,7 +1187,7 @@
             const studentIndex = sortedStudents.findIndex(s => s.email === studentEmail);
             const displayName = hideNames && studentIndex > -1 ? `Student ${studentIndex + 1}` : student.name;
 
-            document.getElementById('modalTitle').innerHTML = `Submissions for ${displayName}${specificSlide !== null ? ` - Q${specificSlide + 1}` : ''}`;
+            document.getElementById('modalTitle').innerHTML = `Submissions for ${displayName}${specificSlide !== null ? ` - ${escapeHtml(getQuestionLabel(specificSlide))}` : ''}`;
 
             let submissionsToShow = (specificSlide !== null ? student.submissions.filter(s => s.slideIndex === specificSlide) : student.submissions)
                 .sort((a, b) => (a.slideIndex - b.slideIndex) || ((b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0)));
@@ -1136,7 +1209,7 @@
             currentModalView = { type: 'question', slide: slideIndex };
             document.getElementById('showAllAttemptsToggle').checked = showAllAttempts;
             document.getElementById('showAllAttemptsToggle').parentElement.classList.remove('hidden');
-            document.getElementById('modalTitle').innerHTML = `All Submissions for Question ${slideIndex + 1} <button onclick="regradeQuestion(${slideIndex})" class="ml-4 text-sm bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded-lg">Regrade</button>`;
+            document.getElementById('modalTitle').innerHTML = `All Submissions for ${escapeHtml(getQuestionLabel(slideIndex))} <button onclick="regradeQuestion(${slideIndex})" class="ml-4 text-sm bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded-lg">Regrade</button>`;
 
             const studentsForModal = getCurrentlySortedStudents();
 
@@ -1171,7 +1244,7 @@
             if (submissions.length > 0) {
                 submissions.forEach(sub => {
                     const displayName = nameMap && hideNames ? nameMap.get(sub.studentEmail) : sub.studentName;
-                    const headerText = nameMap ? `${displayName}` : `Question ${sub.slideIndex + 1}`;
+                    const headerText = nameMap ? `${displayName}` : escapeHtml(getQuestionLabel(sub.slideIndex));
                     const date = sub.timestamp ? new Date(sub.timestamp.seconds * 1000).toLocaleString() : 'N/A';
 
                     // Show attempt info if available
@@ -1217,6 +1290,48 @@
         function closeModal() {
             document.getElementById('submissionModal').classList.add('hidden');
             currentModalView = null;
+        }
+
+        function closeSimDataModal() {
+            document.getElementById('simDataModal').classList.add('hidden');
+        }
+
+        function showSimulationData(studentEmail) {
+            const student = allStudentData.find(s => s.email === studentEmail);
+            if (!student || !student.simData) {
+                showToast("No simulation data found for this student.", { color: 'red' });
+                return;
+            }
+            document.getElementById('simDataModalTitle').textContent = `Simulation Data: ${student.name}`;
+            document.getElementById('simDataModalContent').innerHTML = renderSimDataValue(student.simData);
+            document.getElementById('simDataModal').classList.remove('hidden');
+        }
+
+        function renderSimDataValue(value) {
+            if (Array.isArray(value)) {
+                if (value.length === 0) return '<p class="text-gray-400">[]</p>';
+                if (value.every(item => item && typeof item === 'object' && !Array.isArray(item))) {
+                    const keys = Array.from(new Set(value.flatMap(item => Object.keys(item))));
+                    let html = '<div class="overflow-x-auto"><table class="min-w-full text-sm border border-gray-700"><thead class="bg-gray-700"><tr>';
+                    keys.forEach(k => { html += `<th class="px-3 py-2 text-left border-b border-gray-600">${escapeHtml(k)}</th>`; });
+                    html += '</tr></thead><tbody>';
+                    value.forEach(row => {
+                        html += '<tr class="border-t border-gray-700">';
+                        keys.forEach(k => { html += `<td class="px-3 py-2 align-top">${renderSimDataValue(row[k])}</td>`; });
+                        html += '</tr>';
+                    });
+                    html += '</tbody></table></div>';
+                    return html;
+                }
+                return `<ul class="list-disc pl-5 space-y-1">${value.map(v => `<li>${renderSimDataValue(v)}</li>`).join('')}</ul>`;
+            }
+            if (value && typeof value === 'object') {
+                const entries = Object.entries(value);
+                if (!entries.length) return '<p class="text-gray-400">{}</p>';
+                return `<dl class="space-y-2">${entries.map(([k, v]) => `<div class="bg-gray-700/50 rounded p-2"><dt class="font-semibold text-cyan-300">${escapeHtml(k)}</dt><dd class="mt-1">${renderSimDataValue(v)}</dd></div>`).join('')}</dl>`;
+            }
+            if (value === null || value === undefined) return '<span class="text-gray-500">null</span>';
+            return escapeHtml(String(value));
         }
 
         async function unlockQuestion(studentEmail, slideIndex, event) {
@@ -1328,7 +1443,7 @@
             const maxPoints = parseFloat(document.getElementById('maxPoints').value) || 100;
             const decimalPlaces = parseInt(document.getElementById('decimalPlaces').value, 10) || 0;
             const studentsToExport = getCurrentlySortedStudents();
-            const numQuestions = assignmentData.type === 'pdf' ? (assignmentData.questionZones ? assignmentData.questionZones.length : 0) : assignmentData.type === 'video' ? (assignmentData.videoQuestions ? assignmentData.videoQuestions.length : 0) : (assignmentData.slideIds ? assignmentData.slideIds.length : 0);
+            const numQuestions = assignmentData.type === 'pdf' ? (assignmentData.questionZones ? assignmentData.questionZones.length : 0) : assignmentData.type === 'video' ? (assignmentData.videoQuestions ? assignmentData.videoQuestions.length : 0) : assignmentData.type === 'simulation' ? (assignmentData.simQuestions ? assignmentData.simQuestions.length : 0) : (assignmentData.slideIds ? assignmentData.slideIds.length : 0);
 
             const outputData = studentsToExport.map(student => {
                 const nameParts = student.name.split(' ').filter(Boolean);
@@ -1368,7 +1483,7 @@
 
         function exportToCSV() {
             let csvContent = "\uFEFF"; // Add BOM for Excel UTF-8 support
-            const numQuestions = assignmentData.type === 'pdf' ? (assignmentData.questionZones ? assignmentData.questionZones.length : 0) : assignmentData.type === 'video' ? (assignmentData.videoQuestions ? assignmentData.videoQuestions.length : 0) : (assignmentData.slideIds ? assignmentData.slideIds.length : 0);
+            const numQuestions = assignmentData.type === 'pdf' ? (assignmentData.questionZones ? assignmentData.questionZones.length : 0) : assignmentData.type === 'video' ? (assignmentData.videoQuestions ? assignmentData.videoQuestions.length : 0) : assignmentData.type === 'simulation' ? (assignmentData.simQuestions ? assignmentData.simQuestions.length : 0) : (assignmentData.slideIds ? assignmentData.slideIds.length : 0);
             const hasFocusMode = assignmentData.focusModeEnabled;
 
             let headers = ["Email", "Last Name", "First Name", "Full Name (Last, First)", "Class", "Average Score %", "Completion %"];

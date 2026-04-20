@@ -521,6 +521,28 @@
                     </button>
                 </div>
             </div>
+
+            <!-- Simulation Student UI -->
+            <div id="simulation-student-content" class="hidden">
+                <div class="bg-gray-800 p-4 rounded-lg mb-4">
+                    <div id="simulation-iframe-container" class="w-full min-h-[60vh] bg-black rounded border border-gray-700 overflow-hidden"></div>
+                    <div id="simulation-complete-indicator" class="mt-3 text-sm text-blue-300">Complete the simulation to unlock follow-up questions.</div>
+                </div>
+                <div id="simulation-questions-section" class="hidden bg-gray-800 p-4 rounded-lg">
+                    <h3 class="text-xl font-bold text-yellow-400 mb-4">Follow-up Questions</h3>
+                    <div id="simulation-questions-list" class="space-y-4"></div>
+                    <div class="mt-6 flex gap-4">
+                        <button onclick="showSummary()"
+                            class="w-full bg-gray-600 hover:bg-gray-500 text-white font-bold py-3 rounded-lg transition-colors border border-gray-500">
+                            View Summary
+                        </button>
+                        <button id="simulation-submit-final" onclick="handleSubmitAssignment()"
+                            class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition-colors shadow-lg">
+                            Submit Final Assignment
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div id="summaryContainer" class="hidden">
@@ -625,6 +647,8 @@
         let isSubmitted = false;
         let confirmCallback = null;
         let assignmentAuraEarned = 0; // Aura from THIS assignment only for the current student
+        let simulationMessageListener = null;
+        let simulationCompleted = false;
 
         // Question progress tracking - per-question attempt data
         let questionProgressData = {}; // Key: slideIndex, Value: {attemptCount, bestScore, locked, etc.}
@@ -711,11 +735,15 @@
                         ? (assignmentData.questionZones || [])
                         : assignmentData.type === 'video'
                             ? (assignmentData.videoQuestions || [])
+                            : assignmentData.type === 'simulation'
+                                ? (assignmentData.simQuestions || [])
                             : (assignmentData.slideIds || [])).length;
                     const oldCount = (oldData?.type === 'pdf'
                         ? (oldData?.questionZones || [])
                         : oldData?.type === 'video'
                             ? (oldData?.videoQuestions || [])
+                            : oldData?.type === 'simulation'
+                                ? (oldData?.simQuestions || [])
                             : (oldData?.slideIds || [])).length;
                     if (!oldData || newCount !== oldCount) {
                         slideStates = new Array(newCount).fill(null);
@@ -1067,18 +1095,28 @@
                 if (assignmentData.type === 'video') {
                     document.getElementById('slides-ui').classList.add('hidden');
                     document.getElementById('pdf-student-content').classList.add('hidden');
+                    document.getElementById('simulation-student-content').classList.add('hidden');
                     document.getElementById('video-student-content').classList.remove('hidden');
                     initializeVideoStudentView();
                     initTools();
                 } else if (assignmentData.type === 'pdf') {
                     document.getElementById('slides-ui').classList.add('hidden');
                     document.getElementById('video-student-content').classList.add('hidden');
+                    document.getElementById('simulation-student-content').classList.add('hidden');
                     document.getElementById('pdf-student-content').classList.remove('hidden');
                     initializePDFStudentView();
+                    initTools();
+                } else if (assignmentData.type === 'simulation') {
+                    document.getElementById('slides-ui').classList.add('hidden');
+                    document.getElementById('pdf-student-content').classList.add('hidden');
+                    document.getElementById('video-student-content').classList.add('hidden');
+                    document.getElementById('simulation-student-content').classList.remove('hidden');
+                    initializeSimulationStudentView();
                     initTools();
                 } else {
                     document.getElementById('pdf-student-content').classList.add('hidden');
                     document.getElementById('video-student-content').classList.add('hidden');
+                    document.getElementById('simulation-student-content').classList.add('hidden');
                     updateSlideDisplay();
                     initTools();
                 }
@@ -1317,7 +1355,11 @@
                     });
                     const qCountFV = (assignmentData.type === 'pdf'
                         ? (assignmentData.questionZones || [])
-                        : (assignmentData.slideIds || [])).length;
+                        : assignmentData.type === 'video'
+                            ? (assignmentData.videoQuestions || [])
+                            : assignmentData.type === 'simulation'
+                                ? (assignmentData.simQuestions || [])
+                                : (assignmentData.slideIds || [])).length;
                     const overallAverage = qCountFV > 0 ? totalScore / qCountFV : 0;
 
                     // Read assignment-level Aura config
@@ -1604,12 +1646,25 @@
         }
 
         function handleSignOut() {
+            if (simulationMessageListener) {
+                window.removeEventListener('message', simulationMessageListener);
+                simulationMessageListener = null;
+            }
             auth.signOut().then(() => {
                 window.location.reload();
             });
         }
 
         function saveCurrentState() {
+            if (assignmentData?.type === 'simulation') {
+                const simQuestions = assignmentData.simQuestions || [];
+                simQuestions.forEach((_, index) => {
+                    const el = document.getElementById(`sim-answer-${index}`);
+                    if (!el) return;
+                    slideStates[index] = { ...slideStates[index], answer: el.value };
+                });
+                return;
+            }
             const currentAnswer = document.getElementById('inputbox').value;
             slideStates[currentSlideIndex] = { ...slideStates[currentSlideIndex], answer: currentAnswer };
         }
@@ -1668,10 +1723,13 @@
 
             const isPDF = assignmentData.type === 'pdf';
             const isVideo = assignmentData.type === 'video';
+            const isSimulation = assignmentData.type === 'simulation';
             const questionCount = isPDF
                 ? (assignmentData.questionZones || []).length
                 : isVideo 
                     ? (assignmentData.videoQuestions || []).length
+                    : isSimulation
+                        ? (assignmentData.simQuestions || []).length
                     : (assignmentData.slideIds || []).length;
 
             for (let index = 0; index < questionCount; index++) {
@@ -1690,13 +1748,16 @@
                     }
                 }
 
-                const jumpFunc = isVideo ? `jumpToVideoItemByQuestionIndex` : `jumpToSlide`;
+                const jumpFunc = isVideo ? `jumpToVideoItemByQuestionIndex` : isSimulation ? `jumpToSimulationQuestion` : `jumpToSlide`;
                 const clickHandler = shouldDisableLinks ? '' : (isPDF ? `onclick="focusPDFZone(${index})"` : `onclick="${jumpFunc}(${index})"`);
                 const cursorClass = shouldDisableLinks ? 'cursor-not-allowed' : 'cursor-pointer';
                 const hoverClass = shouldDisableLinks ? '' : 'hover:bg-gray-600';
                 const opacityClass = shouldDisableLinks ? 'opacity-50' : '';
+                const questionLabel = isSimulation
+                    ? (assignmentData.simQuestions?.[index]?.body || `Question ${index + 1}`)
+                    : `Question ${index + 1}`;
 
-                perQuestionHTML += `<div ${clickHandler} class="flex justify-between items-center bg-gray-700 p-3 rounded-lg ${cursorClass} ${hoverClass} ${opacityClass} transition-colors"><span class="font-medium">Question ${index + 1}</span><span class="font-bold ${color}">${displayScore}</span></div>`;
+                perQuestionHTML += `<div ${clickHandler} class="flex justify-between items-center bg-gray-700 p-3 rounded-lg ${cursorClass} ${hoverClass} ${opacityClass} transition-colors"><span class="font-medium">${escapeHtml(questionLabel)}</span><span class="font-bold ${color}">${displayScore}</span></div>`;
             }
             const overallAverage = questionCount > 0 ? (totalScore / questionCount).toFixed(1) : '0.0';
             const overallColor = overallAverage >= 90 ? 'text-green-400' : overallAverage >= 60 ? 'text-yellow-400' : 'text-red-400';
@@ -1798,6 +1859,15 @@
                 hideSummary();
             }
             updateSlideDisplay();
+        }
+
+        function jumpToSimulationQuestion(index) {
+            hideSummary();
+            const target = document.getElementById(`sim-answer-${index}`);
+            if (target) {
+                target.focus();
+                target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
         }
 
         function jumpToSlideFromDropdown() {
@@ -2413,8 +2483,10 @@
 
         function checkCurrentSlideAnswer(studentAnswer, info) {
             const isVideoAssignment = assignmentData?.type === 'video';
+            const isSimulationAssignment = assignmentData?.type === 'simulation';
             const currentVideoQuestion = isVideoAssignment ? assignmentData?.videoQuestions?.[currentSlideIndex] : null;
-            const checkerIdKey = currentVideoQuestion?.id;
+            const currentSimQuestion = isSimulationAssignment ? assignmentData?.simQuestions?.[currentSlideIndex] : null;
+            const checkerIdKey = currentVideoQuestion?.id || currentSimQuestion?.id;
             const legacyKey = `calc${currentSlideIndex + 1}`;
             const checkerCode = (checkerIdKey ? assignmentData.checkerFunctions?.[checkerIdKey] : undefined) || assignmentData.checkerFunctions?.[legacyKey];
             const funcString = checkerCode;
@@ -2503,7 +2575,11 @@
                         });
                         const qCountSubmit = (assignmentData.type === 'pdf'
                             ? (assignmentData.questionZones || [])
-                            : (assignmentData.slideIds || [])).length;
+                            : assignmentData.type === 'video'
+                                ? (assignmentData.videoQuestions || [])
+                                : assignmentData.type === 'simulation'
+                                    ? (assignmentData.simQuestions || [])
+                                    : (assignmentData.slideIds || [])).length;
                         const overallAverage = qCountSubmit > 0 ? totalScore / qCountSubmit : 0;
 
                         // Read assignment-level Aura config
@@ -3018,6 +3094,106 @@
                 div.onclick = () => div.classList.toggle('crossed-off');
                 container.appendChild(div);
             });
+        }
+
+        function initializeSimulationStudentView() {
+            simulationCompleted = false;
+            const iframeContainer = document.getElementById('simulation-iframe-container');
+            const indicator = document.getElementById('simulation-complete-indicator');
+            const questionsSection = document.getElementById('simulation-questions-section');
+            const questionsList = document.getElementById('simulation-questions-list');
+
+            iframeContainer.innerHTML = '';
+            questionsList.innerHTML = '';
+
+            const simUrl = assignmentData.simulationUrl || '';
+            if (!simUrl) {
+                indicator.textContent = 'Simulation URL is missing. Please contact your teacher.';
+                indicator.classList.remove('text-blue-300');
+                indicator.classList.add('text-red-400');
+                return;
+            }
+
+            const iframe = document.createElement('iframe');
+            iframe.src = simUrl;
+            iframe.className = 'w-full min-h-[60vh] rounded';
+            iframe.setAttribute('allow', 'fullscreen');
+            iframeContainer.appendChild(iframe);
+
+            const simQuestions = assignmentData.simQuestions || [];
+            simQuestions.forEach((q, index) => {
+                const state = slideStates[index] || {};
+                const questionDiv = document.createElement('div');
+                questionDiv.className = 'bg-gray-700/60 border border-gray-600 rounded-lg p-4';
+                questionDiv.innerHTML = `
+                    <p class="font-semibold mb-2">Question ${index + 1}</p>
+                    <p class="text-gray-200 mb-3">${escapeHtml(q.body || '')}</p>
+                    <textarea id="sim-answer-${index}" rows="4" class="w-full p-3 bg-gray-800 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500" placeholder="Your answer here...">${escapeHtml(state.answer || '')}</textarea>
+                    <div class="mt-3 flex items-center gap-3">
+                        <button onclick="simulationCheckAndSave(${index})" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">Check & Save</button>
+                        <span id="sim-result-${index}" class="text-sm font-semibold ${state.score !== undefined ? 'text-yellow-300' : 'text-gray-400'}">${state.score !== undefined ? `Score: ${state.score}` : ''}</span>
+                    </div>
+                `;
+                questionsList.appendChild(questionDiv);
+            });
+
+            if (simulationMessageListener) {
+                window.removeEventListener('message', simulationMessageListener);
+            }
+
+            simulationMessageListener = async (event) => {
+                try {
+                    const expectedOrigin = new URL(simUrl).origin;
+                    if (event.origin !== expectedOrigin) return;
+                } catch (e) {
+                    return;
+                }
+
+                if (!event.data || event.data.action !== 'SIM_COMPLETE') return;
+
+                simulationCompleted = true;
+                indicator.textContent = '✅ Simulation marked complete.';
+                indicator.classList.remove('text-blue-300');
+                indicator.classList.add('text-green-400');
+                questionsSection.classList.remove('hidden');
+
+                if (event.data.simData !== undefined) {
+                    try {
+                        const simDocId = `${assignmentData.id}_${encodeURIComponent(userProfile.email)}`;
+                        await db.collection('simulationData').doc(simDocId).set({
+                            assignmentId: assignmentData.id,
+                            studentEmail: userProfile.email,
+                            studentName: userProfile.name || '',
+                            simData: event.data.simData,
+                            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                        }, { merge: true });
+                    } catch (error) {
+                        console.error('Error saving simulation data:', error);
+                    }
+                }
+
+                showToast('Simulation complete! Follow-up questions unlocked.', { color: 'green' });
+            };
+
+            window.addEventListener('message', simulationMessageListener);
+        }
+
+        async function simulationCheckAndSave(index) {
+            const textarea = document.getElementById(`sim-answer-${index}`);
+            if (!textarea) return;
+            const resultEl = document.getElementById(`sim-result-${index}`);
+            const previousIndex = currentSlideIndex;
+
+            currentSlideIndex = index;
+            document.getElementById('inputbox').value = textarea.value;
+            await myfunction();
+            currentSlideIndex = previousIndex;
+
+            const state = slideStates[index];
+            if (state && resultEl) {
+                resultEl.textContent = `Score: ${state.score ?? 0}`;
+                resultEl.className = 'text-sm font-semibold text-yellow-300';
+            }
         }
         // ==========================================
         // VIDEO STUDENT VIEW LOGIC
