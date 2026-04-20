@@ -599,6 +599,7 @@
     <div id="toast-wrapper-bottom-center" class="toast-wrapper bottom-center flex-col-reverse space-y-3"></div>
     <div id="toast-wrapper-bottom-right" class="toast-wrapper bottom-right flex-col-reverse space-y-3"></div>
 
+    <script src="./shared/checker-runner.js"></script>
     <script>
         const TEACHER_EMAILS = ["klynch@mtps.us", "mstuart@mtps.us", "cfiori@mtps.us", "mlock@mtps.us", "cheine@mtps.us", "kgray@mtps.us"];
         const MAX_NORMALIZED_ANSWERS = 100; // Cap for normalized answer history to prevent unbounded growth
@@ -2176,26 +2177,6 @@
             timeoutId = setTimeout(dismiss, duration);
         }
 
-        // Helper for Fuzzy Matching (Levenshtein Distance)
-        function levenshteinDistance(a, b) {
-            if (a.length === 0) return b.length;
-            if (b.length === 0) return a.length;
-            const matrix = [];
-            for (let i = 0; i <= b.length; i++) { matrix[i] = [i]; }
-            for (let j = 0; j <= a.length; j++) { matrix[0][j] = j; }
-            for (let i = 1; i <= b.length; i++) {
-                for (let j = 1; j <= a.length; j++) {
-                    if (b.charAt(i - 1) == a.charAt(j - 1)) {
-                        matrix[i][j] = matrix[i - 1][j - 1];
-                    } else {
-                        matrix[i][j] = Math.min(matrix[i - 1][j - 1] + 1, Math.min(matrix[i][j - 1] + 1, matrix[i - 1][j] + 1));
-                    }
-                }
-            }
-            return matrix[b.length][a.length];
-        }
-
-        // Helper for Text Conditions (called by generated checker code)
         // =======================================
         // PDF STUDENT VIEW FUNCTIONS
         // =======================================
@@ -2430,48 +2411,6 @@
         // END PDF STUDENT VIEW FUNCTIONS
         // =======================================
 
-        function checkTextCondition(studentVal, targetVal, op) {
-            const userText = (studentVal || "").toLowerCase().trim();
-            const targetText = (targetVal || "").toLowerCase().trim();
-
-            const isFuzzyEnabled = assignmentData.modifications && assignmentData.modifications.enabled && assignmentData.modifications.fuzzy;
-            // Only apply fuzzy if enabled AND student actually has modifications? 
-            // User said: "an additonal per question modification option when modifications are turned on".
-            // Interpretation: Global toggle. If on, it applies. But does it apply to *everyone* or just *modified students*?
-            // "when modifications are turned on... fuzzy checking to accomodate poor spellers".
-            // Usually accommodations apply only to the accommodated student.
-            // So checks `userProfile.hasModifications`.
-
-            const useFuzzy = isFuzzyEnabled && userProfile.hasModifications;
-
-            if (op === 'contains') {
-                if (useFuzzy) {
-                    // Fuzzy contains is hard. Simplified: check if target is close to any substring? 
-                    // Or just check if Levenshtein(userText, targetText) is low enough? No, contains is substring.
-                    // For "contains", fuzzy is expensive/complex. 
-                    // Let's stick to simple includes for now unless exact match.
-                    // Or scan sliding window? 
-                    return userText.includes(targetText);
-                }
-                return userText.includes(targetText);
-            } else if (op === 'not_contains') {
-                return !userText.includes(targetText);
-            } else if (op === 'equals_str') {
-                if (useFuzzy) {
-                    const dist = levenshteinDistance(userText, targetText);
-                    // Threshold: allow 1 error per 4 chars? Min 1?
-                    // e.g. "appel" (5) vs "apple" (5) -> dist 2 (swap) or 1?
-                    // "apple" vs "aple" -> 1.
-                    // Let's say max distance = Math.max(1, Math.floor(targetText.length / 4));
-                    // If target is 3 chars, max 1 error. 
-                    const maxErrors = Math.max(1, Math.floor(targetText.length / 4));
-                    return dist <= maxErrors;
-                }
-                return userText === targetText;
-            }
-            return false;
-        }
-
         function checkCurrentSlideAnswer(studentAnswer, info) {
             const isVideoAssignment = assignmentData?.type === 'video';
             const currentVideoQuestion = isVideoAssignment ? assignmentData?.videoQuestions?.[currentSlideIndex] : null;
@@ -2481,22 +2420,14 @@
             const funcString = checkerCode;
             if (funcString) {
                 try {
-                    const funcNameMatch = funcString.match(/function\s+([a-zA-Z0-9_]+)\s*\(/);
-                    if (!funcNameMatch || !funcNameMatch[1]) {
-                        throw new Error("Could not find a valid function definition in the checker code.");
-                    }
-                    const funcNameToRun = funcNameMatch[1];
-                    const runner = new Function('studentAnswer', 'showToast', 'userProfile', 'attemptInfo', 'checkTextCondition', `
-                        ${funcString}
-                        if (typeof ${funcNameToRun} === 'function') {
-                            return ${funcNameToRun}(studentAnswer, showToast, userProfile, attemptInfo);
-                        }
-                        if (typeof checkAnswer === 'function') {
-                            return checkAnswer(studentAnswer);
-                        }
-                        throw new Error("Checker function not found.");
-                    `);
-                    return runner(studentAnswer, showToast, userProfile, info, checkTextCondition);
+                    return executeCheckerFunction(funcString, studentAnswer, {
+                        showToast,
+                        userProfile,
+                        attemptInfo: info,
+                        assignmentData,
+                        checkTextCondition: (studentVal, targetVal, op) =>
+                            checkTextCondition(studentVal, targetVal, op, { assignmentData, userProfile })
+                    });
                 } catch (e) {
                     console.error(`Error executing checker for slide ${currentSlideIndex}:`, e);
                     showToast(`Error in checking logic: ${e.message}`, { color: 'red' });

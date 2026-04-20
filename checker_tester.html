@@ -85,6 +85,7 @@
     <div id="toast-wrapper-bottom-center" class="toast-wrapper bottom-center flex-col-reverse space-y-3"></div>
     <div id="toast-wrapper-bottom-right" class="toast-wrapper bottom-right flex-col-reverse space-y-3"></div>
 
+<script src="./shared/checker-runner.js"></script>
 <script>
     function runTest() {
         const codeInput = document.getElementById('checkerCode').value;
@@ -107,22 +108,12 @@
         };
 
         try {
-            const funcNameMatch = codeInput.match(/function\s+([a-zA-Z0-9_]+)\s*\(/);
-            if (!funcNameMatch || !funcNameMatch[1]) {
-                throw new Error("Could not find a valid function definition (e.g., 'function calc(...)') in your code.");
-            }
-            const funcNameToRun = funcNameMatch[1];
-            
-            const runner = new Function('studentAnswer', 'showToast', 'userProfile', 'isLate', 'showVideo', `
-                ${codeInput}
-                if (typeof ${funcNameToRun} === 'function') {
-                    return ${funcNameToRun}(studentAnswer, showToast, userProfile, isLate, showVideo);
-                } else {
-                    throw new Error("The function '${funcNameToRun}' defined in your code could not be executed.");
-                }
-            `);
-
-            const score = runner(studentAnswer, showToast, mockUserProfile, isLate, showVideo);
+            const score = executeCheckerFunction(codeInput, studentAnswer, {
+                showToast,
+                userProfile: mockUserProfile,
+                isLate,
+                showVideo
+            });
 
             resultBox.textContent = `Score: ${score}`;
             resultBox.style.color = score >= 90 ? '#48bb78' : '#f6ad55';
@@ -229,4 +220,3 @@
 </script>
 </body>
 </html>
-
