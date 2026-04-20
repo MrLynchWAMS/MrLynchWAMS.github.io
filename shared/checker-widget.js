@@ -568,6 +568,9 @@
       }
 
       function generateCodeFromUI(container) {
+        const escapeForDoubleQuotedJSString = (value) =>
+          String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+
         // Defensive null-safe DOM lookups to prevent TypeError when elements are missing
         const exclusiveToggleEl = container.querySelector('.exclusive-scoring-toggle');
         const isExclusive = exclusiveToggleEl ? exclusiveToggleEl.checked : false;
@@ -638,29 +641,29 @@
               if (op === 'ordered') {
                 if (keywords.length === 0) return;
                 if (keywords.length === 1) {
-                  groupConditions.push(`answerStr.includes("${keywords[0].replace(/"/g, '\\"')}")`);
+                  groupConditions.push(`answerStr.includes("${escapeForDoubleQuotedJSString(keywords[0])}")`);
                 } else {
                   // Generate a pure boolean expression (IIFE that returns true/false) for ordered keyword check
-                  const kwsArrayLiteral = JSON.stringify(keywords);
+                  const kwsArrayLiteral = `[${keywords.map(k => `"${escapeForDoubleQuotedJSString(k)}"`).join(',')}]`;
                   const orderedCheckExpr = `(function(){ const _kws = ${kwsArrayLiteral}; let _pos = 0; for (let _i = 0; _i < _kws.length; _i++){ const _p = answerStr.indexOf(_kws[_i], _pos); if (_p === -1) return false; _pos = _p + _kws[_i].length; } return true; })()`;
                   groupConditions.push(orderedCheckExpr);
                 }
               } else if (keywords.length > 1 && (op === 'contains' || op === 'not_contains')) {
                 const textBoolEl = cond.querySelector('.text-bool');
                 const textBool = textBoolEl ? textBoolEl.value : '||';
-                const keywordConditions = keywords.map(k => `${op === 'not_contains' ? '!' : ''}answerStr.includes("${k.replace(/"/g, '\\"')}")`);
+                const keywordConditions = keywords.map(k => `${op === 'not_contains' ? '!' : ''}answerStr.includes("${escapeForDoubleQuotedJSString(k)}")`);
                 groupConditions.push(`(${keywordConditions.join(` ${textBool} `)})`);
               } else if (keywords.length > 0) {
                 const keyword = keywords[0];
-                if (op === 'contains') groupConditions.push(`answerStr.includes("${keyword.replace(/"/g, '\\"')}")`);
-                else if (op === 'not_contains') groupConditions.push(`!answerStr.includes("${keyword.replace(/"/g, '\\"')}")`);
-                else if (op === 'equals_str') groupConditions.push(`answerStr === "${keyword.replace(/"/g, '\\"')}"`);
+                if (op === 'contains') groupConditions.push(`answerStr.includes("${escapeForDoubleQuotedJSString(keyword)}")`);
+                else if (op === 'not_contains') groupConditions.push(`!answerStr.includes("${escapeForDoubleQuotedJSString(keyword)}")`);
+                else if (op === 'equals_str') groupConditions.push(`answerStr === "${escapeForDoubleQuotedJSString(keyword)}"`);
                 else if (op === 'count') {
                   const countEl = cond.querySelector('.cond-count');
                   const countOpEl = cond.querySelector('.cond-count-op');
                   const count = countEl ? (parseInt(countEl.value, 10) || 1) : 1;
                   const countOp = countOpEl ? countOpEl.value : '>=';
-                  groupConditions.push(`(answerStr.split("${keyword.replace(/"/g, '\\"')}").length - 1 ${countOp} ${count})`);
+                  groupConditions.push(`(answerStr.split("${escapeForDoubleQuotedJSString(keyword)}").length - 1 ${countOp} ${count})`);
                 }
               }
             } else if (type === 'number') {
@@ -704,7 +707,7 @@
                 const valStr = cond.querySelector('.cond-value')?.value || "";
                 const targetNums = valStr.split(',').map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
                 if (targetNums.length === 0) return;
-                const targetArrayLiteral = JSON.stringify(targetNums);
+                const targetArrayLiteral = `[${targetNums.map(n => Number(n)).join(',')}]`;
                 conditionString = `(function(){ const _t = ${targetArrayLiteral}; let _ai = 0; for (const _tn of _t) { const _foundIdx = answerNums.slice(_ai).indexOf(_tn); if (_foundIdx === -1) return false; _ai += _foundIdx + 1; } return true; })()`;
               } else if (op === 'count') {
                 conditionString = createComparison('');
