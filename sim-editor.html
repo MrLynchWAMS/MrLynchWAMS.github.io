@@ -498,7 +498,7 @@
           <a id="openSimLink" target="_blank" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded inline-flex items-center">Open</a>
         </div>
       </div>
-      <iframe id="simulationPreview" class="w-full min-h-[60vh] bg-black rounded border border-gray-700" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
+      <iframe id="simulationPreview" class="w-full min-h-[60vh] bg-black rounded border border-gray-700" sandbox="allow-scripts allow-forms allow-popups"></iframe>
     </div>
 
     <div class="bg-gray-800 p-6 rounded-lg mb-8">
@@ -618,7 +618,14 @@
         if (impersonatedEmail) {
           const banner = document.createElement('div');
           banner.className = 'bg-red-600 text-white text-center p-2 font-bold fixed top-0 w-full z-[200] flex justify-center items-center gap-4';
-          banner.innerHTML = `<span>⚠️ IMPERSONATING: ${impersonatedEmail}</span><button onclick="stopImpersonating()" class="bg-white text-red-600 px-3 py-1 rounded text-xs hover:bg-gray-200">Stop</button>`;
+          const span = document.createElement('span');
+          span.textContent = `⚠️ IMPERSONATING: ${impersonatedEmail}`;
+          const btn = document.createElement('button');
+          btn.textContent = 'Stop';
+          btn.className = 'bg-white text-red-600 px-3 py-1 rounded text-xs hover:bg-gray-200';
+          btn.onclick = stopImpersonating;
+          banner.appendChild(span);
+          banner.appendChild(btn);
           document.body.prepend(banner);
           document.body.style.paddingTop = '40px';
           return impersonatedEmail;
@@ -747,7 +754,7 @@
           document.getElementById('simulationUrlInput').value = assignmentData.simulationUrl || '';
           refreshSimPreview();
 
-          simQuestions = (assignmentData.simQuestions || []).map((q, i) => ({ id: q.id || `sq${i + 1}`, body: q.body || '', type: 'open-ended' }));
+          simQuestions = (assignmentData.simQuestions || []).map((q, i) => ({ id: q.id || `sq_${Date.now()}_${i}`, body: q.body || '', type: 'open-ended' }));
           nextQuestionId = simQuestions.length + 1;
 
           const auraOnTime = document.getElementById('auraOnTime');
@@ -994,9 +1001,21 @@
       }
 
       function refreshSimPreview() {
-        const url = document.getElementById('simulationUrlInput').value.trim();
-        document.getElementById('simulationPreview').src = url || 'about:blank';
-        document.getElementById('openSimLink').href = url || '#';
+        const rawUrl = document.getElementById('simulationUrlInput').value.trim();
+        const safeUrl = normalizeSimulationUrl(rawUrl);
+        document.getElementById('simulationPreview').src = safeUrl || 'about:blank';
+        document.getElementById('openSimLink').href = safeUrl || '#';
+      }
+
+      function normalizeSimulationUrl(url) {
+        if (!url) return '';
+        try {
+          const parsed = new URL(url, window.location.origin);
+          if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return '';
+          return parsed.toString();
+        } catch (e) {
+          return '';
+        }
       }
 
       // Extract a structured config from the current Simple UI
@@ -1042,7 +1061,7 @@
             globalWordBankList: document.getElementById('globalWordBankList').value.trim()
           };
 
-          const simulationUrl = document.getElementById('simulationUrlInput').value.trim();
+          const simulationUrl = normalizeSimulationUrl(document.getElementById('simulationUrlInput').value.trim());
           if (!simulationUrl) {
             showToast('Simulation URL is required.', { color: 'red' });
             saveBtn.textContent = "Save Assignment";
@@ -1288,7 +1307,7 @@
 
       let auraRules = [];
       function addAuraRule(ruleData = { amount: 1, minScore: 0 }) {
-        const id = Date.now() + Math.random().toString(36).substr(2, 9);
+        const id = Date.now() + Math.random().toString(36).slice(2, 11);
         const rule = { id, ...ruleData };
         auraRules.push(rule);
         renderAuraRules();
