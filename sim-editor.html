@@ -498,7 +498,7 @@
           <a id="openSimLink" target="_blank" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded inline-flex items-center">Open</a>
         </div>
       </div>
-      <iframe id="simulationPreview" class="w-full min-h-[60vh] bg-black rounded border border-gray-700" sandbox="allow-scripts allow-forms allow-popups"></iframe>
+      <iframe id="simulationPreview" class="w-full min-h-[80vh] bg-black rounded border border-gray-700" sandbox="allow-scripts allow-forms allow-popups allow-same-origin"></iframe>
     </div>
 
     <div class="bg-gray-800 p-6 rounded-lg mb-8">
@@ -754,7 +754,7 @@
           document.getElementById('simulationUrlInput').value = assignmentData.simulationUrl || '';
           refreshSimPreview();
 
-          simQuestions = (assignmentData.simQuestions || []).map((q, i) => ({ id: q.id || `sq_${Date.now()}_${i}`, body: q.body || '', type: 'open-ended' }));
+          simQuestions = (assignmentData.simQuestions || []).map((q, i) => ({ id: q.id || `sq_${Date.now()}_${i}`, body: q.body || '', type: 'open-ended', showBeforeSim: q.showBeforeSim === true }));
           nextQuestionId = simQuestions.length + 1;
 
           const auraOnTime = document.getElementById('auraOnTime');
@@ -956,6 +956,10 @@
         <button onclick="removeQuestion('${q.id}')" class="text-red-400 hover:text-red-300 font-bold">Delete</button>
       </div>
       <textarea id="question-body-${q.id}" class="w-full p-2 bg-gray-700 border border-gray-600 rounded mb-4" rows="3" placeholder="Question prompt...">${escapeHtml(q.body || '')}</textarea>
+      <label class="flex items-center gap-2 mb-4 text-sm text-gray-300">
+        <input type="checkbox" id="show-before-sim-${q.id}" ${q.showBeforeSim ? 'checked' : ''} class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500">
+        <span>Show before simulation is complete</span>
+      </label>
       <div id="checker-container-${q.id}"></div>
       <div class="mt-4 border-t border-gray-700 pt-4">
         <h4 class="font-semibold mb-2">Deadline & Late Policy</h4>
@@ -993,12 +997,18 @@
             if (qRef) qRef.body = e.target.value;
           });
 
+          const showBeforeSimInput = editorBox.querySelector(`#show-before-sim-${q.id}`);
+          showBeforeSimInput.addEventListener('change', (e) => {
+            const qRef = simQuestions.find(it => it.id === q.id);
+            if (qRef) qRef.showBeforeSim = e.target.checked;
+          });
+
           container.appendChild(editorBox);
         });
       }
 
       function addQuestion() {
-        simQuestions.push({ id: `sq${nextQuestionId++}`, body: '', type: 'open-ended' });
+        simQuestions.push({ id: `sq${nextQuestionId++}`, body: '', type: 'open-ended', showBeforeSim: false });
         renderEditor();
         toggleWordBankSettings();
       }
@@ -1219,7 +1229,7 @@
 
           const updatePayload = {
             simulationUrl,
-            simQuestions: simQuestions.map(q => ({ id: q.id, body: q.body || '', type: 'open-ended' })),
+            simQuestions: simQuestions.map(q => ({ id: q.id, body: q.body || '', type: 'open-ended', showBeforeSim: q.showBeforeSim === true })),
             checkerFunctions,
             checkerMeta,
             deadlinePolicy,
