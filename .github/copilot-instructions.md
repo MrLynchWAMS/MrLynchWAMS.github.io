@@ -20,7 +20,6 @@ This repository contains educational web tools for teachers and students, hosted
 - `export.html` - Data export functionality
 - `checker_tester.html` - Testing tool for assignment checkers
 - `notes.html` - Notes functionality
-- `strobe.html` - Strobe/visual effect tool
 
 ## Coding Conventions
 
