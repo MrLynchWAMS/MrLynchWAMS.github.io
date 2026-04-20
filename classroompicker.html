@@ -3096,7 +3096,7 @@
             });
         }
 
-        function initializeSimulationStudentView() {
+        async function initializeSimulationStudentView() {
             simulationCompleted = false;
             const iframeContainer = document.getElementById('simulation-iframe-container');
             const indicator = document.getElementById('simulation-complete-indicator');
@@ -3166,6 +3166,25 @@
                 questionsSection.classList.add('hidden');
             }
 
+            // Check if simulation was already completed (persisted in Firestore)
+            try {
+                const simDocId = `${assignmentData.id}_${encodeURIComponent(userProfile.email)}`;
+                const existingSimDoc = await db.collection('simulationData').doc(simDocId).get();
+                if (existingSimDoc.exists) {
+                    simulationCompleted = true;
+                    indicator.textContent = '✅ Simulation marked complete.';
+                    indicator.classList.remove('text-blue-300');
+                    indicator.classList.add('text-green-400');
+                    questionsSection.classList.remove('hidden');
+                    questionsList.querySelectorAll('[data-sim-locked="true"]').forEach((el) => {
+                        el.classList.remove('hidden');
+                        delete el.dataset.simLocked;
+                    });
+                }
+            } catch (e) {
+                console.error('Error checking existing simulation data:', e);
+            }
+
             if (simulationMessageListener) {
                 window.removeEventListener('message', simulationMessageListener);
             }
@@ -3190,19 +3209,19 @@
                     delete el.dataset.simLocked;
                 });
 
-                if (event.data.simData !== undefined) {
-                    try {
-                        const simDocId = `${assignmentData.id}_${encodeURIComponent(userProfile.email)}`;
-                        await db.collection('simulationData').doc(simDocId).set({
-                            assignmentId: assignmentData.id,
-                            studentEmail: userProfile.email,
-                            studentName: userProfile.name || '',
-                            simData: event.data.simData,
-                            timestamp: firebase.firestore.FieldValue.serverTimestamp()
-                        }, { merge: true });
-                    } catch (error) {
-                        console.error('Error saving simulation data:', error);
-                    }
+                // Always save completion record (simData may or may not be present)
+                try {
+                    const simDocId = `${assignmentData.id}_${encodeURIComponent(userProfile.email)}`;
+                    await db.collection('simulationData').doc(simDocId).set({
+                        assignmentId: assignmentData.id,
+                        studentEmail: userProfile.email,
+                        studentName: userProfile.name || '',
+                        simData: event.data.simData !== undefined ? event.data.simData : null,
+                        simulationCompleted: true,
+                        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                    }, { merge: true });
+                } catch (error) {
+                    console.error('Error saving simulation data:', error);
                 }
 
                 showToast('Simulation complete! Follow-up questions unlocked.', { color: 'green' });
