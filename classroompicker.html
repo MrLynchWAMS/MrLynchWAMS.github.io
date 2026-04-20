@@ -199,6 +199,27 @@
 
         /* Word Bank Specific */
         #wordbank-popup {
+            width: 320px;
+            max-height: 400px;
+        }
+
+        #video-wrapper.disable-seeking {
+            position: relative;
+        }
+        #video-wrapper.disable-seeking::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 45px; /* Common height for YT progress bar area */
+            background: rgba(0,0,0,0.01);
+            z-index: 10;
+            cursor: not-allowed;
+            pointer-events: auto;
+        }
+
+        #wordbank-popup {
             max-width: 300px;
             max-height: 400px;
         }
@@ -361,12 +382,15 @@
             bottom: 0;
             left: 0;
             width: 100%;
-            height: 48px; /* Approximate height of YouTube progress bar area */
+            height: 48px;
+            /* Approximate height of YouTube progress bar area */
             background: transparent;
             z-index: 10;
             cursor: not-allowed;
-            display: none; /* Only shown when .disable-seeking is on video-wrapper */
+            display: none;
+            /* Only shown when .disable-seeking is on video-wrapper */
         }
+
         .disable-seeking .video-skip-overlay {
             display: block;
         }
@@ -495,17 +519,19 @@
                             <p class="text-xl font-bold mb-4 text-center text-yellow-400" id="video-q-label">Question
                             </p>
                             <p id="video-q-body" class="text-lg text-white mb-6 text-center max-w-2xl"></p>
-                            <div id="video-q-interactive" class="w-full max-w-2xl flex flex-col gap-4 max-h-[55vh] overflow-y-auto"></div>
+                            <div id="video-q-interactive"
+                                class="w-full max-w-2xl flex flex-col gap-4 max-h-[55vh] overflow-y-auto"></div>
                         </div>
                     </div>
                     <div class="mt-4 flex gap-4 w-full">
                         <div id="video-timeline-markers" class="flex-grow bg-gray-700 h-2 rounded relative"></div>
                     </div>
                 </div>
-                    <div class="interactive-column bg-gray-800 p-4 rounded-lg flex flex-col">
-                        <button onclick="rewatchSegment()" id="rewatch-btn" class="mb-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg transition-all flex items-center justify-center gap-2">
-                            <span class="text-xl">↺</span> Rewatch Last Minute
-                        </button>
+                <div class="interactive-column bg-gray-800 p-4 rounded-lg flex flex-col">
+                    <button onclick="rewatchSegment()" id="rewatch-btn"
+                        class="mb-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg transition-all flex items-center justify-center gap-2">
+                        <span class="text-xl">↺</span> Rewatch Last Minute
+                    </button>
                     <h3 class="text-xl font-bold text-yellow-400 mb-4 border-b border-gray-700 pb-2">Questions & Notes
                     </h3>
                     <div id="video-sidebar-list" class="flex-grow overflow-y-auto space-y-3 pr-2">
@@ -525,8 +551,10 @@
             <!-- Simulation Student UI -->
             <div id="simulation-student-content" class="hidden">
                 <div class="bg-gray-800 p-4 rounded-lg mb-4">
-                    <div id="simulation-iframe-container" class="w-full min-h-[60vh] bg-black rounded border border-gray-700 overflow-hidden"></div>
-                    <div id="simulation-complete-indicator" class="mt-3 text-sm text-blue-300">Complete the simulation to unlock follow-up questions.</div>
+                    <div id="simulation-iframe-container"
+                        class="w-full min-h-[60vh] bg-black rounded border border-gray-700 overflow-hidden"></div>
+                    <div id="simulation-complete-indicator" class="mt-3 text-sm text-blue-300">Complete the simulation
+                        to unlock follow-up questions.</div>
                 </div>
                 <div id="simulation-questions-section" class="hidden bg-gray-800 p-4 rounded-lg">
                     <h3 class="text-xl font-bold text-yellow-400 mb-4">Follow-up Questions</h3>
@@ -737,14 +765,14 @@
                             ? (assignmentData.videoQuestions || [])
                             : assignmentData.type === 'simulation'
                                 ? (assignmentData.simQuestions || [])
-                            : (assignmentData.slideIds || [])).length;
+                                : (assignmentData.slideIds || [])).length;
                     const oldCount = (oldData?.type === 'pdf'
                         ? (oldData?.questionZones || [])
                         : oldData?.type === 'video'
                             ? (oldData?.videoQuestions || [])
                             : oldData?.type === 'simulation'
                                 ? (oldData?.simQuestions || [])
-                            : (oldData?.slideIds || [])).length;
+                                : (oldData?.slideIds || [])).length;
                     if (!oldData || newCount !== oldCount) {
                         slideStates = new Array(newCount).fill(null);
                     }
@@ -1726,11 +1754,11 @@
             const isSimulation = assignmentData.type === 'simulation';
             const questionCount = isPDF
                 ? (assignmentData.questionZones || []).length
-                : isVideo 
+                : isVideo
                     ? (assignmentData.videoQuestions || []).length
                     : isSimulation
                         ? (assignmentData.simQuestions || []).length
-                    : (assignmentData.slideIds || []).length;
+                        : (assignmentData.slideIds || []).length;
 
             for (let index = 0; index < questionCount; index++) {
                 const state = slideStates[index];
@@ -1740,11 +1768,11 @@
                 let color = 'text-gray-500';
                 if (state) {
                     if (hideScores) {
-                      displayScore = (state.answer) ? 'Saved' : 'N/A';
-                      color = (state.answer) ? 'text-blue-400' : 'text-gray-500';
+                        displayScore = (state.answer) ? 'Saved' : 'N/A';
+                        color = (state.answer) ? 'text-blue-400' : 'text-gray-500';
                     } else if (state.score !== undefined) {
-                      displayScore = state.score;
-                      color = displayScore >= 90 ? 'text-green-400' : 'text-yellow-400';
+                        displayScore = state.score;
+                        color = displayScore >= 90 ? 'text-green-400' : 'text-yellow-400';
                     }
                 }
 
@@ -1761,11 +1789,11 @@
             }
             const overallAverage = questionCount > 0 ? (totalScore / questionCount).toFixed(1) : '0.0';
             const overallColor = overallAverage >= 90 ? 'text-green-400' : overallAverage >= 60 ? 'text-yellow-400' : 'text-red-400';
-            
+
             if (hideScores) {
-              document.getElementById('overallScore').innerHTML = `<span class="text-gray-400 text-2xl italic">Hidden until submission</span>`;
+                document.getElementById('overallScore').innerHTML = `<span class="text-gray-400 text-2xl italic">Hidden until submission</span>`;
             } else {
-              document.getElementById('overallScore').innerHTML = `<span class="${overallColor}">${overallAverage}%</span>`;
+                document.getElementById('overallScore').innerHTML = `<span class="${overallColor}">${overallAverage}%</span>`;
             }
             document.getElementById('perQuestionScores').innerHTML = perQuestionHTML;
 
@@ -3250,257 +3278,320 @@
         // ==========================================
         // VIDEO STUDENT VIEW LOGIC
         // ==========================================
-            let videoPlayer = null;
-            let ytPlayerInterval = null;
-            let sortedVideoItems = [];
-            let currentVideoItemIndex = 0;
-            let isVideoPausedForQuestion = false;
-            let lastKnownTime = 0;
-            let isEnforcingSkipPrevention = false;
-            let furthestReachedTime = 0;
-            let watchTimeSeconds = 0;
-            let lastWatchSyncTime = 0;
+        let videoPlayer = null;
+        let ytPlayerInterval = null;
+        let sortedVideoItems = [];
+        let currentVideoItemIndex = 0;
+        let isVideoPausedForQuestion = false;
+        let lastKnownTime = 0;
+        let isEnforcingSkipPrevention = false;
+        let furthestReachedTime = 0;
+        let watchTimeSeconds = 0;
+        let lastWatchSyncTime = 0;
 
-            function initializeVideoStudentView() {
-                const questions = (assignmentData.videoQuestions || []).map((q, i) => ({ ...q, _kind: 'question', _index: i, id: q.id || `vq${i}` }));
-                const notes = (assignmentData.videoNotes || []).map((n, i) => ({ ...n, _kind: 'note', id: n.id || `vn${i}` }));
+        function initializeVideoStudentView() {
+            // Fetch existing status from db
+            const statusId = `${assignmentData.id}_${userProfile.email.toLowerCase()}`;
+            db.collection("submissionStatus").doc(statusId).get().then(doc => {
+                if (doc.exists) {
+                    const data = doc.data();
+                    watchTimeSeconds = data.watchTime || 0;
+                    lastWatchSyncTime = watchTimeSeconds;
+                    furthestReachedTime = data.furthestReachedTime || 0;
+                    lastKnownTime = furthestReachedTime;
+                }
+                
+                renderVideoSidebar();
+                setupVideoPlayerUI();
+            }).catch(e => {
+                console.error("Error loading video status:", e);
+                renderVideoSidebar();
+                setupVideoPlayerUI();
+            });
+        }
 
-                sortedVideoItems = [...questions, ...notes].sort((a, b) => a.time - b.time);
-                currentVideoItemIndex = 0;
+        function renderVideoSidebar() {
+            const questions = (assignmentData.videoQuestions || []).map((q, i) => ({ ...q, _kind: 'question', _index: i, id: q.id || `vq${i}` }));
+            const notes = (assignmentData.videoNotes || []).map((n, i) => ({ ...n, _kind: 'note', id: n.id || `vn${i}` }));
 
-                const sidebarList = document.getElementById('video-sidebar-list');
-                sidebarList.innerHTML = sortedVideoItems.map(item => {
-                    const icon = item._kind === 'note' ? '📌' : '❓';
-                    const mmss = Math.floor(item.time / 60) + ':' + String(Math.floor(item.time % 60)).padStart(2, '0');
-                    const title = item._kind === 'note' ? 'Note' : `Q${item._index + 1}`;
-                    return `<div id="vsb_${item.id}" class="p-3 bg-gray-700/50 border border-gray-600 rounded-lg text-sm mb-2 text-gray-300 transition-colors">
+            sortedVideoItems = [...questions, ...notes].sort((a, b) => a.time - b.time);
+            currentVideoItemIndex = 0;
+
+            const sidebarList = document.getElementById('video-sidebar-list');
+            if (!sidebarList) return;
+
+            sidebarList.innerHTML = sortedVideoItems.map(item => {
+                const icon = item._kind === 'note' ? '📌' : '❓';
+                const mmss = Math.floor(item.time / 60) + ':' + String(Math.floor(item.time % 60)).padStart(2, '0');
+                const title = item._kind === 'note' ? 'Note' : `Q${item._index + 1}`;
+                return `<div id="vsb_${item.id}" class="p-3 bg-gray-700/50 border border-gray-600 rounded-lg text-sm mb-2 text-gray-300 transition-colors">
                     <span class="font-bold text-yellow-400 mr-2">${title}</span> 
                     <span class="text-xs text-gray-400 opacity-70">[${mmss}]</span>
                     <span class="status-icon ml-2 inline-block"></span>
                 </div>`;
-                }).join('');
+            }).join('');
 
-                // Restore checkmarks from previous sessions if answered
-                sortedVideoItems.forEach(item => {
-                    if (item._kind === 'question' && slideStates[item._index] && slideStates[item._index].answer) {
-                        const sbItemIcon = document.querySelector(`#vsb_${item.id} .status-icon`);
-                        if (sbItemIcon) sbItemIcon.innerHTML = '✅';
-                    }
-                });
+            // Restore checkmarks from previous sessions if answered
+            sortedVideoItems.forEach(item => {
+                if (item._kind === 'question' && slideStates[item._index] && slideStates[item._index].answer) {
+                    const sbItemIcon = document.querySelector(`#vsb_${item.id} .status-icon`);
+                    if (sbItemIcon) sbItemIcon.innerHTML = '✅';
+                }
+            });
+        }
 
-                const playerContainer = document.getElementById('video-player');
-                if (assignmentData.videoSourceType === 'youtube') {
-                    if (typeof YT !== 'undefined' && YT.Player) {
-                        setupYouTubePlayer(assignmentData.videoSourceId);
-                    } else {
-                        window.onYouTubeIframeAPIReady = () => setupYouTubePlayer(assignmentData.videoSourceId);
-                    }
-                } else if (assignmentData.videoSourceType === 'gdrive') {
-                    playerContainer.innerHTML = `<iframe src="https://drive.google.com/file/d/${assignmentData.videoSourceId}/preview" class="w-full h-full" allow="autoplay" frameborder="0" style="position: absolute; top:0; left:0;"></iframe>`;
+        function setupVideoPlayerUI() {
+            const sidebarList = document.getElementById('video-sidebar-list');
+            const playerContainer = document.getElementById('video-player');
+            if (!playerContainer) return;
+
+            if (assignmentData.videoSourceType === 'youtube') {
+                if (typeof YT !== 'undefined' && YT.Player) {
+                    setupYouTubePlayer(assignmentData.videoSourceId);
+                } else {
+                    window.onYouTubeIframeAPIReady = () => setupYouTubePlayer(assignmentData.videoSourceId);
+                }
+            } else if (assignmentData.videoSourceType === 'gdrive') {
+                playerContainer.innerHTML = `<iframe src="https://drive.google.com/file/d/${assignmentData.videoSourceId}/preview" class="w-full h-full" allow="autoplay" frameborder="0" style="position: absolute; top:0; left:0;"></iframe>`;
+                if (sidebarList) {
                     sidebarList.innerHTML = `<p class="text-sm text-gray-400 mb-4 italic p-2 border border-gray-600 rounded">Google Drive videos cannot automatically pause. Please watch the video and answer the questions interactively below.</p>`;
                     sortedVideoItems.forEach(item => {
                         const existingAnswerHtml = (item._kind === 'question' && slideStates[item._index] && slideStates[item._index].answer) ? `<span class="ml-2 text-green-400 text-xs">✅ Answered</span>` : '';
                         sidebarList.innerHTML += `<div class="mb-4 bg-gray-700/60 border border-gray-600 p-4 rounded-lg shadow-sm">
-                        <p class="text-sm font-bold text-yellow-500 mb-2">${item._kind === 'note' ? '📌 Note' : '❓ Q' + (item._index + 1)} <span class="text-gray-400 text-xs ml-1">[${Math.floor(item.time / 60)}:${String(Math.floor(item.time % 60)).padStart(2, '0')}]</span>${existingAnswerHtml}</p>
-                        <p class="text-sm text-gray-200 mb-3 leading-relaxed">${escapeHtml(item.body)}</p>
-                        ${item._kind === 'question' ? `<button onclick="showVideoOverlay('${item.id}', true)" class="w-full bg-blue-600 hover:bg-blue-700 font-bold px-3 py-2 rounded text-sm text-white transition-colors">Answer Question</button>` : ''}
-                    </div>`;
+                            <p class="text-sm font-bold text-yellow-500 mb-2">${item._kind === 'note' ? '📌 Note' : '❓ Q' + (item._index + 1)} <span class="text-gray-400 text-xs ml-1">[${Math.floor(item.time / 60)}:${String(Math.floor(item.time % 60)).padStart(2, '0')}]</span>${existingAnswerHtml}</p>
+                            <p class="text-sm text-gray-200 mb-3 leading-relaxed">${escapeHtml(item.body)}</p>
+                            ${item._kind === 'question' ? `<button onclick="showVideoOverlay('${item.id}', true)" class="w-full bg-blue-600 hover:bg-blue-700 font-bold px-3 py-2 rounded text-sm text-white transition-colors">Answer Question</button>` : ''}
+                        </div>`;
                     });
-                    document.getElementById('video-submit-final').classList.remove('hidden');
                 }
+                document.getElementById('video-submit-final').classList.remove('hidden');
             }
+        }
 
-            function setupYouTubePlayer(videoId) {
-                videoPlayer = new YT.Player('video-player', {
-                    height: '100%',
-                    width: '100%',
-                    videoId: videoId,
-                    playerVars: { 'playsinline': 1, 'rel': 0, 'modestbranding': 1, 'origin': window.location.origin },
-                    events: {
-                        'onReady': () => {
-                            ytPlayerInterval = setInterval(checkVideoTime, 1000);
-                            document.getElementById('video-submit-final').classList.remove('hidden');
-                            lastKnownTime = videoPlayer.getCurrentTime();
-                            furthestReachedTime = lastKnownTime;
 
-                            const settings = assignmentData.playbackSettings || {};
-                            if (settings.skipPrevention) {
-                                document.getElementById('video-wrapper').classList.add('disable-seeking');
-                            }
-                        },
-                        'onStateChange': (e) => {
-                            if (e.data == YT.PlayerState.PLAYING && isVideoPausedForQuestion) {
-                                videoPlayer.pauseVideo();
-                            }
-                            if (e.data == YT.PlayerState.BUFFERING || e.data == YT.PlayerState.PLAYING) {
-                                // Reset skip check base on seek
-                                if (!isEnforcingSkipPrevention) {
-                                  const curr = videoPlayer.getCurrentTime();
-                                  if (curr > lastKnownTime + 1.5) {
+        function setupYouTubePlayer(videoId) {
+            videoPlayer = new YT.Player('video-player', {
+                height: '100%',
+                width: '100%',
+                videoId: videoId,
+                playerVars: { 'playsinline': 1, 'rel': 0, 'modestbranding': 1, 'origin': window.location.origin },
+                events: {
+                    'onReady': () => {
+                        ytPlayerInterval = setInterval(checkVideoTime, 1000);
+                        document.getElementById('video-submit-final').classList.remove('hidden');
+                        lastKnownTime = videoPlayer.getCurrentTime();
+                        // Only reset furthestReachedTime if it's 0 (new session)
+                        if (!furthestReachedTime) furthestReachedTime = lastKnownTime;
+                        else videoPlayer.seekTo(furthestReachedTime);
+
+
+                        const settings = assignmentData.playbackSettings || {};
+                        if (settings.skipPrevention) {
+                            document.getElementById('video-wrapper').classList.add('disable-seeking');
+                        }
+                    },
+                    'onStateChange': (e) => {
+                        if (e.data == YT.PlayerState.PLAYING && isVideoPausedForQuestion) {
+                            videoPlayer.pauseVideo();
+                        }
+                        if (e.data == YT.PlayerState.BUFFERING || e.data == YT.PlayerState.PLAYING) {
+                            // Reset skip check base on seek
+                            if (!isEnforcingSkipPrevention) {
+                                const curr = videoPlayer.getCurrentTime();
+                                if (curr > lastKnownTime + 1.5) {
                                     // Potential skip check is handled in checkVideoTime for better precision
-                                  }
                                 }
                             }
                         }
                     }
-                });
+                }
+            });
+        }
+
+        async function checkVideoTime() {
+            if (!videoPlayer || typeof videoPlayer.getCurrentTime !== 'function') return;
+
+            const settings = assignmentData.playbackSettings || {};
+            const currentTime = videoPlayer.getCurrentTime();
+
+            // Track furthest reached
+            if (currentTime > furthestReachedTime) {
+                furthestReachedTime = currentTime;
             }
 
-            async function checkVideoTime() {
-                if (!videoPlayer || typeof videoPlayer.getCurrentTime !== 'function') return;
-                
-                const settings = assignmentData.playbackSettings || {};
-                const currentTime = videoPlayer.getCurrentTime();
+            // Increment watch time if playing
+            if (videoPlayer.getPlayerState() === YT.PlayerState.PLAYING && !isVideoPausedForQuestion) {
+                watchTimeSeconds += 1;
 
-                // Track furthest reached
-                if (currentTime > furthestReachedTime) {
-                    furthestReachedTime = currentTime;
-                }
-
-                // Increment watch time if playing
-                if (videoPlayer.getPlayerState() === YT.PlayerState.PLAYING && !isVideoPausedForQuestion) {
-                   watchTimeSeconds += 1;
-                   
-                   // Periodic sync every 30 seconds
-                   if (watchTimeSeconds - lastWatchSyncTime >= 30) {
-                       syncWatchTime();
-                   }
-                }
-
-                // Speed Lock
-                if (settings.speedLock) {
-                    if (typeof videoPlayer.getPlaybackRate === 'function' && videoPlayer.getPlaybackRate() > 1.01) {
-                        videoPlayer.setPlaybackRate(1);
-                        showToast("Speed locking is active for this assignment.", { color: 'blue' });
-                    }
-                }
-
-                // Skip Prevention
-                if (settings.skipPrevention && !isVideoPausedForQuestion && !isEnforcingSkipPrevention) {
-                    // Force seek back if skipped past furthestReachedTime
-                    if (currentTime > furthestReachedTime + 2.5) {
-                        isEnforcingSkipPrevention = true;
-                        videoPlayer.pauseVideo();
-                        showToast("Skipping forward is disabled.", { color: 'red' });
-                        setTimeout(() => {
-                            videoPlayer.seekTo(furthestReachedTime);
-                            videoPlayer.playVideo();
-                            isEnforcingSkipPrevention = false;
-                        }, 500);
-                        return;
-                    }
-                }
-
-                if (!isEnforcingSkipPrevention && !isVideoPausedForQuestion) {
-                    lastKnownTime = currentTime;
-                }
-
-                if (isVideoPausedForQuestion) return;
-
-                if (currentVideoItemIndex < sortedVideoItems.length) {
-                    const nextItem = sortedVideoItems[currentVideoItemIndex];
-                    if (currentTime >= nextItem.time) {
-                        showVideoOverlay(nextItem.id);
-                    }
+                // Periodic sync every 30 seconds
+                if (watchTimeSeconds - lastWatchSyncTime >= 30) {
+                    syncWatchTime();
                 }
             }
 
-            async function syncWatchTime() {
-                if (!userProfile.email || !assignmentData.id) return;
-                lastWatchSyncTime = watchTimeSeconds;
-                
-                try {
-                    const statusId = `${assignmentData.id}_${userProfile.email.toLowerCase()}`;
-                    await db.collection("submissionStatus").doc(statusId).set({
-                        assignmentId: assignmentData.id,
-                        studentEmail: userProfile.email.toLowerCase(),
-                        watchTime: watchTimeSeconds,
-                        lastAccessed: firebase.firestore.FieldValue.serverTimestamp()
-                    }, { merge: true });
-
-                    // Check for watch time Aura rules
-                    if (Array.isArray(assignmentData.auraRules)) {
-                        const watchRules = assignmentData.auraRules.filter(r => r.trigger === 'watch_time_reached' && (watchTimeSeconds / 60) >= (r.minutesRequired || 99999));
-                        // Since we don't want to spam, we could track which ones are already awarded
-                        // For now, let's just make it simple
-                    }
-                } catch (e) {
-                    console.error("Watch time sync error:", e);
+            // Speed Lock
+            if (settings.speedLock) {
+                const currentRate = typeof videoPlayer.getPlaybackRate === 'function' ? videoPlayer.getPlaybackRate() : 1;
+                if (Math.abs(currentRate - 1) > 0.01) {
+                    videoPlayer.setPlaybackRate(1);
+                    showToast("Speed locking is active for this assignment.", { color: 'blue' });
                 }
             }
 
-            function rewatchSegment() {
-                if (!videoPlayer || typeof videoPlayer.seekTo !== 'function') return;
 
-                const curr = videoPlayer.getCurrentTime();
-                const startTime = Math.max(0, curr - 60);
-
-                const overlay = document.getElementById('video-overlay');
-                if (overlay) overlay.classList.add('hidden');
-                isVideoPausedForQuestion = false;
-                
-                // Allow seek back even if skipPrevention is on
-                videoPlayer.seekTo(startTime);
-                videoPlayer.playVideo();
-            }
-
-            function showVideoOverlay(itemId, isManual = false) {
-                const item = sortedVideoItems.find(i => i.id === itemId);
-                if (!item) return;
-
-                isVideoPausedForQuestion = true;
-                if (videoPlayer && typeof videoPlayer.pauseVideo === 'function') {
+            // Skip Prevention
+            if (settings.skipPrevention && !isVideoPausedForQuestion && !isEnforcingSkipPrevention) {
+                // Force seek back if skipped past furthestReachedTime
+                if (currentTime > furthestReachedTime + 2.5) {
+                    isEnforcingSkipPrevention = true;
                     videoPlayer.pauseVideo();
+                    showToast("Skipping forward is disabled.", { color: 'red' });
+                    setTimeout(() => {
+                        videoPlayer.seekTo(furthestReachedTime);
+                        videoPlayer.playVideo();
+                        isEnforcingSkipPrevention = false;
+                    }, 500);
+                    return;
                 }
+            }
 
-                const overlay = document.getElementById('video-overlay');
-                const label = document.getElementById('video-q-label');
-                const body = document.getElementById('video-q-body');
-                const interactive = document.getElementById('video-q-interactive');
+            if (!isEnforcingSkipPrevention && !isVideoPausedForQuestion) {
+                lastKnownTime = currentTime;
+            }
 
-                overlay.classList.remove('hidden');
-                body.innerHTML = escapeHtml(item.body);
+            if (isVideoPausedForQuestion) return;
 
-                // Hide the wrapper's pointer events if YouTube so they cant unpause by clicking behind the transparent UI
-                document.getElementById('video-wrapper').classList.add('pointer-events-auto');
+            if (currentVideoItemIndex < sortedVideoItems.length) {
+                const nextItem = sortedVideoItems[currentVideoItemIndex];
+                if (currentTime >= nextItem.time) {
+                    showVideoOverlay(nextItem.id);
+                }
+            }
+        }
 
-                // Check for potential aura
-                let auraHtml = '';
-                if (item._kind === 'question' && Array.isArray(assignmentData.auraRules)) {
-                    const hasAura = assignmentData.auraRules.some(r => r.trigger === 'question_correct' && (r.target === 'all' || r.target === `q${item._index + 1}`));
-                    if (hasAura) {
-                        auraHtml = `<div class="mt-2 text-yellow-400 text-xs font-bold animate-pulse">✨ Earn Aura for a correct answer! ✨</div>`;
+        async function syncWatchTime() {
+            if (!userProfile.email || !assignmentData.id) return;
+            lastWatchSyncTime = watchTimeSeconds;
+
+            try {
+                const statusId = `${assignmentData.id}_${userProfile.email.toLowerCase()}`;
+                await db.collection("submissionStatus").doc(statusId).set({
+                    assignmentId: assignmentData.id,
+                    studentEmail: userProfile.email.toLowerCase(),
+                    watchTime: watchTimeSeconds,
+                    furthestReachedTime: furthestReachedTime,
+                    lastAccessed: firebase.firestore.FieldValue.serverTimestamp()
+                }, { merge: true });
+
+                // Check for watch time Aura rules
+                if (Array.isArray(assignmentData.auraRules)) {
+                    const statusDoc = await db.collection("submissionStatus").doc(statusId).get();
+                    const statusData = statusDoc.data() || {};
+                    const awardedRules = statusData.awardedAuraRuleIds || [];
+
+                    for (const rule of assignmentData.auraRules) {
+                        if (rule.trigger === 'watch_time_reached' && !awardedRules.includes(rule.id)) {
+                            const minutesWatched = watchTimeSeconds / 60;
+                            if (minutesWatched >= (rule.minutesRequired || 0)) {
+                                // Award Aura!
+                                if (userProfile.studentDocId) {
+                                    await db.collection('students').doc(userProfile.studentDocId).update({
+                                        auraLifetime: firebase.firestore.FieldValue.increment(rule.amount),
+                                        auraBalance: firebase.firestore.FieldValue.increment(rule.amount)
+                                    });
+                                    userProfile.auraLifetime = (userProfile.auraLifetime || 0) + rule.amount;
+                                    userProfile.auraBalance = (userProfile.auraBalance || 0) + rule.amount;
+                                    updateUserHeader();
+                                    showToast(`✨ +${rule.amount} Aura for Watch Time! ✨`, { color: 'yellow', duration: 4000 });
+                                    
+                                    // Mark as awarded
+                                    awardedRules.push(rule.id);
+                                    await db.collection("submissionStatus").doc(statusId).update({
+                                        awardedAuraRuleIds: awardedRules
+                                    });
+                                }
+                            }
+                        }
                     }
                 }
 
-                if (item._kind === 'note') {
-                    label.textContent = "📌 Note";
-                    interactive.innerHTML = `<button onclick="continueVideoFromItem(${isManual})" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2"><span>Continue Video</span> <span>▶</span></button>`;
-                } else {
-                    label.textContent = `Question ${item._index + 1}`;
+            } catch (e) {
+                console.error("Watch time sync error:", e);
+            }
+        }
 
-                    const existingAnswer = (slideStates[item._index] && slideStates[item._index].answer) ? slideStates[item._index].answer : '';
+        function rewatchSegment() {
+            if (!videoPlayer || typeof videoPlayer.seekTo !== 'function') return;
 
-                    let interactiveContent = '';
-                    if (item.type === 'multiple-choice') {
-                        const isMultiple = item.selectionType === 'multiple';
-                        const typeAttr = isMultiple ? 'checkbox' : 'radio';
-                        const existingAnswers = existingAnswer.split("||");
+            const curr = videoPlayer.getCurrentTime();
+            const startTime = Math.max(0, curr - 60);
 
-                        const choicesHtml = (item.choices || []).map((c, ci) => {
-                            const checked = existingAnswers.includes(c.text) ? 'checked' : '';
-                            return `<label class="flex items-center gap-3 p-4 bg-gray-800 border-2 ${checked ? 'border-yellow-500' : 'border-gray-700'} rounded-lg cursor-pointer hover:bg-gray-700 transition-colors">
+            const overlay = document.getElementById('video-overlay');
+            if (overlay) overlay.classList.add('hidden');
+            isVideoPausedForQuestion = false;
+
+            // Allow seek back even if skipPrevention is on
+            videoPlayer.seekTo(startTime);
+            videoPlayer.playVideo();
+        }
+
+        function showVideoOverlay(itemId, isManual = false) {
+            const item = sortedVideoItems.find(i => i.id === itemId);
+            if (!item) return;
+
+            isVideoPausedForQuestion = true;
+            if (videoPlayer && typeof videoPlayer.pauseVideo === 'function') {
+                videoPlayer.pauseVideo();
+            }
+
+            const overlay = document.getElementById('video-overlay');
+            const label = document.getElementById('video-q-label');
+            const body = document.getElementById('video-q-body');
+            const interactive = document.getElementById('video-q-interactive');
+
+            overlay.classList.remove('hidden');
+            body.innerHTML = escapeHtml(item.body);
+
+            // Hide the wrapper's pointer events if YouTube so they cant unpause by clicking behind the transparent UI
+            document.getElementById('video-wrapper').classList.add('pointer-events-auto');
+
+            // Check for potential aura
+            let auraHtml = '';
+            if (item._kind === 'question' && Array.isArray(assignmentData.auraRules)) {
+                const hasAura = assignmentData.auraRules.some(r => r.trigger === 'question_correct' && (r.target === 'all' || r.target === `q${item._index + 1}`));
+                if (hasAura) {
+                    auraHtml = `<div class="mt-2 text-yellow-400 text-xs font-bold animate-pulse">✨ Earn Aura for a correct answer! ✨</div>`;
+                }
+            }
+
+            if (item._kind === 'note') {
+                label.textContent = "📌 Note";
+                interactive.innerHTML = `<button onclick="continueVideoFromItem(${isManual})" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2"><span>Continue Video</span> <span>▶</span></button>`;
+            } else {
+                label.textContent = `Question ${item._index + 1}`;
+
+                const existingAnswer = (slideStates[item._index] && slideStates[item._index].answer) ? slideStates[item._index].answer : '';
+
+                let interactiveContent = '';
+                if (item.type === 'multiple-choice') {
+                    const isMultiple = item.selectionType === 'multiple';
+                    const typeAttr = isMultiple ? 'checkbox' : 'radio';
+                    const existingAnswers = existingAnswer.split("||");
+
+                    const choicesHtml = (item.choices || []).map((c, ci) => {
+                        const checked = existingAnswers.includes(c.text) ? 'checked' : '';
+                        return `<label class="flex items-center gap-3 p-4 bg-gray-800 border-2 ${checked ? 'border-yellow-500' : 'border-gray-700'} rounded-lg cursor-pointer hover:bg-gray-700 transition-colors">
                             <input type="${typeAttr}" name="vq_${item.id}" value="${escapeAttr(c.text)}" class="w-6 h-6 text-blue-500 bg-gray-900 border-gray-600 focus:ring-yellow-500" ${checked} onchange="this.parentElement.classList.toggle('border-yellow-500', this.checked); if(!${isMultiple}) { document.querySelectorAll('input[name=\\'vq_${item.id}\\']').forEach(inp => { if(inp!==this) inp.parentElement.classList.remove('border-yellow-500'); }); }">
                             <span class="text-lg">${escapeHtml(c.text)}</span>
                         </label>`;
-                        }).join('');
+                    }).join('');
 
-                        interactiveContent = `<div class="space-y-3 mb-6 w-full text-left">${choicesHtml}</div>`;
-                    } else {
-                        interactiveContent = `<textarea id="vq_${item.id}_input" class="w-full p-4 bg-gray-800 border-2 border-gray-600 rounded-xl text-white mb-6 focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 text-lg shadow-inner" rows="4" placeholder="Type your answer here...">${escapeHtml(existingAnswer)}</textarea>`;
-                    }
+                    interactiveContent = `<div class="space-y-3 mb-6 w-full text-left">${choicesHtml}</div>`;
+                } else {
+                    interactiveContent = `<textarea id="vq_${item.id}_input" class="w-full p-4 bg-gray-800 border-2 border-gray-600 rounded-xl text-white mb-6 focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 text-lg shadow-inner" rows="4" placeholder="Type your answer here...">${escapeHtml(existingAnswer)}</textarea>`;
+                }
 
-                    interactive.innerHTML = `
+                interactive.innerHTML = `
                         ${auraHtml}
                         ${interactiveContent}
                         <div class="flex flex-col gap-3">
@@ -3509,103 +3600,111 @@
                             ${isManual ? `<button onclick="continueVideoFromItem(true)" class="w-full text-gray-400 mt-1 text-sm underline hover:text-white">Cancel</button>` : ''}
                         </div>
                     `;
+            }
+        }
+
+        async function submitVideoQuestion(itemId, isManual = false) {
+            const item = sortedVideoItems.find(i => i.id === itemId);
+            if (!item) return;
+
+            const scoringMode = assignmentData.scoringMode || 'instant';
+            let studentAnswer = "";
+
+            if (item.type === 'multiple-choice') {
+                const inputs = document.querySelectorAll(`input[name="vq_${item.id}"]:checked`);
+                const answers = Array.from(inputs).map(inp => inp.value);
+                if (answers.length === 0) {
+                    showToast("Please select an answer.", { color: 'red' });
+                    return;
+                }
+                studentAnswer = answers.join("||");
+            } else {
+                const ta = document.getElementById(`vq_${item.id}_input`);
+                studentAnswer = ta.value.trim();
+                if (!studentAnswer) {
+                    showToast("Please type an answer.", { color: 'red' });
+                    return;
                 }
             }
 
-            async function submitVideoQuestion(itemId, isManual = false) {
-                const item = sortedVideoItems.find(i => i.id === itemId);
-                if (!item) return;
+            const interactive = document.getElementById('video-q-interactive');
+            const btn = interactive.querySelector('button.bg-green-600');
+            const prevHTML = btn.innerHTML;
+            btn.innerHTML = `<span class="animate-pulse">Checking...</span>`;
+            btn.disabled = true;
 
-                const scoringMode = assignmentData.scoringMode || 'instant';
-                let studentAnswer = "";
+            // Offline Evaluation
+            let score = 0;
+            if (item.type === 'multiple-choice') {
+                const correctAnswers = item.choices.filter(c => c.isCorrect).map(c => c.text);
+                const selectedSet = new Set(studentAnswer.split("||"));
+                const correctSet = new Set(correctAnswers);
 
-                if (item.type === 'multiple-choice') {
-                    const inputs = document.querySelectorAll(`input[name="vq_${item.id}"]:checked`);
-                    const answers = Array.from(inputs).map(inp => inp.value);
-                    if (answers.length === 0) {
-                        showToast("Please select an answer.", { color: 'red' });
-                        return;
-                    }
-                    studentAnswer = answers.join("||");
-                } else {
-                    const ta = document.getElementById(`vq_${item.id}_input`);
-                    studentAnswer = ta.value.trim();
-                    if (!studentAnswer) {
-                        showToast("Please type an answer.", { color: 'red' });
-                        return;
-                    }
+                let allCorrect = true;
+                if (selectedSet.size !== correctSet.size) allCorrect = false;
+                else {
+                    for (let sel of selectedSet) if (!correctSet.has(sel)) allCorrect = false;
                 }
-
-                const interactive = document.getElementById('video-q-interactive');
-                const btn = interactive.querySelector('button.bg-green-600');
-                const prevHTML = btn.innerHTML;
-                btn.innerHTML = `<span class="animate-pulse">Checking...</span>`;
-                btn.disabled = true;
-
-                // Offline Evaluation
-                let score = 0;
-                if (item.type === 'multiple-choice') {
-                    const correctAnswers = item.choices.filter(c => c.isCorrect).map(c => c.text);
-                    const selectedSet = new Set(studentAnswer.split("||"));
-                    const correctSet = new Set(correctAnswers);
-
-                    let allCorrect = true;
-                    if (selectedSet.size !== correctSet.size) allCorrect = false;
-                    else {
-                        for (let sel of selectedSet) if (!correctSet.has(sel)) allCorrect = false;
-                    }
-                    score = allCorrect ? 100 : 0;
-                } else {
-                    const oldIndex = currentSlideIndex;
-                    currentSlideIndex = item._index;
-                    try {
-                        score = await checkCurrentSlideAnswer(studentAnswer, { attemptCount: 1 });
-                        if (typeof score !== 'number' || isNaN(score)) score = 0;
-                    } catch (e) {
-                        score = 0;
-                    }
-                    currentSlideIndex = oldIndex;
-                }
-
-                slideStates[item._index] = { ...slideStates[item._index], answer: studentAnswer, score: score };
-
+                score = allCorrect ? 100 : 0;
+            } else {
+                const oldIndex = currentSlideIndex;
+                currentSlideIndex = item._index;
                 try {
-                    // Update sidebar icon
-                    const sbItemIcon = document.querySelector(`#vsb_${item.id} .status-icon`);
-                    if (sbItemIcon) {
+                    score = await checkCurrentSlideAnswer(studentAnswer, { attemptCount: 1 });
+                    if (typeof score !== 'number' || isNaN(score)) score = 0;
+                } catch (e) {
+                    score = 0;
+                }
+                currentSlideIndex = oldIndex;
+            }
+
+            slideStates[item._index] = { ...slideStates[item._index], answer: studentAnswer, score: score };
+
+            try {
+                // Update sidebar icon
+                const sbItemIcon = document.querySelector(`#vsb_${item.id} .status-icon`);
+                if (sbItemIcon) {
+                    if (scoringMode !== 'afterSubmission') {
                         sbItemIcon.innerHTML = '✅';
                         document.getElementById(`vsb_${item.id}`).classList.replace('border-gray-600', 'border-green-600');
+                    } else {
+                        // In afterSubmission mode, just show a generic checkmark without the green border 
+                        // to indicate saved status but not correctness (or just leave it)
+                        sbItemIcon.innerHTML = '💾'; 
+                        document.getElementById(`vsb_${item.id}`).classList.add('opacity-80');
                     }
+                }
 
-                    // Handle Feedback and Revision
-                    if (scoringMode === 'afterSubmission') {
-                        showToast("Answer saved!", { color: 'green' });
+
+                // Handle Feedback and Revision
+                if (scoringMode === 'afterSubmission') {
+                    showToast("Answer saved!", { color: 'green' });
+                    continueVideoFromItem(isManual);
+                } else {
+                    // Instant scoring
+                    if (score >= 90) {
+                        showToast(`Excellent! Score: ${score}/100`, { color: 'green' });
+
+                        // Check for per-question Aura
+                        if (Array.isArray(assignmentData.auraRules)) {
+                            const rule = assignmentData.auraRules.find(r => r.trigger === 'question_correct' && (r.target === 'all' || r.target === `q${item._index + 1}`));
+                            if (rule && rule.amount > 0 && userProfile.studentDocId) {
+                                await db.collection('students').doc(userProfile.studentDocId).update({
+                                    auraLifetime: firebase.firestore.FieldValue.increment(rule.amount),
+                                    auraBalance: firebase.firestore.FieldValue.increment(rule.amount)
+                                });
+                                userProfile.auraLifetime = (userProfile.auraLifetime || 0) + rule.amount;
+                                userProfile.auraBalance = (userProfile.auraBalance || 0) + rule.amount;
+                                updateUserHeader();
+                                showToast(`✨ +${rule.amount} Aura ✨`, { color: 'yellow', duration: 4000 });
+                            }
+                        }
                         continueVideoFromItem(isManual);
                     } else {
-                        // Instant scoring
-                        if (score >= 90) {
-                            showToast(`Excellent! Score: ${score}/100`, { color: 'green' });
-                            
-                            // Check for per-question Aura
-                            if (Array.isArray(assignmentData.auraRules)) {
-                                const rule = assignmentData.auraRules.find(r => r.trigger === 'question_correct' && (r.target === 'all' || r.target === `q${item._index + 1}`));
-                                if (rule && rule.amount > 0 && userProfile.studentDocId) {
-                                    await db.collection('students').doc(userProfile.studentDocId).update({
-                                        auraLifetime: firebase.firestore.FieldValue.increment(rule.amount),
-                                        auraBalance: firebase.firestore.FieldValue.increment(rule.amount)
-                                    });
-                                    userProfile.auraLifetime = (userProfile.auraLifetime || 0) + rule.amount;
-                                    userProfile.auraBalance = (userProfile.auraBalance || 0) + rule.amount;
-                                    updateUserHeader();
-                                    showToast(`✨ +${rule.amount} Aura ✨`, { color: 'yellow', duration: 4000 });
-                                }
-                            }
-                            continueVideoFromItem(isManual);
-                        } else {
-                            // Question incorrect or partial
-                            showToast(`Score: ${score}/100`, { color: 'blue' });
-                            
-                            interactive.innerHTML = `
+                        // Question incorrect or partial
+                        showToast(`Score: ${score}/100`, { color: 'blue' });
+
+                        interactive.innerHTML = `
                                 <div class="bg-gray-700/80 p-6 rounded-xl border border-gray-600 shadow-2xl text-center">
                                     <div class="text-4xl mb-3">📝</div>
                                     <p class="text-xl font-bold text-white mb-2">Score: ${score}/100</p>
@@ -3616,69 +3715,69 @@
                                     </div>
                                 </div>
                             `;
-                        }
                     }
-
-                    // Add submission entry
-                    await db.collection("submissions").add({
-                        assignmentId: assignmentData.id,
-                        studentEmail: userProfile.email,
-                        studentName: userProfile.name,
-                        slideIndex: item._index,
-                        answer: studentAnswer,
-                        score: score,
-                        timestamp: firebase.firestore.FieldValue.serverTimestamp()
-                    });
-                } catch (e) {
-                    console.error("Save error: ", e);
-                    showToast("Failed to save. Check your connection.", { color: 'red' });
-                    btn.innerHTML = prevHTML;
-                    btn.disabled = false;
                 }
+
+                // Add submission entry
+                await db.collection("submissions").add({
+                    assignmentId: assignmentData.id,
+                    studentEmail: userProfile.email,
+                    studentName: userProfile.name,
+                    slideIndex: item._index,
+                    answer: studentAnswer,
+                    score: score,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            } catch (e) {
+                console.error("Save error: ", e);
+                showToast("Failed to save. Check your connection.", { color: 'red' });
+                btn.innerHTML = prevHTML;
+                btn.disabled = false;
+            }
+        }
+
+        function jumpToVideoItemByQuestionIndex(qIndex) {
+            const item = sortedVideoItems.find(it => it._kind === 'question' && it._index === qIndex);
+            if (item) {
+                const summary = document.getElementById('summaryContainer');
+                if (summary) summary.classList.add('hidden');
+                const main = document.getElementById('mainContainer');
+                if (main) main.classList.remove('hidden');
+
+                showVideoOverlay(item.id, true);
+            }
+        }
+
+        function continueVideoFromItem(isManual = false) {
+            document.getElementById('video-overlay').classList.add('hidden');
+            isVideoPausedForQuestion = false;
+
+            if (!isManual && assignmentData.videoSourceType === 'youtube' && currentVideoItemIndex < sortedVideoItems.length) {
+                currentVideoItemIndex++;
             }
 
-            function jumpToVideoItemByQuestionIndex(qIndex) {
-                const item = sortedVideoItems.find(it => it._kind === 'question' && it._index === qIndex);
-                if (item) {
-                    const summary = document.getElementById('summaryContainer');
-                    if (summary) summary.classList.add('hidden');
-                    const main = document.getElementById('mainContainer');
-                    if (main) main.classList.remove('hidden');
-                    
-                    showVideoOverlay(item.id, true);
-                }
+            if (videoPlayer && typeof videoPlayer.playVideo === 'function') {
+                videoPlayer.playVideo();
             }
 
-            function continueVideoFromItem(isManual = false) {
-                document.getElementById('video-overlay').classList.add('hidden');
-                isVideoPausedForQuestion = false;
-
-                if (!isManual && assignmentData.videoSourceType === 'youtube' && currentVideoItemIndex < sortedVideoItems.length) {
-                    currentVideoItemIndex++;
-                }
-
-                if (videoPlayer && typeof videoPlayer.playVideo === 'function') {
-                    videoPlayer.playVideo();
-                }
-
-                if (currentVideoItemIndex >= sortedVideoItems.length) {
-                    document.getElementById('video-submit-final').classList.remove('hidden');
-                }
-
-                // Re-render Google Drive sidebar if it's manual mode to show updated checks
-                if (isManual && assignmentData.videoSourceType === 'gdrive') {
-                    initializeVideoStudentView(); // Simple trick to redraw marks
-                }
+            if (currentVideoItemIndex >= sortedVideoItems.length) {
+                document.getElementById('video-submit-final').classList.remove('hidden');
             }
 
-            function escapeHtml(text) {
-                const div = document.createElement('div');
-                div.textContent = text || '';
-                return div.innerHTML;
+            // Re-render Google Drive sidebar if it's manual mode to show updated checks
+            if (isManual && assignmentData.videoSourceType === 'gdrive') {
+                initializeVideoStudentView(); // Simple trick to redraw marks
             }
-            function escapeAttr(text) {
-                return (text || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text || '';
+            return div.innerHTML;
+        }
+        function escapeAttr(text) {
+            return (text || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
     </script>
     <!-- Floating Tools UI -->
     <button id="calc-toggle-btn" class="tool-toggle-btn hidden" onclick="toggleCalculator()"
