@@ -3116,15 +3116,24 @@
 
             const iframe = document.createElement('iframe');
             iframe.src = simUrl;
-            iframe.className = 'w-full min-h-[60vh] rounded';
+            iframe.className = 'w-full min-h-[80vh] rounded';
             iframe.setAttribute('allow', 'fullscreen');
             iframeContainer.appendChild(iframe);
 
             const simQuestions = assignmentData.simQuestions || [];
+            const lockedQuestionCount = simQuestions.filter(q => !q.showBeforeSim).length;
+            const hasPreSimQuestions = simQuestions.some(q => q.showBeforeSim);
+            indicator.classList.remove('text-red-400', 'text-blue-300', 'text-green-400', 'text-gray-300');
+
             simQuestions.forEach((q, index) => {
                 const state = slideStates[index] || {};
                 const questionDiv = document.createElement('div');
                 questionDiv.className = 'bg-gray-700/60 border border-gray-600 rounded-lg p-4';
+                const isLockedUntilComplete = !q.showBeforeSim;
+                if (isLockedUntilComplete) {
+                    questionDiv.classList.add('hidden');
+                    questionDiv.dataset.simLocked = 'true';
+                }
                 questionDiv.innerHTML = `
                     <p class="font-semibold mb-2">Question ${index + 1}</p>
                     <p class="text-gray-200 mb-3">${escapeHtml(q.body || '')}</p>
@@ -3136,6 +3145,26 @@
                 `;
                 questionsList.appendChild(questionDiv);
             });
+
+            if (!simQuestions.length) {
+                indicator.textContent = 'No follow-up questions for this simulation.';
+                indicator.classList.add('text-gray-300');
+            } else if (lockedQuestionCount === 0) {
+                indicator.textContent = 'All follow-up questions are available now.';
+                indicator.classList.add('text-green-400');
+            } else if (hasPreSimQuestions) {
+                indicator.textContent = 'Complete the simulation to unlock remaining questions.';
+                indicator.classList.add('text-blue-300');
+            } else {
+                indicator.textContent = 'Complete the simulation to unlock follow-up questions.';
+                indicator.classList.add('text-blue-300');
+            }
+
+            if (hasPreSimQuestions || (simQuestions.length && lockedQuestionCount === 0)) {
+                questionsSection.classList.remove('hidden');
+            } else {
+                questionsSection.classList.add('hidden');
+            }
 
             if (simulationMessageListener) {
                 window.removeEventListener('message', simulationMessageListener);
@@ -3156,6 +3185,10 @@
                 indicator.classList.remove('text-blue-300');
                 indicator.classList.add('text-green-400');
                 questionsSection.classList.remove('hidden');
+                questionsList.querySelectorAll('[data-sim-locked="true"]').forEach((el) => {
+                    el.classList.remove('hidden');
+                    delete el.dataset.simLocked;
+                });
 
                 if (event.data.simData !== undefined) {
                     try {
