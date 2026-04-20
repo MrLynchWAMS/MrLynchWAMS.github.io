@@ -143,6 +143,11 @@
                             class="mr-2">
                         <span>Video (YouTube / Google Drive)</span>
                     </label>
+                    <label class="flex items-center cursor-pointer">
+                        <input type="radio" name="assignmentType" value="simulation" onchange="toggleCreateFields()"
+                            class="mr-2">
+                        <span>Simulation</span>
+                    </label>
                 </div>
 
                 <div id="slidesFields">
@@ -167,6 +172,11 @@
                 <div id="videoFields" class="hidden">
                     <label for="videoLink" class="block text-sm font-medium text-gray-300 mb-2">Video URL (YouTube or Google Drive share link)</label>
                     <input type="text" id="videoLink" placeholder="https://www.youtube.com/watch?v=... or Google Drive link"
+                        class="w-full p-3 mb-4 bg-gray-700 rounded border border-gray-600">
+                </div>
+                <div id="simulationFields" class="hidden">
+                    <label for="simulationUrl" class="block text-sm font-medium text-gray-300 mb-2">Simulation URL</label>
+                    <input type="text" id="simulationUrl" placeholder="https://custom.scienceclass.rocks/my-simulation/"
                         class="w-full p-3 mb-4 bg-gray-700 rounded border border-gray-600">
                 </div>
                 <div class="flex items-center mb-4">
@@ -490,7 +500,7 @@
                 statusHTML += '</div>';
 
                 const escapedName = escapeHtml(assignment.name);
-                const editUrl = assignment.type === 'pdf' ? `pdf-editor.html?id=${assignment.id}` : assignment.type === 'video' ? `video-editor.html?id=${assignment.id}` : `editor.html?id=${assignment.id}`;
+                const editUrl = assignment.type === 'pdf' ? `pdf-editor.html?id=${assignment.id}` : assignment.type === 'video' ? `video-editor.html?id=${assignment.id}` : assignment.type === 'simulation' ? `sim-editor.html?id=${assignment.id}` : `editor.html?id=${assignment.id}`;
 
                 card.innerHTML = `
                 <div>
@@ -533,6 +543,7 @@
             document.getElementById('slidesFields').classList.toggle('hidden', type !== 'slides');
             document.getElementById('pdfFields').classList.toggle('hidden', type !== 'pdf');
             document.getElementById('videoFields').classList.toggle('hidden', type !== 'video');
+            document.getElementById('simulationFields').classList.toggle('hidden', type !== 'simulation');
         }
 
         function closeCreateModal() {
@@ -541,6 +552,7 @@
             document.getElementById('slidesLink').value = '';
             document.getElementById('pdfFile').value = '';
             document.getElementById('videoLink').value = '';
+            document.getElementById('simulationUrl').value = '';
             document.getElementById('uploadProgress').classList.add('hidden');
             document.getElementById('isPublicCheckbox').checked = false;
             document.getElementById('modal-error').innerText = '';
@@ -565,6 +577,7 @@
             let presentationId = null;
             let pdfUrl = null;
             let videoUrl = null;
+            let simulationUrl = null;
             let assignmentVideoId = "";
             let assignmentVideoType = "";
 
@@ -612,6 +625,12 @@
                 
                 assignmentVideoId = ytMatch ? ytMatch[1] : driveMatch[1];
                 assignmentVideoType = ytMatch ? 'youtube' : 'gdrive';
+            } else if (type === 'simulation') {
+                simulationUrl = document.getElementById('simulationUrl').value.trim();
+                if (!simulationUrl) {
+                    errorP.innerText = "Please enter a simulation URL.";
+                    return;
+                }
             }
 
             try {
@@ -622,6 +641,7 @@
                     presentationId: presentationId || "", 
                     pdfUrl: pdfUrl || "",
                     videoUrl: videoUrl || "", 
+                    simulationUrl: simulationUrl || "",
                     videoSourceType: (type === 'video' && typeof assignmentVideoType !== 'undefined') ? assignmentVideoType : "",
                     videoSourceId: (type === 'video' && typeof assignmentVideoId !== 'undefined') ? assignmentVideoId : "",
                     teacherEmail: currentUserEmail,
@@ -639,6 +659,11 @@
                     docData.videoQuestions = [];
                     docData.videoNotes = [];
                     docData.checkerFunctions = {};
+                    docData.checkerMeta = {};
+                } else if (type === 'simulation') {
+                    docData.simQuestions = [];
+                    docData.checkerFunctions = {};
+                    docData.checkerMeta = {};
                 } else if (type === 'pdf') {
                     docData.questionZones = [];
                     docData.annotations = [];
@@ -650,7 +675,7 @@
                 const newDoc = await db.collection("assignments").add(docData);
                 showToast("Assignment created!", { color: 'green' });
                 closeCreateModal();
-                const editorPage = type === 'pdf' ? 'pdf-editor.html' : type === 'video' ? 'video-editor.html' : 'editor.html';
+                const editorPage = type === 'pdf' ? 'pdf-editor.html' : type === 'video' ? 'video-editor.html' : type === 'simulation' ? 'sim-editor.html' : 'editor.html';
                 window.location.href = `./${editorPage}?id=${newDoc.id}`;
             } catch (error) {
                 console.error("Error creating assignment:", error);
@@ -846,6 +871,12 @@
                     shareData.videoQuestions = source.videoQuestions || [];
                     shareData.videoNotes = source.videoNotes || [];
                     shareData.checkerFunctions = source.checkerFunctions || {};
+                    shareData.checkerMeta = source.checkerMeta || {};
+                } else if (source.type === 'simulation') {
+                    shareData.simulationUrl = source.simulationUrl || "";
+                    shareData.simQuestions = source.simQuestions || [];
+                    shareData.checkerFunctions = source.checkerFunctions || {};
+                    shareData.checkerMeta = source.checkerMeta || {};
                 } else if (source.type === 'pdf') {
                     shareData.pdfUrl = source.pdfUrl || "";
                     shareData.questionZones = source.questionZones || [];
