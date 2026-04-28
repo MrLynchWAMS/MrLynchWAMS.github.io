@@ -148,6 +148,11 @@
                             class="mr-2">
                         <span>Simulation</span>
                     </label>
+                    <label class="flex items-center cursor-pointer">
+                        <input type="radio" name="assignmentType" value="lesson" onchange="toggleCreateFields()"
+                            class="mr-2">
+                        <span>Multimodal Lesson</span>
+                    </label>
                 </div>
 
                 <div id="slidesFields">
@@ -170,14 +175,20 @@
                 </div>
 
                 <div id="videoFields" class="hidden">
-                    <label for="videoLink" class="block text-sm font-medium text-gray-300 mb-2">Video URL (YouTube or Google Drive share link)</label>
-                    <input type="text" id="videoLink" placeholder="https://www.youtube.com/watch?v=... or Google Drive link"
+                    <label for="videoLink" class="block text-sm font-medium text-gray-300 mb-2">Video URL (YouTube or
+                        Google Drive share link)</label>
+                    <input type="text" id="videoLink"
+                        placeholder="https://www.youtube.com/watch?v=... or Google Drive link"
                         class="w-full p-3 mb-4 bg-gray-700 rounded border border-gray-600">
                 </div>
                 <div id="simulationFields" class="hidden">
-                    <label for="simulationUrl" class="block text-sm font-medium text-gray-300 mb-2">Simulation URL</label>
+                    <label for="simulationUrl" class="block text-sm font-medium text-gray-300 mb-2">Simulation
+                        URL</label>
                     <input type="text" id="simulationUrl" placeholder="https://custom.scienceclass.rocks/my-simulation/"
                         class="w-full p-3 mb-4 bg-gray-700 rounded border border-gray-600">
+                </div>
+                <div id="lessonFields" class="hidden">
+                    <p class="text-sm text-gray-400 mb-4">You will build your lesson and link sections in the next step.</p>
                 </div>
                 <div class="flex items-center mb-4">
                     <input type="checkbox" id="isPublicCheckbox" class="mr-2 w-4 h-4">
@@ -544,6 +555,7 @@
             document.getElementById('pdfFields').classList.toggle('hidden', type !== 'pdf');
             document.getElementById('videoFields').classList.toggle('hidden', type !== 'video');
             document.getElementById('simulationFields').classList.toggle('hidden', type !== 'simulation');
+            document.getElementById('lessonFields').classList.toggle('hidden', type !== 'lesson');
         }
 
         function closeCreateModal() {
@@ -613,16 +625,16 @@
             } else if (type === 'video') {
                 videoUrl = document.getElementById('videoLink').value.trim();
                 if (!videoUrl) { errorP.innerText = "Please enter a video URL."; return; }
-                
+
                 // Detection logic simplified for creation
                 const ytMatch = videoUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/);
                 const driveMatch = videoUrl.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/) || videoUrl.match(/drive\.google\.com\/open\?id=([a-zA-Z0-9_-]+)/);
-                
-                if (!ytMatch && !driveMatch) { 
-                    errorP.innerText = "Please enter a valid YouTube or Google Drive video URL."; 
-                    return; 
+
+                if (!ytMatch && !driveMatch) {
+                    errorP.innerText = "Please enter a valid YouTube or Google Drive video URL.";
+                    return;
                 }
-                
+
                 assignmentVideoId = ytMatch ? ytMatch[1] : driveMatch[1];
                 assignmentVideoType = ytMatch ? 'youtube' : 'gdrive';
             } else if (type === 'simulation') {
@@ -637,19 +649,19 @@
                 btn.innerText = "Creating...";
                 btn.disabled = true;
                 const docData = {
-                    name, type, 
-                    presentationId: presentationId || "", 
+                    name, type,
+                    presentationId: presentationId || "",
                     pdfUrl: pdfUrl || "",
-                    videoUrl: videoUrl || "", 
+                    videoUrl: videoUrl || "",
                     simulationUrl: simulationUrl || "",
                     videoSourceType: (type === 'video' && typeof assignmentVideoType !== 'undefined') ? assignmentVideoType : "",
                     videoSourceId: (type === 'video' && typeof assignmentVideoId !== 'undefined') ? assignmentVideoId : "",
                     teacherEmail: currentUserEmail,
-                    coTeachers: currentUserDefaultCoTeachers || [], 
-                    assignedClasses: [], 
-                    classStatus: {}, 
+                    coTeachers: currentUserDefaultCoTeachers || [],
+                    assignedClasses: [],
+                    classStatus: {},
                     isPublic,
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp(), 
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                     slideIds: [],
                     postSubmissionRule: 'open',
                     scoringMode: 'instant'
@@ -667,6 +679,9 @@
                 } else if (type === 'pdf') {
                     docData.questionZones = [];
                     docData.annotations = [];
+                } else if (type === 'lesson') {
+                    docData.sections = [];
+                    docData.sectionStatus = {};
                 } else {
                     docData.checkerCode = {};
                     docData.checkerMeta = {};
@@ -675,7 +690,7 @@
                 const newDoc = await db.collection("assignments").add(docData);
                 showToast("Assignment created!", { color: 'green' });
                 closeCreateModal();
-                const editorPage = type === 'pdf' ? 'pdf-editor.html' : type === 'video' ? 'video-editor.html' : type === 'simulation' ? 'sim-editor.html' : 'editor.html';
+                const editorPage = type === 'pdf' ? 'pdf-editor.html' : type === 'video' ? 'video-editor.html' : type === 'simulation' ? 'sim-editor.html' : type === 'lesson' ? 'lesson-editor.html' : 'editor.html';
                 window.location.href = `./${editorPage}?id=${newDoc.id}`;
             } catch (error) {
                 console.error("Error creating assignment:", error);
@@ -841,13 +856,13 @@
             if (!targetEmail || !source) return;
             try {
                 const shareData = {
-                    name: source.name + " (copy)", 
-                    type: source.type || "slides", 
-                    teacherEmail: targetEmail, 
-                    coTeachers: [], 
+                    name: source.name + " (copy)",
+                    type: source.type || "slides",
+                    teacherEmail: targetEmail,
+                    coTeachers: [],
                     assignedClasses: [],
-                    classStatus: {}, 
-                    isPublic: false, 
+                    classStatus: {},
+                    isPublic: false,
                     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                     // Common fields
                     postSubmissionRule: source.postSubmissionRule || 'open',
@@ -855,7 +870,7 @@
                     allowEarlyAccess: source.allowEarlyAccess || false,
                     toolsConfig: source.toolsConfig || {},
                     modifications: source.modifications || {},
-                    deadlinePolicy: source.deadlinePolicy || {}, 
+                    deadlinePolicy: source.deadlinePolicy || {},
                     auraRules: source.auraRules || [],
                     auraOnTime: source.auraOnTime || false,
                     auraDueAt: source.auraDueAt || null,
