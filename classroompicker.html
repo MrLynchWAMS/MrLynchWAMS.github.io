@@ -431,7 +431,13 @@
         </div>
         <div id="mainContainer" class="hidden">
             <div class="flex justify-between items-center mb-4">
-                <div></div>
+                <div id="deadline-timer-container" class="hidden flex items-center gap-2 bg-gray-800/80 px-4 py-2 rounded-lg border border-yellow-500/50 shadow-lg animate-fade-in">
+                    <span class="text-xl">⏰</span>
+                    <div class="flex flex-col">
+                        <span id="deadline-timer-label" class="text-[10px] uppercase tracking-wider text-gray-400 font-bold">Time Remaining</span>
+                        <span id="deadline-timer-text" class="font-mono font-bold text-yellow-400 leading-tight">--:--</span>
+                    </div>
+                </div>
                 <div class="flex items-center gap-4">
                     <div id="user-info-container"></div>
                     <button onclick="handleSignOut()"
@@ -723,6 +729,8 @@
         // ---------------------------
 
         let assignmentListener = null;
+        let deadlineTimerInterval = null;
+        let isDeadlineReached = false;
         let submissionStatusListener = null;
 
         window.onload = async function () {
@@ -890,6 +898,34 @@
                 }
             }
 
+            // --- New Deadline Policy Enforcement ---
+            const policy = assignmentData.deadlinePolicy || {};
+            const isPerClass = !!policy.perClass;
+            const dueAtTimestamp = isPerClass ? policy.classDueAt?.[studentClass] : policy.globalDueAt;
+            const behavior = policy.behavior || 'none'; // 'none', 'lock-only', 'auto-submit'
+            const latePolicy = policy.latePolicy || 'allow'; // 'allow', 'penalize', 'block'
+
+            if (dueAtTimestamp) {
+                const now = new Date();
+                const dueAt = dueAtTimestamp.toDate ? dueAtTimestamp.toDate() : new Date(dueAtTimestamp);
+
+                if (now > dueAt) {
+                    // Deadline has passed
+                    if (latePolicy === 'block') {
+                        showAccessDenied("The deadline for this assignment has passed. Late submissions are not allowed.");
+                        return;
+                    }
+
+                    if (!isDeadlineReached) {
+                        isDeadlineReached = true;
+                        handleDeadlineReached(behavior);
+                    }
+                } else if (behavior !== 'none') {
+                    // Deadline is in the future, start timer
+                    startDeadlineTimer(dueAt, behavior);
+                }
+            }
+
             // If we reach here, and they WERE seeing an error, restore view
             if (accessEvaluationInterval) {
                 clearInterval(accessEvaluationInterval);
@@ -910,6 +946,106 @@
                     document.getElementById('mainContainer').classList.remove('hidden');
                     updateSlideDisplay();
                 }
+            }
+        }
+
+        function startDeadlineTimer(dueAt, behavior) {
+            if (deadlineTimerInterval) clearInterval(deadlineTimerInterval);
+
+            const timerContainer = document.getElementById('deadline-timer-container');
+            const timerText = document.getElementById('deadline-timer-text');
+            const timerLabel = document.getElementById('deadline-timer-label');
+
+            timerContainer.classList.remove('hidden');
+
+            function updateTimer() {
+                const now = new Date();
+                const diff = dueAt - now;
+
+                if (diff <= 0) {
+                    clearInterval(deadlineTimerInterval);
+                    timerText.textContent = "00:00:00";
+                    if (!isDeadlineReached) {
+                        isDeadlineReached = true;
+                        handleDeadlineReached(behavior);
+                    }
+                    return;
+                }
+
+                const hours = Math.floor(diff / 3600000);
+                const mins = Math.floor((diff % 3600000) / 60000);
+                const secs = Math.floor((diff % 60000) / 1000);
+
+                timerText.textContent = `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+
+                // Warning colors
+                if (diff < 300000) { // 5 minutes
+                    timerText.classList.add('text-red-500');
+                    timerText.classList.remove('text-yellow-400');
+                    timerContainer.classList.add('border-red-500');
+                } else {
+                    timerText.classList.remove('text-red-500');
+                    timerText.classList.add('text-yellow-400');
+                    timerContainer.classList.remove('border-red-500');
+                }
+            }
+
+            updateTimer();
+            deadlineTimerInterval = setInterval(updateTimer, 1000);
+        }
+
+        async function handleDeadlineReached(behavior) {
+            if (isSubmitted) return;
+
+            if (behavior === 'auto-submit') {
+                showToast("⏰ Deadline reached! Auto-submitting your work...", { color: 'blue', duration: 5000 });
+                // Small delay to ensure they see the toast
+                setTimeout(async () => {
+                    await performAutoSubmit('deadline');
+                }, 2000);
+            } else if (behavior === 'lock-only') {
+                showToast("⏰ Deadline reached! Assignment is now locked.", { color: 'red', duration: 5000 });
+                // Lock the UI
+                const main = document.getElementById('mainContainer');
+                if (main) {
+                    const lockoutDiv = document.createElement('div');
+                    lockoutDiv.className = "fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 text-center";
+                    lockoutDiv.innerHTML = `
+                        <div class="bg-gray-800 p-8 rounded-2xl border-2 border-red-500 shadow-2xl max-w-md">
+                            <span class="text-6xl mb-4 block">🔒</span>
+                            <h2 class="text-2xl font-bold text-white mb-2">Assignment Locked</h2>
+                            <p class="text-gray-300 mb-6">The deadline has passed and the assignment is now locked. You can no longer make changes.</p>
+                            <button onclick="performAutoSubmit('lock')" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg">Submit & View Summary</button>
+                        </div>
+                    `;
+                    document.body.appendChild(lockoutDiv);
+                }
+            }
+        }
+
+        async function performAutoSubmit(reason) {
+            if (isSubmitted) return;
+
+            try {
+                // Similar to handleSubmitAssignment but without confirmation
+                const statusRef = db.collection("submissionStatus").doc(`${assignmentData.id}_${userProfile.email}`);
+                await statusRef.set({
+                    studentEmail: userProfile.email,
+                    studentName: userProfile.name,
+                    assignmentId: assignmentData.id,
+                    status: 'submitted',
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                    autoSubmitted: true,
+                    submitReason: reason,
+                    auraAwarded: false
+                });
+
+                isSubmitted = true;
+                showToast("Work saved and submitted.", { color: 'green' });
+                showSummary();
+            } catch (e) {
+                console.error("Auto-submit error:", e);
+                showToast("Error during auto-submit. Please refresh.", { color: 'red' });
             }
         }
 
