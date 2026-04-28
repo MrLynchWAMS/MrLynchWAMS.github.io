@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson Editor</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📚</text></svg>">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
+  <style>
+    .hidden { display: none; }
+    .sticky-header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(17, 24, 39, 0.95);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px border-gray-700;
+      padding: 1rem 0;
+    }
+    #toast-wrapper {
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      z-index: 50;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+  </style>
+</head>
+
+<body class="bg-gray-900 text-white font-sans">
+  <div id="page-loader" class="flex flex-col items-center justify-center h-screen">
+    <h1 class="text-4xl font-bold text-yellow-400 mb-4">Lesson Editor</h1>
+    <p id="loading-text" class="text-lg text-gray-300">Initializing...</p>
+    <div id="signInButtonContainer" class="hidden mt-8">
+      <div id="g_id_onload" data-client_id="1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com" data-callback="handleCredentialResponse"></div>
+      <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_black" data-text="signin_with" data-shape="rectangular" data-logo_alignment="left"></div>
+    </div>
+    <p id="auth-error" class="text-red-500 mt-4"></p>
+  </div>
+
+  <div id="editorContent" class="hidden container mx-auto p-4 md:p-8">
+    <div class="sticky-header mb-6">
+      <div class="flex justify-between items-center flex-wrap gap-4">
+        <div class="flex items-center gap-3">
+          <div id="titleDisplay" class="flex items-center gap-2">
+            <h1 id="assignmentTitle" class="text-3xl font-bold text-yellow-400"></h1>
+            <button onclick="startEditingTitle()" class="text-gray-400 hover:text-white transition-colors" title="Rename Assignment">✏️</button>
+          </div>
+          <div id="titleEditor" class="hidden flex items-center gap-2">
+            <input type="text" id="titleInput" class="bg-gray-700 text-white text-xl p-1 rounded border border-gray-600 focus:outline-none focus:border-yellow-400">
+            <button onclick="saveTitle()" class="text-green-400 hover:text-green-300" title="Save">✅</button>
+            <button onclick="cancelEditingTitle()" class="text-red-400 hover:text-red-300" title="Cancel">❌</button>
+          </div>
+        </div>
+        <div>
+          <a href="./assignments.html" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg mr-2">&larr; Back to Assignments</a>
+          <button onclick="saveAssignment()" id="saveBtn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg mr-2">Save Lesson</button>
+          <button id="signOutButton" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Sign Out</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-gray-800 p-4 rounded-lg mb-6">
+      <h2 class="text-xl font-semibold mb-2">Student Link</h2>
+      <div class="flex gap-2">
+        <input id="shareLink" type="text" readonly class="w-full p-2 bg-gray-700 border border-gray-600 rounded">
+        <button onclick="copyShareLink()" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-3 rounded-lg">Copy</button>
+      </div>
+    </div>
+
+    <div id="deadline-widget-container"></div>
+
+    <div class="bg-gray-800 p-6 rounded-lg mb-8">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-2xl font-bold text-yellow-400">Lesson Sections</h2>
+        <button onclick="addSection()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">+ Add Section</button>
+      </div>
+      <p class="text-gray-400 mb-6">Create the flow of your lesson by linking existing assignments and setting adaptive unlock conditions.</p>
+      
+      <div id="sectionsContainer" class="space-y-4">
+        <!-- Sections will be injected here -->
+      </div>
+    </div>
+  </div>
+
+  <div id="toast-wrapper"></div>
+  <script src="./shared/deadline-widget.js"></script>
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
+      authDomain: "mrlynch-slides-app.firebaseapp.com",
+      projectId: "mrlynch-slides-app",
+      storageBucket: "mrlynch-slides-app.appspot.com",
+      messagingSenderId: "223179627035",
+      appId: "1:223179627035:web:ff0f538f3029d829c3f6be"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    const auth = firebase.auth();
+
+    let currentUserEmail = "";
+    let assignmentId = "";
+    let assignmentData = null;
+    let allClassNames = [];
+    let availableAssignments = []; // List of other assignments for the teacher
+
+    window.onload = function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        assignmentId = urlParams.get('id');
+        if (!assignmentId) {
+            document.getElementById('loading-text').innerText = "Error: No assignment ID provided.";
+            return;
+        }
+
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                currentUserEmail = user.email.toLowerCase();
+                document.getElementById('signOutButton').onclick = () => auth.signOut().then(() => window.location.reload());
+                loadData();
+            } else {
+                document.getElementById('loading-text').classList.add('hidden');
+                document.getElementById('signInButtonContainer').classList.remove('hidden');
+            }
+        });
+    };
+
+    function handleCredentialResponse(response) {
+      const idToken = response.credential;
+      const credential = firebase.auth.GoogleAuthProvider.credential(idToken);
+      auth.signInWithCredential(credential).catch(error => {
+        document.getElementById('auth-error').innerText = error.message;
+      });
+    }
+
+    async function loadData() {
+        try {
+            // Load the lesson
+            const doc = await db.collection("assignments").doc(assignmentId).get();
+            if (!doc.exists) {
+                document.getElementById('loading-text').innerText = "Assignment not found.";
+                return;
+            }
+            assignmentData = { id: doc.id, ...doc.data() };
+            
+            // Authorization
+            const isOwner = assignmentData.teacherEmail === currentUserEmail;
+            const isCoTeacher = assignmentData.coTeachers && assignmentData.coTeachers.includes(currentUserEmail);
+            if (!isOwner && !isCoTeacher) {
+                document.getElementById('loading-text').innerText = "Access denied.";
+                return;
+            }
+
+            // Ensure sections array exists
+            if (!assignmentData.sections) assignmentData.sections = [];
+
+            // Get Owner Data for classes
+            let ownerDoc = await db.collection("teachers").doc(assignmentData.teacherEmail).get();
+            let ownerData = ownerDoc.exists ? ownerDoc.data() : { defaultClasses: [] };
+            allClassNames = (ownerData.defaultClasses || []).map(cls => String(cls).trim().toLowerCase());
+            
+            let teacherDefaults = ownerData.defaultAssignmentConfig || {};
+
+            // Render DeadlineWidget
+            DeadlineWidget.render(allClassNames);
+            DeadlineWidget.populate(assignmentData, teacherDefaults, allClassNames);
+
+            // Fetch other assignments for the dropdown
+            const assignmentsQuery = await db.collection("assignments")
+                .where("teacherEmail", "==", assignmentData.teacherEmail)
+                .get();
+            availableAssignments = [];
+            assignmentsQuery.forEach(d => {
+                if (d.id !== assignmentId && d.data().type !== 'lesson') { // Cannot nest lessons inside lessons (to avoid infinite loops)
+                    availableAssignments.push({ id: d.id, name: d.data().name, type: d.data().type });
+                }
+            });
+            availableAssignments.sort((a,b) => a.name.localeCompare(b.name));
+
+            // Populate UI
+            document.getElementById('assignmentTitle').innerText = assignmentData.name;
+            document.getElementById('titleInput').value = assignmentData.name;
+            document.getElementById('shareLink').value = `${window.location.origin}/classroompicker.html?assignmentId=${assignmentId}`;
+
+            renderSections();
+
+            document.getElementById('page-loader').classList.add('hidden');
+            document.getElementById('editorContent').classList.remove('hidden');
+        } catch (e) {
+            console.error(e);
+            document.getElementById('loading-text').innerText = "Error loading data: " + e.message;
+        }
+    }
+
+    // --- Title Editing ---
+    function startEditingTitle() {
+        document.getElementById('titleDisplay').classList.add('hidden');
+        document.getElementById('titleEditor').classList.remove('hidden');
+        document.getElementById('titleInput').focus();
+    }
+    function cancelEditingTitle() {
+        document.getElementById('titleInput').value = assignmentData.name;
+        document.getElementById('titleEditor').classList.add('hidden');
+        document.getElementById('titleDisplay').classList.remove('hidden');
+    }
+    async function saveTitle() {
+        const newTitle = document.getElementById('titleInput').value.trim();
+        if (!newTitle) return;
+        try {
+            await db.collection("assignments").doc(assignmentId).update({ name: newTitle });
+            assignmentData.name = newTitle;
+            document.getElementById('assignmentTitle').innerText = newTitle;
+            cancelEditingTitle();
+            showToast("Title updated");
+        } catch (e) {
+            console.error(e);
+            showToast("Error updating title", "red");
+        }
+    }
+
+    // --- Sections ---
+    function generateId() {
+        return Math.random().toString(36).substr(2, 9);
+    }
+
+    function addSection() {
+        assignmentData.sections.push({
+            id: generateId(),
+            title: `Section ${assignmentData.sections.length + 1}`,
+            linkedAssignmentId: '',
+            unlockCondition: {
+                dependsOn: '',
+                requireStatus: 'none',
+                minScore: '',
+                maxScore: ''
+            }
+        });
+        renderSections();
+    }
+
+    function removeSection(index) {
+        if(confirm("Are you sure you want to remove this section?")) {
+            assignmentData.sections.splice(index, 1);
+            renderSections();
+        }
+    }
+
+    function moveSection(index, dir) {
+        if (dir === -1 && index > 0) {
+            const temp = assignmentData.sections[index - 1];
+            assignmentData.sections[index - 1] = assignmentData.sections[index];
+            assignmentData.sections[index] = temp;
+        } else if (dir === 1 && index < assignmentData.sections.length - 1) {
+            const temp = assignmentData.sections[index + 1];
+            assignmentData.sections[index + 1] = assignmentData.sections[index];
+            assignmentData.sections[index] = temp;
+        }
+        renderSections();
+    }
+
+    function renderSections() {
+        const container = document.getElementById('sectionsContainer');
+        container.innerHTML = '';
+        
+        assignmentData.sections.forEach((sec, index) => {
+            const card = document.createElement('div');
+            card.className = "bg-gray-700 p-4 rounded-lg border border-gray-600 relative";
+            
+            // Build options for assignments
+            let assignmentOptions = `<option value="">-- Select an Assignment --</option>`;
+            availableAssignments.forEach(a => {
+                const selected = sec.linkedAssignmentId === a.id ? 'selected' : '';
+                assignmentOptions += `<option value="${a.id}" ${selected}>${a.name} (${a.type})</option>`;
+            });
+
+            // Build options for dependsOn
+            let dependsOptions = `<option value="">None (Available immediately)</option>`;
+            assignmentData.sections.forEach((s, idx) => {
+                if (idx < index) { // Can only depend on previous sections
+                    const selected = sec.unlockCondition.dependsOn === s.id ? 'selected' : '';
+                    dependsOptions += `<option value="${s.id}" ${selected}>${s.title}</option>`;
+                }
+            });
+
+            // Build HTML
+            let html = `
+                <div class="flex justify-between items-center mb-4">
+                    <div class="flex items-center gap-2">
+                        <span class="text-gray-400 font-bold">${index + 1}.</span>
+                        <input type="text" value="${sec.title}" onchange="updateSection(${index}, 'title', this.value)" class="bg-gray-800 text-white p-2 rounded border border-gray-600 focus:border-yellow-400 outline-none w-64" placeholder="Section Title">
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="moveSection(${index}, -1)" ${index === 0 ? 'disabled class="text-gray-600"' : 'class="text-gray-300 hover:text-white"'} title="Move Up">⬆️</button>
+                        <button onclick="moveSection(${index}, 1)" ${index === assignmentData.sections.length - 1 ? 'disabled class="text-gray-600"' : 'class="text-gray-300 hover:text-white"'} title="Move Down">⬇️</button>
+                        <button onclick="removeSection(${index})" class="text-red-400 hover:text-red-300 ml-4" title="Delete Section">🗑️</button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm text-gray-300 mb-1">Linked Content</label>
+                        <select onchange="updateSection(${index}, 'linkedAssignmentId', this.value)" class="w-full bg-gray-800 border border-gray-600 rounded p-2 focus:border-yellow-400 outline-none">
+                            ${assignmentOptions}
+                        </select>
+                        <p class="text-xs text-gray-400 mt-1">This section will load the selected assignment.</p>
+                    </div>
+                    
+                    <div class="bg-gray-800 p-3 rounded border border-gray-600">
+                        <label class="block text-sm font-bold text-yellow-400 mb-2">Adaptive Routing (Unlock Condition)</label>
+                        
+                        <div class="mb-2">
+                            <label class="block text-xs text-gray-400 mb-1">Depends on:</label>
+                            <select onchange="updateCondition(${index}, 'dependsOn', this.value)" class="w-full bg-gray-700 border border-gray-600 rounded p-1 text-sm outline-none">
+                                ${dependsOptions}
+                            </select>
+                        </div>
+            `;
+
+            if (sec.unlockCondition.dependsOn) {
+                html += `
+                        <div class="mb-2">
+                            <label class="block text-xs text-gray-400 mb-1">Requirement:</label>
+                            <select onchange="updateCondition(${index}, 'requireStatus', this.value)" class="w-full bg-gray-700 border border-gray-600 rounded p-1 text-sm outline-none">
+                                <option value="submitted" ${sec.unlockCondition.requireStatus === 'submitted' ? 'selected' : ''}>Must be Submitted</option>
+                            </select>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-2 mt-2">
+                            <div>
+                                <label class="block text-xs text-gray-400 mb-1">Min Score (%) (Optional)</label>
+                                <input type="number" value="${sec.unlockCondition.minScore}" onchange="updateCondition(${index}, 'minScore', this.value)" class="w-full bg-gray-700 border border-gray-600 rounded p-1 text-sm outline-none" placeholder="0">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-400 mb-1">Max Score (%) (Optional)</label>
+                                <input type="number" value="${sec.unlockCondition.maxScore}" onchange="updateCondition(${index}, 'maxScore', this.value)" class="w-full bg-gray-700 border border-gray-600 rounded p-1 text-sm outline-none" placeholder="100">
+                            </div>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-2">Leave score limits blank to unlock simply on submission.</p>
+                `;
+            } else {
+                html += `<p class="text-xs text-gray-500 italic mt-2">Section is immediately available.</p>`;
+            }
+
+            html += `
+                    </div>
+                </div>
+            `;
+            
+            card.innerHTML = html;
+            container.appendChild(card);
+        });
+    }
+
+    // Must attach these to window so inline handlers can find them
+    window.updateSection = function(index, field, value) {
+        assignmentData.sections[index][field] = value;
+    };
+
+    window.updateCondition = function(index, field, value) {
+        assignmentData.sections[index].unlockCondition[field] = value;
+        if (field === 'dependsOn') {
+            renderSections(); // Re-render to show/hide score fields
+        }
+    };
+
+    // --- Save ---
+    async function saveAssignment() {
+        const btn = document.getElementById('saveBtn');
+        btn.innerText = "Saving...";
+        btn.disabled = true;
+
+        try {
+            const updatePayload = {
+                sections: assignmentData.sections
+            };
+
+            // Apply deadline widget changes
+            DeadlineWidget.applyToSavePayload(updatePayload, allClassNames);
+
+            await db.collection("assignments").doc(assignmentId).update(updatePayload);
+            
+            showToast("Lesson saved successfully!", { color: "green" });
+        } catch (e) {
+            console.error(e);
+            showToast("Error saving: " + e.message, { color: "red", duration: 5000 });
+        } finally {
+            btn.innerText = "Save Lesson";
+            btn.disabled = false;
+        }
+    }
+
+    function copyShareLink() {
+        const link = document.getElementById('shareLink').value;
+        navigator.clipboard.writeText(link).then(() => {
+            showToast("Link copied to clipboard!");
+        });
+    }
+
+    function showToast(message, options = {}) {
+        const wrapper = document.getElementById('toast-wrapper');
+        const toast = document.createElement('div');
+        const color = options.color || 'blue';
+        toast.className = `bg-${color}-600 text-white px-4 py-2 rounded shadow-lg transform transition-all duration-300 translate-x-full`;
+        toast.innerText = message;
+        wrapper.appendChild(toast);
+        
+        requestAnimationFrame(() => {
+            toast.classList.remove('translate-x-full');
+        });
+
+        setTimeout(() => {
+            toast.classList.add('translate-x-full');
+            setTimeout(() => toast.remove(), 300);
+        }, options.duration || 3000);
+    }
+  </script>
+</body>
+</html>
