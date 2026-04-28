@@ -239,7 +239,7 @@
       <select id="scoringMode"
         class="w-full md:w-1/2 p-2 bg-gray-700 rounded border border-gray-600 focus:border-yellow-400 focus:outline-none">
         <option value="instant">Instant (scores shown immediately after checking)</option>
-        <option value="after-submit">After Submission (scores hidden until student submits)</option>
+        <option value="afterSubmission">After Submission (scores hidden until student submits)</option>
       </select>
     </div>
 
@@ -255,16 +255,19 @@
         <option value="hide">Lock & Hide (Students cannot see answers or scores)</option>
       </select>
     </div>
+    <div id="deadline-widget-container"></div>
     <!-- Playback Restrictions -->
     <div class="bg-gray-800 p-6 rounded-lg mb-8">
       <h2 class="text-2xl font-bold text-yellow-400 mb-4">Playback Restrictions</h2>
       <div class="space-y-4">
         <label class="flex items-center gap-3 cursor-pointer">
-          <input type="checkbox" id="preventSkipping" class="w-5 h-5 bg-gray-700 border-gray-600 rounded text-yellow-500 focus:ring-yellow-500">
+          <input type="checkbox" id="preventSkipping"
+            class="w-5 h-5 bg-gray-700 border-gray-600 rounded text-yellow-500 focus:ring-yellow-500">
           <span class="text-lg text-gray-200">Prevent students from skipping & seeking ahead</span>
         </label>
         <label class="flex items-center gap-3 cursor-pointer">
-          <input type="checkbox" id="lockPlaybackSpeed" class="w-5 h-5 bg-gray-700 border-gray-600 rounded text-yellow-500 focus:ring-yellow-500">
+          <input type="checkbox" id="lockPlaybackSpeed"
+            class="w-5 h-5 bg-gray-700 border-gray-600 rounded text-yellow-500 focus:ring-yellow-500">
           <span class="text-lg text-gray-200">Lock playback speed (No speeding up/slowing down)</span>
         </label>
       </div>
@@ -277,27 +280,36 @@
           <h2 class="text-2xl font-bold text-yellow-400">✧ Aura Rewards</h2>
           <span id="aura-chevron" class="text-2xl transform transition-transform">▶</span>
         </div>
-        <p class="text-gray-400 mt-2">Set up automatic behaviors to reward student performance with extra Aura points upon submission.</p>
+        <p class="text-gray-400 mt-2">Set up automatic behaviors to reward student performance with extra Aura points
+          upon submission.</p>
       </div>
       <div id="aura-content" class="collapsible-content border-t border-gray-700">
         <div class="px-6 pb-6">
-          <p class="text-gray-400 mb-4 mt-4 text-sm">Aura is awarded once per assignment at submit time, based on the overall assignment average. If multiple rules match, the highest matching reward is given (non-cumulative).</p>
+          <p class="text-gray-400 mb-4 mt-4 text-sm">Aura is awarded once per assignment at submit time, based on the
+            overall assignment average. If multiple rules match, the highest matching reward is given (non-cumulative).
+          </p>
           <div id="aura-rules-container" class="space-y-4"></div>
           <div class="mt-6 flex justify-between items-center">
-            <button onclick="addAuraRule()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm">+ Add Aura Condition</button>
+            <button onclick="addAuraRule()"
+              class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm">+ Add Aura
+              Condition</button>
             <div class="flex items-center">
-              <input type="checkbox" id="auraOnTime" class="w-4 h-4 text-yellow-500 rounded focus:ring-yellow-500 bg-gray-700 border-gray-500">
+              <input type="checkbox" id="auraOnTime"
+                class="w-4 h-4 text-yellow-500 rounded focus:ring-yellow-500 bg-gray-700 border-gray-500">
               <label for="auraOnTime" class="ml-2 text-sm text-gray-300">"Must be on time" applies to ALL rules</label>
             </div>
           </div>
-          <div id="aura-global-deadline" class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6 p-4 bg-gray-700/30 rounded-lg border border-gray-700 hidden">
+          <div id="aura-global-deadline"
+            class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6 p-4 bg-gray-700/30 rounded-lg border border-gray-700 hidden">
             <div>
               <label class="block text-sm text-gray-400 mb-1">Global Aura Deadline Date</label>
-              <input type="date" id="auraDueDate" class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none">
+              <input type="date" id="auraDueDate"
+                class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none">
             </div>
             <div>
               <label class="block text-sm text-gray-400 mb-1">Global Aura Deadline Time</label>
-              <input type="time" id="auraDueTime" class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none">
+              <input type="time" id="auraDueTime"
+                class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none">
             </div>
           </div>
         </div>
@@ -354,57 +366,73 @@
     </div>
   </div>
 
-    <template id="checkerTemplate">
-      <div class="checker-widget">
-        <div class="flex items-center justify-between mb-2">
-          <label class="block font-semibold">Checker Function</label>
-          <div class="flex items-center space-x-1 p-1 bg-gray-700 rounded-lg">
-            <button class="mode-toggle-btn simple-mode-btn bg-indigo-600 text-white rounded-md px-3 py-1 text-sm font-semibold">Simple</button>
-            <button class="mode-toggle-btn advanced-mode-btn bg-transparent text-gray-300 rounded-md px-3 py-1 text-sm font-semibold">Advanced</button>
-          </div>
-        </div>
-        <div class="simple-mode-ui mt-2 p-3 bg-gray-700/50 border border-gray-600 rounded-lg space-y-4">
-          <div class="grid grid-cols-2 gap-4 text-sm border-b border-gray-700 pb-4">
-            <div>
-              <label class="flex items-center space-x-2 cursor-pointer">
-                <input type="checkbox" class="exclusive-scoring-toggle bg-gray-700 border-gray-600 rounded text-indigo-500 focus:ring-indigo-600">
-                <span>Exclusive scoring (stop at first match)</span>
-              </label>
-            </div>
-            <div class="flex items-center space-x-2">
-              <label class="whitespace-nowrap">Numeric equality tolerance (±)</label>
-              <input type="number" class="numeric-tolerance-input w-20 bg-gray-700 border border-gray-600 rounded-md p-1 text-center" value="0" min="0" step="any">
-            </div>
-          </div>
-          <div class="rule-groups-container space-y-4"></div>
-          <button class="add-rule-group-btn mt-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm">+ Add Rule Group</button>
-          <div class="mt-4">
-            <label class="block text-xs font-medium text-gray-500">Live Code Preview (read-only)</label>
-            <pre class="bg-gray-900 text-white p-2 rounded-md text-xs overflow-x-auto h-32"><code class="live-code-preview"></code></pre>
-          </div>
-        </div>
-        <div class="advanced-mode-ui hidden">
-          <textarea class="checker-textarea w-full h-64 p-2 bg-gray-700 rounded" placeholder="// Write your checker function here"></textarea>
-          <div class="flex justify-between mt-2">
-            <button class="convert-to-simple-btn bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded-md text-sm">Convert back to Simple</button>
-            <button class="delete-advanced-btn bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-3 rounded-md text-sm">Delete Advanced Code</button>
-          </div>
-        </div>
-        <div class="universal-quick-test mt-2 pt-2 border-t border-gray-700 space-y-2">
-          <label class="block text-xs font-medium text-gray-400">Quick Test</label>
-          <div class="flex items-center space-x-2">
-            <input type="text" class="quick-test-input w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-sm" placeholder="Enter a sample answer...">
-            <button class="quick-test-btn bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1 px-3 rounded-md text-sm">Run</button>
-            <span class="quick-test-result text-sm font-semibold text-gray-300"></span>
-          </div>
-        </div>
-        <div class="simple-disabled-notice hidden">
-          <b>Advanced code exists.</b> Delete advanced code to use Simple Mode.
+  <template id="checkerTemplate">
+    <div class="checker-widget">
+      <div class="flex items-center justify-between mb-2">
+        <label class="block font-semibold">Checker Function</label>
+        <div class="flex items-center space-x-1 p-1 bg-gray-700 rounded-lg">
+          <button
+            class="mode-toggle-btn simple-mode-btn bg-indigo-600 text-white rounded-md px-3 py-1 text-sm font-semibold">Simple</button>
+          <button
+            class="mode-toggle-btn advanced-mode-btn bg-transparent text-gray-300 rounded-md px-3 py-1 text-sm font-semibold">Advanced</button>
         </div>
       </div>
-    </template>
+      <div class="simple-mode-ui mt-2 p-3 bg-gray-700/50 border border-gray-600 rounded-lg space-y-4">
+        <div class="grid grid-cols-2 gap-4 text-sm border-b border-gray-700 pb-4">
+          <div>
+            <label class="flex items-center space-x-2 cursor-pointer">
+              <input type="checkbox"
+                class="exclusive-scoring-toggle bg-gray-700 border-gray-600 rounded text-indigo-500 focus:ring-indigo-600">
+              <span>Exclusive scoring (stop at first match)</span>
+            </label>
+          </div>
+          <div class="flex items-center space-x-2">
+            <label class="whitespace-nowrap">Numeric equality tolerance (±)</label>
+            <input type="number"
+              class="numeric-tolerance-input w-20 bg-gray-700 border border-gray-600 rounded-md p-1 text-center"
+              value="0" min="0" step="any">
+          </div>
+        </div>
+        <div class="rule-groups-container space-y-4"></div>
+        <button
+          class="add-rule-group-btn mt-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm">+
+          Add Rule Group</button>
+        <div class="mt-4">
+          <label class="block text-xs font-medium text-gray-500">Live Code Preview (read-only)</label>
+          <pre
+            class="bg-gray-900 text-white p-2 rounded-md text-xs overflow-x-auto h-32"><code class="live-code-preview"></code></pre>
+        </div>
+      </div>
+      <div class="advanced-mode-ui hidden">
+        <textarea class="checker-textarea w-full h-64 p-2 bg-gray-700 rounded"
+          placeholder="// Write your checker function here"></textarea>
+        <div class="flex justify-between mt-2">
+          <button
+            class="convert-to-simple-btn bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded-md text-sm">Convert
+            back to Simple</button>
+          <button
+            class="delete-advanced-btn bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-3 rounded-md text-sm">Delete
+            Advanced Code</button>
+        </div>
+      </div>
+      <div class="universal-quick-test mt-2 pt-2 border-t border-gray-700 space-y-2">
+        <label class="block text-xs font-medium text-gray-400">Quick Test</label>
+        <div class="flex items-center space-x-2">
+          <input type="text" class="quick-test-input w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-sm"
+            placeholder="Enter a sample answer...">
+          <button
+            class="quick-test-btn bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1 px-3 rounded-md text-sm">Run</button>
+          <span class="quick-test-result text-sm font-semibold text-gray-300"></span>
+        </div>
+      </div>
+      <div class="simple-disabled-notice hidden">
+        <b>Advanced code exists.</b> Delete advanced code to use Simple Mode.
+      </div>
+    </div>
+  </template>
   <div id="toast-wrapper"></div>
 
+  <script src="./shared/deadline-widget.js"></script>
   <script src="./shared/checker-widget.js"></script>
   <script src="./shared/checker-runner.js"></script>
   <script>
@@ -423,6 +451,8 @@
     let assignmentId = null;
     let assignmentData = null;
     let currentUserEmail = null;
+    let teacherDefaults = {};
+    let allClassNames = [];
     let lastKnownUserEmail = null;
     let gisInitialized = false;
     let signInWatchdog = null;
@@ -543,18 +573,18 @@
       }
 
       try {
-          google.accounts.id.initialize({
-            client_id: "1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com",
-            callback: handleCredentialResponse,
-            auto_select: false,
-            itp_support: true
-          });
-          gisInitialized = true;
-          renderGoogleSignInButton();
-          return true;
+        google.accounts.id.initialize({
+          client_id: "1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com",
+          callback: handleCredentialResponse,
+          auto_select: false,
+          itp_support: true
+        });
+        gisInitialized = true;
+        renderGoogleSignInButton();
+        return true;
       } catch (e) {
-          console.error("GIS initialization error:", e);
-          return false;
+        console.error("GIS initialization error:", e);
+        return false;
       }
     }
 
@@ -772,6 +802,25 @@
           }
         });
 
+        // Filter students by current teacher to ensure Class Times logic only shows THEIR classes
+        const studentSnapshot = await db.collection("students").get();
+        const allStudentsFetched = studentSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const teacherStudents = allStudentsFetched.filter(s => {
+          const studentTeacher = s.teacherEmail ? s.teacherEmail.toLowerCase() : 'klynch@mtps.us';
+          return studentTeacher === currentUserEmail;
+        });
+        window.allTeacherStudents = teacherStudents;
+
+        allClassNames = [...new Set(teacherStudents.map(s => String(s.class)))].sort();
+
+        // Load teacher data for defaults
+        const teacherDoc = await db.collection("teachers").doc(assignmentData.teacherEmail).get();
+        const teacherData = teacherDoc.exists ? teacherDoc.data() : {};
+
+        // Initialize deadline widget
+        DeadlineWidget.render(allClassNames);
+        DeadlineWidget.populate(assignmentData, teacherData, allClassNames);
+
         renderQuestions();
       } catch (error) {
         console.error("Error loading assignment:", error);
@@ -867,7 +916,7 @@
       auraRules.forEach((rule, index) => {
         const div = document.createElement('div');
         div.className = "flex flex-col gap-4 p-4 bg-gray-700/50 rounded-lg border border-gray-600 relative animate-fade-in-right";
-        
+
         const isWatchTime = rule.trigger === 'watch_time_reached';
         const isQuestionCorrect = rule.trigger === 'question_correct';
 
@@ -903,7 +952,7 @@
               <label class="block text-xs text-gray-400 mb-1">Target</label>
               <select onchange="updateRule(${index}, 'target', this.value)" class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none text-sm">
                 <option value="all" ${rule.target === 'all' ? 'selected' : ''}>Any Question</option>
-                ${videoQuestions.map((q, i) => `<option value="q${i+1}" ${rule.target === `q${i+1}` ? 'selected' : ''}>Question ${i+1}</option>`).join('')}
+                ${videoQuestions.map((q, i) => `<option value="q${i + 1}" ${rule.target === `q${i + 1}` ? 'selected' : ''}>Question ${i + 1}</option>`).join('')}
               </select>
             </div>
             ` : ''}
@@ -920,9 +969,9 @@
     function updateRule(index, field, value) {
       if (!auraRules[index]) return;
       if (field === 'amount' || field === 'minScore' || field === 'minutesRequired') {
-          auraRules[index][field] = parseFloat(value) || 0;
+        auraRules[index][field] = parseFloat(value) || 0;
       } else {
-          auraRules[index][field] = value;
+        auraRules[index][field] = value;
       }
     }
 
@@ -1363,6 +1412,10 @@
         const url = document.getElementById('videoUrlInput').value.trim();
         const source = detectVideoSource(url);
 
+        // Read deadline data from the shared widget
+        const dwResult = DeadlineWidget.read(allClassNames);
+        const deadlinePolicy = dwResult.deadlinePolicy;
+
         // Build checker functions and meta
         const checkerFunctions = {};
         const checkerMeta = {};
@@ -1381,8 +1434,8 @@
             clean.choices = q.choices;
             clean.selectionType = q.selectionType || 'single';
           } else {
-             clean.checkerCode = q.checkerCode || '';
-             clean.checkerMeta = q.checkerMeta || null;
+            clean.checkerCode = q.checkerCode || '';
+            clean.checkerMeta = q.checkerMeta || null;
           }
           return clean;
         });
@@ -1405,8 +1458,12 @@
           auraRules: auraRules,
           playbackSettings: playbackSettings,
           scoringMode: document.getElementById('scoringMode').value,
-          postSubmissionRule: document.getElementById('postSubmissionRule').value
+          postSubmissionRule: document.getElementById('postSubmissionRule').value,
+          deadlinePolicy: deadlinePolicy
         };
+
+        // Apply deadline widget data (perClass, globalDueAt, behavior, late policy)
+        DeadlineWidget.applyToSavePayload(updatePayload, allClassNames);
 
         await db.collection("assignments").doc(assignmentId).update(updatePayload);
         showToast("Assignment saved!", { color: 'green' });
