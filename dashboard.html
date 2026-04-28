@@ -267,6 +267,10 @@
         let submittedEmails = new Set();
         let questionProgressByStudent = new Map(); // Key: studentEmail, Value: Map of slideIndex -> progressData
         let simDataByStudent = new Map();
+        let studentsMap = new Map();
+        let submissionsByStudent = new Map();
+        let violationsByStudent = new Map();
+        let simDataByStudentLocal = new Map();
 
         // --- Impersonation Logic ---
         function checkImpersonation() {
@@ -363,12 +367,12 @@
             if (unsubscribeSimulationData) unsubscribeSimulationData();
 
             // Initialize data structures
-            const studentsMap = new Map();
-            const submissionsByStudent = new Map();
-            const submittedEmails = new Set();
-            const violationsByStudent = new Map();
-            const auraByStudent = new Map();
-            const simDataByStudentLocal = new Map();
+            studentsMap.clear();
+            submissionsByStudent.clear();
+            submittedEmails.clear();
+            violationsByStudent.clear();
+            auraByStudent.clear();
+            simDataByStudentLocal.clear();
 
             // Listener 1: Students collection (filtered by roster)
             unsubscribeStudents = db.collection("students")
