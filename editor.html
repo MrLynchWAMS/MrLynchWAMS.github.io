@@ -212,59 +212,7 @@
       </select>
     </div>
 
-    <div id="deadline-section" class="bg-gray-800 rounded-lg mb-8 overflow-hidden">
-      <div id="deadline-header" class="p-6 cursor-pointer" onclick="toggleDeadlineSection()">
-        <div class="flex justify-between items-center">
-          <h2 class="text-2xl font-bold text-yellow-400">Class Start Times & Deadlines</h2>
-          <span id="deadline-chevron" class="text-2xl transform transition-transform">▶</span>
-        </div>
-        <p class="text-gray-400 mt-2">Manage per-period start times and individual class deadlines to control when
-          students can access and finish work.</p>
-      </div>
-      <div id="deadline-content" class="collapsible-content">
-        <div class="px-6 pb-6">
-          <div class="mb-6 bg-gray-700/30 p-4 rounded-lg border border-gray-700">
-            <label class="flex items-center cursor-pointer mb-2">
-              <input type="checkbox" id="perClassDeadlines" onchange="togglePerClassDeadlines()"
-                class="w-5 h-5 text-yellow-500 rounded focus:ring-yellow-500 bg-gray-800 border-gray-600">
-              <span class="ml-3 font-semibold text-white">Specify individual deadlines by class</span>
-            </label>
-            <p class="text-xs text-gray-400">If unchecked, all periods share a single global deadline. If checked, each
-              period can have its own start time and due date.</p>
-          </div>
-
-          <!-- Global Deadline Section -->
-          <div id="global-deadline-config" class="space-y-4 mb-6">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label class="block text-sm text-gray-400 mb-1">Global Due Date</label>
-                <input type="date" id="globalDueDate"
-                  class="w-full p-2 bg-gray-700 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none">
-              </div>
-              <div>
-                <label class="block text-sm text-gray-400 mb-1">Global Due Time</label>
-                <input type="time" id="globalDueTime"
-                  class="w-full p-2 bg-gray-700 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none">
-              </div>
-            </div>
-          </div>
-
-          <!-- Per-Class Deadlines (Collapsible) -->
-          <div id="per-class-config" class="hidden">
-            <p class="text-gray-400 mb-4 text-sm">Set the official start time and due date for each class period.
-              Per-question
-              deadlines are calculated in minutes after the start time.</p>
-            <div id="class-start-times" class="flex flex-wrap gap-4"></div>
-            <div class="mt-4 border-t border-gray-700 pt-4 flex justify-end">
-              <button onclick="saveTeacherDefaults()"
-                class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg text-sm">Save These
-                Start Times
-                as My Defaults</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+    <div id="deadline-widget-container"></div>
 
 
     <div class="bg-gray-800 p-6 rounded-lg mb-8 border border-red-900/30">
@@ -560,6 +508,7 @@
       </div>
     </template>
     <div id="toast-wrapper"></div>
+    <script src="./shared/deadline-widget.js"></script>
     <script src="./shared/checker-widget.js"></script>
     <script src="./shared/checker-runner.js"></script>
     <script>
@@ -688,26 +637,26 @@
 
           // Auto-repair and redirect if this assignment is actually a Video or PDF assignment
           if (!assignmentData.type || assignmentData.type === 'slides') {
-              if (assignmentData.videoUrl && !assignmentData.presentationId) {
-                  assignmentData.type = 'video';
-                  await db.collection("assignments").doc(assignmentId).update({ type: 'video' });
-              } else if (assignmentData.pdfUrl && !assignmentData.presentationId) {
-                  assignmentData.type = 'pdf';
-                  await db.collection("assignments").doc(assignmentId).update({ type: 'pdf' });
-              }
+            if (assignmentData.videoUrl && !assignmentData.presentationId) {
+              assignmentData.type = 'video';
+              await db.collection("assignments").doc(assignmentId).update({ type: 'video' });
+            } else if (assignmentData.pdfUrl && !assignmentData.presentationId) {
+              assignmentData.type = 'pdf';
+              await db.collection("assignments").doc(assignmentId).update({ type: 'pdf' });
+            }
           }
 
           if (assignmentData.type === 'video') {
-              window.location.href = `./video-editor.html?id=${assignmentId}`;
-              return;
+            window.location.href = `./video-editor.html?id=${assignmentId}`;
+            return;
           } else if (assignmentData.type === 'pdf') {
-              window.location.href = `./pdf-editor.html?id=${assignmentId}`;
-              return;
+            window.location.href = `./pdf-editor.html?id=${assignmentId}`;
+            return;
           }
 
           if (!assignmentData.presentationId) {
-             loadingText.textContent = "Error: This Slides assignment has an invalid or missing Presentation ID.";
-             return;
+            loadingText.textContent = "Error: This Slides assignment has an invalid or missing Presentation ID.";
+            return;
           }
 
           // Check access control
@@ -808,31 +757,9 @@
           focusModeOptions.classList.toggle('hidden', !focusModeEnabled.checked);
           focusModeEnabled.addEventListener('change', () => { focusModeOptions.classList.toggle('hidden', !focusModeEnabled.checked); });
 
-          // Deadlines initialization
-          const perClassDeadlines = document.getElementById('perClassDeadlines');
-          const globalDueDateInput = document.getElementById('globalDueDate');
-          const globalDueTimeInput = document.getElementById('globalDueTime');
-
-          // Default to perClass: true if not specified
-          const isPerClass = (assignmentData.deadlinePolicy?.perClass !== undefined)
-            ? assignmentData.deadlinePolicy.perClass
-            : true;
-
-          perClassDeadlines.checked = isPerClass;
-          togglePerClassDeadlines(); // Set visibility based on initial state
-
-          if (assignmentData.deadlinePolicy?.globalDueAt) {
-            const dueAt = assignmentData.deadlinePolicy.globalDueAt.toDate ? assignmentData.deadlinePolicy.globalDueAt.toDate() : new Date(assignmentData.deadlinePolicy.globalDueAt);
-            const year = dueAt.getFullYear();
-            const month = String(dueAt.getMonth() + 1).padStart(2, '0');
-            const day = String(dueAt.getDate()).padStart(2, '0');
-            globalDueDateInput.value = `${year}-${month}-${day}`;
-            const hours = String(dueAt.getHours()).padStart(2, '0');
-            const minutes = String(dueAt.getMinutes()).padStart(2, '0');
-            globalDueTimeInput.value = `${hours}:${minutes}`;
-          }
-
-          renderDeadlineUI();
+          // Deadlines initialization via shared widget
+          DeadlineWidget.render(allClassNames);
+          DeadlineWidget.populate(assignmentData, teacherDefaults, allClassNames);
 
           // Initialize Tools & Features
           const calcEnabled = document.getElementById('calculatorEnabled');
@@ -868,74 +795,7 @@
         }
       }
 
-      function renderDeadlineUI() {
-        const container = document.getElementById('class-start-times');
-        container.innerHTML = '';
-        const assignmentStartTimes = assignmentData.deadlinePolicy?.classStartTimes;
-        const classDueAt = assignmentData.deadlinePolicy?.classDueAt || {};
-        const defaultStartTimes = teacherDefaults.classStartTimes;
-        const hardcodedDefaults = { '1': '08:01', '2': '08:50', '5': '11:17', '7': '12:55', '8': '13:44' };
-        allClassNames.forEach(className => {
-          const startTimeValue = assignmentStartTimes?.[className] || defaultStartTimes?.[className] || hardcodedDefaults[className] || '08:00';
-
-          // Parse per-class start date/time (if using classStartAt Timestamp)
-          let startDateValue = '';
-          const classStart = assignmentData.deadlinePolicy?.classStartAt?.[className];
-          if (classStart) {
-            const startAt = classStart.toDate ? classStart.toDate() : new Date(classStart);
-            if (!isNaN(startAt.getTime())) {
-              const year = startAt.getFullYear();
-              const month = String(startAt.getMonth() + 1).padStart(2, '0');
-              const day = String(startAt.getDate()).padStart(2, '0');
-              startDateValue = `${year}-${month}-${day}`;
-            }
-          }
-
-          // Parse per-class due date/time from Firestore Timestamp or ISO string
-          let dueDateValue = '';
-          let dueTimeValue = '';
-          const classDue = classDueAt[className];
-          if (classDue) {
-            const dueAt = classDue.toDate ? classDue.toDate() : new Date(classDue);
-            if (!isNaN(dueAt.getTime())) {
-              const year = dueAt.getFullYear();
-              const month = String(dueAt.getMonth() + 1).padStart(2, '0');
-              const day = String(dueAt.getDate()).padStart(2, '0');
-              dueDateValue = `${year}-${month}-${day}`;
-              const hours = String(dueAt.getHours()).padStart(2, '0');
-              const minutes = String(dueAt.getMinutes()).padStart(2, '0');
-              dueTimeValue = `${hours}:${minutes}`;
-            }
-          }
-
-          container.innerHTML += `
-      <div class="bg-gray-700 p-3 rounded-lg">
-        <label class="block text-sm font-semibold mb-2">Period ${className}</label>
-        <div class="flex flex-col gap-2">
-          <div class="flex items-center gap-2">
-            <label for="start-date-${className}" class="text-xs text-gray-400 w-20">Start Date</label>
-            <input type="date" id="start-date-${className}" value="${startDateValue}" class="p-2 bg-gray-800 border border-gray-600 rounded text-sm">
-          </div>
-          <div class="flex items-center gap-2">
-            <label for="start-time-${className}" class="text-xs text-gray-400 w-20">Start Time</label>
-            <input type="time" id="start-time-${className}" value="${startTimeValue}" class="p-2 bg-gray-800 border border-gray-600 rounded w-28 text-sm">
-          </div>
-          <div class="flex items-center gap-2">
-            <label for="due-date-${className}" class="text-xs text-gray-400 w-20">Due Date</label>
-            <input type="date" id="due-date-${className}" value="${dueDateValue}" class="p-2 bg-gray-800 border border-gray-600 rounded text-sm">
-          </div>
-          <div class="flex items-center gap-2">
-            <label for="due-time-${className}" class="text-xs text-gray-400 w-20">Due Time</label>
-            <input type="time" id="due-time-${className}" value="${dueTimeValue}" class="p-2 bg-gray-800 border border-gray-600 rounded w-28 text-sm">
-          </div>
-          <div class="flex items-center gap-2">
-            <label for="early-access-padding-${className}" class="text-xs text-gray-400 w-20">Early Access (mins)</label>
-            <input type="number" id="early-access-padding-${className}" value="${assignmentData.deadlinePolicy?.earlyAccessPadding?.[className] || 0}" class="p-2 bg-gray-800 border border-gray-600 rounded w-28 text-sm">
-          </div>
-        </div>
-      </div>`;
-        });
-      }
+      // renderDeadlineUI — now handled by DeadlineWidget
 
       function renderEditor() {
         const container = document.getElementById('slidesContainer');
@@ -1101,7 +961,10 @@
           saveBtn.textContent = "Saving...";
           const checkerFunctions = {};
           const checkerMeta = {};
-          const deadlinePolicy = { classStartTimes: {}, classStartAt: {}, classDueAt: {}, earlyAccessPadding: {} };
+
+          // Read deadline data from the shared widget
+          const dwResult = DeadlineWidget.read(allClassNames);
+          const deadlinePolicy = dwResult.deadlinePolicy;
 
           // Tools & Features
           const toolsConfig = {
@@ -1117,49 +980,7 @@
           const focusModeEnabled = document.getElementById('focusModeEnabled').checked;
           const focusModeAction = document.getElementById('focusModeAction').value;
 
-          allClassNames.forEach(className => {
-            const startTimeValue = document.getElementById(`start-time-${className}`).value;
-            const startDateValue = document.getElementById(`start-date-${className}`).value;
-
-            if (startTimeValue) {
-              deadlinePolicy.classStartTimes[String(className)] = startTimeValue;
-            }
-
-            // Build per-class start Timestamp if both date and time are provided
-            if (startDateValue && startTimeValue) {
-              const dateParts = startDateValue.split('-');
-              const timeParts = startTimeValue.split(':');
-              if (dateParts.length === 3 && timeParts.length >= 2) {
-                const [year, month, day] = dateParts.map(Number);
-                const [hour, minute] = timeParts.map(Number);
-                if (!isNaN(year) && !isNaN(month) && !isNaN(day) && !isNaN(hour) && !isNaN(minute)) {
-                  const localDate = new Date(year, month - 1, day, hour, minute, 0, 0);
-                  deadlinePolicy.classStartAt[String(className)] = firebase.firestore.Timestamp.fromDate(localDate);
-                }
-              }
-            }
-
-            // Read per-class due date and time
-            const dueDateStr = document.getElementById(`due-date-${className}`).value;
-            const dueTimeStr = document.getElementById(`due-time-${className}`).value;
-
-            // Build per-class due Timestamp if both date and time are provided
-            if (dueDateStr && dueTimeStr) {
-              const dateParts = dueDateStr.split('-');
-              const timeParts = dueTimeStr.split(':');
-              if (dateParts.length === 3 && timeParts.length >= 2) {
-                const [year, month, day] = dateParts.map(Number);
-                const [hour, minute] = timeParts.map(Number);
-                if (!isNaN(year) && !isNaN(month) && !isNaN(day) && !isNaN(hour) && !isNaN(minute)) {
-                  const localDate = new Date(year, month - 1, day, hour, minute, 0, 0);
-                  deadlinePolicy.classDueAt[String(className)] = firebase.firestore.Timestamp.fromDate(localDate);
-                }
-              }
-            }
-            // Read early access padding
-            const paddingValue = parseInt(document.getElementById(`early-access-padding-${className}`).value, 10) || 0;
-            deadlinePolicy.earlyAccessPadding[String(className)] = paddingValue;
-          });
+          // Per-class deadline data is already read from the widget above
 
           assignmentData.slideIds.forEach((id, index) => {
             const qNum = index + 1;
@@ -1246,24 +1067,7 @@
             }
           }
 
-          // Global deadlines
-          const isPerClass = document.getElementById('perClassDeadlines').checked;
-          const globalDueDateStr = document.getElementById('globalDueDate').value;
-          const globalDueTimeStr = document.getElementById('globalDueTime').value;
-          let globalDueAt = null;
-
-          if (globalDueDateStr && globalDueTimeStr) {
-            const dateParts = globalDueDateStr.split('-');
-            const timeParts = globalDueTimeStr.split(':');
-            if (dateParts.length === 3 && timeParts.length >= 2) {
-              const [year, month, day] = dateParts.map(Number);
-              const [hour, minute] = timeParts.map(Number);
-              if (!isNaN(year) && !isNaN(month) && !isNaN(day) && !isNaN(hour) && !isNaN(minute)) {
-                globalDueAt = firebase.firestore.Timestamp.fromDate(new Date(year, month - 1, day, hour, minute, 0, 0));
-              }
-            }
-          }
-
+          // Build payload and merge widget deadline data
           const updatePayload = {
             slideIds: assignmentData.slideIds,
             checkerFunctions: checkerFunctions,
@@ -1277,13 +1081,8 @@
             toolsConfig: toolsConfig
           };
 
-          // Use dot notation to avoid nested FieldValue.delete() errors
-          updatePayload["deadlinePolicy.perClass"] = isPerClass;
-          if (globalDueAt) {
-            updatePayload["deadlinePolicy.globalDueAt"] = globalDueAt;
-          } else {
-            updatePayload["deadlinePolicy.globalDueAt"] = firebase.firestore.FieldValue.delete();
-          }
+          // Apply deadline widget data (perClass, globalDueAt, behavior, late policy)
+          DeadlineWidget.applyToSavePayload(updatePayload, allClassNames);
 
           if (auraDueAt) {
             updatePayload.auraDueAt = auraDueAt;
@@ -1399,17 +1198,7 @@
         }
       }
 
-      function togglePerClassDeadlines() {
-        const isChecked = document.getElementById('perClassDeadlines').checked;
-        document.getElementById('per-class-config').classList.toggle('hidden', !isChecked);
-        document.getElementById('global-deadline-config').classList.toggle('hidden', isChecked);
-
-        // Update collapsible height if open
-        const content = document.getElementById('deadline-content');
-        if (content.style.maxHeight && content.style.maxHeight !== '0px') {
-          content.style.maxHeight = '2000px';
-        }
-      }
+      // togglePerClassDeadlines — now handled by DeadlineWidget
 
       let auraRules = [];
       function addAuraRule(ruleData = { amount: 1, minScore: 0 }) {
@@ -1476,17 +1265,7 @@
         }, options.duration || 3000);
       }
 
-      function toggleDeadlineSection() {
-        const content = document.getElementById('deadline-content');
-        const chevron = document.getElementById('deadline-chevron');
-        if (content.style.maxHeight && content.style.maxHeight !== '0px') {
-          content.style.maxHeight = '0';
-          chevron.style.transform = 'rotate(0deg)';
-        } else {
-          content.style.maxHeight = content.scrollHeight + 'px';
-          chevron.style.transform = 'rotate(90deg)';
-        }
-      }
+      // toggleDeadlineSection & saveTeacherDefaults — now handled by DeadlineWidget
 
       function toggleAttemptSection(index) {
         const checkbox = document.getElementById(`attempts-enabled-${index}`);
@@ -1495,21 +1274,6 @@
           config.classList.remove('hidden');
         } else {
           config.classList.add('hidden');
-        }
-      }
-
-      async function saveTeacherDefaults() {
-        try {
-          const classStartTimes = {};
-          allClassNames.forEach(className => {
-            const timeValue = document.getElementById(`start-time-${className}`).value;
-            if (timeValue) classStartTimes[String(className)] = timeValue;
-          });
-          await db.collection("teachers").doc(auth.currentUser.email).set({ classStartTimes }, { merge: true });
-          showToast("Default start times saved!", { color: 'green' });
-        } catch (e) {
-          console.error("Error saving teacher defaults:", e);
-          showToast("Error saving defaults.", { color: 'red' });
         }
       }
 
