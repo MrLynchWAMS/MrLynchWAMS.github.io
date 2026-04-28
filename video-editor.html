@@ -813,13 +813,13 @@
 
         allClassNames = [...new Set(teacherStudents.map(s => String(s.class)))].sort();
 
-        // Load teacher data for defaults
-        const teacherDoc = await db.collection("teachers").doc(assignmentData.teacherEmail).get();
-        const teacherData = teacherDoc.exists ? teacherDoc.data() : {};
+        // Load teacher data for defaults (using assignment owner's email)
+        const ownerDoc = await db.collection("teachers").doc(assignmentData.teacherEmail).get();
+        const ownerData = ownerDoc.exists ? ownerDoc.data() : {};
 
         // Initialize deadline widget
         DeadlineWidget.render(allClassNames);
-        DeadlineWidget.populate(assignmentData, teacherData, allClassNames);
+        DeadlineWidget.populate(assignmentData, ownerData, allClassNames);
 
         renderQuestions();
       } catch (error) {
