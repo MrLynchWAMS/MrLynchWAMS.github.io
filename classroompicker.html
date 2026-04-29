@@ -620,6 +620,8 @@
                     <button id="backToAssignmentBtn" onclick="hideSummary()"
                         class="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 rounded-lg transition-colors">&larr;
                         Back to Assignment</button>
+                    <button id="summaryLessonHubBtn" onclick="returnToLessonHub()"
+                        class="hidden w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-lg transition-colors">🏠 Return to Lesson Overview</button>
                     <button id="submitButton" onclick="handleSubmitAssignment()"
                         class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition-colors">Submit
                         Assignment</button>
@@ -1307,6 +1309,14 @@
                 initializeFocusMode();
             }
 
+            const urlParams = new URLSearchParams(window.location.search);
+            parentLessonId = urlParams.get('lessonId');
+            if (parentLessonId) {
+                document.getElementById('lesson-child-banner').classList.remove('hidden');
+            } else {
+                document.getElementById('lesson-child-banner').classList.add('hidden');
+            }
+
             // **FIX:** Check if assignment should be hidden on load
             const postRule = assignmentData.postSubmissionRule || 'open';
             if (isSubmitted && postRule === 'hide') {
@@ -1328,14 +1338,6 @@
 
                 document.getElementById('mainContainer').classList.remove('hidden');
                 document.getElementById('lesson-hub-ui').classList.add('hidden');
-
-                const urlParams = new URLSearchParams(window.location.search);
-                parentLessonId = urlParams.get('lessonId');
-                if (parentLessonId) {
-                    document.getElementById('lesson-child-banner').classList.remove('hidden');
-                } else {
-                    document.getElementById('lesson-child-banner').classList.add('hidden');
-                }
 
                 if (assignmentData.type === 'video') {
                     document.getElementById('slides-ui').classList.add('hidden');
@@ -1955,6 +1957,16 @@
                 submitButton.disabled = false;
                 submitButton.classList.add('bg-green-600', 'hover:bg-green-700');
                 submitButton.classList.remove('bg-gray-500', 'cursor-not-allowed');
+            }
+
+            // Show lesson hub return button if applicable
+            const summaryHubBtn = document.getElementById('summaryLessonHubBtn');
+            if (summaryHubBtn) {
+                if (parentLessonId) {
+                    summaryHubBtn.classList.remove('hidden');
+                } else {
+                    summaryHubBtn.classList.add('hidden');
+                }
             }
 
             let totalScore = 0;
