@@ -511,7 +511,7 @@
                 statusHTML += '</div>';
 
                 const escapedName = escapeHtml(assignment.name);
-                const editUrl = assignment.type === 'pdf' ? `pdf-editor.html?id=${assignment.id}` : assignment.type === 'video' ? `video-editor.html?id=${assignment.id}` : assignment.type === 'simulation' ? `sim-editor.html?id=${assignment.id}` : `editor.html?id=${assignment.id}`;
+                const editUrl = assignment.type === 'pdf' ? `pdf-editor.html?id=${assignment.id}` : assignment.type === 'video' ? `video-editor.html?id=${assignment.id}` : assignment.type === 'simulation' ? `sim-editor.html?id=${assignment.id}` : assignment.type === 'lesson' ? `lesson-editor.html?id=${assignment.id}` : `editor.html?id=${assignment.id}`;
 
                 card.innerHTML = `
                 <div>
