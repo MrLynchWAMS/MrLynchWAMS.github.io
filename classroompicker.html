@@ -1283,13 +1283,27 @@
             } else {
                 if (assignmentData.type === 'lesson') {
                     loader.classList.add('hidden');
-                    document.getElementById('mainContainer').classList.add('hidden');
+                    document.getElementById('mainContainer').classList.remove('hidden');
                     document.getElementById('lesson-hub-ui').classList.remove('hidden');
+                    document.getElementById('slides-ui').classList.add('hidden');
+                    document.getElementById('video-student-content').classList.add('hidden');
+                    document.getElementById('pdf-student-content').classList.add('hidden');
+                    document.getElementById('simulation-student-content').classList.add('hidden');
+                    document.getElementById('lesson-child-banner').classList.add('hidden');
                     initLessonHub();
                     return; // Hub handles its own display
                 }
 
                 document.getElementById('mainContainer').classList.remove('hidden');
+                document.getElementById('lesson-hub-ui').classList.add('hidden');
+
+                const urlParams = new URLSearchParams(window.location.search);
+                parentLessonId = urlParams.get('lessonId');
+                if (parentLessonId) {
+                    document.getElementById('lesson-child-banner').classList.remove('hidden');
+                } else {
+                    document.getElementById('lesson-child-banner').classList.add('hidden');
+                }
 
                 if (assignmentData.type === 'video') {
                     document.getElementById('slides-ui').classList.add('hidden');
