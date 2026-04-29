@@ -829,7 +829,7 @@
                 if (parentId) {
                     db.collection("assignments").doc(parentId).onSnapshot(snap => {
                         // Bypass for teachers: they should never be kicked out
-                        if (userProfile && userProfile.isTeacher) return;
+                        if (userProfile && (userProfile.isTeacher || userProfile.class === 'Teacher')) return;
 
                         if (snap.exists && userProfile) {
                             const pData = snap.data();
@@ -892,8 +892,7 @@
             if (!userProfile || !assignmentData) return;
 
             // Authorized Teachers always have access regardless of class status
-            const isAuthorizedTeacher = (userProfile.class === 'Teacher');
-            if (isAuthorizedTeacher) return;
+            if (userProfile.isTeacher || userProfile.class === 'Teacher') return;
 
             const studentClass = userProfile.class;
             const assignedClasses = assignmentData.assignedClasses || [];
@@ -1139,7 +1138,15 @@
             }
 
             if (isAuthorizedTeacher) {
-                userProfile = { name: profile.name, email: email, class: 'Teacher', auraLifetime: 0, auraBalance: 0, teacherEmail: email };
+                userProfile = { 
+                    name: profile.name, 
+                    email: email, 
+                    class: 'Teacher', 
+                    isTeacher: true, 
+                    auraLifetime: 0, 
+                    auraBalance: 0, 
+                    teacherEmail: email 
+                };
                 initializeStudentSession();
                 return;
             }
@@ -4076,7 +4083,7 @@
 
         function evaluateUnlockConditions(section, index) {
             // Teachers have full access to all sections for preview/testing
-            if (userProfile && userProfile.isTeacher) return { allowed: true };
+            if (userProfile && (userProfile.isTeacher || userProfile.class === 'Teacher')) return { allowed: true };
 
             const classStatus = assignmentData.sectionStatus ? (assignmentData.sectionStatus[userProfile.class] || {}) : {};
             if (classStatus[section.id] === 'closed') {
