@@ -449,17 +449,16 @@
                             const email = data.studentEmail ? data.studentEmail.toLowerCase() : '';
                             if (!email) return;
                             
-                            // For a lesson, we only care about the overall lesson submission for `submittedEmails` and Aura.
-                            // The individual section submissions shouldn't mark the whole lesson as "submitted" 
-                            // UNLESS the user wants to see partial status? Let's just track everything for now and process in rebuildAllStudentData
-                            
-                            // Wait, if it's a lesson, `submittedEmails` should only trigger if the lesson itself is submitted
-                            if (data.assignmentId === assignmentId) {
-                                if (change.type === "removed") {
+                            const statusKey = `${data.assignmentId}_${email}`;
+
+                            if (change.type === "removed") {
+                                if (data.assignmentId === assignmentId) {
                                     submittedEmails.delete(email);
                                     auraByStudent.delete(email);
-                                    submittedStatusByStudent.delete(email);
-                                } else {
+                                }
+                                submittedStatusByStudent.delete(statusKey);
+                            } else {
+                                if (data.assignmentId === assignmentId) {
                                     if (data.status === 'submitted') {
                                         submittedEmails.add(email);
                                     } else {
@@ -470,11 +469,14 @@
                                         auraAwarded: !!data.auraAwarded,
                                         auraAmount: typeof data.auraAmount === 'number' ? data.auraAmount : 0
                                     });
-                                    submittedStatusByStudent.set(email, {
-                                        status: data.status || 'none',
-                                        watchTime: data.watchTimeSeconds || data.watchTime || 0
-                                    });
                                 }
+                                
+                                submittedStatusByStudent.set(statusKey, {
+                                    assignmentId: data.assignmentId,
+                                    status: data.status || 'none',
+                                    score: typeof data.score === 'number' ? data.score : 0,
+                                    watchTime: data.watchTimeSeconds || data.watchTime || 0
+                                });
                             }
                         });
                         rebuildAllStudentData();
@@ -566,7 +568,19 @@
                 allStudentData = Array.from(studentsMap.values()).map(student => {
                     const auraData = auraByStudent.get(student.email) || { auraAwarded: false, auraAmount: 0 };
                     const questionProgress = questionProgressByStudent.get(student.email) || new Map();
-                    const statusData = submittedStatusByStudent.get(student.email) || { status: 'none', watchTime: 0 };
+                    const statusData = submittedStatusByStudent.get(`${assignmentId}_${student.email}`) || { status: 'none', watchTime: 0 };
+                    
+                    // Lesson-specific section mapping
+                    const sectionSubmissions = {};
+                    if (assignmentData.type === 'lesson' && assignmentData.sections) {
+                        assignmentData.sections.forEach(sec => {
+                            const key = `${sec.linkedAssignmentId}_${student.email}`;
+                            if (submittedStatusByStudent.has(key)) {
+                                sectionSubmissions[sec.id] = submittedStatusByStudent.get(key);
+                            }
+                        });
+                    }
+
                     return {
                         ...student,
                         submissions: submissionsByStudent.get(student.email) || [],
@@ -576,7 +590,8 @@
                         auraAmount: auraData.auraAmount,
                         watchTime: statusData.watchTime || 0,
                         questionProgress,
-                        simData: simDataByStudentLocal.get(student.email) || null
+                        simData: simDataByStudentLocal.get(student.email) || null,
+                        sectionSubmissions
                     };
                 });
 
@@ -810,18 +825,44 @@
             }
 
             const currentStatusMap = assignmentData.sectionStatus?.[activeClass] || {};
-            
             assignmentData.sections.forEach(sec => {
                 const status = currentStatusMap[sec.id] || 'closed';
+                const isUnlocked = assignmentData.manualOverrides?.[activeClass]?.[sec.id] === 'open';
                 
                 const btnClass = status === 'open' 
                     ? 'bg-green-600 hover:bg-green-700 text-white' 
                     : 'bg-gray-600 hover:bg-gray-500 text-gray-300';
                 
-                list.innerHTML += `<button onclick="toggleSectionStatus('${sec.id}', '${status === 'open' ? 'closed' : 'open'}')" class="${btnClass} px-4 py-2 rounded-lg font-bold transition-colors">
-                    ${sec.title}: ${status.toUpperCase()}
-                </button>`;
+                list.innerHTML += `<div class="flex flex-col gap-1">
+                    <button onclick="toggleSectionStatus('${sec.id}', '${status === 'open' ? 'closed' : 'open'}')" class="${btnClass} px-4 py-2 rounded-lg font-bold transition-colors">
+                        ${sec.title}: ${status.toUpperCase()}
+                    </button>
+                    ${assignmentData.type === 'lesson' ? `
+                        <button onclick="toggleSectionOverride('${sec.id}')" class="text-[10px] uppercase font-bold ${isUnlocked ? 'text-blue-400' : 'text-gray-500'} hover:underline">
+                            ${isUnlocked ? '🔓 All Unlocked' : '🔒 Use Auto-Gating'}
+                        </button>
+                    ` : ''}
+                </div>`;
             });
+        }
+        
+        async function toggleSectionOverride(sectionId) {
+            if (!activeClass || activeClass === 'All') return;
+            const current = assignmentData.manualOverrides?.[activeClass]?.[sectionId] || 'auto';
+            const newValue = current === 'open' ? 'auto' : 'open';
+            
+            try {
+                await db.collection("assignments").doc(assignmentId).update({
+                    [`manualOverrides.${activeClass}.${sectionId}`]: newValue
+                });
+                if (!assignmentData.manualOverrides) assignmentData.manualOverrides = {};
+                if (!assignmentData.manualOverrides[activeClass]) assignmentData.manualOverrides[activeClass] = {};
+                assignmentData.manualOverrides[activeClass][sectionId] = newValue;
+                renderLessonControlPanel();
+                displayStudentData();
+            } catch (e) {
+                console.error("Error toggling override:", e);
+            }
         }
         
         async function toggleSectionStatus(sectionId, newStatus) {
@@ -938,8 +979,11 @@
             for (let i = 1; i <= numQuestions; i++) {
                 let qLabel = `Q${i}`;
                 if (assignmentData.type === 'lesson') {
-                    qLabel = questionsList[i - 1].label;
-                    headerHtml += `<th class="px-2 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer hover:text-yellow-400" onclick="showQuestionSubmissions('${questionsList[i - 1].assignmentId}', ${questionsList[i - 1].slideIndex})" title="${qLabel}">L-Q${i}</th>`;
+                    const qInfo = questionsList[i - 1];
+                    qLabel = qInfo.label;
+                    const isFirstInSection = i === 1 || qInfo.assignmentId !== questionsList[i - 2].assignmentId;
+                    const borderClass = isFirstInSection ? 'border-l-4 border-purple-500/50' : '';
+                    headerHtml += `<th class="px-2 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer hover:text-yellow-400 ${borderClass}" onclick="showQuestionSubmissions('${qInfo.assignmentId}', ${qInfo.slideIndex})" title="${qLabel}">L-Q${i}</th>`;
                 } else {
                     headerHtml += `<th class="px-2 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer hover:text-yellow-400" onclick="showQuestionSubmissions('${assignmentData.id}', ${i - 1})">Q${i}</th>`;
                 }
@@ -1050,9 +1094,10 @@
                 for (let i = 0; i < numQuestions; i++) {
                     let latestSubmission;
                     let questionProgress;
+                    let qInfo = null;
                     
                     if (assignmentData.type === 'lesson') {
-                        const qInfo = questionsList[i];
+                        qInfo = questionsList[i];
                         latestSubmission = student.submissions.filter(s => s.slideIndex === qInfo.slideIndex && s.assignmentId === qInfo.assignmentId).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
                         questionProgress = student.questionProgress?.get(`${qInfo.assignmentId}_${qInfo.slideIndex}`);
                     } else {
@@ -1061,7 +1106,20 @@
                     }
 
                     const attemptCount = questionProgress?.attemptCount || 0;
-                    const isLocked = questionProgress?.locked || false;
+                    const isFocusLocked = questionProgress?.locked || false;
+
+                    let isSectionLocked = false;
+                    let lockReason = "";
+                    if (assignmentData.type === 'lesson' && qInfo) {
+                        const section = assignmentData.sections.find(s => s.linkedAssignmentId === qInfo.assignmentId);
+                        if (section) {
+                            const lock = evaluateLockForStudent(student, section);
+                            if (!lock.allowed) {
+                                isSectionLocked = true;
+                                lockReason = lock.reason;
+                            }
+                        }
+                    }
 
                     if (blackoutMode) {
                         if (latestSubmission) {
@@ -1074,7 +1132,12 @@
                             tableHtml += `<td class="px-2 py-4"><div class="h-6 rounded-full border-2 border-dashed border-gray-400"></div></td>`;
                         }
                     } else {
-                        if (latestSubmission) {
+                        const isFirstInSection = assignmentData.type === 'lesson' && (i === 0 || qInfo.assignmentId !== questionsList[i-1].assignmentId);
+                        const borderClass = isFirstInSection ? 'border-l-4 border-purple-500/50' : '';
+
+                        if (isSectionLocked) {
+                            tableHtml += `<td class="px-2 py-4 whitespace-nowrap text-center text-gray-600 bg-gray-900/30 ${borderClass}" title="Locked: ${lockReason}" onclick="showSubmissions('${escapedEmail}', ${qInfo.slideIndex}, '${qInfo.assignmentId}')">🔒</td>`;
+                        } else if (latestSubmission) {
                             const score = latestSubmission.score;
                             const color = score >= 90 ? 'bg-green-500' : score >= 70 ? 'bg-yellow-500' : 'bg-red-500';
                             const textColor = score >= 70 ? 'text-black' : 'text-white';
@@ -1082,23 +1145,21 @@
                             let attemptDisplay = '';
                             if (showAttempts && attemptCount > 0) {
                                 const attemptColor = score >= 70 ? 'text-gray-900' : 'text-gray-300';
-                                attemptDisplay = `<span class="text-[10px] ${attemptColor} ml-1 font-bold">(${attemptCount}${isLocked ? '🔒' : ''})</span>`;
-                            } else if (showAttempts && isLocked) {
+                                attemptDisplay = `<span class="text-[10px] ${attemptColor} ml-1 font-bold">(${attemptCount}${isFocusLocked ? '🔒' : ''})</span>`;
+                            } else if (showAttempts && isFocusLocked) {
                                 attemptDisplay = `<span class="text-xs text-red-600 ml-1">🔒</span>`;
                             }
-                            if (assignmentData.type === 'lesson') {
-                                tableHtml += `<td class="px-2 py-4 whitespace-nowrap text-sm font-semibold cursor-pointer" onclick="showSubmissions('${escapedEmail}', ${questionsList[i].slideIndex}, '${questionsList[i].assignmentId}')">
-                                <div class="w-full bg-gray-600 rounded-full h-6 relative">
-                                    <div class="${color} ${textColor} h-6 rounded-full text-center text-xs flex items-center justify-center font-bold" style="width: ${score}%">${scoreDisplay}${attemptDisplay}</div>
-                                </div></td>`;
-                            } else {
-                                tableHtml += `<td class="px-2 py-4 whitespace-nowrap text-sm font-semibold cursor-pointer" onclick="showSubmissions('${escapedEmail}', ${i})">
-                                <div class="w-full bg-gray-600 rounded-full h-6 relative">
-                                    <div class="${color} ${textColor} h-6 rounded-full text-center text-xs flex items-center justify-center font-bold" style="width: ${score}%">${scoreDisplay}${attemptDisplay}</div>
-                                </div></td>`;
-                            }
+                            
+                            const clickFn = assignmentData.type === 'lesson' 
+                                ? `showSubmissions('${escapedEmail}', ${qInfo.slideIndex}, '${qInfo.assignmentId}')`
+                                : `showSubmissions('${escapedEmail}', ${i})`;
+
+                            tableHtml += `<td class="px-2 py-4 whitespace-nowrap text-sm font-semibold cursor-pointer ${borderClass}" onclick="${clickFn}">
+                            <div class="w-full bg-gray-600 rounded-full h-6 relative">
+                                <div class="${color} ${textColor} h-6 rounded-full text-center text-xs flex items-center justify-center font-bold" style="width: ${score}%">${scoreDisplay}${attemptDisplay}</div>
+                            </div></td>`;
                         } else {
-                            tableHtml += `<td class="px-2 py-4"><div class="bg-gray-700 h-6 rounded-full flex items-center justify-center text-gray-500 text-xs">-</div></td>`;
+                            tableHtml += `<td class="px-2 py-4 ${borderClass}"><div class="bg-gray-700 h-6 rounded-full flex items-center justify-center text-gray-500 text-xs">-</div></td>`;
                         }
                     }
                 }
@@ -1551,9 +1612,79 @@
             document.getElementById('submissionModal').classList.remove('hidden');
         }
 
+        function evaluateLockForStudent(student, section) {
+            // Check Class-Level Status
+            const classStatus = assignmentData.sectionStatus ? (assignmentData.sectionStatus[student.class] || {}) : {};
+            if (classStatus[section.id] === 'closed') {
+                return { allowed: false, reason: "Section closed by teacher." };
+            }
+
+            // Check Manual Override for this specific student
+            const studentOverrides = assignmentData.studentOverrides?.[student.email] || {};
+            if (studentOverrides[section.id] === 'open') return { allowed: true };
+
+            // Check Global Override for this section
+            if (assignmentData.manualOverrides?.[student.class]?.[section.id] === 'open') return { allowed: true };
+
+            // Evaluate Conditions
+            const cond = section.unlockCondition;
+            if (!cond || !cond.dependsOn) return { allowed: true };
+
+            const depSection = assignmentData.sections.find(s => s.id === cond.dependsOn);
+            if (!depSection) return { allowed: true };
+
+            const depSub = student.sectionSubmissions?.[depSection.id];
+            if (!depSub) return { allowed: false, reason: `Requires completion of "${depSection.title}"` };
+
+            const score = depSub.score || 0;
+            if (cond.minScore && score < parseFloat(cond.minScore)) {
+                return { allowed: false, reason: `Requires ${cond.minScore}% on "${depSection.title}"` };
+            }
+            if (cond.maxScore && score > parseFloat(cond.maxScore)) {
+                return { allowed: false, reason: `Requires score below ${cond.maxScore}% on "${depSection.title}"` };
+            }
+
+            return { allowed: true };
+        }
+
+        async function unlockSectionForStudent(studentEmail, sectionId) {
+            try {
+                await db.collection("assignments").doc(assignmentId).update({
+                    [`studentOverrides.${studentEmail}.${sectionId}`]: 'open'
+                });
+                showToast("Section unlocked for student!", { color: 'green' });
+                // Local state will update via snapshots
+            } catch (e) {
+                console.error("Error unlocking section:", e);
+                showToast("Failed to unlock section.", { color: 'red' });
+            }
+        }
+
         function renderModalContent(submissions, nameMap = null) {
             const modalContent = document.getElementById('modalContent');
             let contentHtml = '<div class="space-y-4">';
+            
+            // For Lesson type, if showing a specific question, check for lock status
+            if (assignmentData.type === 'lesson' && currentModalView && currentModalView.type === 'student') {
+                const student = allStudentData.find(s => s.email === currentModalView.email);
+                if (student && currentModalView.targetAssignmentId) {
+                    const section = assignmentData.sections.find(s => s.linkedAssignmentId === currentModalView.targetAssignmentId);
+                    if (section) {
+                        const lock = evaluateLockForStudent(student, section);
+                        if (!lock.allowed) {
+                            contentHtml += `
+                            <div class="bg-yellow-900/30 border border-yellow-700/50 p-4 rounded-lg flex justify-between items-center">
+                                <div>
+                                    <p class="text-yellow-400 font-bold">🔒 Section Locked for Student</p>
+                                    <p class="text-xs text-gray-400">${lock.reason}</p>
+                                </div>
+                                <button onclick="unlockSectionForStudent('${student.email}', '${section.id}')" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm font-bold">Manual Unlock</button>
+                            </div>`;
+                        }
+                    }
+                }
+            }
+
             if (submissions.length > 0) {
                 submissions.forEach(sub => {
                     const displayName = nameMap && hideNames ? nameMap.get(sub.studentEmail) : sub.studentName;
