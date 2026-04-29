@@ -483,6 +483,20 @@
                     });
                 unsubscribeArray.push(unStatus);
 
+                // Listener 3.5: Main Assignment Live Config (New)
+                if (assignmentId) {
+                    const unMain = db.collection("assignments").doc(assignmentId)
+                        .onSnapshot(snap => {
+                            if (snap.exists) {
+                                const newData = snap.data();
+                                assignmentData = { ...assignmentData, ...newData };
+                                if (assignmentData.type === 'lesson') renderLessonControlPanel();
+                                rebuildAllStudentData();
+                            }
+                        });
+                    unsubscribeArray.push(unMain);
+                }
+
                 // Listener 4: Focus violations
                 const unVio = db.collection("focusViolations")
                     .where("assignmentId", "in", chunk)
@@ -827,21 +841,27 @@
             const currentStatusMap = assignmentData.sectionStatus?.[activeClass] || {};
             assignmentData.sections.forEach(sec => {
                 const status = currentStatusMap[sec.id] || 'closed';
-                const isUnlocked = assignmentData.manualOverrides?.[activeClass]?.[sec.id] === 'open';
+                const isOverridden = assignmentData.manualOverrides?.[activeClass]?.[sec.id] === 'open';
                 
-                const btnClass = status === 'open' 
-                    ? 'bg-green-600 hover:bg-green-700 text-white' 
-                    : 'bg-gray-600 hover:bg-gray-500 text-gray-300';
-                
-                list.innerHTML += `<div class="flex flex-col gap-1">
-                    <button onclick="toggleSectionStatus('${sec.id}', '${status === 'open' ? 'closed' : 'open'}')" class="${btnClass} px-4 py-2 rounded-lg font-bold transition-colors">
-                        ${sec.title}: ${status.toUpperCase()}
-                    </button>
-                    ${assignmentData.type === 'lesson' ? `
-                        <button onclick="toggleSectionOverride('${sec.id}')" class="text-[10px] uppercase font-bold ${isUnlocked ? 'text-blue-400' : 'text-gray-500'} hover:underline">
-                            ${isUnlocked ? '🔓 All Unlocked' : '🔒 Use Auto-Gating'}
+                list.innerHTML += `
+                <div class="bg-gray-800/50 border border-gray-700 p-3 rounded-lg flex flex-col gap-3">
+                    <div class="flex justify-between items-center">
+                        <span class="font-bold text-white text-sm">${sec.title}</span>
+                        <div class="flex bg-gray-700 rounded p-1 gap-1">
+                            <button onclick="toggleSectionStatus('${sec.id}', 'open')" class="px-3 py-1 rounded text-[10px] font-bold transition ${status === 'open' ? 'bg-green-600 text-white shadow-lg' : 'text-gray-400 hover:bg-gray-600'}">OPEN</button>
+                            <button onclick="toggleSectionStatus('${sec.id}', 'closed')" class="px-3 py-1 rounded text-[10px] font-bold transition ${status === 'closed' ? 'bg-red-600 text-white shadow-lg' : 'text-gray-400 hover:bg-gray-600'}">CLOSE</button>
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-between items-center pt-2 border-t border-gray-700/50">
+                        <span class="text-[10px] text-gray-500 uppercase font-mono">
+                            ${sec.unlockCondition?.dependsOn ? `Gated by Section ${assignmentData.sections.findIndex(s => s.id === sec.unlockCondition.dependsOn) + 1}` : 'Free Access'}
+                        </span>
+                        <button onclick="toggleSectionOverride('${sec.id}')" 
+                            class="px-3 py-1 rounded text-[10px] font-bold border transition ${isOverridden ? 'bg-blue-600/20 border-blue-500 text-blue-400' : 'border-gray-600 text-gray-500 hover:border-gray-400'}">
+                            ${isOverridden ? '🔓 GATING OVERRIDDEN' : '🔒 ENFORCE GATING'}
                         </button>
-                    ` : ''}
+                    </div>
                 </div>`;
             });
         }
@@ -1673,12 +1693,18 @@
                         const lock = evaluateLockForStudent(student, section);
                         if (!lock.allowed) {
                             contentHtml += `
-                            <div class="bg-yellow-900/30 border border-yellow-700/50 p-4 rounded-lg flex justify-between items-center">
-                                <div>
-                                    <p class="text-yellow-400 font-bold">🔒 Section Locked for Student</p>
-                                    <p class="text-xs text-gray-400">${lock.reason}</p>
+                            <div class="bg-yellow-900/30 border border-yellow-700/50 p-4 rounded-lg flex flex-col gap-3">
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <p class="text-yellow-400 font-bold">🔒 Section Locked for Student</p>
+                                        <p class="text-xs text-gray-400">${lock.reason}</p>
+                                    </div>
+                                    <span class="bg-gray-800 text-gray-400 text-[10px] px-2 py-1 rounded font-mono uppercase">Individual Override</span>
                                 </div>
-                                <button onclick="unlockSectionForStudent('${student.email}', '${section.id}')" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm font-bold">Manual Unlock</button>
+                                <button onclick="unlockSectionForStudent('${student.email}', '${section.id}')" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold transition shadow-lg">
+                                    Manually Unlock Section "${section.title}" for this Student
+                                </button>
+                                <p class="text-[10px] text-center text-gray-500 italic">This will allow the student to bypass automated gating requirements for this entire section.</p>
                             </div>`;
                         }
                     }
