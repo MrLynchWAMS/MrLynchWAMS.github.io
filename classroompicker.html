@@ -445,6 +445,16 @@
                 </div>
             </div>
 
+            <div id="lesson-child-banner" class="hidden w-full bg-purple-900/40 border border-purple-500/50 text-purple-200 px-4 py-2 mb-4 flex items-center justify-between rounded-lg backdrop-blur-sm">
+                <div class="flex items-center gap-2">
+                    <span class="text-xl">📚</span>
+                    <span class="font-bold text-sm tracking-wide uppercase">Lesson Section</span>
+                </div>
+                <button onclick="returnToLessonHub()" class="bg-purple-600 hover:bg-purple-500 text-white font-bold py-1 px-4 rounded transition-colors text-sm shadow-md">
+                    &larr; Back to Lesson Hub
+                </button>
+            </div>
+
             <!-- Slides UI -->
             <div id="slides-ui" class="main-content-grid grid grid-cols-1 md:grid-cols-3 gap-8">
                 <div class="slides-column md:col-span-2 bg-gray-800 p-4 rounded-lg flex flex-col">
@@ -489,6 +499,15 @@
                         class="w-full mt-4 bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition-colors">Check
                         & Save Answer</button>
                     <p id="result" class="mt-4 text-xl font-bold text-center"></p>
+                </div>
+            </div>
+
+            <!-- Lesson Hub UI -->
+            <div id="lesson-hub-ui" class="hidden bg-gray-800 p-8 rounded-xl max-w-4xl mx-auto shadow-2xl border border-gray-700/50">
+                <h2 class="text-3xl font-bold text-yellow-400 mb-2">Lesson Sections</h2>
+                <p class="text-gray-400 mb-8">Complete the sections below. Some sections may be locked until previous tasks are finished.</p>
+                <div id="lesson-sections-container" class="space-y-4">
+                    <!-- JS populated sections -->
                 </div>
             </div>
 
@@ -678,6 +697,8 @@
         let checkerFunctionStrings = {};
         let slideStates = [];
         let assignmentId;
+        let parentLessonId = null; // Tracks if we are viewing a child section of a lesson
+        let lessonSectionsSubmissions = {}; // Cache of submission statuses for other sections in the same lesson
         let isSubmitted = false;
         let confirmCallback = null;
         let assignmentAuraEarned = 0; // Aura from THIS assignment only for the current student
@@ -736,6 +757,13 @@
         window.onload = async function () {
             const urlParams = new URLSearchParams(window.location.search);
             assignmentId = urlParams.get('assignmentId');
+            parentLessonId = urlParams.get('lessonId');
+
+            if (parentLessonId) {
+                const banner = document.getElementById('lesson-child-banner');
+                if (banner) banner.classList.remove('hidden');
+            }
+
             const loader = document.getElementById('pageLoader');
             const errorP = document.getElementById('loadingError');
             if (!assignmentId) {
@@ -1253,7 +1281,14 @@
                 loader.classList.add('hidden');
                 showSummary(); // Directly show summary if submitted and hidden
             } else {
-                loader.classList.add('hidden');
+                if (assignmentData.type === 'lesson') {
+                    loader.classList.add('hidden');
+                    document.getElementById('mainContainer').classList.add('hidden');
+                    document.getElementById('lesson-hub-ui').classList.remove('hidden');
+                    initLessonHub();
+                    return; // Hub handles its own display
+                }
+
                 document.getElementById('mainContainer').classList.remove('hidden');
 
                 if (assignmentData.type === 'video') {
@@ -3929,6 +3964,109 @@
         }
         function escapeAttr(text) {
             return (text || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        // --- Lesson Hub Logic ---
+        async function initLessonHub() {
+            const hub = document.getElementById('lesson-hub-ui');
+            const titleEl = hub.querySelector('h1');
+            titleEl.textContent = assignmentData.name || "Lesson Hub";
+
+            // Fetch submission status for all sections to evaluate unlock conditions
+            lessonSectionsSubmissions = {};
+            if (assignmentData.sections && assignmentData.sections.length > 0) {
+                const sectionIds = assignmentData.sections.map(s => s.linkedAssignmentId).filter(id => id);
+                if (sectionIds.length > 0) {
+                    const statusSnapshot = await db.collection("submissionStatus")
+                        .where("studentEmail", "==", userProfile.email)
+                        .where("assignmentId", "in", sectionIds)
+                        .get();
+                    
+                    statusSnapshot.forEach(doc => {
+                        lessonSectionsSubmissions[doc.data().assignmentId] = doc.data();
+                    });
+                }
+            }
+
+            renderLessonSections();
+        }
+
+        function renderLessonSections() {
+            const container = document.getElementById('lesson-sections-list');
+            container.innerHTML = '';
+
+            if (!assignmentData.sections || assignmentData.sections.length === 0) {
+                container.innerHTML = '<p class="text-gray-400 italic">No sections found in this lesson.</p>';
+                return;
+            }
+
+            assignmentData.sections.forEach((section, index) => {
+                const unlock = evaluateUnlockConditions(section, index);
+                const isComplete = !!lessonSectionsSubmissions[section.linkedAssignmentId];
+                const score = isComplete ? (lessonSectionsSubmissions[section.linkedAssignmentId].score || 0) : null;
+
+                const card = document.createElement('div');
+                card.className = `p-6 rounded-xl border-2 transition-all ${unlock.allowed ? 'bg-gray-800 border-gray-700 hover:border-yellow-500 cursor-pointer' : 'bg-gray-800/50 border-gray-800 opacity-60 cursor-not-allowed'}`;
+                
+                let statusBadge = '';
+                if (isComplete) {
+                    statusBadge = `<span class="bg-green-600 text-white text-xs px-2 py-1 rounded-full">✅ Complete ${score !== null ? `(${score}%)` : ''}</span>`;
+                } else if (!unlock.allowed) {
+                    statusBadge = `<span class="bg-gray-700 text-gray-400 text-xs px-2 py-1 rounded-full">🔒 Locked</span>`;
+                } else {
+                    statusBadge = `<span class="bg-blue-600 text-white text-xs px-2 py-1 rounded-full">👉 Available</span>`;
+                }
+
+                card.innerHTML = `
+                    <div class="flex justify-between items-start mb-2">
+                        <h3 class="text-xl font-bold text-white">${index + 1}. ${section.title}</h3>
+                        ${statusBadge}
+                    </div>
+                    <p class="text-gray-400 text-sm mb-4">${unlock.allowed ? 'Click to start this section.' : unlock.reason}</p>
+                `;
+
+                if (unlock.allowed) {
+                    card.onclick = () => {
+                        window.location.href = `./classroompicker.html?assignmentId=${section.linkedAssignmentId}&lessonId=${assignmentId}`;
+                    };
+                }
+
+                container.appendChild(card);
+            });
+        }
+
+        function evaluateUnlockConditions(section, index) {
+            const classStatus = assignmentData.sectionStatus ? (assignmentData.sectionStatus[userProfile.class] || {}) : {};
+            if (classStatus[section.id] === 'closed') {
+                return { allowed: false, reason: "This section has been closed by your teacher." };
+            }
+
+            const cond = section.unlockCondition;
+            if (!cond || !cond.dependsOn) return { allowed: true };
+
+            const depSection = assignmentData.sections.find(s => s.id === cond.dependsOn);
+            if (!depSection) return { allowed: true };
+
+            const depSub = lessonSectionsSubmissions[depSection.linkedAssignmentId];
+            if (!depSub) {
+                return { allowed: false, reason: `Requires completion of "${depSection.title}"` };
+            }
+
+            const score = depSub.score || 0;
+            if (cond.minScore && score < parseFloat(cond.minScore)) {
+                return { allowed: false, reason: `Requires at least ${cond.minScore}% on "${depSection.title}" (Current: ${score}%)` };
+            }
+            if (cond.maxScore && score > parseFloat(cond.maxScore)) {
+                return { allowed: false, reason: `This section is for students who scored below ${cond.maxScore}% on "${depSection.title}".` };
+            }
+
+            return { allowed: true };
+        }
+
+        function returnToLessonHub() {
+            if (parentLessonId) {
+                window.location.href = `./classroompicker.html?assignmentId=${parentLessonId}`;
+            }
         }
     </script>
     <!-- Floating Tools UI -->
