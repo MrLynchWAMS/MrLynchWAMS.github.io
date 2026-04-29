@@ -11,24 +11,24 @@
   <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
   <style>
-    .hidden { display: none; }
-    .sticky-header {
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      background: rgba(17, 24, 39, 0.95);
-      backdrop-filter: blur(8px);
-      border-bottom: 1px border-gray-700;
-      padding: 1rem 0;
-    }
-    #toast-wrapper {
+    .modal-overlay {
       position: fixed;
-      top: 1rem;
-      right: 1rem;
-      z-index: 50;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
       display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    .modal-content {
+      background: #1f2937;
+      border-radius: 0.75rem;
+      width: 90%;
+      max-width: 600px;
+      max-height: 90vh;
+      overflow-y: auto;
+      border: 1px solid #374151;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
     }
   </style>
 </head>
@@ -83,8 +83,32 @@
       </div>
       <p class="text-gray-400 mb-6">Create the flow of your lesson by linking existing assignments and setting adaptive unlock conditions.</p>
       
-      <div id="sectionsContainer" class="space-y-4">
+    <div id="sectionsContainer" class="space-y-4">
         <!-- Sections will be injected here -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Split Slides Modal -->
+  <div id="splitModal" class="modal-overlay hidden">
+    <div class="modal-content">
+      <div class="p-6 border-b border-gray-700 flex justify-between items-center">
+        <h2 class="text-2xl font-bold text-yellow-400">Split Slides into Sections</h2>
+        <button onclick="closeSplitModal()" class="text-gray-400 hover:text-white text-2xl">&times;</button>
+      </div>
+      <div class="p-6">
+        <p class="text-sm text-gray-400 mb-4 italic">Break your presentation into multiple smaller assignments. Each range will become a new section in this lesson.</p>
+        
+        <div id="splitRowsContainer" class="space-y-3 mb-6">
+            <!-- Rows for split ranges -->
+        </div>
+
+        <button onclick="addSplitRow()" class="text-blue-400 hover:text-blue-300 text-sm font-bold mb-6">+ Add Another Range</button>
+
+        <div class="flex justify-end gap-3 border-t border-gray-700 pt-6">
+            <button onclick="closeSplitModal()" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg">Cancel</button>
+            <button id="executeSplitBtn" onclick="executeSplit()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-lg">Generate Sections</button>
+        </div>
       </div>
     </div>
   </div>
@@ -273,6 +297,8 @@
             
             // Build options for assignments
             let assignmentOptions = `<option value="">-- Select an Assignment --</option>`;
+            const selectedAssignment = availableAssignments.find(a => a.id === sec.linkedAssignmentId);
+            
             availableAssignments.forEach(a => {
                 const selected = sec.linkedAssignmentId === a.id ? 'selected' : '';
                 assignmentOptions += `<option value="${a.id}" ${selected}>${a.name} (${a.type})</option>`;
@@ -304,10 +330,15 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <label class="block text-sm text-gray-300 mb-1">Linked Content</label>
-                        <select onchange="updateSection(${index}, 'linkedAssignmentId', this.value)" class="w-full bg-gray-800 border border-gray-600 rounded p-2 focus:border-yellow-400 outline-none">
+                        <select id="assignment-select-${index}" onchange="updateSection(${index}, 'linkedAssignmentId', this.value); renderSections();" class="w-full bg-gray-800 border border-gray-600 rounded p-2 focus:border-yellow-400 outline-none">
                             ${assignmentOptions}
                         </select>
-                        <p class="text-xs text-gray-400 mt-1">This section will load the selected assignment.</p>
+                        <div class="flex justify-between items-center mt-1">
+                            <p class="text-xs text-gray-400">This section will load the selected assignment.</p>
+                            ${selectedAssignment && selectedAssignment.type === 'slides' ? `
+                                <button onclick="openSplitModal(${index})" class="text-[10px] font-bold text-blue-400 hover:underline">✂️ Split into parts...</button>
+                            ` : ''}
+                        </div>
                     </div>
                     
                     <div class="bg-gray-800 p-3 rounded border border-gray-600">
@@ -367,6 +398,148 @@
             renderSections(); // Re-render to show/hide score fields
         }
     };
+
+    // --- Smart Splitting Logic ---
+    let activeSplitSectionIndex = -1;
+    let sourceAssignmentForSplit = null;
+
+    async function openSplitModal(sectionIndex) {
+        activeSplitSectionIndex = sectionIndex;
+        const linkedId = assignmentData.sections[sectionIndex].linkedAssignmentId;
+        if (!linkedId) return;
+
+        showToast("Fetching presentation data...");
+        try {
+            const doc = await db.collection("assignments").doc(linkedId).get();
+            if (!doc.exists) return;
+            sourceAssignmentForSplit = { id: doc.id, ...doc.data() };
+            
+            const numSlides = (sourceAssignmentForSplit.slideIds || []).length;
+            
+            document.getElementById('splitRowsContainer').innerHTML = '';
+            // Default row
+            addSplitRow(`${sourceAssignmentForSplit.name} (Part 1)`, 1, numSlides);
+            
+            document.getElementById('splitModal').classList.remove('hidden');
+        } catch (e) {
+            console.error(e);
+            showToast("Error fetching assignment", "red");
+        }
+    }
+
+    function addSplitRow(title = "", start = 1, end = "") {
+        const container = document.getElementById('splitRowsContainer');
+        const row = document.createElement('div');
+        row.className = "flex gap-2 items-center bg-gray-700/50 p-2 rounded border border-gray-600";
+        
+        row.innerHTML = `
+            <input type="text" class="flex-grow bg-gray-800 border border-gray-600 rounded p-1 text-sm split-title" placeholder="Part Title" value="${title}">
+            <div class="flex items-center gap-1">
+                <span class="text-xs text-gray-500">Slides</span>
+                <input type="number" class="w-16 bg-gray-800 border border-gray-600 rounded p-1 text-sm split-start" placeholder="Start" value="${start}">
+                <span class="text-xs text-gray-500">to</span>
+                <input type="number" class="w-16 bg-gray-800 border border-gray-600 rounded p-1 text-sm split-end" placeholder="End" value="${end}">
+            </div>
+            <button onclick="this.parentElement.remove()" class="text-red-400 p-1">🗑️</button>
+        `;
+        container.appendChild(row);
+    }
+
+    function closeSplitModal() {
+        document.getElementById('splitModal').classList.add('hidden');
+        sourceAssignmentForSplit = null;
+    }
+
+    async function executeSplit() {
+        const btn = document.getElementById('executeSplitBtn');
+        const rows = document.querySelectorAll('#splitRowsContainer > div');
+        if (rows.length === 0) return;
+
+        btn.innerText = "Generating...";
+        btn.disabled = true;
+
+        try {
+            const newSections = [];
+            
+            for (const row of rows) {
+                const title = row.querySelector('.split-title').value.trim() || "Untitled Part";
+                const start = parseInt(row.querySelector('.split-start').value, 10);
+                const end = parseInt(row.querySelector('.split-end').value, 10);
+                
+                if (isNaN(start) || isNaN(end) || start < 1 || end < start) {
+                    throw new Error(`Invalid range for part: ${title}`);
+                }
+
+                // Create sub-assignment
+                const startIndex = start - 1;
+                const endIndex = end - 1;
+                
+                // Filter slideIds and checkerFunctions
+                const newSlideIds = (sourceAssignmentForSplit.slideIds || []).slice(startIndex, endIndex + 1);
+                const newCheckerFunctions = {};
+                
+                // Map checker functions. Note: we don't re-index the calcN keys inside the function strings, 
+                // but we only include the relevant keys. 
+                // Wait, if Slide 6 becomes Slide 1 in the new assignment, it needs calc1.
+                // We'll re-map them.
+                for (let i = startIndex; i <= endIndex; i++) {
+                    const oldKey = `calc${i + 1}`;
+                    const newKey = `calc${(i - startIndex) + 1}`;
+                    if (sourceAssignmentForSplit.checkerFunctions?.[oldKey]) {
+                        newCheckerFunctions[newKey] = sourceAssignmentForSplit.checkerFunctions[oldKey];
+                    }
+                }
+
+                const newAssignment = {
+                    ...sourceAssignmentForSplit,
+                    name: title,
+                    slideIds: newSlideIds,
+                    checkerFunctions: newCheckerFunctions,
+                    isSubAssignment: true,
+                    parentLessonId: assignmentId,
+                    teacherEmail: currentUserEmail,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                };
+                delete newAssignment.id; // Don't include old ID
+
+                const docRef = await db.collection("assignments").add(newAssignment);
+                
+                // Add to availableAssignments so renderSections can show the name
+                availableAssignments.push({
+                    id: docRef.id,
+                    name: title,
+                    type: sourceAssignmentForSplit.type
+                });
+
+                newSections.push({
+                    id: generateId(),
+                    title: title,
+                    linkedAssignmentId: docRef.id,
+                    unlockCondition: {
+                        dependsOn: newSections.length > 0 ? newSections[newSections.length - 1].id : '',
+                        requireStatus: 'submitted',
+                        minScore: '',
+                        maxScore: ''
+                    }
+                });
+            }
+
+            // Replace the original section with these new sections
+            // Or just append them? User said "break one of the original... into multiple sections".
+            // We'll replace the one that was split.
+            assignmentData.sections.splice(activeSplitSectionIndex, 1, ...newSections);
+            
+            showToast(`Created ${newSections.length} new sections!`, { color: "green" });
+            closeSplitModal();
+            renderSections();
+        } catch (e) {
+            console.error(e);
+            showToast(e.message, { color: "red", duration: 5000 });
+        } finally {
+            btn.innerText = "Generate Sections";
+            btn.disabled = false;
+        }
+    }
 
     // --- Save ---
     async function saveAssignment() {
