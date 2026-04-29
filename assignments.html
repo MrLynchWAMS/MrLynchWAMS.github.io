@@ -77,7 +77,11 @@
     <div id="assignmentContent" class="hidden container mx-auto p-4 md:p-8">
         <div class="flex justify-between items-center mb-6 flex-wrap gap-4">
             <h1 class="text-3xl font-bold text-yellow-400">Your Assignments</h1>
-            <div>
+            <div class="flex items-center gap-4 flex-wrap">
+                <div class="flex items-center gap-2 bg-gray-800 p-2 rounded-lg border border-gray-700">
+                    <input type="checkbox" id="showSubAssignments" onchange="renderAssignments()" class="w-4 h-4 text-blue-600 rounded focus:ring-blue-500">
+                    <label for="showSubAssignments" class="text-xs font-semibold text-gray-400 cursor-pointer">Show hidden lesson parts</label>
+                </div>
                 <button onclick="openCreateModal()"
                     class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg btn-action">+ New
                     Assignment</button>
@@ -445,11 +449,6 @@
                 assignmentsBySource[sourceKey].forEach(assignment => combinedAssignments.set(assignment.id, assignment));
             }
             allAssignments = Array.from(combinedAssignments.values());
-            allAssignments.sort((a, b) => {
-                const ta = a.createdAt ? (a.createdAt.seconds || 0) : 0;
-                const tb = b.createdAt ? (b.createdAt.seconds || 0) : 0;
-                return tb - ta;
-            });
             displayFilteredAssignments();
         }
 
@@ -475,7 +474,17 @@
             const listContainer = document.getElementById('assignmentsList');
             const loadingState = document.getElementById('loadingState');
             const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-            const filteredAssignments = allAssignments.filter(a => a.name.toLowerCase().includes(searchTerm));
+            const showSub = document.getElementById('showSubAssignments')?.checked || false;
+
+            const filteredAssignments = allAssignments.filter(a => {
+                const matchesSearch = (a.name || '').toLowerCase().includes(searchTerm);
+                const matchesSub = showSub || !a.isSubAssignment;
+                return matchesSearch && matchesSub;
+            }).sort((a, b) => {
+                const ta = a.createdAt ? (a.createdAt.seconds || 0) : 0;
+                const tb = b.createdAt ? (b.createdAt.seconds || 0) : 0;
+                return tb - ta;
+            });
 
             listContainer.innerHTML = '';
             if (filteredAssignments.length === 0) {
