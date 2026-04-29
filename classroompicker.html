@@ -445,13 +445,16 @@
                 </div>
             </div>
 
-            <div id="lesson-child-banner" class="hidden w-full bg-purple-900/40 border border-purple-500/50 text-purple-200 px-4 py-2 mb-4 flex items-center justify-between rounded-lg backdrop-blur-sm">
-                <div class="flex items-center gap-2">
-                    <span class="text-xl">📚</span>
-                    <span class="font-bold text-sm tracking-wide uppercase">Lesson Section</span>
+            <div id="lesson-child-banner" class="hidden w-full bg-purple-900/60 border border-purple-500/50 text-purple-100 px-4 py-3 mb-6 flex items-center justify-between rounded-xl backdrop-blur-md shadow-lg">
+                <div class="flex items-center gap-3">
+                    <div class="bg-purple-500/20 p-2 rounded-lg text-xl">📚</div>
+                    <div>
+                        <span class="block text-[10px] font-bold text-purple-300 uppercase tracking-widest">Active Lesson</span>
+                        <span class="font-bold text-sm">Lesson Section Content</span>
+                    </div>
                 </div>
-                <button onclick="returnToLessonHub()" class="bg-purple-600 hover:bg-purple-500 text-white font-bold py-1 px-4 rounded transition-colors text-sm shadow-md">
-                    &larr; Back to Lesson Hub
+                <button onclick="returnToLessonHub()" class="bg-purple-600 hover:bg-purple-500 text-white font-bold py-2 px-4 rounded-lg transition-all text-xs shadow-md active:scale-95 flex items-center gap-2">
+                    <span>🏠 Return to Lesson Overview</span>
                 </button>
             </div>
 
@@ -825,6 +828,9 @@
                 const parentId = urlParams.get('lessonId');
                 if (parentId) {
                     db.collection("assignments").doc(parentId).onSnapshot(snap => {
+                        // Bypass for teachers: they should never be kicked out
+                        if (userProfile && userProfile.isTeacher) return;
+
                         if (snap.exists && userProfile) {
                             const pData = snap.data();
                             const section = (pData.sections || []).find(s => s.linkedAssignmentId === assignmentId);
@@ -4069,6 +4075,9 @@
         }
 
         function evaluateUnlockConditions(section, index) {
+            // Teachers have full access to all sections for preview/testing
+            if (userProfile && userProfile.isTeacher) return { allowed: true };
+
             const classStatus = assignmentData.sectionStatus ? (assignmentData.sectionStatus[userProfile.class] || {}) : {};
             if (classStatus[section.id] === 'closed') {
                 return { allowed: false, reason: "This section has been closed by your teacher." };
