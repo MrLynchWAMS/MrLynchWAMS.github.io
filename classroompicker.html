@@ -820,6 +820,25 @@
                     console.error("Assignment listener error:", err);
                 });
 
+                // Parent Lesson Listener for real-time section control
+                const urlParams = new URLSearchParams(window.location.search);
+                const parentId = urlParams.get('lessonId');
+                if (parentId) {
+                    db.collection("assignments").doc(parentId).onSnapshot(snap => {
+                        if (snap.exists && userProfile) {
+                            const pData = snap.data();
+                            const section = (pData.sections || []).find(s => s.linkedAssignmentId === assignmentId);
+                            if (section) {
+                                const classStatus = pData.sectionStatus?.[userProfile.class]?.[section.id] || 'closed';
+                                if (classStatus === 'closed') {
+                                    // Kick student out if section closed
+                                    window.location.href = `./classroompicker.html?assignmentId=${parentId}`;
+                                }
+                            }
+                        }
+                    });
+                }
+
                 auth.onAuthStateChanged(user => {
                     if (user) {
                         let email = user.email.toLowerCase();
@@ -4054,6 +4073,11 @@
             if (classStatus[section.id] === 'closed') {
                 return { allowed: false, reason: "This section has been closed by your teacher." };
             }
+
+            // Teacher Manual Overrides
+            const globalOverride = assignmentData.manualOverrides?.[userProfile.class]?.[section.id] === 'open';
+            const studentOverride = assignmentData.studentOverrides?.[userProfile.email]?.[section.id] === 'open';
+            if (globalOverride || studentOverride) return { allowed: true };
 
             const cond = section.unlockCondition;
             if (!cond || !cond.dependsOn) return { allowed: true };
