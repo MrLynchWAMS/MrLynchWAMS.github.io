@@ -194,6 +194,13 @@
                 </div>
             </div>
 
+            <div id="lessonControlPanel" class="hidden mb-4 p-4 bg-gray-800 rounded-lg border border-purple-900/30">
+                <h2 class="text-xl font-bold text-purple-400 mb-4">Lesson Control Panel</h2>
+                <div id="lessonSectionsList" class="flex flex-wrap gap-4">
+                    <!-- JS populated -->
+                </div>
+            </div>
+
             <div class="overflow-x-auto bg-gray-800 rounded-lg shadow">
                 <table class="min-w-full divide-y divide-gray-700 table-fixed">
                     <thead id="tableHeader" class="bg-gray-700"></thead>
@@ -295,11 +302,8 @@
 
         // --- Firestore live listener handles ---
         let unsubscribeStudents = null;
-        let unsubscribeSubmissions = null;
-        let unsubscribeStatus = null;
-        let unsubscribeViolations = null;
-        let unsubscribeQuestionProgress = null;
-        let unsubscribeSimulationData = null;
+        let unsubscribeArray = []; // Tracks all sub-assignment listeners
+        let unsubscribeStatus = null; // Still used for some legacy checks if any
 
         window.onload = function () {
             const urlParams = new URLSearchParams(window.location.search);
@@ -346,7 +350,7 @@
                 }
             });
         };
-        // --- SETUP LIVE LISTENERS (OPTIMIZED) ---
+                // --- SETUP LIVE LISTENERS (OPTIMIZED) ---
         let displayUpdateTimeout = null;
         function debouncedDisplayUpdate() {
             if (displayUpdateTimeout) clearTimeout(displayUpdateTimeout);
@@ -357,24 +361,20 @@
             }, 100);
         }
 
+        function chunkArray(myArray, chunk_size) {
+            let index = 0;
+            let arrayLength = myArray.length;
+            let tempArray = [];
+            for (index = 0; index < arrayLength; index += chunk_size) {
+                tempArray.push(myArray.slice(index, index + chunk_size));
+            }
+            return tempArray;
+        }
+
         function setupLiveStudentData() {
-            // Unsubscribe previous listeners (if any)
-            if (unsubscribeStudents) unsubscribeStudents();
-            if (unsubscribeSubmissions) unsubscribeSubmissions();
-            if (unsubscribeStatus) unsubscribeStatus();
-            if (unsubscribeViolations) unsubscribeViolations();
-            if (unsubscribeQuestionProgress) unsubscribeQuestionProgress();
-            if (unsubscribeSimulationData) unsubscribeSimulationData();
+            cleanupListeners();
 
-            // Initialize data structures
-            studentsMap.clear();
-            submissionsByStudent.clear();
-            submittedEmails.clear();
-            violationsByStudent.clear();
-            auraByStudent.clear();
-            simDataByStudentLocal.clear();
-
-            // Listener 1: Students collection (filtered by roster)
+            // Listener 1: Roster Data (Independent of assignmentId)
             unsubscribeStudents = db.collection("students")
                 .onSnapshot(studentSnapshot => {
                     const assignmentTeacher = assignmentData.teacherEmail ? assignmentData.teacherEmail.toLowerCase() : 'klynch@mtps.us';
@@ -397,146 +397,170 @@
                     rebuildAllStudentData();
                 });
 
-            // Listener 2: Submissions for this assignment
-            unsubscribeSubmissions = db.collection("submissions")
-                .where("assignmentId", "==", assignmentId)
-                .onSnapshot(submissionSnapshot => {
-                    submissionSnapshot.docChanges().forEach(change => {
-                        const submission = { id: change.doc.id, ...change.doc.data() };
-                        const studentEmail = submission.studentEmail ? submission.studentEmail.toLowerCase() : '';
-                        if (!studentEmail) return;
+            // For collections tied to assignment IDs, determine targets
+            let targetIds = [assignmentId];
+            if (assignmentData.type === 'lesson' && assignmentData.sections && assignmentData.sections.length > 0) {
+                const linkedIds = assignmentData.sections.map(s => s.linkedAssignmentId).filter(id => id);
+                targetIds = [...new Set([assignmentId, ...linkedIds])]; // Unique IDs
+            }
 
-                        if (change.type === "removed") {
-                            const submissions = submissionsByStudent.get(studentEmail) || [];
-                            submissionsByStudent.set(
-                                studentEmail,
-                                submissions.filter(s => s.id !== submission.id)
-                            );
-                        } else {
-                            // added or modified
-                            if (!submissionsByStudent.has(studentEmail)) {
-                                submissionsByStudent.set(studentEmail, []);
-                            }
-                            const submissions = submissionsByStudent.get(studentEmail);
-                            const existingIndex = submissions.findIndex(s => s.id === submission.id);
-                            if (existingIndex >= 0) {
-                                submissions[existingIndex] = submission;
+            const chunks = chunkArray(targetIds, 10);
+
+            chunks.forEach(chunk => {
+                // Listener 2: Submissions
+                const unSub = db.collection("submissions")
+                    .where("assignmentId", "in", chunk)
+                    .onSnapshot(submissionSnapshot => {
+                        submissionSnapshot.docChanges().forEach(change => {
+                            const submission = { id: change.doc.id, ...change.doc.data() };
+                            const studentEmail = submission.studentEmail ? submission.studentEmail.toLowerCase() : '';
+                            if (!studentEmail) return;
+
+                            if (change.type === "removed") {
+                                const submissions = submissionsByStudent.get(studentEmail) || [];
+                                submissionsByStudent.set(
+                                    studentEmail,
+                                    submissions.filter(s => s.id !== submission.id)
+                                );
                             } else {
-                                submissions.push(submission);
-                            }
-                        }
-                    });
-                    rebuildAllStudentData();
-                });
-
-            // Listener 3: Submission status (includes Aura data)
-            unsubscribeStatus = db.collection("submissionStatus")
-                .where("assignmentId", "==", assignmentId)
-                .onSnapshot(statusSnapshot => {
-                    submittedEmails.clear();
-                    auraByStudent.clear();
-                    submittedStatusByStudent.clear();
-
-                    // Aggregate all docs per student to select the "best" one for Aura
-                    const docsByStudent = new Map();
-                    statusSnapshot.forEach(doc => {
-                        const data = doc.data();
-                        const email = data.studentEmail ? data.studentEmail.toLowerCase() : '';
-                        if (!email) return;
-
-                        submittedEmails.add(email);
-
-                        if (!docsByStudent.has(email)) {
-                            docsByStudent.set(email, []);
-                        }
-                        docsByStudent.get(email).push(data);
-                    });
-
-                    // For each student, select the best doc for Aura data
-                    // Priority: most recent timestamp, then prefer auraAwarded=true
-                    docsByStudent.forEach((docs, email) => {
-                        let bestDoc = docs[0];
-                        for (let i = 1; i < docs.length; i++) {
-                            const current = docs[i];
-                            const bestTimestamp = bestDoc.timestamp?.seconds || 0;
-                            const currentTimestamp = current.timestamp?.seconds || 0;
-
-                            if (currentTimestamp > bestTimestamp) {
-                                bestDoc = current;
-                            } else if (currentTimestamp === bestTimestamp) {
-                                // If timestamps are equal, prefer the one with auraAwarded=true
-                                if (!!current.auraAwarded && !bestDoc.auraAwarded) {
-                                    bestDoc = current;
+                                if (!submissionsByStudent.has(studentEmail)) {
+                                    submissionsByStudent.set(studentEmail, []);
+                                }
+                                const submissions = submissionsByStudent.get(studentEmail);
+                                const existingIndex = submissions.findIndex(s => s.id === submission.id);
+                                if (existingIndex >= 0) {
+                                    submissions[existingIndex] = submission;
+                                } else {
+                                    submissions.push(submission);
                                 }
                             }
-                        }
-
-                        // Populate auraByStudent from the chosen best doc
-                        auraByStudent.set(email, {
-                            auraAwarded: !!bestDoc.auraAwarded,
-                            auraAmount: typeof bestDoc.auraAmount === 'number' ? bestDoc.auraAmount : 0
                         });
-
-                        // Populate submittedStatusByStudent for Watch Time, etc.
-                        submittedStatusByStudent.set(email, bestDoc);
+                        rebuildAllStudentData();
                     });
+                unsubscribeArray.push(unSub);
 
-                    rebuildAllStudentData();
-                });
-
-            // Listener 4: Focus Mode violations for this assignment
-            unsubscribeViolations = db.collection("focusViolations")
-                .where("assignmentId", "==", assignmentId)
-                .onSnapshot(violationSnapshot => {
-                    violationsByStudent.clear();
-                    violationSnapshot.forEach(doc => {
-                        const violation = { id: doc.id, ...doc.data() };
-                        const studentEmail = violation.studentEmail ? violation.studentEmail.toLowerCase() : '';
-                        if (!studentEmail) return;
-
-                        if (!violationsByStudent.has(studentEmail)) {
-                            violationsByStudent.set(studentEmail, []);
-                        }
-                        violationsByStudent.get(studentEmail).push(violation);
+                // Listener 3: Submission status
+                const unStatus = db.collection("submissionStatus")
+                    .where("assignmentId", "in", chunk)
+                    .onSnapshot(statusSnapshot => {
+                        statusSnapshot.docChanges().forEach(change => {
+                            const doc = change.doc;
+                            const data = doc.data();
+                            const email = data.studentEmail ? data.studentEmail.toLowerCase() : '';
+                            if (!email) return;
+                            
+                            // For a lesson, we only care about the overall lesson submission for `submittedEmails` and Aura.
+                            // The individual section submissions shouldn't mark the whole lesson as "submitted" 
+                            // UNLESS the user wants to see partial status? Let's just track everything for now and process in rebuildAllStudentData
+                            
+                            // Wait, if it's a lesson, `submittedEmails` should only trigger if the lesson itself is submitted
+                            if (data.assignmentId === assignmentId) {
+                                if (change.type === "removed") {
+                                    submittedEmails.delete(email);
+                                    auraByStudent.delete(email);
+                                    submittedStatusByStudent.delete(email);
+                                } else {
+                                    if (data.status === 'submitted') {
+                                        submittedEmails.add(email);
+                                    } else {
+                                        submittedEmails.delete(email);
+                                    }
+                                    
+                                    auraByStudent.set(email, {
+                                        auraAwarded: !!data.auraAwarded,
+                                        auraAmount: typeof data.auraAmount === 'number' ? data.auraAmount : 0
+                                    });
+                                    submittedStatusByStudent.set(email, {
+                                        status: data.status || 'none',
+                                        watchTime: data.watchTimeSeconds || data.watchTime || 0
+                                    });
+                                }
+                            }
+                        });
+                        rebuildAllStudentData();
                     });
-                    rebuildAllStudentData();
-                });
+                unsubscribeArray.push(unStatus);
 
-            // Listener 5: Question progress (attempt tracking) for this assignment
-            unsubscribeQuestionProgress = db.collection("questionProgress")
-                .where("assignmentId", "==", assignmentId)
-                .onSnapshot(progressSnapshot => {
-                    questionProgressByStudent.clear();
-                    progressSnapshot.forEach(doc => {
-                        const progress = { id: doc.id, ...doc.data() };
-                        const studentEmail = progress.studentEmail ? progress.studentEmail.toLowerCase() : '';
-                        if (!studentEmail) return;
+                // Listener 4: Focus violations
+                const unVio = db.collection("focusViolations")
+                    .where("assignmentId", "in", chunk)
+                    .onSnapshot(violationSnapshot => {
+                        violationSnapshot.docChanges().forEach(change => {
+                            const violation = { id: change.doc.id, ...change.doc.data() };
+                            const studentEmail = violation.studentEmail ? violation.studentEmail.toLowerCase() : '';
+                            if (!studentEmail) return;
 
-                        const slideIndex = parseInt(progress.slideIndex, 10);
-                        if (isNaN(slideIndex)) return;
-
-                        if (!questionProgressByStudent.has(studentEmail)) {
-                            questionProgressByStudent.set(studentEmail, new Map());
-                        }
-                        questionProgressByStudent.get(studentEmail).set(slideIndex, progress);
+                            if (change.type === "removed") {
+                                const violations = violationsByStudent.get(studentEmail) || [];
+                                violationsByStudent.set(studentEmail, violations.filter(v => v.id !== violation.id));
+                            } else {
+                                if (!violationsByStudent.has(studentEmail)) {
+                                    violationsByStudent.set(studentEmail, []);
+                                }
+                                const violations = violationsByStudent.get(studentEmail);
+                                const existingIndex = violations.findIndex(v => v.id === violation.id);
+                                if (existingIndex >= 0) {
+                                    violations[existingIndex] = violation;
+                                } else {
+                                    violations.push(violation);
+                                }
+                            }
+                        });
+                        rebuildAllStudentData();
                     });
-                    rebuildAllStudentData();
-                });
+                unsubscribeArray.push(unVio);
 
-            // Listener 6: Simulation contextual data for this assignment
-            unsubscribeSimulationData = db.collection("simulationData")
-                .where("assignmentId", "==", assignmentId)
-                .onSnapshot(simSnapshot => {
-                    simDataByStudentLocal.clear();
-                    simSnapshot.forEach(doc => {
-                        const simDoc = doc.data();
-                        const studentEmail = simDoc.studentEmail ? simDoc.studentEmail.toLowerCase() : '';
-                        if (!studentEmail) return;
-                        simDataByStudentLocal.set(studentEmail, simDoc.simData);
+                // Listener 5: Question progress
+                const unProg = db.collection("questionProgress")
+                    .where("assignmentId", "in", chunk)
+                    .onSnapshot(progressSnapshot => {
+                        progressSnapshot.docChanges().forEach(change => {
+                            const progress = { id: change.doc.id, ...change.doc.data() };
+                            const studentEmail = progress.studentEmail ? progress.studentEmail.toLowerCase() : '';
+                            if (!studentEmail) return;
+
+                            const slideIndex = parseInt(progress.slideIndex, 10);
+                            if (isNaN(slideIndex)) return;
+                            
+                            // Key by assignmentId + slideIndex to avoid collisions between sections
+                            const progressKey = `${progress.assignmentId}_${slideIndex}`;
+
+                            if (change.type === "removed") {
+                                if (questionProgressByStudent.has(studentEmail)) {
+                                    questionProgressByStudent.get(studentEmail).delete(progressKey);
+                                }
+                            } else {
+                                if (!questionProgressByStudent.has(studentEmail)) {
+                                    questionProgressByStudent.set(studentEmail, new Map());
+                                }
+                                questionProgressByStudent.get(studentEmail).set(progressKey, progress);
+                            }
+                        });
+                        rebuildAllStudentData();
                     });
-                    simDataByStudent = simDataByStudentLocal;
-                    rebuildAllStudentData();
-                });
+                unsubscribeArray.push(unProg);
+
+                // Listener 6: Simulation Data
+                const unSim = db.collection("simulationData")
+                    .where("assignmentId", "in", chunk)
+                    .onSnapshot(simSnapshot => {
+                        simSnapshot.docChanges().forEach(change => {
+                            const doc = change.doc;
+                            const simDoc = doc.data();
+                            const studentEmail = simDoc.studentEmail ? simDoc.studentEmail.toLowerCase() : '';
+                            if (!studentEmail) return;
+
+                            if (change.type === "removed") {
+                                simDataByStudentLocal.delete(studentEmail);
+                            } else {
+                                simDataByStudentLocal.set(studentEmail, simDoc.simData);
+                            }
+                        });
+                        simDataByStudent = simDataByStudentLocal;
+                        rebuildAllStudentData();
+                    });
+                unsubscribeArray.push(unSim);
+            });
 
             function rebuildAllStudentData() {
                 allStudentData = Array.from(studentsMap.values()).map(student => {
@@ -556,7 +580,6 @@
                     };
                 });
 
-                // PATCH: Set activeClass to first class after data loads, only once
                 const assignedClasses = assignmentData.assignedClasses || [];
                 const classesInAssignment = [...new Set(allStudentData.filter(s => assignedClasses.includes(String(s.class))).map(s => String(s.class)))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
                 if (!initialized && classesInAssignment.length > 0) {
@@ -568,16 +591,16 @@
             }
         }
 
-
         // --- CLEANUP LISTENERS ---
         function cleanupListeners() {
-            if (unsubscribeStudents) unsubscribeStudents();
-            if (unsubscribeSubmissions) unsubscribeSubmissions();
-            if (unsubscribeStatus) unsubscribeStatus();
-            if (unsubscribeViolations) unsubscribeViolations();
-            if (unsubscribeQuestionProgress) unsubscribeQuestionProgress();
-            if (unsubscribeSimulationData) unsubscribeSimulationData();
+            if (unsubscribeStudents) {
+                unsubscribeStudents();
+                unsubscribeStudents = null;
+            }
+            unsubscribeArray.forEach(fn => fn());
+            unsubscribeArray = [];
         }
+
         window.addEventListener("beforeunload", cleanupListeners);
 
         // --- DASHBOARD LOAD ---
@@ -590,6 +613,27 @@
                     return;
                 }
                 assignmentData = { id: doc.id, ...doc.data() };
+                // Load Linked Assignments for Lessons
+                window.linkedAssignmentsData = {};
+                if (assignmentData.type === 'lesson' && assignmentData.sections) {
+                    const linkedIds = assignmentData.sections.map(s => s.linkedAssignmentId).filter(id => id);
+                    if (linkedIds.length > 0) {
+                        try {
+                            const chunks = [];
+                            for(let i = 0; i < linkedIds.length; i += 10) chunks.push(linkedIds.slice(i, i+10));
+                            
+                            for (const chunk of chunks) {
+                                const q = await db.collection("assignments").where(firebase.firestore.FieldPath.documentId(), "in", chunk).get();
+                                q.forEach(d => {
+                                    window.linkedAssignmentsData[d.id] = { id: d.id, ...d.data() };
+                                });
+                            }
+                        } catch(e) {
+                            console.error("Error loading linked assignments:", e);
+                        }
+                    }
+                }
+
 
                 // Get current user's email and teacher profile
                 const teacherDoc = await db.collection("teachers").doc(currentUserEmail).get();
@@ -650,7 +694,23 @@
             const averages = {};
             const assignedClasses = assignmentData.assignedClasses || [];
             const studentsInAssignment = allStudentData.filter(s => assignedClasses.includes(String(s.class)));
-            const numQuestions = assignmentData.type === 'pdf' ? (assignmentData.questionZones ? assignmentData.questionZones.length : 0) : assignmentData.type === 'video' ? (assignmentData.videoQuestions ? assignmentData.videoQuestions.length : 0) : assignmentData.type === 'simulation' ? (assignmentData.simQuestions ? assignmentData.simQuestions.length : 0) : (assignmentData.slideIds ? assignmentData.slideIds.length : 0);
+            
+            let numQuestions = 0;
+            let questionsList = [];
+            if (assignmentData.type === 'lesson' && assignmentData.sections && window.linkedAssignmentsData) {
+                assignmentData.sections.forEach(sec => {
+                    const linkedData = window.linkedAssignmentsData[sec.linkedAssignmentId];
+                    if (linkedData) {
+                        const linkedNumQ = linkedData.type === 'pdf' ? (linkedData.questionZones ? linkedData.questionZones.length : 0) : linkedData.type === 'video' ? (linkedData.videoQuestions ? linkedData.videoQuestions.length : 0) : linkedData.type === 'simulation' ? (linkedData.simQuestions ? linkedData.simQuestions.length : 0) : (linkedData.slideIds ? linkedData.slideIds.length : 0);
+                        for (let j = 0; j < linkedNumQ; j++) {
+                            questionsList.push({ assignmentId: linkedData.id, slideIndex: j });
+                        }
+                    }
+                });
+                numQuestions = questionsList.length;
+            } else {
+                numQuestions = assignmentData.type === 'pdf' ? (assignmentData.questionZones ? assignmentData.questionZones.length : 0) : assignmentData.type === 'video' ? (assignmentData.videoQuestions ? assignmentData.videoQuestions.length : 0) : assignmentData.type === 'simulation' ? (assignmentData.simQuestions ? assignmentData.simQuestions.length : 0) : (assignmentData.slideIds ? assignmentData.slideIds.length : 0);
+            }
 
             const classes = [...new Set(studentsInAssignment.map(s => String(s.class)))];
             classes.forEach(c => {
@@ -659,7 +719,13 @@
                 let attemptedQuestions = 0;
                 studentsInClass.forEach(student => {
                     for (let i = 0; i < numQuestions; i++) {
-                        const latestSubmission = student.submissions.filter(sub => sub.slideIndex === i).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
+                        let latestSubmission;
+                        if (assignmentData.type === 'lesson') {
+                            const q = questionsList[i];
+                            latestSubmission = student.submissions.filter(sub => sub.slideIndex === q.slideIndex && sub.assignmentId === q.assignmentId).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
+                        } else {
+                            latestSubmission = student.submissions.filter(sub => sub.slideIndex === i).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
+                        }
                         if (latestSubmission) {
                             totalScore += latestSubmission.score;
                             attemptedQuestions++;
@@ -673,7 +739,13 @@
             let allAttemptedQuestions = 0;
             studentsInAssignment.forEach(student => {
                 for (let i = 0; i < numQuestions; i++) {
-                    const latestSubmission = student.submissions.filter(s => s.slideIndex === i).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
+                    let latestSubmission;
+                    if (assignmentData.type === 'lesson') {
+                        const q = questionsList[i];
+                        latestSubmission = student.submissions.filter(sub => sub.slideIndex === q.slideIndex && sub.assignmentId === q.assignmentId).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
+                    } else {
+                        latestSubmission = student.submissions.filter(sub => sub.slideIndex === i).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
+                    }
                     if (latestSubmission) {
                         allTotalScore += latestSubmission.score;
                         allAttemptedQuestions++;
@@ -719,7 +791,59 @@
                 const activeAvg = classAverages[activeClass] || '-';
                 avgEl.textContent = `(Avg: ${activeAvg})`;
             }
+            if (assignmentData && assignmentData.type === 'lesson') {
+                renderLessonControlPanel();
+            }
             changeSort(sortMode);
+        }
+
+        function renderLessonControlPanel() {
+            if (assignmentData.type !== 'lesson') return;
+            const panel = document.getElementById('lessonControlPanel');
+            const list = document.getElementById('lessonSectionsList');
+            panel.classList.remove('hidden');
+            
+            list.innerHTML = '';
+            if (activeClass === 'All') {
+                list.innerHTML = '<p class="text-gray-400 italic">Select a specific class to manage section access.</p>';
+                return;
+            }
+
+            const currentStatusMap = assignmentData.sectionStatus?.[activeClass] || {};
+            
+            assignmentData.sections.forEach(sec => {
+                const status = currentStatusMap[sec.id] || 'closed';
+                
+                const btnClass = status === 'open' 
+                    ? 'bg-green-600 hover:bg-green-700 text-white' 
+                    : 'bg-gray-600 hover:bg-gray-500 text-gray-300';
+                
+                list.innerHTML += `<button onclick="toggleSectionStatus('${sec.id}', '${status === 'open' ? 'closed' : 'open'}')" class="${btnClass} px-4 py-2 rounded-lg font-bold transition-colors">
+                    ${sec.title}: ${status.toUpperCase()}
+                </button>`;
+            });
+        }
+        
+        async function toggleSectionStatus(sectionId, newStatus) {
+            if (!activeClass || activeClass === 'All') return;
+            
+            const updatePath = `sectionStatus.${activeClass}.${sectionId}`;
+            try {
+                await db.collection("assignments").doc(assignmentId).update({
+                    [updatePath]: newStatus
+                });
+                
+                // Update local data
+                if (!assignmentData.sectionStatus) assignmentData.sectionStatus = {};
+                if (!assignmentData.sectionStatus[activeClass]) assignmentData.sectionStatus[activeClass] = {};
+                assignmentData.sectionStatus[activeClass][sectionId] = newStatus;
+                
+                renderLessonControlPanel();
+                showToast(`Section marked as ${newStatus}`, { color: 'blue' });
+            } catch (error) {
+                console.error("Error updating section status:", error);
+                showToast("Failed to update status", { color: 'red' });
+            }
         }
 
         function changeSort(newMode) {
@@ -764,7 +888,28 @@
         function displayStudentData() {
             const tableHeader = document.getElementById('tableHeader');
             const studentList = document.getElementById('studentData');
-            const numQuestions = assignmentData.type === 'pdf' ? (assignmentData.questionZones ? assignmentData.questionZones.length : 0) : assignmentData.type === 'video' ? (assignmentData.videoQuestions ? assignmentData.videoQuestions.length : 0) : assignmentData.type === 'simulation' ? (assignmentData.simQuestions ? assignmentData.simQuestions.length : 0) : (assignmentData.slideIds ? assignmentData.slideIds.length : 0);
+            
+            let numQuestions = 0;
+            let questionsList = []; // Used only for lessons
+            if (assignmentData.type === 'lesson' && assignmentData.sections && window.linkedAssignmentsData) {
+                assignmentData.sections.forEach(sec => {
+                    const linkedData = window.linkedAssignmentsData[sec.linkedAssignmentId];
+                    if (linkedData) {
+                        const linkedNumQ = linkedData.type === 'pdf' ? (linkedData.questionZones ? linkedData.questionZones.length : 0) : linkedData.type === 'video' ? (linkedData.videoQuestions ? linkedData.videoQuestions.length : 0) : linkedData.type === 'simulation' ? (linkedData.simQuestions ? linkedData.simQuestions.length : 0) : (linkedData.slideIds ? linkedData.slideIds.length : 0);
+                        for (let i = 0; i < linkedNumQ; i++) {
+                            questionsList.push({
+                                label: `${sec.title} - Q${i+1}`,
+                                assignmentId: linkedData.id,
+                                slideIndex: i
+                            });
+                        }
+                    }
+                });
+                numQuestions = questionsList.length;
+            } else {
+                numQuestions = assignmentData.type === 'pdf' ? (assignmentData.questionZones ? assignmentData.questionZones.length : 0) : assignmentData.type === 'video' ? (assignmentData.videoQuestions ? assignmentData.videoQuestions.length : 0) : assignmentData.type === 'simulation' ? (assignmentData.simQuestions ? assignmentData.simQuestions.length : 0) : (assignmentData.slideIds ? assignmentData.slideIds.length : 0);
+            }
+
             const sortedStudents = getCurrentlySortedStudents();
             const hasFocusMode = assignmentData.focusModeEnabled;
 
@@ -791,7 +936,13 @@
                 }
             }
             for (let i = 1; i <= numQuestions; i++) {
-                headerHtml += `<th class="px-2 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer hover:text-yellow-400" onclick="showQuestionSubmissions(${i - 1})">Q${i}</th>`;
+                let qLabel = `Q${i}`;
+                if (assignmentData.type === 'lesson') {
+                    qLabel = questionsList[i - 1].label;
+                    headerHtml += `<th class="px-2 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer hover:text-yellow-400" onclick="showQuestionSubmissions('${questionsList[i - 1].assignmentId}', ${questionsList[i - 1].slideIndex})" title="${qLabel}">L-Q${i}</th>`;
+                } else {
+                    headerHtml += `<th class="px-2 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer hover:text-yellow-400" onclick="showQuestionSubmissions('${assignmentData.id}', ${i - 1})">Q${i}</th>`;
+                }
             }
             headerHtml += '</tr>';
 
@@ -811,7 +962,16 @@
                     }
                 }
                 for (let i = 0; i < numQuestions; i++) {
-                    const scores = sortedStudents.map(s => s.submissions.filter(sub => sub.slideIndex === i).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0]).filter(Boolean).map(sub => sub.score);
+                    const scores = sortedStudents.map(s => {
+                        let subs = [];
+                        if (assignmentData.type === 'lesson') {
+                            const qInfo = questionsList[i];
+                            subs = s.submissions.filter(sub => sub.slideIndex === qInfo.slideIndex && sub.assignmentId === qInfo.assignmentId);
+                        } else {
+                            subs = s.submissions.filter(sub => sub.slideIndex === i);
+                        }
+                        return subs.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
+                    }).filter(Boolean).map(sub => sub.score);
                     const avg = scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(0) : '-';
                     classAverageRowHtml += `<td class="px-2 py-1 text-center text-xs font-semibold text-cyan-400">${avg}</td>`;
                 }
@@ -823,7 +983,16 @@
             sortedStudents.forEach((student, index) => {
                 const rawDisplayName = hideNames ? `Student ${index + 1}` : student.name;
                 const displayName = escapeHtml(rawDisplayName);
-                const latestScores = Array.from({ length: numQuestions }, (_, i) => student.submissions.filter(s => s.slideIndex === i).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0]?.score || 0);
+                const latestScores = Array.from({ length: numQuestions }, (_, i) => {
+                    let subs = [];
+                    if (assignmentData.type === 'lesson') {
+                        const qInfo = questionsList[i];
+                        subs = student.submissions.filter(sub => sub.slideIndex === qInfo.slideIndex && sub.assignmentId === qInfo.assignmentId);
+                    } else {
+                        subs = student.submissions.filter(sub => sub.slideIndex === i);
+                    }
+                    return subs.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0]?.score || 0;
+                });
                 const studentAvg = latestScores.length > 0 ? (latestScores.reduce((a, b) => a + b, 0) / latestScores.length).toFixed(0) : '-';
 
                 let avgScoreDisplay = '';
@@ -879,14 +1048,28 @@
             `;
 
                 for (let i = 0; i < numQuestions; i++) {
-                    const latestSubmission = student.submissions.filter(s => s.slideIndex === i).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
-                    const questionProgress = student.questionProgress?.get(i);
+                    let latestSubmission;
+                    let questionProgress;
+                    
+                    if (assignmentData.type === 'lesson') {
+                        const qInfo = questionsList[i];
+                        latestSubmission = student.submissions.filter(s => s.slideIndex === qInfo.slideIndex && s.assignmentId === qInfo.assignmentId).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
+                        questionProgress = student.questionProgress?.get(`${qInfo.assignmentId}_${qInfo.slideIndex}`);
+                    } else {
+                        latestSubmission = student.submissions.filter(s => s.slideIndex === i).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
+                        questionProgress = student.questionProgress?.get(`${assignmentId}_${i}`); // Using compound key
+                    }
+
                     const attemptCount = questionProgress?.attemptCount || 0;
                     const isLocked = questionProgress?.locked || false;
 
                     if (blackoutMode) {
                         if (latestSubmission) {
-                            tableHtml += `<td class="px-2 py-4 whitespace-nowrap cursor-pointer" onclick="showSubmissions('${escapedEmail}', ${i})"><div class="w-full bg-black rounded-full h-6"></div></td>`;
+                            if (assignmentData.type === 'lesson') {
+                                tableHtml += `<td class="px-2 py-4 whitespace-nowrap cursor-pointer" onclick="showSubmissions('${escapedEmail}', ${questionsList[i].slideIndex}, '${questionsList[i].assignmentId}')"><div class="w-full bg-black rounded-full h-6"></div></td>`;
+                            } else {
+                                tableHtml += `<td class="px-2 py-4 whitespace-nowrap cursor-pointer" onclick="showSubmissions('${escapedEmail}', ${i})"><div class="w-full bg-black rounded-full h-6"></div></td>`;
+                            }
                         } else {
                             tableHtml += `<td class="px-2 py-4"><div class="h-6 rounded-full border-2 border-dashed border-gray-400"></div></td>`;
                         }
@@ -903,10 +1086,17 @@
                             } else if (showAttempts && isLocked) {
                                 attemptDisplay = `<span class="text-xs text-red-600 ml-1">🔒</span>`;
                             }
-                            tableHtml += `<td class="px-2 py-4 whitespace-nowrap text-sm font-semibold cursor-pointer" onclick="showSubmissions('${escapedEmail}', ${i})">
-                            <div class="w-full bg-gray-600 rounded-full h-6 relative">
-                                <div class="${color} ${textColor} h-6 rounded-full text-center text-xs flex items-center justify-center font-bold" style="width: ${score}%">${scoreDisplay}${attemptDisplay}</div>
-                            </div></td>`;
+                            if (assignmentData.type === 'lesson') {
+                                tableHtml += `<td class="px-2 py-4 whitespace-nowrap text-sm font-semibold cursor-pointer" onclick="showSubmissions('${escapedEmail}', ${questionsList[i].slideIndex}, '${questionsList[i].assignmentId}')">
+                                <div class="w-full bg-gray-600 rounded-full h-6 relative">
+                                    <div class="${color} ${textColor} h-6 rounded-full text-center text-xs flex items-center justify-center font-bold" style="width: ${score}%">${scoreDisplay}${attemptDisplay}</div>
+                                </div></td>`;
+                            } else {
+                                tableHtml += `<td class="px-2 py-4 whitespace-nowrap text-sm font-semibold cursor-pointer" onclick="showSubmissions('${escapedEmail}', ${i})">
+                                <div class="w-full bg-gray-600 rounded-full h-6 relative">
+                                    <div class="${color} ${textColor} h-6 rounded-full text-center text-xs flex items-center justify-center font-bold" style="width: ${score}%">${scoreDisplay}${attemptDisplay}</div>
+                                </div></td>`;
+                            }
                         } else {
                             tableHtml += `<td class="px-2 py-4"><div class="bg-gray-700 h-6 rounded-full flex items-center justify-center text-gray-500 text-xs">-</div></td>`;
                         }
@@ -931,13 +1121,15 @@
 
         function executeChecker(submission) {
             const slideIndex = submission.slideIndex;
+            const dataToUse = (window.linkedAssignmentsData && window.linkedAssignmentsData[submission.assignmentId]) ? window.linkedAssignmentsData[submission.assignmentId] : assignmentData;
+            
             let checkerKey = `calc${slideIndex + 1}`;
-            if (assignmentData.type === 'video') {
-                checkerKey = assignmentData.videoQuestions?.[slideIndex]?.id || checkerKey;
-            } else if (assignmentData.type === 'simulation') {
-                checkerKey = assignmentData.simQuestions?.[slideIndex]?.id || checkerKey;
+            if (dataToUse.type === 'video') {
+                checkerKey = dataToUse.videoQuestions?.[slideIndex]?.id || checkerKey;
+            } else if (dataToUse.type === 'simulation') {
+                checkerKey = dataToUse.simQuestions?.[slideIndex]?.id || checkerKey;
             }
-            const funcString = assignmentData.checkerFunctions?.[checkerKey] || assignmentData.checkerFunctions?.[`calc${slideIndex + 1}`];
+            const funcString = dataToUse.checkerFunctions?.[checkerKey] || dataToUse.checkerFunctions?.[`calc${slideIndex + 1}`];
             if (!funcString) return 0;
             try {
                 const userProfile = { name: submission.studentName, email: submission.studentEmail };
@@ -961,7 +1153,33 @@
             showToast("Starting to regrade all submissions...", { color: 'blue' });
 
             try {
-                const submissionsSnapshot = await db.collection("submissions").where("assignmentId", "==", assignmentId).get();
+                let submissionsSnapshot;
+                if (assignmentData.type === 'lesson') {
+                    // For lessons, we just use the loaded allStudentData to find submissions to regrade
+                    // since querying all linked assignment IDs would be complex.
+                    const allSubmissionsToRegrade = allStudentData.flatMap(s => s.submissions);
+                    if (allSubmissionsToRegrade.length === 0) {
+                        showToast("No submissions found to regrade.", { color: 'default' });
+                        regradeBtn.disabled = false;
+                        regradeBtn.textContent = 'Regrade All';
+                        return;
+                    }
+                    const batch = db.batch();
+                    let count = 0;
+                    allSubmissionsToRegrade.forEach(sub => {
+                        const newScore = executeChecker(sub);
+                        const submissionRef = db.collection("submissions").doc(sub.id);
+                        batch.update(submissionRef, { score: newScore, isManualGrade: false });
+                        count++;
+                    });
+                    await batch.commit();
+                    showToast(`Successfully regraded ${count} submissions! Refreshing data...`, { color: 'green' });
+                    regradeBtn.disabled = false;
+                    regradeBtn.textContent = 'Regrade All';
+                    return;
+                }
+
+                submissionsSnapshot = await db.collection("submissions").where("assignmentId", "==", assignmentId).get();
                 if (submissionsSnapshot.empty) {
                     showToast("No submissions found to regrade.", { color: 'default' });
                     return;
@@ -990,11 +1208,13 @@
         }
 
         async function regradeQuestion(slideIndex) {
+            // Check if currentModalView has targetAssignmentId
+            const targetAssignmentId = (currentModalView && currentModalView.targetAssignmentId) ? currentModalView.targetAssignmentId : assignmentId;
             showToast(`Regrading Question ${slideIndex + 1}...`, { color: 'blue' });
 
             try {
                 const submissionsSnapshot = await db.collection("submissions")
-                    .where("assignmentId", "==", assignmentId)
+                    .where("assignmentId", "==", targetAssignmentId)
                     .where("slideIndex", "==", slideIndex)
                     .get();
 
@@ -1228,14 +1448,18 @@
             }
         }
 
-        function showSubmissions(studentEmail, slideIndex) { showStudentSubmissions(studentEmail, slideIndex); }
+        function showSubmissions(studentEmail, slideIndex, targetAssignmentId = null) { showStudentSubmissions(studentEmail, slideIndex, targetAssignmentId); }
 
-        function getQuestionLabel(slideIndex) {
-            if (assignmentData.type === 'video') {
-                return assignmentData.videoQuestions?.[slideIndex]?.body || `Question ${slideIndex + 1}`;
+        function getQuestionLabel(slideIndex, targetAssignmentId = null) {
+            const dataToUse = targetAssignmentId && window.linkedAssignmentsData && window.linkedAssignmentsData[targetAssignmentId] 
+                ? window.linkedAssignmentsData[targetAssignmentId] 
+                : assignmentData;
+
+            if (dataToUse.type === 'video') {
+                return dataToUse.videoQuestions?.[slideIndex]?.body || `Question ${slideIndex + 1}`;
             }
-            if (assignmentData.type === 'simulation') {
-                return assignmentData.simQuestions?.[slideIndex]?.body || `Question ${slideIndex + 1}`;
+            if (dataToUse.type === 'simulation') {
+                return dataToUse.simQuestions?.[slideIndex]?.body || `Question ${slideIndex + 1}`;
             }
             return `Question ${slideIndex + 1}`;
         }
@@ -1244,13 +1468,13 @@
             showAllAttempts = isChecked;
             localStorage.setItem('dashboardShowAllAttempts', isChecked);
             if (currentModalView) {
-                if (currentModalView.type === 'student') showStudentSubmissions(currentModalView.email, currentModalView.slide);
-                else if (currentModalView.type === 'question') showQuestionSubmissions(currentModalView.slide);
+                if (currentModalView.type === 'student') showStudentSubmissions(currentModalView.email, currentModalView.slide, currentModalView.targetAssignmentId);
+                else if (currentModalView.type === 'question') showQuestionSubmissions(currentModalView.targetAssignmentId || assignmentId, currentModalView.slide);
             }
         }
 
-        function showStudentSubmissions(studentEmail, specificSlide = null) {
-            currentModalView = { type: 'student', email: studentEmail, slide: specificSlide };
+        function showStudentSubmissions(studentEmail, specificSlide = null, targetAssignmentId = null) {
+            currentModalView = { type: 'student', email: studentEmail, slide: specificSlide, targetAssignmentId: targetAssignmentId };
             document.getElementById('showAllAttemptsToggle').checked = showAllAttempts;
             document.getElementById('showAllAttemptsToggle').parentElement.classList.remove('hidden');
             const student = allStudentData.find(s => s.email === studentEmail);
@@ -1260,11 +1484,17 @@
             const studentIndex = sortedStudents.findIndex(s => s.email === studentEmail);
             const displayName = hideNames && studentIndex > -1 ? `Student ${studentIndex + 1}` : student.name;
 
-            const qLabel = specificSlide !== null ? escapeHtml(getQuestionLabel(specificSlide)) : '';
+            const qLabel = specificSlide !== null ? escapeHtml(getQuestionLabel(specificSlide, targetAssignmentId)) : '';
             document.getElementById('modalTitle').innerHTML = `Submissions for ${displayName}${specificSlide !== null ? ` - ${qLabel}` : ''}`;
 
-            let submissionsToShow = (specificSlide !== null ? student.submissions.filter(s => s.slideIndex === specificSlide) : student.submissions)
-                .sort((a, b) => (a.slideIndex - b.slideIndex) || ((b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0)));
+            let submissionsToShow;
+            if (specificSlide !== null) {
+                submissionsToShow = student.submissions.filter(s => s.slideIndex === specificSlide && (!targetAssignmentId || s.assignmentId === targetAssignmentId));
+            } else {
+                submissionsToShow = student.submissions;
+            }
+            
+            submissionsToShow = submissionsToShow.sort((a, b) => (a.slideIndex - b.slideIndex) || ((b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0)));
 
             let submissionsToDisplay;
             if (showAllAttempts) {
@@ -1279,11 +1509,19 @@
             document.getElementById('submissionModal').classList.remove('hidden');
         }
 
-        function showQuestionSubmissions(slideIndex) {
-            currentModalView = { type: 'question', slide: slideIndex };
+        function showQuestionSubmissions(targetAssignmentId, slideIndex) {
+            // If only one arg was passed (from older code), assume it's slideIndex
+            if (slideIndex === undefined) {
+                slideIndex = targetAssignmentId;
+                targetAssignmentId = assignmentId;
+            }
+            currentModalView = { type: 'question', slide: slideIndex, targetAssignmentId: targetAssignmentId };
             document.getElementById('showAllAttemptsToggle').checked = showAllAttempts;
             document.getElementById('showAllAttemptsToggle').parentElement.classList.remove('hidden');
-            const qLabel = escapeHtml(getQuestionLabel(slideIndex));
+            const qLabel = escapeHtml(getQuestionLabel(slideIndex, targetAssignmentId));
+            
+            // Regrade button needs to regrade specifically for this targetAssignmentId if it's a lesson. 
+            // We'll leave it calling regradeQuestion(slideIndex) but we may need to pass targetAssignmentId there too later.
             document.getElementById('modalTitle').innerHTML = `All Submissions for ${qLabel} <button onclick="regradeQuestion(${slideIndex})" class="ml-4 text-sm bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded-lg">Regrade</button>`;
 
             const studentsForModal = getCurrentlySortedStudents();
@@ -1294,7 +1532,7 @@
             });
 
             const allSubmissions = studentsForModal.flatMap(student =>
-                student.submissions.filter(s => s.slideIndex === slideIndex).map(s => ({ ...s, studentName: student.name, studentEmail: student.email }))
+                student.submissions.filter(s => s.slideIndex === slideIndex && s.assignmentId === targetAssignmentId).map(s => ({ ...s, studentName: student.name, studentEmail: student.email }))
             );
 
             let submissionsToDisplay;
@@ -1319,7 +1557,7 @@
             if (submissions.length > 0) {
                 submissions.forEach(sub => {
                     const displayName = nameMap && hideNames ? nameMap.get(sub.studentEmail) : sub.studentName;
-                    const headerText = nameMap ? `${displayName}` : escapeHtml(getQuestionLabel(sub.slideIndex));
+                    const headerText = nameMap ? `${displayName}` : escapeHtml(getQuestionLabel(sub.slideIndex, sub.assignmentId));
                     const date = sub.timestamp ? new Date(sub.timestamp.seconds * 1000).toLocaleString() : 'N/A';
 
                     // Show attempt info if available
@@ -1334,7 +1572,7 @@
                     // Add unlock button if question is locked
                     let unlockButton = '';
                     if (sub.locked && sub.attemptsEnabled) {
-                        unlockButton = `<button onclick="unlockQuestion('${sub.studentEmail}', ${sub.slideIndex}, event)" class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-1 px-3 rounded-lg text-sm">🔓 Unlock</button>`;
+                        unlockButton = `<button onclick="unlockQuestion('${sub.studentEmail}', ${sub.slideIndex}, '${sub.assignmentId}', event)" class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-1 px-3 rounded-lg text-sm">🔓 Unlock</button>`;
                     }
 
                     contentHtml += `<div class="bg-gray-700 p-4 rounded-lg">
@@ -1409,12 +1647,13 @@
             return escapeHtml(String(value));
         }
 
-        async function unlockQuestion(studentEmail, slideIndex, event) {
+        async function unlockQuestion(studentEmail, slideIndex, targetId = null, event) {
             const button = event.target;
             button.disabled = true;
+            const actualAssignmentId = targetId || assignmentId;
 
             try {
-                const progressKey = `${assignmentId}_${studentEmail}_${slideIndex}`;
+                const progressKey = `${actualAssignmentId}_${studentEmail}_${slideIndex}`;
                 await db.collection("questionProgress").doc(progressKey).update({
                     locked: false
                 });
@@ -1424,9 +1663,9 @@
                 // Refresh modal if it's still open
                 if (currentModalView) {
                     if (currentModalView.type === 'student') {
-                        showStudentSubmissions(currentModalView.email, currentModalView.slide);
+                        showStudentSubmissions(currentModalView.email, currentModalView.slide, currentModalView.targetAssignmentId);
                     } else if (currentModalView.type === 'question') {
-                        showQuestionSubmissions(currentModalView.slide);
+                        showQuestionSubmissions(currentModalView.targetAssignmentId, currentModalView.slide);
                     }
                 }
             } catch (error) {
@@ -1633,3 +1872,5 @@
 </body>
 
 </html>
+
+
