@@ -4148,10 +4148,22 @@
                 return { allowed: false, reason: `Requires completion of "${depSection.title}"` };
             }
 
-            const score = depSub.score || 0;
-            if (cond.minScore && score < parseFloat(cond.minScore)) {
-                return { allowed: false, reason: `Requires at least ${cond.minScore}% on "${depSection.title}" (Current: ${score}%)` };
+            const uType = cond.unlockType || (cond.requireStatus === 'submitted' ? 'submitted' : 'none');
+            const isSubmitted = depSub.status === 'submitted';
+            const score = typeof depSub.score === 'number' ? depSub.score : 0;
+            const minScore = parseFloat(cond.minScore || 0);
+
+            if (uType === 'score') {
+                if (score < minScore) return { allowed: false, reason: `Reach ${minScore}% on "${depSection.title}" to unlock (Current: ${score}%)` };
+            } else if (uType === 'both') {
+                if (!isSubmitted) return { allowed: false, reason: `Must submit "${depSection.title}" AND have ${minScore}%.` };
+                if (score < minScore) return { allowed: false, reason: `Must have at least ${minScore}% on "${depSection.title}" (Current: ${score}%)` };
+            } else {
+                // Default to 'submitted' behavior for backward compatibility or explicit selection
+                if (!isSubmitted) return { allowed: false, reason: `Must submit "${depSection.title}" to proceed.` };
+                if (minScore > 0 && score < minScore) return { allowed: false, reason: `Requires at least ${minScore}% on "${depSection.title}" (Current: ${score}%)` };
             }
+
             if (cond.maxScore && score > parseFloat(cond.maxScore)) {
                 return { allowed: false, reason: `This section is for students who scored below ${cond.maxScore}% on "${depSection.title}".` };
             }
