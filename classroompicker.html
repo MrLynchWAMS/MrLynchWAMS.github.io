@@ -1381,8 +1381,9 @@
                 let submissions = querySnapshot.docs.map(doc => doc.data());
                 submissions.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
                 submissions.forEach(sub => {
-                    if (sub.slideIndex !== undefined && !slideStates[sub.slideIndex]) {
-                        slideStates[sub.slideIndex] = { answer: sub.answer, score: sub.score };
+                    const idx = parseInt(sub.slideIndex, 10);
+                    if (!isNaN(idx) && !slideStates[idx]) {
+                        slideStates[idx] = { answer: sub.answer, score: sub.score };
                     }
                 });
             } catch (error) {
@@ -2805,6 +2806,22 @@
                     submitButton.disabled = true;
                     submitButton.textContent = 'Submitting...';
 
+                    // Calculate current overall average for gating/aura
+                    let totalScore = 0;
+                    slideStates.forEach(state => {
+                        if (state && typeof state.score === 'number') {
+                            totalScore += state.score;
+                        }
+                    });
+                    const qCountSubmit = (assignmentData.type === 'pdf'
+                        ? (assignmentData.questionZones || [])
+                        : assignmentData.type === 'video'
+                            ? (assignmentData.videoQuestions || [])
+                            : assignmentData.type === 'simulation'
+                                ? (assignmentData.simQuestions || [])
+                                : (assignmentData.slideIds || [])).length;
+                    const overallAverage = qCountSubmit > 0 ? totalScore / qCountSubmit : 0;
+
                     // Create submissionStatus document and keep the reference
                     const statusRef = db.collection("submissionStatus").doc(`${assignmentData.id}_${userProfile.email}`);
                     await statusRef.set({
@@ -2812,6 +2829,7 @@
                         studentName: userProfile.name,
                         assignmentId: assignmentData.id,
                         status: 'submitted',
+                        score: overallAverage,
                         timestamp: firebase.firestore.FieldValue.serverTimestamp(),
                         auraAwarded: false
                     });
@@ -2822,22 +2840,7 @@
                     // --- AURA AWARDING AT SUBMIT TIME ---
                     // Aura is awarded once per assignment, based on overall average, at submit time
                     try {
-                        // Calculate overall assignment average from slideStates
-                        // Use slideStates.length as denominator to include unanswered slides as 0
-                        let totalScore = 0;
-                        slideStates.forEach(state => {
-                            if (state && typeof state.score === 'number') {
-                                totalScore += state.score;
-                            }
-                        });
-                        const qCountSubmit = (assignmentData.type === 'pdf'
-                            ? (assignmentData.questionZones || [])
-                            : assignmentData.type === 'video'
-                                ? (assignmentData.videoQuestions || [])
-                                : assignmentData.type === 'simulation'
-                                    ? (assignmentData.simQuestions || [])
-                                    : (assignmentData.slideIds || [])).length;
-                        const overallAverage = qCountSubmit > 0 ? totalScore / qCountSubmit : 0;
+                        // overallAverage is already calculated above for the status document
 
                         // Read assignment-level Aura config
                         // Calculate Aura Eligibility (New Rule-Based System)
@@ -3552,7 +3555,19 @@
             const notes = (assignmentData.videoNotes || []).map((n, i) => ({ ...n, _kind: 'note', id: n.id || `vn${i}` }));
 
             sortedVideoItems = [...questions, ...notes].sort((a, b) => a.time - b.time);
+            
+            // Advance currentVideoItemIndex past questions that are already answered
             currentVideoItemIndex = 0;
+            while (currentVideoItemIndex < sortedVideoItems.length) {
+                const item = sortedVideoItems[currentVideoItemIndex];
+                if (item._kind === 'question' && slideStates[item._index] && slideStates[item._index].answer) {
+                    currentVideoItemIndex++;
+                } else if (item._kind === 'note' && item.time < furthestReachedTime) {
+                    currentVideoItemIndex++;
+                } else {
+                    break;
+                }
+            }
 
             const sidebarList = document.getElementById('video-sidebar-list');
             if (!sidebarList) return;
@@ -3720,11 +3735,22 @@
 
             try {
                 const statusId = `${assignmentData.id}_${userProfile.email.toLowerCase()}`;
+                
+                let currentTotalScore = 0;
+                slideStates.forEach(state => {
+                    if (state && typeof state.score === 'number') {
+                        currentTotalScore += state.score;
+                    }
+                });
+                const qCountSync = (assignmentData.type === 'video' ? (assignmentData.videoQuestions || []) : []).length;
+                const currentAvg = qCountSync > 0 ? currentTotalScore / qCountSync : 0;
+
                 await db.collection("submissionStatus").doc(statusId).set({
                     assignmentId: assignmentData.id,
                     studentEmail: userProfile.email.toLowerCase(),
                     watchTime: watchTimeSeconds,
                     furthestReachedTime: furthestReachedTime,
+                    score: currentAvg,
                     lastAccessed: firebase.firestore.FieldValue.serverTimestamp()
                 }, { merge: true });
 
@@ -3849,6 +3875,10 @@
         }
 
         async function submitVideoQuestion(itemId, isManual = false) {
+            if (isSubmitted && (assignmentData.postSubmissionRule === 'lock' || assignmentData.postSubmissionRule === 'hide')) {
+                showToast("Assignment has been submitted and is locked.", { color: 'red' });
+                return;
+            }
             const item = sortedVideoItems.find(i => i.id === itemId);
             if (!item) return;
 
