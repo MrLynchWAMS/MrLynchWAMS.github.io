@@ -97,12 +97,18 @@
             left: 0;
             z-index: 20;
             background-color: #111827; /* gray-900 */
+            min-width: 256px;
+            max-width: 256px;
         }
         .sticky-col-2 {
             position: sticky;
-            left: 16rem; /* Matches w-64 */
+            left: 256px;
             z-index: 20;
             background-color: #111827;
+            min-width: 80px;
+            max-width: 80px;
+            box-shadow: 4px 0 6px -2px rgba(0, 0, 0, 0.5);
+            border-right: 1px solid #374151; /* gray-700 */
         }
         /* Hover state for sticky rows */
         tr:hover .sticky-col-1, tr:hover .sticky-col-2 {
@@ -1030,16 +1036,18 @@
                     qLabel = qInfo.label;
                     const isFirstInSection = i === 1 || qInfo.assignmentId !== questionsList[i - 2].assignmentId;
                     const borderClass = isFirstInSection ? 'border-l-4 border-purple-500/50' : '';
-                    headerHtml += `<th class="px-2 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer hover:text-yellow-400 ${borderClass}" onclick="showQuestionSubmissions('${qInfo.assignmentId}', ${qInfo.slideIndex})" title="${qLabel}">L-Q${i}</th>`;
+                    headerHtml += `<th class="px-2 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer hover:text-yellow-400 min-w-[80px] ${borderClass}" onclick="showQuestionSubmissions('${qInfo.assignmentId}', ${qInfo.slideIndex})" title="${qLabel}">L-Q${i}</th>`;
                 } else {
-                    headerHtml += `<th class="px-2 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer hover:text-yellow-400" onclick="showQuestionSubmissions('${assignmentData.id}', ${i - 1})">Q${i}</th>`;
+                    headerHtml += `<th class="px-2 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer hover:text-yellow-400 min-w-[80px]" onclick="showQuestionSubmissions('${assignmentData.id}', ${i - 1})">Q${i}</th>`;
                 }
             }
             headerHtml += '</tr>';
 
             let classAverageRowHtml = '';
             if (showScores) {
-                classAverageRowHtml = `<tr><td class="text-xs font-semibold text-cyan-400 px-3">Class Average:</td><td class="px-2"></td>`;
+                classAverageRowHtml = `<tr class="bg-gray-800/50">
+                    <td class="px-3 py-1 text-xs font-semibold text-cyan-400 sticky-col-1 border-b border-gray-700">Class Average:</td>
+                    <td class="px-2 py-1 sticky-col-2 border-b border-gray-700"></td>`;
                 if (showWatchTime && assignmentData.type === 'video') {
                     classAverageRowHtml += `<td class="px-2"></td>`;
                 }
@@ -1064,7 +1072,7 @@
                         return subs.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
                     }).filter(Boolean).map(sub => sub.score);
                     const avg = scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(0) : '-';
-                    classAverageRowHtml += `<td class="px-2 py-1 text-center text-xs font-semibold text-cyan-400">${avg}</td>`;
+                    classAverageRowHtml += `<td class="px-2 py-1 text-center text-xs font-semibold text-cyan-400 min-w-[80px]">${avg}</td>`;
                 }
                 classAverageRowHtml += '</tr>';
             }
