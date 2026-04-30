@@ -259,7 +259,7 @@
             linkedAssignmentId: '',
             unlockCondition: {
                 dependsOn: '',
-                requireStatus: 'none',
+                unlockType: 'submitted',
                 minScore: '',
                 maxScore: ''
             }
@@ -355,9 +355,11 @@
             if (sec.unlockCondition.dependsOn) {
                 html += `
                         <div class="mb-2">
-                            <label class="block text-xs text-gray-400 mb-1">Requirement:</label>
-                            <select onchange="updateCondition(${index}, 'requireStatus', this.value)" class="w-full bg-gray-700 border border-gray-600 rounded p-1 text-sm outline-none">
-                                <option value="submitted" ${sec.unlockCondition.requireStatus === 'submitted' ? 'selected' : ''}>Must be Submitted</option>
+                            <label class="block text-xs text-gray-400 mb-1">Unlock Requirement:</label>
+                            <select onchange="updateCondition(${index}, 'unlockType', this.value)" class="w-full bg-gray-700 border border-gray-600 rounded p-1 text-sm outline-none">
+                                <option value="submitted" ${(sec.unlockCondition.unlockType === 'submitted' || sec.unlockCondition.requireStatus === 'submitted') ? 'selected' : ''}>Must be Submitted</option>
+                                <option value="score" ${sec.unlockCondition.unlockType === 'score' ? 'selected' : ''}>Score Threshold Met (Real-time)</option>
+                                <option value="both" ${sec.unlockCondition.unlockType === 'both' ? 'selected' : ''}>Both (Submitted & Score)</option>
                             </select>
                         </div>
                         
