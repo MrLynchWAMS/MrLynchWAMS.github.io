@@ -91,6 +91,23 @@
             border-radius: 4px;
             user-select: none;
         }
+
+        .sticky-col-1 {
+            position: sticky;
+            left: 0;
+            z-index: 20;
+            background-color: #111827; /* gray-900 */
+        }
+        .sticky-col-2 {
+            position: sticky;
+            left: 16rem; /* Matches w-64 */
+            z-index: 20;
+            background-color: #111827;
+        }
+        /* Hover state for sticky rows */
+        tr:hover .sticky-col-1, tr:hover .sticky-col-2 {
+            background-color: #374151; /* gray-700 */
+        }
     </style>
 </head>
 
@@ -985,8 +1002,8 @@
             const hasFocusMode = assignmentData.focusModeEnabled;
 
             let headerHtml = `<tr>
-            <th class="px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-64">Student Name</th>
-            <th class="px-2 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider w-20">
+            <th class="px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-64 sticky-col-1 border-b border-gray-700">Student Name</th>
+            <th class="px-2 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider w-20 sticky-col-2 border-b border-gray-700">
                 Submitted<br>
                 <input type="checkbox" id="submitAllCheckbox" onchange="handleSubmitAllCheckbox(this)">
             </th>`;
@@ -1113,8 +1130,8 @@
                 }
 
                 tableHtml += `<tr class="hover:bg-gray-700">
-                <td class="px-3 py-4 whitespace-nowrap text-sm font-medium text-white cursor-pointer hover:text-yellow-400 truncate" onclick="showStudentSubmissions('${escapedEmail}')">${displayName}${avgScoreDisplay}</td>
-                <td class="px-2 py-4 whitespace-nowrap text-center"><input type="checkbox" onchange="toggleSubmissionStatus('${escapedEmail}', this.checked)" ${student.isSubmitted ? 'checked' : ''} class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"></td>
+                <td class="px-3 py-4 whitespace-nowrap text-sm font-medium text-white cursor-pointer hover:text-yellow-400 truncate sticky-col-1" onclick="showStudentSubmissions('${escapedEmail}')">${displayName}${avgScoreDisplay}</td>
+                <td class="px-2 py-4 whitespace-nowrap text-center sticky-col-2"><input type="checkbox" onchange="toggleSubmissionStatus('${escapedEmail}', this.checked)" ${student.isSubmitted ? 'checked' : ''} class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"></td>
                 ${watchTimeCell}
                 ${simDataCell}
                 ${auraCell}
@@ -1693,10 +1710,21 @@
             const depSub = student.sectionSubmissions?.[depSection.id];
             if (!depSub) return { allowed: false, reason: `Requires completion of "${depSection.title}"` };
 
-            const score = depSub.score || 0;
-            if (cond.minScore && score < parseFloat(cond.minScore)) {
-                return { allowed: false, reason: `Requires ${cond.minScore}% on "${depSection.title}"` };
+            const uType = cond.unlockType || (cond.requireStatus === 'submitted' ? 'submitted' : 'none');
+            const isSubmitted = depSub.status === 'submitted';
+            const score = typeof depSub.score === 'number' ? depSub.score : 0;
+            const minScore = parseFloat(cond.minScore || 0);
+
+            if (uType === 'score') {
+                if (score < minScore) return { allowed: false, reason: `Requires ${minScore}% on "${depSection.title}"` };
+            } else if (uType === 'both') {
+                if (!isSubmitted) return { allowed: false, reason: `Must submit "${depSection.title}" AND have ${minScore}%.` };
+                if (score < minScore) return { allowed: false, reason: `Requires ${minScore}% on "${depSection.title}"` };
+            } else {
+                if (!isSubmitted) return { allowed: false, reason: `Must submit "${depSection.title}"` };
+                if (minScore > 0 && score < minScore) return { allowed: false, reason: `Requires ${minScore}% on "${depSection.title}"` };
             }
+
             if (cond.maxScore && score > parseFloat(cond.maxScore)) {
                 return { allowed: false, reason: `Requires score below ${cond.maxScore}% on "${depSection.title}"` };
             }
