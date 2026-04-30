@@ -114,6 +114,61 @@
         tr:hover .sticky-col-1, tr:hover .sticky-col-2 {
             background-color: #374151; /* gray-700 */
         }
+
+        /* ===== COMPACT MODE STYLES ===== */
+        body.compact-mode .sticky-col-1 {
+            min-width: 180px;
+            max-width: 180px;
+        }
+        body.compact-mode .sticky-col-2 {
+            left: 180px;
+            min-width: 60px;
+            max-width: 60px;
+        }
+        body.compact-mode .container {
+            padding: 0.5rem;
+        }
+        body.compact-mode table th,
+        body.compact-mode table td {
+            padding: 0.25rem 0.25rem !important;
+        }
+        body.compact-mode th[class*="text-"] {
+            font-size: 0.65rem !important;
+        }
+        body.compact-mode td {
+            font-size: 0.75rem !important;
+        }
+        body.compact-mode .min-w-\[80px\] {
+            min-width: 50px !important;
+        }
+        body.compact-mode #dashboardTitle {
+            font-size: 1.5rem !important;
+        }
+        body.compact-mode .mb-6 {
+            margin-bottom: 0.75rem !important;
+        }
+        body.compact-mode .mb-4 {
+            margin-bottom: 0.5rem !important;
+        }
+        body.compact-mode .p-4 {
+            padding: 0.5rem !important;
+        }
+        body.compact-mode .gap-x-6 {
+            column-gap: 1rem !important;
+        }
+        body.compact-mode .text-3xl {
+            font-size: 1.5rem !important;
+        }
+        body.compact-mode .font-bold {
+            font-weight: 600;
+        }
+
+        /* ===== FULL WIDTH MODE ===== */
+        body.full-width-mode .container {
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 1rem !important;
+        }
     </style>
 </head>
 
@@ -193,6 +248,14 @@
                                 id="showSimData" onchange="toggleDisplayOptions()"
                                 class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"><span
                                 class="ml-2">Show Sim Data</span></label>
+                        <label class="flex items-center"><input type="checkbox" id="fullWidthMode"
+                                onchange="toggleFullWidth()"
+                                class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"><span
+                                class="ml-2">Full Width</span></label>
+                        <label class="flex items-center"><input type="checkbox" id="compactMode"
+                                onchange="toggleCompactMode()"
+                                class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"><span
+                                class="ml-2">Compact View</span></label>
                     </div>
                     <div class="h-6 border-l border-gray-600 hidden md:block"></div>
                     <div class="flex items-center gap-4">
@@ -291,6 +354,8 @@
         let staticRandomOrder = [];
         let showAllAttempts = localStorage.getItem('dashboardShowAllAttempts') === 'true';
         let currentModalView = null;
+        let fullWidthMode = localStorage.getItem('dashboardFullWidth') === 'true';
+        let compactMode = localStorage.getItem('dashboardCompact') === 'true';
 
         let auraByStudent = new Map();
         let submittedStatusByStudent = new Map();
@@ -718,6 +783,16 @@
                 document.title = assignmentData.name + " - Dashboard";
                 document.getElementById('dashboardTitle').textContent = `Dashboard for: ${assignmentData.name}`;
 
+                // Apply saved modes
+                if (fullWidthMode) {
+                    document.getElementById('fullWidthMode').checked = true;
+                    document.body.classList.add('full-width-mode');
+                }
+                if (compactMode) {
+                    document.getElementById('compactMode').checked = true;
+                    document.body.classList.add('compact-mode');
+                }
+
                 setupLiveStudentData(); // <-- Live updates!
                 // No activeClass set here: handled in snapshot listener above
 
@@ -734,6 +809,32 @@
                 console.error("Error loading dashboard:", error);
                 document.getElementById('loadingError').textContent = "An error occurred while loading the dashboard.";
             }
+        }
+
+        // --- Full Width & Compact Mode Toggles ---
+        function toggleFullWidth() {
+            fullWidthMode = document.getElementById('fullWidthMode').checked;
+            localStorage.setItem('dashboardFullWidth', fullWidthMode);
+            if (fullWidthMode) {
+                document.body.classList.add('full-width-mode');
+                showToast("Full Width mode enabled", { color: 'blue' });
+            } else {
+                document.body.classList.remove('full-width-mode');
+                showToast("Full Width mode disabled", { color: 'blue' });
+            }
+        }
+
+        function toggleCompactMode() {
+            compactMode = document.getElementById('compactMode').checked;
+            localStorage.setItem('dashboardCompact', compactMode);
+            if (compactMode) {
+                document.body.classList.add('compact-mode');
+                showToast("Compact View enabled - more columns visible!", { color: 'blue' });
+            } else {
+                document.body.classList.remove('compact-mode');
+                showToast("Compact View disabled", { color: 'blue' });
+            }
+            displayStudentData();
         }
 
         // --- Handle Sign Out with Cleanup ---
@@ -2102,5 +2203,3 @@
 </body>
 
 </html>
-
-
