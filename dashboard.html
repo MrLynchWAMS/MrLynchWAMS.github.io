@@ -839,24 +839,33 @@
             }
 
             const currentStatusMap = assignmentData.sectionStatus?.[activeClass] || {};
+            let contentHtml = '';
             assignmentData.sections.forEach(sec => {
-                const status = currentStatusMap[sec.id] || 'closed';
+                const status = currentStatusMap[sec.id] || 'auto';
                 const isOverridden = assignmentData.manualOverrides?.[activeClass]?.[sec.id] === 'open';
                 
-                list.innerHTML += `
-                <div class="bg-gray-800/50 border border-gray-700 p-3 rounded-lg flex flex-col gap-3">
+                let statusInfo = '';
+                if (status === 'open') statusInfo = '<span class="text-green-400 font-bold">FORCE OPEN</span>';
+                else if (status === 'closed') statusInfo = '<span class="text-red-400 font-bold">FORCE CLOSED</span>';
+                else statusInfo = '<span class="text-blue-400 font-bold italic">AUTO (Conditions)</span>';
+
+                contentHtml += `
+                <div class="p-3 bg-gray-700/30 rounded border border-gray-600 flex flex-col gap-3">
                     <div class="flex justify-between items-center">
-                        <span class="font-bold text-white text-sm">${sec.title}</span>
-                        <div class="flex bg-gray-700 rounded p-1 gap-1">
-                            <button onclick="toggleSectionStatus('${sec.id}', 'open')" class="px-3 py-1 rounded text-[10px] font-bold transition ${status === 'open' ? 'bg-green-600 text-white shadow-lg' : 'text-gray-400 hover:bg-gray-600'}">OPEN</button>
-                            <button onclick="toggleSectionStatus('${sec.id}', 'closed')" class="px-3 py-1 rounded text-[10px] font-bold transition ${status === 'closed' ? 'bg-red-600 text-white shadow-lg' : 'text-gray-400 hover:bg-gray-600'}">CLOSE</button>
+                        <div>
+                            <div class="text-xs font-bold text-gray-300 uppercase">${sec.title}</div>
+                            <div class="text-[10px] text-gray-400">Current: ${statusInfo}</div>
+                        </div>
+                        <div class="flex gap-1">
+                            <button onclick="toggleSectionStatus('${sec.id}', 'open')" 
+                                class="px-2 py-1 rounded text-[10px] font-bold border transition ${status === 'open' ? 'bg-green-600 border-green-500 text-white' : 'border-gray-600 text-gray-400 hover:border-gray-500'}">OPEN</button>
+                            <button onclick="toggleSectionStatus('${sec.id}', 'auto')" 
+                                class="px-2 py-1 rounded text-[10px] font-bold border transition ${status === 'auto' ? 'bg-blue-600 border-blue-500 text-white' : 'border-gray-600 text-gray-400 hover:border-gray-500'}">AUTO</button>
+                            <button onclick="toggleSectionStatus('${sec.id}', 'closed')" 
+                                class="px-2 py-1 rounded text-[10px] font-bold border transition ${status === 'closed' ? 'bg-red-600 border-red-500 text-white' : 'border-gray-600 text-gray-400 hover:border-gray-500'}">CLOSE</button>
                         </div>
                     </div>
-                    
-                    <div class="flex justify-between items-center pt-2 border-t border-gray-700/50">
-                        <span class="text-[10px] text-gray-500 uppercase font-mono">
-                            ${sec.unlockCondition?.dependsOn ? `Gated by Section ${assignmentData.sections.findIndex(s => s.id === sec.unlockCondition.dependsOn) + 1}` : 'Free Access'}
-                        </span>
+                    <div>
                         <button onclick="toggleSectionOverride('${sec.id}')" 
                             class="px-3 py-1 rounded text-[10px] font-bold border transition ${isOverridden ? 'bg-blue-600/20 border-blue-500 text-blue-400' : 'border-gray-600 text-gray-500 hover:border-gray-400'}">
                             ${isOverridden ? '🔓 GATING OVERRIDDEN' : '🔒 ENFORCE GATING'}
@@ -864,6 +873,7 @@
                     </div>
                 </div>`;
             });
+            list.innerHTML = contentHtml;
         }
         
         async function toggleSectionOverride(sectionId) {
@@ -1514,18 +1524,45 @@
         async function toggleSubmissionStatusBackend(student, shouldSubmit) {
             const studentEmail = student.email.toLowerCase();
             const statusRef = db.collection("submissionStatus").doc(`${assignmentId}_${studentEmail}`);
-            if (shouldSubmit) {
-                await statusRef.set({
-                    studentEmail: student.email,
-                    studentName: student.name,
-                    assignmentId: assignmentId,
-                    status: "submitted",
-                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
-                }, { merge: true });
-                student.isSubmitted = true;
-            } else {
-                await statusRef.delete();
-                student.isSubmitted = false;
+            
+            try {
+                const batch = db.batch();
+                
+                if (shouldSubmit) {
+                    batch.set(statusRef, {
+                        studentEmail: student.email,
+                        studentName: student.name,
+                        assignmentId: assignmentId,
+                        status: "submitted",
+                        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                    }, { merge: true });
+
+                    // If this is a multimodal lesson, also submit all linked child assignments
+                    if (assignmentData.type === 'lesson' && assignmentData.sections) {
+                        assignmentData.sections.forEach(sec => {
+                            if (sec.linkedAssignmentId) {
+                                const childStatusRef = db.collection("submissionStatus").doc(`${sec.linkedAssignmentId}_${studentEmail}`);
+                                batch.set(childStatusRef, {
+                                    studentEmail: student.email,
+                                    studentName: student.name,
+                                    assignmentId: sec.linkedAssignmentId,
+                                    status: "submitted",
+                                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                                }, { merge: true });
+                            }
+                        });
+                    }
+                } else {
+                    batch.delete(statusRef);
+                    // Also delete children if it's a lesson? Generally better to be explicit, but for now let's just delete the parent.
+                    // Note: Deleting children might be undesirable if the teacher just wants to reset the lesson hub status.
+                }
+                
+                await batch.commit();
+                student.isSubmitted = shouldSubmit;
+            } catch (error) {
+                console.error("Batch update failed:", error);
+                throw error;
             }
         }
 
