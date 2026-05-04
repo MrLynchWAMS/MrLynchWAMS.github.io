@@ -2754,7 +2754,9 @@
                         showToast,
                         userProfile,
                         attemptInfo: info,
+                        isLate: info && info.isLate,
                         assignmentData,
+                        showVideo: showVideoFromChecker,
                         checkTextCondition: (studentVal, targetVal, op) =>
                             checkTextCondition(studentVal, targetVal, op, { assignmentData, userProfile })
                     });
@@ -2768,6 +2770,38 @@
             return 0;
         }
 
+
+        function showVideoFromChecker(youtubeUrl) {
+            // Extract 11-char video ID from youtube.com/watch?v= or youtu.be/ URLs
+            let videoId = null;
+            try {
+                const url = new URL(String(youtubeUrl || ''));
+                if (url.hostname.includes('youtu.be')) {
+                    videoId = url.pathname.slice(1).split('?')[0];
+                } else {
+                    videoId = url.searchParams.get('v');
+                }
+            } catch (_) {
+                const m = String(youtubeUrl || '').match(/(?:v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+                if (m) videoId = m[1];
+            }
+            if (!videoId || videoId.length !== 11) return;
+
+            const overlay = document.createElement('div');
+            overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;';
+            overlay.innerHTML = `
+                <div style="position:relative;width:min(90vw,800px);aspect-ratio:16/9;background:#000;border-radius:0.5rem;overflow:hidden;">
+                    <iframe src="https://www.youtube.com/embed/${videoId}?autoplay=1" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen style="width:100%;height:100%;"></iframe>
+                    <button style="position:absolute;top:0.5rem;right:0.5rem;background:rgba(0,0,0,0.7);color:white;border:none;border-radius:50%;width:2rem;height:2rem;font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:1;">&times;</button>
+                </div>`;
+            const closeBtn = overlay.querySelector('button');
+            const close = () => { document.removeEventListener('keydown', onKey); overlay.remove(); };
+            const onKey = (e) => { if (e.key === 'Escape') close(); };
+            closeBtn.addEventListener('click', close);
+            overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+            document.addEventListener('keydown', onKey);
+            document.body.appendChild(overlay);
+        }
 
         function showConfirmationModal(message, onConfirm, showCancel = true) {
             document.getElementById('confirmationMessage').innerHTML = message;

@@ -617,17 +617,11 @@
             class="add-rule-group-btn mt-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm">+
             Add Rule Group</button>
 
-          <div class="mt-4">
-            <label class="block text-xs font-medium text-gray-500">Live Code Preview (read-only)</label>
-            <pre
-              class="bg-gray-900 text-white p-2 rounded-md text-xs overflow-x-auto h-32"><code class="live-code-preview"></code></pre>
+          <div class="preview-section mt-2">
+            <button type="button" class="preview-toggle-btn text-xs text-gray-500 hover:text-gray-300">▶ View generated code</button>
+            <pre class="live-code-preview hidden text-xs bg-gray-900 p-2 rounded mt-1 overflow-x-auto max-h-40"></pre>
           </div>
 
-          <div class="mt-2 pt-2 border-t border-gray-700 space-y-2">
-            <label class="block text-xs font-medium text-gray-400">Optional: Toast notification when this group matches
-              is
-              set per-group</label>
-          </div>
         </div>
 
         <div class="advanced-mode-ui hidden">
@@ -657,9 +651,6 @@
           </div>
         </div>
 
-        <div class="simple-disabled-notice hidden">
-          <b>Advanced code exists.</b> Delete advanced code to use Simple Mode.
-        </div>
       </div>
     </template>
     <div id="toast-wrapper"></div>

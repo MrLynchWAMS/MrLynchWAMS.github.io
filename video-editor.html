@@ -256,6 +256,77 @@
       </select>
     </div>
     <div id="deadline-widget-container"></div>
+    <div id="modifications-section" class="bg-gray-800 rounded-lg mb-8 overflow-hidden border border-purple-900/30">
+      <div id="modifications-header" class="p-6 cursor-pointer" onclick="toggleModificationsSection()">
+        <div class="flex justify-between items-center">
+          <h2 class="text-2xl font-bold text-yellow-400">🧩 Special Ed. Modifications</h2>
+          <span id="modifications-chevron" class="text-2xl transform transition-transform">▶</span>
+        </div>
+        <p class="text-gray-400 mt-2">Configure accommodations like extra time and attempts for specific students.</p>
+      </div>
+      <div id="modifications-content" class="collapsible-content">
+        <div class="px-6 pb-6">
+          <div class="mb-6 bg-gray-700/30 p-4 rounded-lg border border-gray-700">
+            <label class="flex items-center cursor-pointer mb-4">
+              <input type="checkbox" id="modificationsEnabled" onchange="toggleModificationsEnabled()"
+                class="w-5 h-5 text-purple-500 rounded focus:ring-purple-500 bg-gray-800 border-gray-600">
+              <span class="ml-3 font-semibold text-white text-lg">Enable Modifications for this Assignment</span>
+            </label>
+            <div id="modificationsSettings" class="hidden space-y-4">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-medium text-gray-300 mb-1">Time Limit Multiplier</label>
+                  <input type="number" id="modTimeMultiplier" value="1.5" min="1.0" step="0.1"
+                    class="w-full p-2 bg-gray-800 border border-gray-600 rounded">
+                  <p class="text-xs text-gray-500 mt-1">Ex: 1.5x gives 15 mins for a 10 min deadline.</p>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-300 mb-1">Attempt Penalty Multiplier</label>
+                  <input type="number" id="modPenaltyMultiplier" value="0.5" min="0" max="1.0" step="0.1"
+                    class="w-full p-2 bg-gray-800 border border-gray-600 rounded">
+                  <p class="text-xs text-gray-500 mt-1">Ex: 0.5x cuts the point deduction in half.</p>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-300 mb-1">Max Attempts Bonus</label>
+                  <input type="number" id="modAttemptsBonus" value="2" min="0" step="1"
+                    class="w-full p-2 bg-gray-800 border border-gray-600 rounded">
+                  <p class="text-xs text-gray-500 mt-1">Ex: +2 adds 2 extra tries before locking.</p>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-300 mb-1">Help Threshold Override (Attempts)</label>
+                  <input type="number" id="modHelpThreshold" value="1" min="1" step="1"
+                    class="w-full p-2 bg-gray-800 border border-gray-600 rounded">
+                  <p class="text-xs text-gray-500 mt-1">Show "Help" notifications after this many attempts.</p>
+                </div>
+                <div>
+                  <label class="flex items-center cursor-pointer mt-6">
+                    <input type="checkbox" id="modIgnoreDeduction"
+                      class="w-5 h-5 text-purple-500 rounded bg-gray-800 border-gray-600">
+                    <span class="ml-3 font-semibold text-white text-sm">Ignore Attempt Penalty</span>
+                  </label>
+                  <p class="text-xs text-gray-500 mt-1">If enabled, point deductions for extra attempts are ignored for modified students.</p>
+                </div>
+              </div>
+              <div class="flex items-center gap-3 mt-2">
+                <input type="checkbox" id="modFuzzyMatch" class="w-4 h-4 rounded bg-gray-700 border-gray-600">
+                <div>
+                  <label for="modFuzzyMatch" class="text-sm font-medium text-gray-300">Allow Fuzzy Spelling</label>
+                  <p class="text-xs text-gray-500">If enabled, "is exactly" text checks will tolerate minor spelling errors for modified students.</p>
+                </div>
+              </div>
+              <div class="mt-4 pt-4 border-t border-gray-700">
+                <h3 class="font-semibold text-white mb-2">Apply to Students:</h3>
+                <p class="text-xs text-gray-400 mb-3">Students flagged in the Roster with "Has Modifications" are auto-selected.</p>
+                <div id="modStudentList"
+                  class="max-h-48 overflow-y-auto bg-gray-900 p-2 rounded border border-gray-700 grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <p class="text-gray-500 italic p-2">Loading students...</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
     <!-- Playback Restrictions -->
     <div class="bg-gray-800 p-6 rounded-lg mb-8">
       <h2 class="text-2xl font-bold text-yellow-400 mb-4">Playback Restrictions</h2>
@@ -397,10 +468,9 @@
         <button
           class="add-rule-group-btn mt-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm">+
           Add Rule Group</button>
-        <div class="mt-4">
-          <label class="block text-xs font-medium text-gray-500">Live Code Preview (read-only)</label>
-          <pre
-            class="bg-gray-900 text-white p-2 rounded-md text-xs overflow-x-auto h-32"><code class="live-code-preview"></code></pre>
+        <div class="preview-section mt-2">
+          <button type="button" class="preview-toggle-btn text-xs text-gray-500 hover:text-gray-300">▶ View generated code</button>
+          <pre class="live-code-preview hidden text-xs bg-gray-900 p-2 rounded mt-1 overflow-x-auto max-h-40"></pre>
         </div>
       </div>
       <div class="advanced-mode-ui hidden">
@@ -424,9 +494,6 @@
             class="quick-test-btn bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1 px-3 rounded-md text-sm">Run</button>
           <span class="quick-test-result text-sm font-semibold text-gray-300"></span>
         </div>
-      </div>
-      <div class="simple-disabled-notice hidden">
-        <b>Advanced code exists.</b> Delete advanced code to use Simple Mode.
       </div>
     </div>
   </template>
@@ -821,6 +888,17 @@
         DeadlineWidget.render(allClassNames);
         DeadlineWidget.populate(assignmentData, ownerData, allClassNames);
 
+        // Initialize Modifications
+        const mods = assignmentData.modifications || {};
+        document.getElementById('modificationsEnabled').checked = mods.enabled || false;
+        document.getElementById('modTimeMultiplier').value = mods.timeMultiplier || 1.5;
+        document.getElementById('modPenaltyMultiplier').value = mods.penaltyMultiplier || 0.5;
+        document.getElementById('modAttemptsBonus').value = mods.maxAttemptsBonus || 2;
+        document.getElementById('modHelpThreshold').value = mods.helpThreshold || 1;
+        document.getElementById('modIgnoreDeduction').checked = mods.ignoreDeduction || false;
+        document.getElementById('modFuzzyMatch').checked = mods.fuzzy || false;
+        toggleModificationsEnabled();
+
         renderQuestions();
       } catch (error) {
         console.error("Error loading assignment:", error);
@@ -879,6 +957,72 @@
       document.getElementById('titleDisplay').classList.remove('hidden');
       document.getElementById('titleEditor').classList.add('hidden');
     }
+    // --- Modifications ---
+    function toggleModificationsSection(forceOpen = false) {
+      const content = document.getElementById('modifications-content');
+      const chevron = document.getElementById('modifications-chevron');
+      const isOpen = content.style.maxHeight && content.style.maxHeight !== '0px';
+      if (isOpen && !forceOpen) {
+        content.style.maxHeight = '0';
+        chevron.style.transform = 'rotate(0deg)';
+      } else {
+        content.style.maxHeight = '2000px';
+        chevron.style.transform = 'rotate(90deg)';
+        const list = document.getElementById('modStudentList');
+        if (list.children.length <= 1 && list.innerText.includes('Loading')) {
+          loadModificationsStudentList();
+        }
+      }
+    }
+
+    function toggleModificationsEnabled() {
+      const enabled = document.getElementById('modificationsEnabled').checked;
+      const settings = document.getElementById('modificationsSettings');
+      if (enabled) {
+        settings.classList.remove('hidden');
+        const content = document.getElementById('modifications-content');
+        content.style.maxHeight = '2000px';
+        loadModificationsStudentList();
+      } else {
+        settings.classList.add('hidden');
+      }
+    }
+
+    async function loadModificationsStudentList() {
+      const list = document.getElementById('modStudentList');
+      if (allClassNames.length === 0) {
+        list.innerHTML = '<p class="text-gray-500 italic p-2">No classes assigned yet. Add classes to the assignment first.</p>';
+        return;
+      }
+      try {
+        let students = window.allTeacherStudents || [];
+        students.sort((a, b) => a.name.localeCompare(b.name));
+        if (students.length === 0) {
+          list.innerHTML = '<p class="text-gray-500 italic p-2">No students found in assigned classes.</p>';
+          return;
+        }
+        list.innerHTML = '';
+        const savedModIds = (assignmentData.modifications && assignmentData.modifications.studentIds) || [];
+        const useRosterFlags = savedModIds.length === 0 && (!assignmentData.modifications || !assignmentData.modifications.studentIds);
+        students.forEach(student => {
+          const isSelected = savedModIds.includes(student.id) || (useRosterFlags && student.hasModifications);
+          const hasFlag = student.hasModifications;
+          const div = document.createElement('div');
+          div.className = "flex items-center space-x-2 p-1 hover:bg-gray-800 rounded";
+          div.innerHTML = `
+            <label class="flex items-center space-x-2 cursor-pointer w-full">
+              <input type="checkbox" value="${student.id}" class="mod-student-checkbox w-4 h-4 text-purple-500 rounded bg-gray-800 border-gray-600 focus:ring-purple-500" ${isSelected ? 'checked' : ''}>
+              <span class="text-sm text-gray-300">${student.name}</span>
+              ${hasFlag ? '<span title="Has IEP/504 Flag" class="text-xs">🧩</span>' : ''}
+            </label>`;
+          list.appendChild(div);
+        });
+      } catch (error) {
+        console.error("Error loading mod students:", error);
+        list.innerHTML = '<p class="text-red-400 p-2">Error loading students.</p>';
+      }
+    }
+
     // --- Aura Management ---
     let auraRules = [];
     function toggleAuraSection(forceOpen = false) {
@@ -1464,6 +1608,24 @@
 
         // Apply deadline widget data (perClass, globalDueAt, behavior, late policy)
         DeadlineWidget.applyToSavePayload(updatePayload, allClassNames);
+
+        // Modifications
+        const modsEnabled = document.getElementById('modificationsEnabled').checked;
+        if (modsEnabled) {
+          const modStudentIds = Array.from(document.querySelectorAll('.mod-student-checkbox:checked')).map(cb => cb.value);
+          updatePayload.modifications = {
+            enabled: true,
+            timeMultiplier: parseFloat(document.getElementById('modTimeMultiplier').value) || 1.0,
+            penaltyMultiplier: parseFloat(document.getElementById('modPenaltyMultiplier').value) || 1.0,
+            maxAttemptsBonus: parseInt(document.getElementById('modAttemptsBonus').value) || 0,
+            helpThreshold: parseInt(document.getElementById('modHelpThreshold').value) || 1,
+            ignoreDeduction: document.getElementById('modIgnoreDeduction').checked,
+            fuzzy: document.getElementById('modFuzzyMatch').checked,
+            studentIds: modStudentIds
+          };
+        } else {
+          updatePayload.modifications = firebase.firestore.FieldValue.delete();
+        }
 
         await db.collection("assignments").doc(assignmentId).update(updatePayload);
         showToast("Assignment saved!", { color: 'green' });
