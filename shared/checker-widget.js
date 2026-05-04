@@ -558,7 +558,7 @@
               const name = nameInput.value.trim();
               if (!name) return;
               const presets = getPresets();
-              presets.push({ id: 'preset_' + Date.now(), name, createdAt: Date.now(), groupConfig: serializeSingleGroup(group) });
+              presets.push({ id: 'preset_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), name, createdAt: Date.now(), groupConfig: serializeSingleGroup(group) });
               savePresets(presets);
               modalEl.remove();
               if (typeof showToast === 'function') showToast('Preset saved.', { color: 'green' });
@@ -809,22 +809,35 @@
                   <h3 style="color:#f9fafb;font-weight:700;font-size:1rem;">Manage Presets</h3>
                   <button class="close-manage-btn" style="color:#9ca3af;font-size:1.25rem;cursor:pointer;background:none;border:none;">✕</button>
                 </div>
-                ${ps.length === 0 ? '<p style="color:#9ca3af;font-size:0.875rem;">No presets saved yet.</p>' : ''}
-                ${ps.map(p => `
-                  <div style="display:flex;align-items:center;justify-content:space-between;padding:0.4rem 0;border-bottom:1px solid #374151;">
-                    <span style="color:#d1d5db;font-size:0.875rem;">${p.name}</span>
-                    <button class="delete-preset-btn" data-id="${p.id}" style="color:#f87171;font-size:0.75rem;cursor:pointer;background:none;border:none;padding:0.2rem 0.5rem;">Delete</button>
-                  </div>`).join('')}
+                <div class="preset-list"></div>
               </div>`;
-            modalEl.querySelector('.close-manage-btn').onclick = () => modalEl.remove();
-            modalEl.querySelectorAll('.delete-preset-btn').forEach(btn => {
-              btn.onclick = () => {
-                const id = btn.dataset.id;
-                const updated = getPresets().filter(p => p.id !== id);
+            const listEl = modalEl.querySelector('.preset-list');
+            if (ps.length === 0) {
+              const empty = document.createElement('p');
+              empty.style.cssText = 'color:#9ca3af;font-size:0.875rem;';
+              empty.textContent = 'No presets saved yet.';
+              listEl.appendChild(empty);
+            }
+            ps.forEach(p => {
+              const row = document.createElement('div');
+              row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:0.4rem 0;border-bottom:1px solid #374151;';
+              const nameSpan = document.createElement('span');
+              nameSpan.style.cssText = 'color:#d1d5db;font-size:0.875rem;';
+              nameSpan.textContent = p.name;
+              const delBtn = document.createElement('button');
+              delBtn.className = 'delete-preset-btn';
+              delBtn.style.cssText = 'color:#f87171;font-size:0.75rem;cursor:pointer;background:none;border:none;padding:0.2rem 0.5rem;';
+              delBtn.textContent = 'Delete';
+              delBtn.onclick = () => {
+                const updated = getPresets().filter(q => q.id !== p.id);
                 savePresets(updated);
                 renderContent();
               };
+              row.appendChild(nameSpan);
+              row.appendChild(delBtn);
+              listEl.appendChild(row);
             });
+            modalEl.querySelector('.close-manage-btn').onclick = () => modalEl.remove();
           };
           renderContent();
           document.body.appendChild(modalEl);
