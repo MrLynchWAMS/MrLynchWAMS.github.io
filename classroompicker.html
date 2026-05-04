@@ -3402,15 +3402,29 @@
                     questionDiv.classList.add('hidden');
                     questionDiv.dataset.simLocked = 'true';
                 }
-                questionDiv.innerHTML = `
-                    <p class="font-semibold mb-2">Question ${index + 1}</p>
-                    <p class="text-gray-200 mb-3">${escapeHtml(q.body || '')}</p>
-                    <textarea id="sim-answer-${index}" rows="4" class="w-full p-3 bg-gray-800 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500" placeholder="Your answer here...">${escapeHtml(state.answer || '')}</textarea>
-                    <div class="mt-3 flex items-center gap-3">
-                        <button onclick="simulationCheckAndSave(${index})" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">Check & Save</button>
+                if (q.isSimAutoField) {
+                    // Auto-fill question: no student input, show auto-filled value + score
+                    questionDiv.innerHTML = `
+                        <p class="font-semibold mb-2">Question ${index + 1} <span class="text-xs text-blue-400 font-normal">(auto-scored from simulation)</span></p>
+                        <p class="text-gray-200 mb-3">${escapeHtml(q.body || '')}</p>
+                        <div id="sim-auto-status-${index}" class="text-sm text-gray-400 italic">Waiting for simulation to complete…</div>
                         <span id="sim-result-${index}" class="text-sm font-semibold ${state.score !== undefined ? 'text-yellow-300' : 'text-gray-400'}">${state.score !== undefined ? `Score: ${state.score}` : ''}</span>
-                    </div>
-                `;
+                    `;
+                    if (state.answer != null && state.answer !== '') {
+                        const statusEl = questionDiv.querySelector(`#sim-auto-status-${index}`);
+                        if (statusEl) statusEl.textContent = `Auto-filled: ${state.answer}`;
+                    }
+                } else {
+                    questionDiv.innerHTML = `
+                        <p class="font-semibold mb-2">Question ${index + 1}</p>
+                        <p class="text-gray-200 mb-3">${escapeHtml(q.body || '')}</p>
+                        <textarea id="sim-answer-${index}" rows="4" class="w-full p-3 bg-gray-800 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500" placeholder="Your answer here...">${escapeHtml(state.answer || '')}</textarea>
+                        <div class="mt-3 flex items-center gap-3">
+                            <button onclick="simulationCheckAndSave(${index})" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">Check & Save</button>
+                            <span id="sim-result-${index}" class="text-sm font-semibold ${state.score !== undefined ? 'text-yellow-300' : 'text-gray-400'}">${state.score !== undefined ? `Score: ${state.score}` : ''}</span>
+                        </div>
+                    `;
+                }
                 questionsList.appendChild(questionDiv);
             });
 
@@ -3448,6 +3462,11 @@
                         el.classList.remove('hidden');
                         delete el.dataset.simLocked;
                     });
+                    // Restore auto-fill answers from previously saved simData
+                    const storedSimData = existingSimDoc.data().simData;
+                    if (storedSimData && typeof storedSimData === 'object') {
+                        await populateSimAutoFields(storedSimData);
+                    }
                 }
             } catch (e) {
                 console.error('Error checking existing simulation data:', e);
@@ -3492,6 +3511,11 @@
                     console.error('Error saving simulation data:', error);
                 }
 
+                // Auto-fill and score any isSimAutoField questions from simData
+                if (event.data.simData && typeof event.data.simData === 'object') {
+                    await populateSimAutoFields(event.data.simData);
+                }
+
                 showToast('Simulation complete! Follow-up questions unlocked.', { color: 'green' });
             };
 
@@ -3514,6 +3538,84 @@
                 resultEl.textContent = `Score: ${state.score ?? 0}`;
                 resultEl.className = 'text-sm font-semibold text-yellow-300';
             }
+        }
+
+        // Auto-fill isSimAutoField questions from simData payload and run checker
+        async function populateSimAutoFields(simData) {
+            const simQuestions = assignmentData.simQuestions || [];
+            const previousIndex = currentSlideIndex;
+            for (let index = 0; index < simQuestions.length; index++) {
+                const q = simQuestions[index];
+                if (!q.isSimAutoField) continue;
+                const fieldPath = q.simFieldPath || '';
+                let rawValue;
+                if (fieldPath) {
+                    rawValue = getNestedValue(simData, fieldPath);
+                }
+                // Convert to a string answer (support strings, numbers, booleans).
+                // Objects are JSON-stringified so checker can receive the full value;
+                // teachers should configure their checker to handle the string format accordingly.
+                let answer;
+                if (rawValue === undefined || rawValue === null) {
+                    console.warn(`[SimAutoField] No value found at path "${fieldPath}" in simData for question ${index + 1}`);
+                    answer = '';
+                } else if (typeof rawValue === 'object') {
+                    answer = JSON.stringify(rawValue);
+                } else {
+                    answer = String(rawValue);
+                }
+
+                // Run checker using existing pipeline (bypass myfunction() to avoid empty-answer toast)
+                currentSlideIndex = index;
+                let score = 0;
+                if (answer.trim() !== '') {
+                    try {
+                        const result = checkCurrentSlideAnswer(answer, { attemptCount: 1, attemptIndex: 1, isNewAttempt: true });
+                        if (typeof result === 'number' && !isNaN(result)) score = result;
+                        else if (result && typeof result.then === 'function') score = (await result) || 0;
+                    } catch (e) {
+                        console.error(`[SimAutoField] Checker error for question ${index + 1}:`, e);
+                    }
+                }
+
+                slideStates[index] = { answer, score };
+
+                // Persist to submissions collection so dashboard shows this like a regular question
+                if (answer.trim() !== '' || score > 0) {
+                    try {
+                        await db.collection('submissions').add({
+                            studentName: userProfile.name,
+                            studentEmail: userProfile.email,
+                            assignmentId: assignmentData.id,
+                            slideIndex: index,
+                            answer,
+                            score,
+                            timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                            attemptIndex: 1,
+                            normalizedAnswer: answer.trim().toLowerCase(),
+                            bestScoreToDate: score,
+                            attemptsEnabled: false,
+                            locked: false,
+                            isSimAutoField: true
+                        });
+                    } catch (e) {
+                        console.error(`[SimAutoField] Firestore save error for question ${index + 1}:`, e);
+                    }
+                }
+
+                // Update auto-fill status display
+                const statusEl = document.getElementById(`sim-auto-status-${index}`);
+                const resultEl = document.getElementById(`sim-result-${index}`);
+                if (statusEl) {
+                    statusEl.textContent = answer ? `Auto-filled: ${answer}` : 'No value found for this path.';
+                    statusEl.className = answer ? 'text-sm text-blue-300' : 'text-sm text-orange-400 italic';
+                }
+                if (resultEl) {
+                    resultEl.textContent = `Score: ${score}`;
+                    resultEl.className = 'text-sm font-semibold text-yellow-300';
+                }
+            }
+            currentSlideIndex = previousIndex;
         }
         // ==========================================
         // VIDEO STUDENT VIEW LOGIC
@@ -4043,6 +4145,18 @@
             if (isManual && assignmentData.videoSourceType === 'gdrive') {
                 initializeVideoStudentView(); // Simple trick to redraw marks
             }
+        }
+
+        // Resolve a dot-notation path into a nested object (e.g. "result.score" → obj.result.score)
+        function getNestedValue(obj, path) {
+            if (!obj || !path) return undefined;
+            const parts = path.split('.');
+            let cur = obj;
+            for (const p of parts) {
+                if (cur == null || typeof cur !== 'object') return undefined;
+                cur = cur[p];
+            }
+            return cur;
         }
 
         function escapeHtml(text) {
