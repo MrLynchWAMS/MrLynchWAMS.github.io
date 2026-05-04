@@ -558,7 +558,8 @@
               const name = nameInput.value.trim();
               if (!name) return;
               const presets = getPresets();
-              presets.push({ id: 'preset_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), name, createdAt: Date.now(), groupConfig: serializeSingleGroup(group) });
+              const now = Date.now();
+              presets.push({ id: 'preset_' + now + '_' + Math.random().toString(36).slice(2, 7), name, createdAt: now, groupConfig: serializeSingleGroup(group) });
               savePresets(presets);
               modalEl.remove();
               if (typeof showToast === 'function') showToast('Preset saved.', { color: 'green' });
