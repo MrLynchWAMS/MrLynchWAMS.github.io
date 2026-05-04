@@ -1544,26 +1544,27 @@
 
         async function setScore(submissionId, event) {
             const input = document.getElementById(`score-${submissionId}`);
+            const maxInput = document.getElementById(`maxscore-${submissionId}`);
             const newScore = parseInt(input.value, 10);
-            if (isNaN(newScore) || newScore < 0 || newScore > 100) {
-                showToast("Please enter a valid score between 0 and 100.", { color: 'red' });
+            const newMax = parseInt(maxInput?.value || '100', 10) || 100;
+            if (isNaN(newScore) || newScore < 0) {
+                showToast("Please enter a valid score.", { color: 'red' });
                 return;
             }
             const button = event.target;
             button.disabled = true;
 
             try {
-                await db.collection("submissions").doc(submissionId).update({
+                await db.collection("submissions").doc(submissionId).set({
                     score: newScore,
+                    maxScore: newMax,
                     isManualGrade: true
-                });
+                }, { merge: true });
 
-                const subDoc = await db.collection("submissions").doc(submissionId).get();
-                const submissionData = subDoc.data();
-                const student = allStudentData.find(s => s.email === submissionData.studentEmail);
+                const student = allStudentData.find(s => s.submissions.some(sub => sub.id === submissionId));
                 if (student) {
                     const subToUpdate = student.submissions.find(s => s.id === submissionId);
-                    if (subToUpdate) subToUpdate.score = newScore;
+                    if (subToUpdate) { subToUpdate.score = newScore; subToUpdate.maxScore = newMax; }
                 }
 
                 calculateAllClassAverages();
@@ -1576,6 +1577,86 @@
                 showToast("Failed to set score.", { color: 'red' });
             } finally {
                 button.disabled = false;
+            }
+        }
+
+        async function saveManualScore(studentEmail, targetAssignmentId, slideIndex) {
+            const scoreEl = document.getElementById(`manscore_${studentEmail}_${slideIndex}`);
+            const maxEl = document.getElementById(`manmax_${studentEmail}_${slideIndex}`);
+            const score = parseFloat(scoreEl?.value);
+            const maxScore = parseFloat(maxEl?.value) || 100;
+            if (isNaN(score)) {
+                showToast("Please enter a valid score.", { color: 'red' });
+                return;
+            }
+            const student = allStudentData.find(s => s.email === studentEmail);
+            const docId = `${targetAssignmentId}_${studentEmail}_${slideIndex}`;
+            try {
+                await db.collection("submissions").doc(docId).set({
+                    assignmentId: targetAssignmentId,
+                    studentEmail: studentEmail,
+                    studentName: student?.name || '',
+                    slideIndex: slideIndex,
+                    score: score,
+                    maxScore: maxScore,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                    isManualGrade: true,
+                    gradedBy: currentUserEmail
+                }, { merge: true });
+                showToast("Score saved.", { color: 'green' });
+            } catch (e) {
+                console.error("Error saving manual score:", e);
+                showToast("Error saving score.", { color: 'red' });
+            }
+        }
+
+        async function applyBulkScore(targetAssignmentId, slideIndex) {
+            const score = parseFloat(document.getElementById('bulkScoreInput').value);
+            const maxScore = parseFloat(document.getElementById('bulkMaxScoreInput').value) || 100;
+            const onlyAttempted = document.getElementById('bulkScoreOnlyAttempted').checked;
+            if (isNaN(score)) {
+                showToast("Please enter a valid score.", { color: 'red' });
+                return;
+            }
+
+            const targetStudents = getCurrentlySortedStudents(false);
+            const attemptedEmails = new Set(
+                targetStudents.flatMap(s => s.submissions
+                    .filter(sub => sub.slideIndex === slideIndex && sub.assignmentId === targetAssignmentId)
+                    .map(() => s.email))
+            );
+
+            const batch = db.batch();
+            let updatedCount = 0;
+            for (const student of targetStudents) {
+                if (onlyAttempted && !attemptedEmails.has(student.email)) continue;
+                const docId = `${targetAssignmentId}_${student.email}_${slideIndex}`;
+                const ref = db.collection("submissions").doc(docId);
+                batch.set(ref, {
+                    assignmentId: targetAssignmentId,
+                    studentEmail: student.email,
+                    studentName: student.name,
+                    slideIndex: slideIndex,
+                    score: score,
+                    maxScore: maxScore,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                    isManualGrade: true,
+                    gradedBy: currentUserEmail
+                }, { merge: true });
+                updatedCount++;
+            }
+
+            if (updatedCount === 0) {
+                showToast("No students matched the criteria.", { color: 'yellow' });
+                return;
+            }
+
+            try {
+                await batch.commit();
+                showToast(`Updated scores for ${updatedCount} student${updatedCount !== 1 ? 's' : ''}.`, { color: 'green' });
+            } catch (e) {
+                console.error("Bulk scoring error:", e);
+                showToast("Error updating scores.", { color: 'red' });
             }
         }
 
@@ -1792,6 +1873,58 @@
             }
 
             renderModalContent(submissionsToDisplay, anonymousNameMap);
+
+            // Prepend bulk scoring section
+            const modalContent = document.getElementById('modalContent');
+            const classLabel = activeClass === 'All' ? 'All Classes' : 'Class ' + activeClass;
+            const bulkHtml = `<div class="mb-6 p-4 bg-gray-700/50 rounded-lg border border-cyan-900/30">
+                <h3 class="text-lg font-bold text-cyan-400 mb-3">Bulk Score Question</h3>
+                <div class="flex flex-wrap items-center gap-4">
+                    <div class="flex items-center gap-2">
+                        <label class="text-sm">Score:</label>
+                        <input type="number" id="bulkScoreInput" class="w-20 bg-gray-800 border border-gray-600 rounded p-1 text-white text-sm" placeholder="Pts">
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <label class="text-sm">Max Pts:</label>
+                        <input type="number" id="bulkMaxScoreInput" class="w-20 bg-gray-800 border border-gray-600 rounded p-1 text-white text-sm" value="100">
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" id="bulkScoreOnlyAttempted" checked class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500">
+                        <label for="bulkScoreOnlyAttempted" class="text-sm">Only Attempted</label>
+                    </div>
+                    <button onclick="applyBulkScore('${escapeHtml(targetAssignmentId)}', ${slideIndex})" class="bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-1 px-4 rounded text-sm transition">
+                        Apply to ${escapeHtml(classLabel)}
+                    </button>
+                </div>
+                <p class="text-[10px] text-gray-400 mt-2 italic">* This will overwrite existing manual scores for these students on this question.</p>
+            </div>`;
+            modalContent.innerHTML = bulkHtml + modalContent.innerHTML;
+
+            // Append unattempted students section
+            const attemptedEmails = new Set(submissionsToDisplay.map(s => s.studentEmail));
+            const unattemptedStudents = studentsForModal.filter(s => !attemptedEmails.has(s.email));
+            if (unattemptedStudents.length > 0) {
+                let unattemptedHtml = '<div class="mt-4 space-y-2"><h3 class="text-base font-bold text-gray-400 mb-2">Not Attempted</h3>';
+                unattemptedStudents.forEach(student => {
+                    const displayName = hideNames && anonymousNameMap.has(student.email) ? anonymousNameMap.get(student.email) : student.name;
+                    unattemptedHtml += `
+                    <div class="bg-gray-700/60 p-3 rounded-lg border border-gray-600/50">
+                        <div class="flex flex-wrap justify-between items-center gap-2">
+                            <p class="font-bold text-gray-300">${escapeHtml(displayName)} <span class="text-xs text-gray-500 font-normal ml-1">— Not Attempted</span></p>
+                            <div class="flex items-center gap-2">
+                                <label class="text-sm">Score:</label>
+                                <input type="number" id="manscore_${escapeHtml(student.email)}_${slideIndex}" class="w-16 bg-gray-900 border border-gray-600 rounded p-1 text-white text-xs" placeholder="Pts">
+                                <span class="text-gray-400">/</span>
+                                <input type="number" id="manmax_${escapeHtml(student.email)}_${slideIndex}" value="100" class="w-16 bg-gray-900 border border-gray-600 rounded p-1 text-white text-xs">
+                                <button onclick="saveManualScore('${escapeHtml(student.email)}', '${escapeHtml(targetAssignmentId)}', ${slideIndex})" class="bg-green-600 hover:bg-green-700 text-white text-xs px-2 py-1 rounded">Save</button>
+                            </div>
+                        </div>
+                    </div>`;
+                });
+                unattemptedHtml += '</div>';
+                modalContent.innerHTML += unattemptedHtml;
+            }
+
             document.getElementById('submissionModal').classList.remove('hidden');
         }
 
@@ -1919,7 +2052,9 @@
                         <div class="flex items-center gap-2">
                             <button onclick="saveAnswer('${sub.id}', event)" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded-lg text-sm">Save Answer</button>
                             <label for="score-${sub.id}" class="text-sm">Score:</label>
-                            <input type="number" id="score-${sub.id}" value="${sub.score}" min="0" max="100" class="w-20 bg-gray-900 border border-gray-600 rounded p-1 text-center">
+                            <input type="number" id="score-${sub.id}" value="${sub.score}" min="0" class="w-20 bg-gray-900 border border-gray-600 rounded p-1 text-center">
+                            <span class="text-gray-400">/</span>
+                            <input type="number" id="maxscore-${sub.id}" value="${sub.maxScore || 100}" min="1" class="w-16 bg-gray-900 border border-gray-600 rounded p-1 text-center text-sm" title="Max Pts">
                             <button onclick="setScore('${sub.id}', event)" class="bg-green-600 hover:bg-green-700 text-white font-bold py-1 px-3 rounded-lg text-sm">Set Score</button>
                             <button onclick="regradeSingleSubmission('${sub.id}', event)" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-1 px-3 rounded-lg text-sm">Regrade</button>
                         </div>
