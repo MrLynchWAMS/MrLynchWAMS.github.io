@@ -634,6 +634,14 @@
             }
             // ---------------------------
 
+            // Extract assignmentId immediately — window.location.search is always available
+            const urlParams = new URLSearchParams(window.location.search);
+            assignmentId = urlParams.get('id');
+            if (!assignmentId) {
+                document.getElementById('loading-text').textContent = "Error: No assignment ID provided in the URL.";
+                document.getElementById('signInButtonContainer').classList.add('hidden');
+            }
+
             auth.onAuthStateChanged(async user => {
                 if (user) {
                     // Check if user exists in teachers collection
@@ -669,15 +677,6 @@
                     document.getElementById('auth-error').innerText = "Firebase sign-in failed. Please try again.";
                 });
             }
-
-            window.onload = function () {
-                const urlParams = new URLSearchParams(window.location.search);
-                assignmentId = urlParams.get('id');
-                if (!assignmentId) {
-                    document.getElementById('loading-text').textContent = "Error: No assignment ID provided in the URL.";
-                    document.getElementById('signInButtonContainer').classList.add('hidden');
-                }
-            };
 
             async function loadAssignment() {
                 if (!assignmentId) return;
