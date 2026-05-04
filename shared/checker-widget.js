@@ -559,7 +559,8 @@
               if (!name) return;
               const presets = getPresets();
               const now = Date.now();
-              presets.push({ id: 'preset_' + now + '_' + Math.random().toString(36).slice(2, 7), name, createdAt: now, groupConfig: serializeSingleGroup(group) });
+              const uid = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : String(now);
+              presets.push({ id: 'preset_' + uid, name, createdAt: now, groupConfig: serializeSingleGroup(group) });
               savePresets(presets);
               modalEl.remove();
               if (typeof showToast === 'function') showToast('Preset saved.', { color: 'green' });
@@ -1335,10 +1336,12 @@
         if (toastRemoveBtn) {
           toastRemoveBtn.addEventListener('click', () => {
             const toastInput = div.querySelector('.rule-toast-message');
-            if (toastInput) toastInput.value = '';
+            if (toastInput) {
+              toastInput.value = '';
+              toastInput.dispatchEvent(new Event('change', { bubbles: true }));
+            }
             if (toastContent) toastContent.classList.add('hidden');
             if (toastToggleBtn) toastToggleBtn.textContent = '＋ Add feedback message';
-            if (typeof updateCodeFromSimple === 'function') updateCodeFromSimple();
           });
         }
 
