@@ -582,10 +582,9 @@
         <div id="pdf-pages-list"></div>
       </div>
 
+      <div id="question-settings-bar-container" class="mb-6"></div>
       <div id="slidesContainer" class="space-y-8"></div>
     </div>
-
-    <template id="checkerTemplate">
       <div class="checker-widget">
         <div class="flex items-center justify-between mb-2">
           <label class="block font-semibold">Checker Function</label>
@@ -656,6 +655,7 @@
     <div id="toast-wrapper"></div>
     <script src="./shared/checker-widget.js"></script>
     <script src="./shared/checker-runner.js"></script>
+    <script src="./shared/question-settings-bar.js"></script>
     <script>
       const CLIENT_ID = "1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com";
       const SCOPES = "https://www.googleapis.com/auth/presentations.readonly";
@@ -1783,6 +1783,13 @@
               });
             }
           }
+        });
+        QuestionSettingsBar.init({
+          container: document.getElementById('question-settings-bar-container'),
+          getQuestionCount: () => assignmentData.type === 'pdf' ? questionZones.length : (assignmentData.slideIds || []).length,
+          getAssignmentData: () => assignmentData,
+          onUpdate: () => {},
+          editorType: 'pdf',
         });
       }
 
