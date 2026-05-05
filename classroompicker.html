@@ -599,6 +599,21 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Blank Assignment Student UI -->
+            <div id="blank-student-content" class="hidden">
+                <div id="blank-student-blocks" class="space-y-6 max-w-3xl mx-auto pb-12"></div>
+                <div class="max-w-3xl mx-auto mt-6 flex gap-4">
+                    <button onclick="showSummary()"
+                        class="w-full bg-gray-600 hover:bg-gray-500 text-white font-bold py-3 rounded-lg transition-colors border border-gray-500">
+                        View Summary
+                    </button>
+                    <button id="blank-submit-final" onclick="handleSubmitAssignment()"
+                        class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition-colors shadow-lg">
+                        Submit Final Assignment
+                    </button>
+                </div>
+            </div>
         </div>
 
         <div id="summaryContainer" class="hidden">
@@ -806,14 +821,18 @@
                             ? (assignmentData.videoQuestions || [])
                             : assignmentData.type === 'simulation'
                                 ? (assignmentData.simQuestions || [])
-                                : (assignmentData.slideIds || [])).length;
+                                : assignmentData.type === 'blank'
+                                    ? (assignmentData.blocks || []).filter(b => b.type === 'question')
+                                    : (assignmentData.slideIds || [])).length;
                     const oldCount = (oldData?.type === 'pdf'
                         ? (oldData?.questionZones || [])
                         : oldData?.type === 'video'
                             ? (oldData?.videoQuestions || [])
                             : oldData?.type === 'simulation'
                                 ? (oldData?.simQuestions || [])
-                                : (oldData?.slideIds || [])).length;
+                                : oldData?.type === 'blank'
+                                    ? (oldData?.blocks || []).filter(b => b.type === 'question')
+                                    : (oldData?.slideIds || [])).length;
                     if (!oldData || newCount !== oldCount) {
                         slideStates = new Array(newCount).fill(null);
                     }
@@ -1331,6 +1350,7 @@
                     document.getElementById('video-student-content').classList.add('hidden');
                     document.getElementById('pdf-student-content').classList.add('hidden');
                     document.getElementById('simulation-student-content').classList.add('hidden');
+                    document.getElementById('blank-student-content').classList.add('hidden');
                     document.getElementById('lesson-child-banner').classList.add('hidden');
                     initLessonHub();
                     return; // Hub handles its own display
@@ -1360,10 +1380,19 @@
                     document.getElementById('simulation-student-content').classList.remove('hidden');
                     initializeSimulationStudentView();
                     initTools();
+                } else if (assignmentData.type === 'blank') {
+                    document.getElementById('slides-ui').classList.add('hidden');
+                    document.getElementById('pdf-student-content').classList.add('hidden');
+                    document.getElementById('video-student-content').classList.add('hidden');
+                    document.getElementById('simulation-student-content').classList.add('hidden');
+                    document.getElementById('blank-student-content').classList.remove('hidden');
+                    initializeBlankStudentView();
+                    initTools();
                 } else {
                     document.getElementById('pdf-student-content').classList.add('hidden');
                     document.getElementById('video-student-content').classList.add('hidden');
                     document.getElementById('simulation-student-content').classList.add('hidden');
+                    document.getElementById('blank-student-content').classList.add('hidden');
                     updateSlideDisplay();
                     initTools();
                 }
@@ -1982,13 +2011,17 @@
             const isPDF = assignmentData.type === 'pdf';
             const isVideo = assignmentData.type === 'video';
             const isSimulation = assignmentData.type === 'simulation';
+            const isBlank = assignmentData.type === 'blank';
+            const blankQuestionBlocks = isBlank ? (assignmentData.blocks || []).filter(b => b.type === 'question') : [];
             const questionCount = isPDF
                 ? (assignmentData.questionZones || []).length
                 : isVideo
                     ? (assignmentData.videoQuestions || []).length
                     : isSimulation
                         ? (assignmentData.simQuestions || []).length
-                        : (assignmentData.slideIds || []).length;
+                        : isBlank
+                            ? blankQuestionBlocks.length
+                            : (assignmentData.slideIds || []).length;
 
             for (let index = 0; index < questionCount; index++) {
                 const state = slideStates[index];
@@ -2006,14 +2039,16 @@
                     }
                 }
 
-                const jumpFunc = isVideo ? `jumpToVideoItemByQuestionIndex` : isSimulation ? `jumpToSimulationQuestion` : `jumpToSlide`;
+                const jumpFunc = isVideo ? `jumpToVideoItemByQuestionIndex` : isSimulation ? `jumpToSimulationQuestion` : isBlank ? `jumpToBlankQuestion` : `jumpToSlide`;
                 const clickHandler = shouldDisableLinks ? '' : (isPDF ? `onclick="focusPDFZone(${index})"` : `onclick="${jumpFunc}(${index})"`);
                 const cursorClass = shouldDisableLinks ? 'cursor-not-allowed' : 'cursor-pointer';
                 const hoverClass = shouldDisableLinks ? '' : 'hover:bg-gray-600';
                 const opacityClass = shouldDisableLinks ? 'opacity-50' : '';
                 const questionLabel = isSimulation
                     ? (assignmentData.simQuestions?.[index]?.body || `Question ${index + 1}`)
-                    : `Question ${index + 1}`;
+                    : isBlank
+                        ? (blankQuestionBlocks[index]?.prompt || `Question ${index + 1}`)
+                        : `Question ${index + 1}`;
 
                 perQuestionHTML += `<div ${clickHandler} class="flex justify-between items-center bg-gray-700 p-3 rounded-lg ${cursorClass} ${hoverClass} ${opacityClass} transition-colors"><span class="font-medium">${escapeHtml(questionLabel)}</span><span class="font-bold ${color}">${displayScore}</span></div>`;
             }
@@ -2853,7 +2888,9 @@
                             ? (assignmentData.videoQuestions || [])
                             : assignmentData.type === 'simulation'
                                 ? (assignmentData.simQuestions || [])
-                                : (assignmentData.slideIds || [])).length;
+                                : assignmentData.type === 'blank'
+                                    ? (assignmentData.blocks || []).filter(b => b.type === 'question')
+                                    : (assignmentData.slideIds || [])).length;
                     const overallAverage = qCountSubmit > 0 ? totalScore / qCountSubmit : 0;
 
                     // Create submissionStatus document and keep the reference
@@ -3233,6 +3270,230 @@
             `;
             });
         }
+
+        // =======================================
+        // BLANK ASSIGNMENT STUDENT VIEW FUNCTIONS
+        // =======================================
+
+        function evaluateInlineChecker(studentAnswer, checker) {
+            const { op, value, value2, tolerance, points } = checker;
+            const pts = points || 100;
+            const s = String(studentAnswer).toLowerCase().trim();
+            const n = parseFloat(s);
+            if (op === 'contains') return s.includes(String(value).toLowerCase()) ? pts : 0;
+            if (op === 'not_contains') return !s.includes(String(value).toLowerCase()) ? pts : 0;
+            if (op === '==') return (tolerance > 0 ? Math.abs(n - value) <= tolerance : n === value) ? pts : 0;
+            if (op === '!=') return n !== value ? pts : 0;
+            if (op === '>') return n > value ? pts : 0;
+            if (op === '<') return n < value ? pts : 0;
+            if (op === 'between') {
+                const lo = Math.min(value, value2), hi = Math.max(value, value2);
+                return n >= lo && n <= hi ? pts : 0;
+            }
+            return 0;
+        }
+
+        function jumpToBlankQuestion(index) {
+            hideSummary();
+            const questionBlocks = (assignmentData.blocks || []).filter(b => b.type === 'question');
+            const block = questionBlocks[index];
+            if (block) {
+                const el = document.getElementById(`blank-q-input-${block.id}`);
+                if (el) {
+                    el.focus();
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }
+        }
+
+        function initializeBlankStudentView() {
+            const blocks = assignmentData.blocks || [];
+            const questionBlocks = blocks.filter(b => b.type === 'question');
+
+            // Ensure slideStates array is large enough without overwriting restored entries
+            if (slideStates.length < questionBlocks.length) {
+                const extended = new Array(questionBlocks.length).fill(null);
+                slideStates.forEach((s, i) => { extended[i] = s; });
+                slideStates = extended;
+            }
+
+            renderBlankStudentView();
+        }
+
+        function renderBlankStudentView() {
+            const blocks = assignmentData.blocks || [];
+            const questionBlocks = blocks.filter(b => b.type === 'question');
+            const container = document.getElementById('blank-student-blocks');
+            if (!container) return;
+
+            const postRule = assignmentData.postSubmissionRule || 'open';
+            const isLocked = isSubmitted && (postRule === 'lock' || postRule === 'hide');
+
+            let html = '';
+            let qIndex = 0;
+
+            blocks.forEach(block => {
+                if (block.type === 'text') {
+                    html += `<div class="prose prose-invert max-w-none bg-gray-800 p-4 rounded-lg">${block.content || ''}</div>`;
+                } else if (block.type === 'image') {
+                    const hasCaption = block.caption && block.caption.trim();
+                    html += `<figure class="text-center">
+                        <img src="${escapeHtml(block.url || '')}" alt="${escapeHtml(block.alt || '')}" class="max-w-full mx-auto rounded-lg border border-gray-700">
+                        ${hasCaption ? `<figcaption class="mt-2 text-sm text-gray-400 italic">${escapeHtml(block.caption)}</figcaption>` : ''}
+                    </figure>`;
+                } else if (block.type === 'question') {
+                    const idx = qIndex;
+                    const state = slideStates[idx] || {};
+                    const savedAnswer = state.answer || '';
+                    const savedScore = state.score;
+                    const scoreDisplay = savedScore !== undefined
+                        ? `<span class="ml-2 font-bold ${savedScore >= 90 ? 'text-green-400' : 'text-yellow-400'}">Score: ${savedScore}</span>`
+                        : '';
+
+                    let inputHTML = '';
+                    if (block.questionType === 'choice' && block.choices && block.choices.length > 0) {
+                        inputHTML = `<div class="space-y-2 mt-2" id="blank-q-choices-${block.id}">`;
+                        block.choices.forEach((choice, ci) => {
+                            const checked = String(savedAnswer) === String(ci) ? 'checked' : '';
+                            inputHTML += `<label class="flex items-center gap-3 cursor-pointer p-2 rounded hover:bg-gray-700">
+                                <input type="radio" name="blank-choice-${block.id}" value="${ci}" ${checked} ${isLocked ? 'disabled' : ''}
+                                    id="blank-q-input-${block.id}-${ci}"
+                                    class="w-4 h-4 text-yellow-400">
+                                <span>${escapeHtml(choice)}</span>
+                            </label>`;
+                        });
+                        inputHTML += `</div>`;
+                        // Use first radio as the "input" for scroll targeting
+                        inputHTML += `<span id="blank-q-input-${block.id}" tabindex="-1"></span>`;
+                    } else if (block.questionType === 'number') {
+                        inputHTML = `<input type="number" id="blank-q-input-${block.id}" value="${escapeHtml(String(savedAnswer))}"
+                            placeholder="Enter a number..."
+                            ${isLocked ? 'disabled' : ''}
+                            class="w-full mt-2 p-3 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500">`;
+                    } else {
+                        inputHTML = `<textarea id="blank-q-input-${block.id}" rows="4"
+                            placeholder="Your answer here..."
+                            ${isLocked ? 'disabled' : ''}
+                            class="w-full mt-2 p-3 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500">${escapeHtml(String(savedAnswer))}</textarea>`;
+                    }
+
+                    const pts = block.points || 100;
+                    html += `<div class="bg-gray-800 p-5 rounded-lg border border-gray-700" id="blank-q-card-${block.id}">
+                        <div class="flex justify-between items-start mb-1">
+                            <p class="font-semibold text-base text-white">${escapeHtml(block.prompt || '')}</p>
+                            <span class="text-xs text-gray-400 ml-2 whitespace-nowrap">${pts} pts</span>
+                        </div>
+                        ${inputHTML}
+                        <div class="mt-3 flex items-center gap-3">
+                            ${!isLocked ? `<button onclick="blankCheckAndSave('${block.id}', ${idx})"
+                                class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-colors">
+                                Check &amp; Save
+                            </button>` : ''}
+                            <span id="blank-q-result-${block.id}" class="text-sm font-semibold">${scoreDisplay}</span>
+                        </div>
+                    </div>`;
+                    qIndex++;
+                }
+            });
+
+            container.innerHTML = html;
+        }
+
+        async function blankCheckAndSave(blockId, qIndex) {
+            if (!userProfile) {
+                showToast("Error: User not signed in.", { color: 'red' });
+                return;
+            }
+            if (isSubmitted && (assignmentData.postSubmissionRule === 'lock' || assignmentData.postSubmissionRule === 'hide')) {
+                showToast("Assignment has been submitted and is locked.", { color: 'red' });
+                return;
+            }
+
+            const blocks = assignmentData.blocks || [];
+            const questionBlocks = blocks.filter(b => b.type === 'question');
+            const block = questionBlocks[qIndex];
+            if (!block || block.id !== blockId) return;
+
+            let studentAnswer;
+            if (block.questionType === 'choice') {
+                const checked = document.querySelector(`input[name="blank-choice-${block.id}"]:checked`);
+                if (!checked) {
+                    showToast("Please select an answer first!", { color: 'red' });
+                    return;
+                }
+                studentAnswer = checked.value;
+            } else {
+                const inputEl = document.getElementById(`blank-q-input-${block.id}`);
+                if (!inputEl || !inputEl.value.trim()) {
+                    showToast("Please enter your answer first!", { color: 'red' });
+                    return;
+                }
+                studentAnswer = inputEl.value.trim();
+            }
+
+            // Compute score
+            let score = 0;
+            if (block.questionType === 'choice') {
+                score = parseInt(studentAnswer) === block.correctChoiceIndex ? (block.points || 100) : 0;
+            } else if (block.inlineChecker) {
+                score = evaluateInlineChecker(studentAnswer, block.inlineChecker);
+            } else {
+                // Use checkerFunctions keyed by block ID
+                const checkerEntry = checkerFunctionStrings[block.id];
+                const funcString = checkerEntry ? (typeof checkerEntry === 'object' ? checkerEntry.code : checkerEntry) : null;
+                if (funcString) {
+                    try {
+                        score = executeCheckerFunction(funcString, studentAnswer, {
+                            showToast,
+                            userProfile,
+                            assignmentData
+                        });
+                    } catch (e) {
+                        console.error('Checker error for block', block.id, e);
+                        showToast(`Error in checker: ${e.message}`, { color: 'red' });
+                        score = 0;
+                    }
+                } else {
+                    showToast("Answer saved (no checker configured).", { color: 'blue', duration: 2000 });
+                    score = 0;
+                }
+            }
+
+            slideStates[qIndex] = { answer: studentAnswer, score };
+
+            // Update result display
+            const resultEl = document.getElementById(`blank-q-result-${block.id}`);
+            if (resultEl) {
+                resultEl.innerHTML = `<span class="font-bold ${score >= 90 ? 'text-green-400' : 'text-yellow-400'}">Score: ${score}</span>`;
+            }
+
+            // Save to Firestore
+            try {
+                const submission = {
+                    studentName: userProfile.name,
+                    studentEmail: userProfile.email,
+                    assignmentId: assignmentData.id,
+                    slideIndex: qIndex,
+                    answer: String(studentAnswer),
+                    score: score,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                    attemptIndex: 1,
+                    normalizedAnswer: String(studentAnswer).toLowerCase().trim(),
+                    bestScoreToDate: score,
+                    attemptsEnabled: false,
+                    locked: false
+                };
+                await db.collection("submissions").add(submission);
+                showToast("Answer saved!", { color: 'blue', position: 'bottom-right', duration: 2000 });
+            } catch (error) {
+                console.error("Error saving blank answer:", error);
+                showToast("Could not save answer. See console.", { color: 'red' });
+            }
+        }
+
+        // =======================================
+        // END BLANK ASSIGNMENT STUDENT VIEW
+        // =======================================
 
         // --- Tool Initialization ---
         function initTools() {
