@@ -498,6 +498,7 @@
                         class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg">+ Add
                         Question</button>
                 </div>
+                <div id="question-settings-bar-container" class="mb-6"></div>
                 <div id="slidesContainer" class="space-y-8"></div>
                 <p id="noQuestionsMsg" class="text-gray-500 italic text-center py-4 hidden">No follow-up questions yet.
                 </p>
@@ -578,6 +579,7 @@
         <script src="./shared/deadline-widget.js"></script>
         <script src="./shared/checker-widget.js"></script>
         <script src="./shared/checker-runner.js"></script>
+        <script src="./shared/question-settings-bar.js"></script>
         <script>
             const firebaseConfig = {
                 apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
@@ -937,6 +939,13 @@
                     if (q.isSimAutoField) refreshDetectedOutputsPanel(q.id);
 
                     container.appendChild(editorBox);
+                });
+                QuestionSettingsBar.init({
+                    container: document.getElementById('question-settings-bar-container'),
+                    getQuestionCount: () => simQuestions.length,
+                    getAssignmentData: () => assignmentData,
+                    onUpdate: () => {},
+                    editorType: 'simulation',
                 });
             }
 

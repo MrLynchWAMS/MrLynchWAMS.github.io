@@ -408,6 +408,7 @@
             class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg text-sm">+ Note</button>
         </div>
       </div>
+      <div id="question-settings-bar-container" class="mb-6"></div>
       <div id="questionsContainer" class="space-y-4"></div>
       <p id="noQuestionsMsg" class="text-gray-500 italic text-center py-8">No questions yet. Add questions using the
         buttons above, or import from EdPuzzle.</p>
@@ -502,6 +503,7 @@
   <script src="./shared/deadline-widget.js"></script>
   <script src="./shared/checker-widget.js"></script>
   <script src="./shared/checker-runner.js"></script>
+  <script src="./shared/question-settings-bar.js"></script>
   <script>
     const firebaseConfig = {
       apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
@@ -1265,6 +1267,13 @@
 
       // Bind events after render
       bindQuestionEvents();
+      QuestionSettingsBar.init({
+        container: document.getElementById('question-settings-bar-container'),
+        getQuestionCount: () => videoQuestions.length,
+        getAssignmentData: () => assignmentData,
+        onUpdate: () => {},
+        editorType: 'video',
+      });
     }
 
     function renderQuestionCard(q, qNum, sortedIdx, total) {
