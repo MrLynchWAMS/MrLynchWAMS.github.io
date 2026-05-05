@@ -782,7 +782,7 @@ Reading level: [GRADE LEVEL]</p>
             return '';
         }
 
-        function parseInlineCheckerString(str, questionType) {
+        function parseInlineCheckerString(str) {
             str = (str || '').trim();
             if (!str) return null;
             const pts = 100;
@@ -813,7 +813,7 @@ Reading level: [GRADE LEVEL]</p>
             if (!str) {
                 block.inlineChecker = null;
             } else {
-                const ic = parseInlineCheckerString(str, block.questionType);
+                const ic = parseInlineCheckerString(str);
                 if (ic) {
                     ic.points = block.points || 100;
                     block.inlineChecker = ic;
@@ -928,9 +928,9 @@ Reading level: [GRADE LEVEL]</p>
 
                     if (block.questionType === 'choice') {
                         // Auto-generate checker for multiple choice
-                        const correctIdx = block.correctChoiceIndex !== undefined ? block.correctChoiceIndex : 0;
-                        const pts = block.points || 100;
-                        const code = `function checkAnswer(studentAnswer) {\n    return parseInt(studentAnswer) === ${correctIdx} ? ${pts} : 0;\n}`;
+                        const correctIdx = Number.isInteger(block.correctChoiceIndex) ? block.correctChoiceIndex : 0;
+                        const pts = Number.isFinite(block.points) && block.points > 0 ? block.points : 100;
+                        const code = `function checkAnswer(studentAnswer) {\n    return parseInt(studentAnswer, 10) === ${correctIdx} ? ${pts} : 0;\n}`;
                         newCheckerFunctions[block.id] = { code, mode: 'auto' };
                     } else if (block.inlineChecker) {
                         // Auto-generate checker from inline config
@@ -991,21 +991,24 @@ Reading level: [GRADE LEVEL]</p>
         }
 
         function generateInlineCheckerCode(ic) {
-            const pts = ic.points || 100;
+            const pts = Number.isFinite(ic.points) && ic.points > 0 ? ic.points : 100;
+            const val = Number.isFinite(Number(ic.value)) ? Number(ic.value) : 0;
+            const val2 = Number.isFinite(Number(ic.value2)) ? Number(ic.value2) : 0;
+            const tol = Number.isFinite(Number(ic.tolerance)) ? Number(ic.tolerance) : 0;
             switch (ic.op) {
                 case '==':
-                    if (ic.tolerance > 0) {
-                        return `function checkAnswer(studentAnswer) {\n    const n = parseFloat(studentAnswer);\n    return Math.abs(n - ${ic.value}) <= ${ic.tolerance} ? ${pts} : 0;\n}`;
+                    if (tol > 0) {
+                        return `function checkAnswer(studentAnswer) {\n    const n = parseFloat(studentAnswer);\n    return Math.abs(n - ${val}) <= ${tol} ? ${pts} : 0;\n}`;
                     }
-                    return `function checkAnswer(studentAnswer) {\n    const n = parseFloat(studentAnswer);\n    return n === ${ic.value} ? ${pts} : 0;\n}`;
+                    return `function checkAnswer(studentAnswer) {\n    const n = parseFloat(studentAnswer);\n    return n === ${val} ? ${pts} : 0;\n}`;
                 case '!=':
-                    return `function checkAnswer(studentAnswer) {\n    const n = parseFloat(studentAnswer);\n    return n !== ${ic.value} ? ${pts} : 0;\n}`;
+                    return `function checkAnswer(studentAnswer) {\n    const n = parseFloat(studentAnswer);\n    return n !== ${val} ? ${pts} : 0;\n}`;
                 case '>':
-                    return `function checkAnswer(studentAnswer) {\n    const n = parseFloat(studentAnswer);\n    return n > ${ic.value} ? ${pts} : 0;\n}`;
+                    return `function checkAnswer(studentAnswer) {\n    const n = parseFloat(studentAnswer);\n    return n > ${val} ? ${pts} : 0;\n}`;
                 case '<':
-                    return `function checkAnswer(studentAnswer) {\n    const n = parseFloat(studentAnswer);\n    return n < ${ic.value} ? ${pts} : 0;\n}`;
+                    return `function checkAnswer(studentAnswer) {\n    const n = parseFloat(studentAnswer);\n    return n < ${val} ? ${pts} : 0;\n}`;
                 case 'between': {
-                    const lo = Math.min(ic.value, ic.value2), hi = Math.max(ic.value, ic.value2);
+                    const lo = Math.min(val, val2), hi = Math.max(val, val2);
                     return `function checkAnswer(studentAnswer) {\n    const n = parseFloat(studentAnswer);\n    return (n >= ${lo} && n <= ${hi}) ? ${pts} : 0;\n}`;
                 }
                 case 'contains':
