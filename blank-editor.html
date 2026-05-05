@@ -633,6 +633,8 @@ Reading level: [GRADE LEVEL]</p>
             const out = [];
             let inList = false;
             let listType = null;
+            let inTable = false;
+            let tableRows = [];
             const closeList = () => {
                 if (inList) {
                     out.push(listType === 'ul' ? '</ul>' : '</ol>');
