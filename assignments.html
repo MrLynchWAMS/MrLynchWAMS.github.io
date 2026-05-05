@@ -530,7 +530,12 @@
                 statusHTML += '</div>';
 
                 const escapedName = escapeHtml(assignment.name);
-                const editUrl = assignment.type === 'pdf' ? `pdf-editor.html?id=${assignment.id}` : assignment.type === 'video' ? `video-editor.html?id=${assignment.id}` : assignment.type === 'simulation' ? `sim-editor.html?id=${assignment.id}` : assignment.type === 'lesson' ? `lesson-editor.html?id=${assignment.id}` : assignment.type === 'blank' ? `blank-editor.html?id=${assignment.id}` : `editor.html?id=${assignment.id}`;
+                const editUrl = assignment.type === 'pdf' ? `pdf-editor.html?id=${assignment.id}` : 
+                                assignment.type === 'video' ? `video-editor.html?id=${assignment.id}` : 
+                                assignment.type === 'simulation' ? `sim-editor.html?id=${assignment.id}` : 
+                                assignment.type === 'lesson' ? `lesson-editor.html?id=${assignment.id}` : 
+                                assignment.type === 'blank' ? `blank-editor.html?id=${assignment.id}` : 
+                                `editor.html?id=${assignment.id}`;
 
                 card.innerHTML = `
                 <div>
@@ -541,18 +546,18 @@
                 </div>
                 <div class="mt-4 pt-4 border-t border-gray-700 flex flex-col gap-2">
                     <div class="flex justify-between gap-2">
-                        <a href="./dashboard.html?assignmentId=${assignment.id}" class="flex-1 text-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-2 rounded-lg btn-action text-sm">Dashboard</a>
+                        <a href="./dashboard.html?assignmentId=${assignment.id}" class="flex-1 text-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-2 rounded-lg btn-action text-sm">Data</a>
                         <a href="./${editUrl}" class="flex-1 text-center bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-2 rounded-lg btn-action text-sm">Edit</a>
-                        <a href="./classroompicker.html?assignmentId=${assignment.id}" target="_blank" class="flex-1 text-center bg-green-700 hover:bg-green-800 text-white font-bold py-2 px-2 rounded-lg btn-action text-sm">Student View</a>
+                        <a href="./classroompicker.html?assignmentId=${assignment.id}" target="_blank" class="flex-1 text-center bg-green-700 hover:bg-green-800 text-white font-bold py-2 px-2 rounded-lg btn-action text-sm">Preview</a>
                     </div>
                     <div class="flex justify-between gap-2">
-                         <button onclick="openStatusModal('${assignment.id}')" class="flex-1 text-center bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-3 rounded-lg btn-action">Assign & Schedule</button>
+                         <button onclick="openStatusModal('${assignment.id}')" class="flex-1 text-center bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-3 rounded-lg btn-action">Assign / Close</button>
                          <button onclick="deleteAssignment('${assignment.id}', '${escapedName}')" class="flex-1 text-center bg-red-700 hover:bg-red-800 text-white font-bold py-2 px-3 rounded-lg btn-action">Delete</button>
                     </div>
                     <div class="flex justify-between gap-2">
                         <button onclick="openCoTeacherModal('${assignment.id}')" class="flex-1 text-center bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold py-2 px-2 rounded-lg btn-action">Co-Teachers</button>
                         <button onclick="openShareModal('${assignment.id}')" class="flex-1 text-center bg-green-600 hover:bg-green-700 text-white text-sm font-bold py-2 px-2 rounded-lg btn-action">Share</button>
-                        <button onclick="togglePublic('${assignment.id}', ${assignment.isPublic || false})" class="flex-1 text-center bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold py-2 px-2 rounded-lg btn-action">${assignment.isPublic ? 'Make Private' : 'Make Public'}</button>
+                        <button onclick="togglePublic('${assignment.id}', ${assignment.isPublic || false})" class="flex-1 text-center bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold py-2 px-2 rounded-lg btn-action">Public</button>
                     </div>
                 </div>`;
                 listContainer.appendChild(card);
