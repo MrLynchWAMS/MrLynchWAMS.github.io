@@ -156,7 +156,7 @@
                     <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: number | answer between 30 and 40 | 100pts]</td><td class="py-1">Number, range</td></tr>
                     <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: text | contains "keyword" | 100pts]</td><td class="py-1">Text must contain word</td></tr>
                     <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: choice | A. opt, B. opt, C. correct*, D. opt | 100pts]</td><td class="py-1">Multiple choice (* = correct)</td></tr>
-                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">## Question text</td><td class="py-1">Question prompt (place before [q:])</td></tr>
+                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300 whitespace-pre">## Question prompt&#10;[q: ...]</td><td class="py-1">Question heading on one line, then [q: ...] on the <em>next</em> line</td></tr>
                     <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">![alt](url)</td><td class="py-1">Image block</td></tr>
                     <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">![alt](url "caption")</td><td class="py-1">Image with caption</td></tr>
                     <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">---</td><td class="py-1">Horizontal divider</td></tr>
@@ -181,12 +181,23 @@
 Rules:
 - Text blocks: write plain text paragraphs
 - Images: ![alt](url) or ![alt](url "caption")
-- Open text questions: ## Prompt\n[q: text]
-- Number questions: ## Prompt\n[q: number | answer==VALUE | 100pts]
-- Range questions: ## Prompt\n[q: number | answer between MIN and MAX | 100pts]
-- Multiple choice: ## Prompt\n[q: choice | A. opt, B. opt, C. correct*, D. opt | 100pts]
-- Text contains: ## Prompt\n[q: text | contains "keyword" | 100pts]
-- Separate sections with blank lines
+- Open text questions:
+  ## Prompt
+  [q: text]
+- Number questions:
+  ## Prompt
+  [q: number | answer==VALUE | 100pts]
+- Range questions:
+  ## Prompt
+  [q: number | answer between MIN and MAX | 100pts]
+- Multiple choice:
+  ## Prompt
+  [q: choice | A. opt, B. opt, C. correct*, D. opt | 100pts]
+- Text contains:
+  ## Prompt
+  [q: text | contains "keyword" | 100pts]
+- The ## line is the question prompt; the [q: ...] line MUST immediately follow it
+- Separate questions with blank lines
 
 Topic: [YOUR TOPIC HERE]</p>
                 </div>
@@ -217,10 +228,17 @@ Number of questions: [N]</p>
 
 - Start with a text block containing the reading passage (plain paragraphs)
 - Follow with comprehension questions
-- Text questions: ## Prompt\n[q: text]
-- Number questions (e.g. dates, quantities): ## Prompt\n[q: number | answer==VALUE | 100pts]
-- Multiple choice: ## Prompt\n[q: choice | A. opt, B. opt, C. correct*, D. opt | 100pts]
-- Separate sections with blank lines
+- Text questions:
+  ## Prompt
+  [q: text]
+- Number questions (e.g. dates, quantities):
+  ## Prompt
+  [q: number | answer==VALUE | 100pts]
+- Multiple choice:
+  ## Prompt
+  [q: choice | A. opt, B. opt, C. correct*, D. opt | 100pts]
+- The ## line is the question prompt; the [q: ...] line MUST immediately follow it
+- Separate questions with blank lines
 
 Topic: [YOUR TOPIC HERE]
 Reading level: [GRADE LEVEL]</p>
@@ -577,6 +595,20 @@ Reading level: [GRADE LEVEL]</p>
             if (block) block[field] = value;
         }
 
+        function insertTextFormat(blockId, before, after) {
+            const card = document.querySelector(`[data-block-id="${blockId}"]`);
+            if (!card) return;
+            const ta = card.querySelector('textarea');
+            if (!ta) return;
+            const start = ta.selectionStart;
+            const end = ta.selectionEnd;
+            const selected = ta.value.substring(start, end);
+            const replacement = before + selected + after;
+            ta.setRangeText(replacement, start, end, 'end');
+            ta.focus();
+            updateBlockField(blockId, 'content', ta.value);
+        }
+
         function updateChoiceCount(blockId, count) {
             const block = blocks.find(b => b.id === blockId);
             if (!block) return;
@@ -625,9 +657,13 @@ Reading level: [GRADE LEVEL]</p>
                 </div>`;
 
                 if (block.type === 'text') {
-                    innerHTML += `<textarea oninput="updateBlockField('${block.id}', 'content', this.value)"
-                        rows="4" placeholder="Enter text content here..."
-                        class="w-full p-3 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500 text-sm">${escapeHtml(block.content || '')}</textarea>`;
+                    innerHTML += `<div class="flex gap-2 mb-2">
+                        <button type="button" onclick="insertTextFormat('${block.id}', '**', '**')" class="bg-gray-600 hover:bg-gray-500 text-white text-xs font-bold px-2 py-1 rounded" title="Bold"><strong>B</strong></button>
+                        <button type="button" onclick="insertTextFormat('${block.id}', '*', '*')" class="bg-gray-600 hover:bg-gray-500 text-white text-xs italic px-2 py-1 rounded" title="Italic"><em>I</em></button>
+                    </div>
+                    <textarea oninput="updateBlockField('${block.id}', 'content', this.value)"
+                        rows="6" placeholder="Enter text content here... Use **bold** or *italic* for formatting."
+                        class="w-full p-3 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500 text-sm leading-relaxed" style="resize:vertical;">${escapeHtml(block.content || '')}</textarea>`;
                 } else if (block.type === 'image') {
                     const previewHtml = block.url ? `<img src="${escapeHtml(block.url)}" alt="preview" class="mt-2 max-h-32 rounded border border-gray-600 object-contain">` : '';
                     innerHTML += `
