@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blank Assignment Tester</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧪</text></svg>">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <style>
+        textarea { font-family: monospace; resize: none; }
+        .help-drawer {
+            position: fixed; top: 0; right: -420px; width: 420px; height: 100vh;
+            background: #1f2937; border-left: 1px solid #374151;
+            z-index: 200; overflow-y: auto; transition: right 0.3s ease;
+            padding: 1.5rem;
+        }
+        .help-drawer.open { right: 0; }
+        .blank-text-content h1, .blank-text-content h2, .blank-text-content h3 {
+            color: #fbbf24; font-weight: 700; margin: 0.9rem 0 0.35rem; line-height: 1.2;
+        }
+        .blank-text-content h1 { font-size: 1.5rem; }
+        .blank-text-content h2 { font-size: 1.25rem; }
+        .blank-text-content h3 { font-size: 1.1rem; }
+        .blank-text-content p { margin: 0.4rem 0; }
+        .blank-text-content ul, .blank-text-content ol { margin: 0.5rem 0 0.5rem 1.25rem; padding-left: 1rem; }
+        .blank-text-content ul { list-style: disc; }
+        .blank-text-content ol { list-style: decimal; }
+        .blank-text-content li { margin: 0.2rem 0; }
+        .blank-text-content a { color: #60a5fa; text-decoration: underline; }
+        .blank-text-content hr { border-color: #4b5563; margin: 1rem 0; }
+    </style>
+</head>
+<body class="bg-gray-950 text-white font-sans h-screen flex flex-col">
+
+    <header class="bg-gray-900 border-b border-gray-800 px-6 py-4 flex justify-between items-center shrink-0">
+        <div class="flex items-center gap-3">
+            <h1 class="text-2xl font-bold text-yellow-400">Blank Assignment Tester</h1>
+            <span class="bg-gray-800 text-gray-400 text-xs px-2 py-1 rounded border border-gray-700">Real-time Sandbox</span>
+        </div>
+        <div class="flex gap-3">
+            <button onclick="toggleHelp()" class="bg-gray-800 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg border border-gray-700 transition-colors">Syntax Help</button>
+            <a href="./assignments.html" class="bg-gray-800 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg border border-gray-700 transition-colors">Assignments</a>
+        </div>
+    </header>
+
+    <main class="flex-1 flex overflow-hidden">
+        <!-- Left: Input -->
+        <section class="w-1/2 flex flex-col border-r border-gray-800">
+            <div class="bg-gray-900/50 px-4 py-2 border-b border-gray-800 text-xs font-bold uppercase tracking-widest text-gray-500">Markup Input</div>
+            <textarea id="markupInput" class="flex-1 p-6 bg-gray-950 text-gray-100 focus:outline-none focus:ring-0 leading-relaxed" 
+                placeholder="## Type your assignment here...&#10;&#10;Use standard markdown, math, and questions.&#10;&#10;## Question Example&#10;[q: choice | A. Opt 1, B. Opt 2, C. Correct Answer*, D. Opt 4 | 100pts]"></textarea>
+        </section>
+
+        <!-- Right: Preview -->
+        <section class="w-1/2 flex flex-col bg-gray-900">
+            <div class="bg-gray-900/50 px-4 py-2 border-b border-gray-800 text-xs font-bold uppercase tracking-widest text-gray-500 flex justify-between items-center">
+                <span>Student Preview</span>
+                <span id="warningBadge" class="hidden bg-yellow-600 text-white px-2 py-0.5 rounded-full text-[10px]">0 warnings</span>
+            </div>
+            <div id="previewContainer" class="flex-1 overflow-y-auto p-8 space-y-6 max-w-3xl mx-auto w-full">
+                <div class="text-gray-500 italic text-center mt-20">Start typing on the left to see the preview here...</div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Help Drawer -->
+    <div id="help-drawer" class="help-drawer">
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-xl font-bold text-yellow-400">Syntax Reference</h2>
+            <button onclick="toggleHelp()" class="text-gray-400 hover:text-white text-2xl">&times;</button>
+        </div>
+        <div id="helpContent"></div>
+    </div>
+    <div id="help-overlay" class="hidden fixed inset-0 bg-black bg-opacity-50 z-[190]" onclick="toggleHelp()"></div>
+
+    <script src="./shared/blank-canvas-parser.js"></script>
+    <script src="./shared/blank-renderer.js"></script>
+    <script>
+        const markupInput = document.getElementById('markupInput');
+        const previewContainer = document.getElementById('previewContainer');
+        const warningBadge = document.getElementById('warningBadge');
+        let debounceTimer = null;
+
+        // Load help content from blank-editor.html (or just hardcode the relevant parts)
+        // For the tester, we'll just hardcode a clean version.
+        const syntaxReference = `
+            <div class="space-y-6 text-sm">
+                <div>
+                    <h3 class="font-bold text-white mb-2 border-b border-gray-700 pb-1">Text & Structure</h3>
+                    <ul class="space-y-1 text-gray-300">
+                        <li><code class="text-yellow-300"># Title</code> / <code class="text-yellow-300">## Heading</code></li>
+                        <li><code class="text-yellow-300">**bold**</code> / <code class="text-yellow-300">*italic*</code></li>
+                        <li><code class="text-yellow-300">- List Item</code> / <code class="text-yellow-300">1. Item</code></li>
+                        <li><code class="text-yellow-300">---</code> (Horizontal Divider)</li>
+                        <li><code class="text-yellow-300">[Link Text](url)</code></li>
+                    </ul>
+                </div>
+                <div>
+                    <h3 class="font-bold text-white mb-2 border-b border-gray-700 pb-1">Math & Data</h3>
+                    <ul class="space-y-1 text-gray-300">
+                        <li><code class="text-yellow-300">$$ E=mc^2 $$</code> (Block Math)</li>
+                        <li><code class="text-yellow-300">$ x^2 $</code> (Inline Math)</li>
+                        <li><code class="text-yellow-300">| Header | Header |</code> (Tables)</li>
+                    </ul>
+                </div>
+                <div>
+                    <h3 class="font-bold text-white mb-2 border-b border-gray-700 pb-1">Media</h3>
+                    <ul class="space-y-1 text-gray-300">
+                        <li><code class="text-yellow-300">![alt](url)</code> (Image)</li>
+                        <li><code class="text-yellow-300">![alt](url "caption")</code> (with Caption)</li>
+                    </ul>
+                </div>
+                <div>
+                    <h3 class="font-bold text-white mb-2 border-b border-gray-700 pb-1">Questions</h3>
+                    <p class="text-xs text-gray-400 mb-2">Two-line format: Heading then Tag</p>
+                    <ul class="space-y-2 text-gray-300">
+                        <li><code class="text-yellow-300">[q: text]</code> (Open text)</li>
+                        <li><code class="text-yellow-300">[q: choice | A. Opt1, B. Opt2* | 100pts]</code> (Choice)</li>
+                        <li><code class="text-yellow-300">[q: number | answer==5 ±0.1 | 100pts]</code> (Number)</li>
+                    </ul>
+                </div>
+            </div>
+        `;
+        document.getElementById('helpContent').innerHTML = syntaxReference;
+
+        function toggleHelp() {
+            document.getElementById('help-drawer').classList.toggle('open');
+            document.getElementById('help-overlay').classList.toggle('hidden');
+        }
+
+        function updatePreview() {
+            const markup = markupInput.value;
+            const result = window.parseCanvasToBlocks(markup);
+            const renderer = window.BlankRenderer;
+            
+            // Warnings
+            if (result.warnings.length > 0) {
+                warningBadge.textContent = `${result.warnings.length} warning${result.warnings.length > 1 ? 's' : ''}`;
+                warningBadge.classList.remove('hidden');
+                warningBadge.title = result.warnings.join('\n');
+            } else {
+                warningBadge.classList.add('hidden');
+            }
+
+            if (!markup.trim()) {
+                previewContainer.innerHTML = '<div class="text-gray-500 italic text-center mt-20">Start typing on the left to see the preview here...</div>';
+                return;
+            }
+
+            let html = '';
+            let qIndex = 0;
+
+            result.blocks.forEach(block => {
+                if (block.type === 'text') {
+                    const rendered = renderer.renderTextBlockContent(block.content || '');
+                    html += `<div class="blank-text-content bg-gray-800/40 p-4 rounded-lg text-gray-200 leading-relaxed border border-gray-800">${rendered}</div>`;
+                } else if (block.type === 'image') {
+                    const hasCaption = block.caption && block.caption.trim();
+                    html += `<figure class="text-center">
+                        <img src="${renderer.escapeHtml(block.url || '')}" alt="${renderer.escapeHtml(block.alt || '')}" class="max-w-full mx-auto rounded-lg border border-gray-800">
+                        ${hasCaption ? `<figcaption class="mt-2 text-sm text-gray-400 italic">${renderer.escapeHtml(block.caption)}</figcaption>` : ''}
+                    </figure>`;
+                } else if (block.type === 'question') {
+                    let inputHTML = '';
+                    if (block.questionType === 'choice' && block.choices && block.choices.length > 0) {
+                        inputHTML = `<div class="space-y-2 mt-2">`;
+                        block.choices.forEach((choice, ci) => {
+                            inputHTML += `<label class="flex items-center gap-3 cursor-pointer p-2 rounded hover:bg-gray-800/50">
+                                <input type="radio" name="tester-choice-${block.id}" value="${ci}" class="w-4 h-4 text-yellow-400">
+                                <span>${renderer.escapeHtml(choice)}</span>
+                            </label>`;
+                        });
+                        inputHTML += `</div>`;
+                    } else if (block.questionType === 'number') {
+                        inputHTML = `<input type="number" placeholder="Enter a number..." class="w-full mt-2 p-3 bg-gray-800 border border-gray-700 rounded focus:outline-none focus:ring-1 focus:ring-yellow-500">`;
+                    } else {
+                        inputHTML = `<textarea rows="3" placeholder="Your answer here..." class="w-full mt-2 p-3 bg-gray-800 border border-gray-700 rounded focus:outline-none focus:ring-1 focus:ring-yellow-500"></textarea>`;
+                    }
+
+                    const pts = block.points || 100;
+                    html += `<div class="bg-gray-800 p-5 rounded-lg border border-gray-700 shadow-lg">
+                        <div class="flex justify-between items-start mb-1">
+                            <p class="font-semibold text-base text-white">${renderer.escapeHtml(block.prompt || '')}</p>
+                            <span class="text-[10px] uppercase tracking-wider text-gray-500 bg-gray-900 px-2 py-0.5 rounded">${pts} pts</span>
+                        </div>
+                        ${inputHTML}
+                        <div class="mt-4 pt-4 border-t border-gray-700/50 flex items-center justify-between">
+                            <button class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-1.5 px-4 rounded text-sm transition-colors">Check & Save</button>
+                            <span class="text-xs text-gray-500 italic">Preview Mode</span>
+                        </div>
+                    </div>`;
+                }
+            });
+
+            previewContainer.innerHTML = html;
+            renderer.renderMathContent(previewContainer);
+        }
+
+        markupInput.oninput = () => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(updatePreview, 300);
+        };
+
+        // Initialize with default content if empty
+        if (!markupInput.value.trim()) {
+            // Optional: load some example content?
+        }
+    </script>
+</body>
+</html>
