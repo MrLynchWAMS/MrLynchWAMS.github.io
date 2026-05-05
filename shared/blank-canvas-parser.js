@@ -180,7 +180,7 @@
             // --- Divider ---
             if (/^\s*---\s*$/.test(line)) {
                 flushText();
-                blocks.push({ id: genId('b'), type: 'text', content: '<hr>' });
+                blocks.push({ id: genId('b'), type: 'text', content: '---' });
                 continue;
             }
 
