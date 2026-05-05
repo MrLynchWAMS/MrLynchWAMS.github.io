@@ -1381,6 +1381,7 @@
                     initializeSimulationStudentView();
                     initTools();
                 } else if (assignmentData.type === 'blank') {
+                    loader.classList.add('hidden');
                     document.getElementById('slides-ui').classList.add('hidden');
                     document.getElementById('pdf-student-content').classList.add('hidden');
                     document.getElementById('video-student-content').classList.add('hidden');
@@ -3321,6 +3322,19 @@
             renderBlankStudentView();
         }
 
+        function renderTextBlockContent(content) {
+            if (!content) return '';
+            let html = String(content)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+            html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+            html = html.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
+            html = html.replace(/\n/g, '<br>');
+            return html;
+        }
+
         function renderBlankStudentView() {
             const blocks = assignmentData.blocks || [];
             const questionBlocks = blocks.filter(b => b.type === 'question');
@@ -3335,7 +3349,8 @@
 
             blocks.forEach(block => {
                 if (block.type === 'text') {
-                    html += `<div class="prose prose-invert max-w-none bg-gray-800 p-4 rounded-lg">${block.content || ''}</div>`;
+                    const rendered = renderTextBlockContent(block.content || '');
+                    html += `<div class="bg-gray-800 p-4 rounded-lg text-gray-200 leading-relaxed">${rendered}</div>`;
                 } else if (block.type === 'image') {
                     const hasCaption = block.caption && block.caption.trim();
                     html += `<figure class="text-center">
