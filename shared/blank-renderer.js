@@ -1,0 +1,133 @@
+/**
+ * shared/blank-renderer.js
+ * Centralized rendering logic for blank assignments (Markdown, Math, Tables).
+ */
+
+(function () {
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    function formatInline(text) {
+        return String(text || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            .replace(/(?<!\*)\*(?!\s)(.+?)(?<!\s)\*(?!\*)/g, '<em>$1</em>')
+            .replace(/\[(.+?)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+    }
+
+    function renderTextBlockContent(content) {
+        if (!content) return '';
+        const lines = String(content).replace(/\r\n/g, '\n').split('\n');
+        const out = [];
+        let inList = false;
+        let listType = null;
+        let inTable = false;
+        let tableRows = [];
+
+        const closeList = () => {
+            if (inList) {
+                out.push(listType === 'ul' ? '</ul>' : '</ol>');
+                inList = false;
+                listType = null;
+            }
+        };
+
+        const closeTable = () => {
+            if (inTable) {
+                let html = '<div class="overflow-x-auto my-4"><table class="w-full text-sm text-left border-collapse border border-gray-700">';
+                tableRows.forEach((row, i) => {
+                    const isHeader = i === 0;
+                    const tag = isHeader ? 'th' : 'td';
+                    const bg = isHeader ? 'bg-gray-900/50' : '';
+                    html += `<tr class="${bg}">`;
+                    row.forEach(cell => {
+                        html += `<${tag} class="border border-gray-700 p-2">${formatInline(cell)}</${tag}>`;
+                    });
+                    html += '</tr>';
+                });
+                html += '</table></div>';
+                out.push(html);
+                inTable = false;
+                tableRows = [];
+            }
+        };
+
+        lines.forEach(line => {
+            const trimmed = line.trim();
+
+            // Table check
+            if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+                closeList();
+                const cells = trimmed.split('|').slice(1, -1).map(c => c.trim());
+                // Skip separator row like |---|---|
+                if (cells.every(c => /^:?-+:?$/.test(c))) return;
+
+                if (!inTable) inTable = true;
+                tableRows.push(cells);
+                return;
+            }
+            closeTable();
+
+            if (!trimmed) {
+                closeList();
+                return;
+            }
+            const heading = trimmed.match(/^(#{1,3})\s+(.*)$/);
+            if (heading) {
+                closeList();
+                const level = heading[1].length;
+                out.push(`<h${level}>${formatInline(heading[2])}</h${level}>`);
+                return;
+            }
+            if (/^---+$/.test(trimmed)) {
+                closeList();
+                out.push('<hr>');
+                return;
+            }
+            const bullet = trimmed.match(/^[-*]\s+(.*)$/);
+            const number = trimmed.match(/^\d+[.)]\s+(.*)$/);
+            if (bullet || number) {
+                const type = bullet ? 'ul' : 'ol';
+                const itemText = bullet ? bullet[1] : number[1];
+                if (!inList || listType !== type) {
+                    closeList();
+                    out.push(type === 'ul' ? '<ul>' : '<ol>');
+                    inList = true;
+                    listType = type;
+                }
+                out.push(`<li>${formatInline(itemText)}</li>`);
+                return;
+            }
+            closeList();
+            out.push(`<p>${formatInline(trimmed)}</p>`);
+        });
+        closeList();
+        closeTable();
+        return out.join('\n');
+    }
+
+    function renderMathContent(element) {
+        if (window.renderMathInElement) {
+            renderMathInElement(element, {
+                delimiters: [
+                    { left: '$$', right: '$$', display: true },
+                    { left: '$', right: '$', display: false }
+                ],
+                throwOnError: false
+            });
+        }
+    }
+
+    // Export to window
+    window.BlankRenderer = {
+        renderTextBlockContent,
+        renderMathContent,
+        escapeHtml,
+        formatInline
+    };
+})();
