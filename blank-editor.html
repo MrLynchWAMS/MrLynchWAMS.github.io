@@ -38,6 +38,24 @@
         .block-card { transition: box-shadow 0.15s; }
         .block-card:hover { box-shadow: 0 0 0 2px #fbbf24; }
         .canvas-textarea { font-family: monospace; min-height: 400px; }
+        .richtext-preview h1, .richtext-preview h2, .richtext-preview h3 {
+            color: #fbbf24;
+            font-weight: 700;
+            margin: 0.9rem 0 0.35rem;
+            line-height: 1.2;
+        }
+        .richtext-preview h1 { font-size: 1.5rem; }
+        .richtext-preview h2 { font-size: 1.25rem; }
+        .richtext-preview h3 { font-size: 1.1rem; }
+        .richtext-preview p { margin: 0.5rem 0; white-space: pre-wrap; }
+        .richtext-preview ul, .richtext-preview ol { margin: 0.5rem 0 0.5rem 1.25rem; padding-left: 1rem; }
+        .richtext-preview ul { list-style: disc; }
+        .richtext-preview ol { list-style: decimal; }
+        .richtext-preview li { margin: 0.2rem 0; }
+        .richtext-preview a { color: #60a5fa; text-decoration: underline; }
+        .richtext-preview hr { border-color: #4b5563; margin: 1rem 0; }
+        .richtext-toolbar button.active { background: #fbbf24; color: #111827; }
+        .richtext-toolbar button { min-width: 2.25rem; }
     </style>
 </head>
 <body class="bg-gray-900 text-white font-sans">
@@ -58,13 +76,18 @@
     </div>
 
     <div id="editorContent" class="hidden">
+        <div id="assignmentTitleBar" class="hidden sticky top-0 z-40 bg-gray-950/95 border-b border-gray-700 px-4 py-2">
+            <div class="max-w-5xl mx-auto flex items-center gap-3">
+                <span class="text-xs uppercase tracking-widest text-gray-400 font-bold">Assignment</span>
+                <h2 id="editorAssignmentTitle" class="text-xl font-bold text-yellow-400 truncate"></h2>
+            </div>
+        </div>
         <!-- Sticky Toolbar -->
         <div class="sticky top-0 z-50 bg-gray-900 border-b border-gray-700 px-4 py-3">
             <div class="max-w-5xl mx-auto flex flex-wrap items-center gap-3">
                 <a href="./assignments.html" class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-3 rounded-lg text-sm">&larr; Back</a>
                 <input type="text" id="assignmentNameInput" placeholder="Assignment Title"
                     class="flex-1 min-w-0 p-2 bg-gray-800 border border-gray-600 rounded-lg text-yellow-400 font-bold text-lg focus:outline-none focus:ring-2 focus:ring-yellow-500">
-                <!-- Mode Toggle -->
                 <div class="flex items-center bg-gray-800 rounded-lg border border-gray-600 overflow-hidden">
                     <button id="btn-structured" onclick="switchMode('structured')"
                         class="px-4 py-2 font-semibold text-sm bg-yellow-500 text-gray-900">Structured</button>
@@ -81,7 +104,6 @@
         </div>
 
         <div class="max-w-5xl mx-auto px-4 py-6">
-            <!-- Student link -->
             <div class="bg-gray-800 p-4 rounded-lg mb-6">
                 <h2 class="text-lg font-semibold mb-2">Student Link</h2>
                 <div class="flex gap-2">
@@ -92,9 +114,8 @@
                 </div>
             </div>
 
-            <!-- ===== STRUCTURED MODE ===== -->
             <div id="structured-mode">
-                <div class="flex gap-3 mb-6">
+                <div class="flex gap-3 mb-6 flex-wrap">
                     <button onclick="addBlock('text')" class="bg-blue-700 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg text-sm">+ Add Text</button>
                     <button onclick="addBlock('image')" class="bg-purple-700 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded-lg text-sm">+ Add Image</button>
                     <button onclick="addBlock('question')" class="bg-green-700 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg text-sm">+ Add Question</button>
@@ -102,7 +123,6 @@
                 <div id="blocks-container" class="space-y-4"></div>
                 <p id="no-blocks-msg" class="text-gray-500 italic text-center py-8">No blocks yet. Click a button above to add content.</p>
 
-                <!-- Checker Section -->
                 <div id="checker-section" class="hidden mt-8 bg-gray-800 p-6 rounded-lg border border-gray-700">
                     <h2 class="text-xl font-bold text-yellow-400 mb-4">Question Checkers</h2>
                     <p class="text-gray-400 text-sm mb-4">Configure auto-grading for open text/number questions below. Multiple choice and inline-checker questions are graded automatically.</p>
@@ -117,7 +137,6 @@
                 </div>
             </div>
 
-            <!-- ===== CANVAS MODE ===== -->
             <div id="canvas-mode" class="hidden">
                 <div class="flex items-center justify-between mb-3">
                     <h2 class="text-lg font-semibold">Canvas Editor</h2>
@@ -133,14 +152,12 @@
         </div>
     </div>
 
-    <!-- Help Drawer -->
     <div id="help-drawer" class="help-drawer">
         <div class="flex justify-between items-center mb-6">
             <h2 class="text-xl font-bold text-yellow-400">Help & Reference</h2>
             <button onclick="toggleHelp()" class="text-gray-400 hover:text-white text-2xl">&times;</button>
         </div>
 
-        <!-- Syntax Reference -->
         <div class="mb-8">
             <h3 class="text-lg font-bold text-white mb-3">Syntax Reference</h3>
             <table class="w-full text-sm text-gray-300 border-collapse">
@@ -154,18 +171,17 @@
                     <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: text]</td><td class="py-1">Open text question</td></tr>
                     <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: number | answer==36 | 100pts]</td><td class="py-1">Number, exact answer</td></tr>
                     <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: number | answer between 30 and 40 | 100pts]</td><td class="py-1">Number, range</td></tr>
-                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: text | contains "keyword" | 100pts]</td><td class="py-1">Text must contain word</td></tr>
-                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: choice | A. opt, B. opt, C. correct*, D. opt | 100pts]</td><td class="py-1">Multiple choice (* = correct)</td></tr>
-                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300 whitespace-pre">## Question prompt&#10;[q: ...]</td><td class="py-1">Question heading on one line, then [q: ...] on the <em>next</em> line</td></tr>
+                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: text | contains &quot;keyword&quot; | 100pts]</td><td class="py-1">Text must contain word</td></tr>
+                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: choice | A. opt, B. opt, C. correct*, D. opt | 100pts]</td><td class="py-1">Multiple choice</td></tr>
+                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300 whitespace-pre">## Question prompt&#10;[q: ...]</td><td class="py-1">Question heading on one line, tag on next</td></tr>
                     <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">![alt](url)</td><td class="py-1">Image block</td></tr>
-                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">![alt](url "caption")</td><td class="py-1">Image with caption</td></tr>
+                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">![alt](url &quot;caption&quot;)</td><td class="py-1">Image with caption</td></tr>
                     <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">---</td><td class="py-1">Horizontal divider</td></tr>
                     <tr><td class="py-1 pr-4 font-mono text-yellow-300">**bold** *italic*</td><td class="py-1">Formatting in text blocks</td></tr>
                 </tbody>
             </table>
         </div>
 
-        <!-- AI Prompt Templates -->
         <div>
             <h3 class="text-lg font-bold text-white mb-3">AI Prompt Templates</h3>
             <p class="text-sm text-gray-400 mb-3">Copy one of these prompts to paste into your AI assistant. It will output valid markup you can paste into the Canvas tab.</p>
@@ -176,11 +192,11 @@
                         <span class="text-sm font-semibold text-yellow-300">General Mixed Assignment</span>
                         <button onclick="copyTemplate('tpl-general')" class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded">Copy</button>
                     </div>
-                    <p id="tpl-general" class="text-xs text-gray-300 whitespace-pre-wrap">Create a science assignment with mixed question types using ONLY the following markup format. Output only valid markup with NO preamble, NO commentary, and NO markdown code blocks — just the raw markup.
+                    <p id="tpl-general" class="text-xs text-gray-300 whitespace-pre-wrap">Create a science assignment with mixed question types using ONLY the following markup format. Output only valid markup with NO preamble, NO explanations, and NO code fences.
 
 Rules:
 - Text blocks: write plain text paragraphs
-- Images: ![alt](url) or ![alt](url "caption")
+- Images: ![alt](url) or ![alt](url &quot;caption&quot;)
 - Open text questions:
   ## Prompt
   [q: text]
@@ -195,7 +211,7 @@ Rules:
   [q: choice | A. opt, B. opt, C. correct*, D. opt | 100pts]
 - Text contains:
   ## Prompt
-  [q: text | contains "keyword" | 100pts]
+  [q: text | contains &quot;keyword&quot; | 100pts]
 - The ## line is the question prompt; the [q: ...] line MUST immediately follow it
 - Separate questions with blank lines
 
@@ -207,7 +223,7 @@ Topic: [YOUR TOPIC HERE]</p>
                         <span class="text-sm font-semibold text-yellow-300">Multiple Choice Focused</span>
                         <button onclick="copyTemplate('tpl-mc')" class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded">Copy</button>
                     </div>
-                    <p id="tpl-mc" class="text-xs text-gray-300 whitespace-pre-wrap">Create a multiple choice quiz using ONLY the following markup format. Output only valid markup with NO preamble, NO commentary, and NO markdown code blocks.
+                    <p id="tpl-mc" class="text-xs text-gray-300 whitespace-pre-wrap">Create a multiple choice quiz using ONLY the following markup format. Output only valid markup with NO preamble, NO explanations, and NO code fences.
 
 Format for each question:
 ## Question text here
@@ -224,7 +240,7 @@ Number of questions: [N]</p>
                         <span class="text-sm font-semibold text-yellow-300">Reading Passage + Comprehension</span>
                         <button onclick="copyTemplate('tpl-reading')" class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded">Copy</button>
                     </div>
-                    <p id="tpl-reading" class="text-xs text-gray-300 whitespace-pre-wrap">Create a reading passage followed by comprehension questions using ONLY the following markup format. Output only valid markup with NO preamble, NO commentary, and NO markdown code blocks.
+                    <p id="tpl-reading" class="text-xs text-gray-300 whitespace-pre-wrap">Create a reading passage followed by comprehension questions using ONLY the following markup format. Output only valid markup with NO preamble, NO explanations, and NO code fences.
 
 - Start with a text block containing the reading passage (plain paragraphs)
 - Follow with comprehension questions
@@ -248,7 +264,6 @@ Reading level: [GRADE LEVEL]</p>
     </div>
     <div id="help-overlay" class="hidden fixed inset-0 bg-black bg-opacity-50 z-[190]" onclick="toggleHelp()"></div>
 
-    <!-- Checker Template (hidden) -->
     <template id="checkerTemplate">
         <div class="checker-widget">
             <div class="flex items-center justify-between mb-2">
@@ -302,7 +317,6 @@ Reading level: [GRADE LEVEL]</p>
     <script src="./shared/blank-canvas-parser.js"></script>
     <script>
         const TEACHER_EMAILS = ["klynch@mtps.us", "mstuart@mtps.us", "cfiori@mtps.us", "mlock@mtps.us", "cheine@mtps.us", "kgray@mtps.us"];
-
         const firebaseConfig = {
             apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
             authDomain: "mrlynch-slides-app.firebaseapp.com",
@@ -318,14 +332,13 @@ Reading level: [GRADE LEVEL]</p>
         let assignmentId = null;
         let assignmentData = null;
         let currentUserEmail = null;
-        let blocks = [];         // Current block list
-        let checkerFunctions = {}; // { blockId: { code, mode, simpleConfig? } }
+        let blocks = [];
+        let checkerFunctions = {};
         let currentMode = 'structured';
         let activeCheckerBlockId = null;
         let activeCheckerWidget = null;
         let canvasDebounceTimer = null;
 
-        // ---- ID Utility ----
         function genId(prefix) {
             const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
             let s = '';
@@ -338,7 +351,8 @@ Reading level: [GRADE LEVEL]</p>
             return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
         }
 
-        // ---- Auth ----
+        function escapeAttr(str) { return escapeHtml(str); }
+
         const urlParams = new URLSearchParams(window.location.search);
         assignmentId = urlParams.get('id');
 
@@ -388,7 +402,6 @@ Reading level: [GRADE LEVEL]</p>
             };
         }
 
-        // ---- Load Assignment ----
         async function loadAssignment() {
             if (!assignmentId) return;
             try {
@@ -401,14 +414,12 @@ Reading level: [GRADE LEVEL]</p>
                 assignmentData = { id: doc.id, ...doc.data() };
 
                 if (assignmentData.type !== 'blank') {
-                    // Redirect to appropriate editor
                     const typeMap = { pdf: 'pdf-editor.html', video: 'video-editor.html', simulation: 'sim-editor.html', lesson: 'lesson-editor.html' };
                     const dest = typeMap[assignmentData.type] || 'editor.html';
                     window.location.href = `./${dest}?id=${assignmentId}`;
                     return;
                 }
 
-                // Access check
                 const isOwner = assignmentData.teacherEmail === currentUserEmail;
                 const isCoTeacher = (assignmentData.coTeachers || []).includes(currentUserEmail);
                 const isGlobal = TEACHER_EMAILS.map(e => e.toLowerCase()).includes(currentUserEmail);
@@ -423,7 +434,7 @@ Reading level: [GRADE LEVEL]</p>
                                 hasAccess = true;
                             }
                         }
-                    } catch (e) { /* ignore */ }
+                    } catch (e) { }
                 }
 
                 if (!hasAccess) {
@@ -431,11 +442,12 @@ Reading level: [GRADE LEVEL]</p>
                     return;
                 }
 
-                // Populate UI
                 blocks = JSON.parse(JSON.stringify(assignmentData.blocks || []));
                 checkerFunctions = JSON.parse(JSON.stringify(assignmentData.checkerFunctions || {}));
 
                 document.getElementById('assignmentNameInput').value = assignmentData.name || '';
+                document.getElementById('editorAssignmentTitle').textContent = assignmentData.name || 'Untitled Assignment';
+                document.getElementById('assignmentTitleBar').classList.remove('hidden');
                 document.getElementById('shareLink').value = `https://custom.scienceclass.rocks/classroompicker.html?assignmentId=${assignmentId}`;
 
                 const lastMode = assignmentData.lastEditorMode || 'structured';
@@ -448,23 +460,19 @@ Reading level: [GRADE LEVEL]</p>
 
                 document.getElementById('page-loader').classList.add('hidden');
                 document.getElementById('editorContent').classList.remove('hidden');
-
             } catch (error) {
                 console.error("Error loading assignment:", error);
                 document.getElementById('loading-text').textContent = `Error: ${error.message || "An unknown error occurred."}`;
             }
         }
 
-        // ---- Mode Switching ----
         function switchMode(mode) {
             if (mode === currentMode) return;
             if (mode === 'canvas') {
-                // Structured → Canvas: serialize
                 const markup = serializeBlocksToCanvas(blocks);
                 document.getElementById('canvas-textarea').value = markup;
                 activateCanvasMode(true);
             } else {
-                // Canvas → Structured: parse
                 const markup = document.getElementById('canvas-textarea').value;
                 const result = parseCanvasToBlocks(markup, blocks);
                 blocks = result.blocks;
@@ -493,11 +501,9 @@ Reading level: [GRADE LEVEL]</p>
             document.getElementById('btn-structured').className = 'px-4 py-2 font-semibold text-sm text-gray-400 hover:bg-gray-700';
 
             if (fromStructured) {
-                const markup = serializeBlocksToCanvas(blocks);
-                document.getElementById('canvas-textarea').value = markup;
+                document.getElementById('canvas-textarea').value = serializeBlocksToCanvas(blocks);
             }
 
-            // Attach debounce validation
             const ta = document.getElementById('canvas-textarea');
             ta.oninput = () => {
                 clearTimeout(canvasDebounceTimer);
@@ -506,7 +512,6 @@ Reading level: [GRADE LEVEL]</p>
                     updateWarningBadge(result.warnings);
                 }, 500);
             };
-            // Initial validation
             const result = validateCanvas(ta.value);
             updateWarningBadge(result.warnings);
         }
@@ -516,7 +521,6 @@ Reading level: [GRADE LEVEL]</p>
             if (warnings.length > 0) {
                 badge.textContent = `${warnings.length} warning${warnings.length > 1 ? 's' : ''}`;
                 badge.classList.remove('hidden');
-                // Update list if visible
                 const list = document.getElementById('warning-list');
                 if (!list.classList.contains('hidden')) {
                     showWarningList(warnings);
@@ -549,11 +553,10 @@ Reading level: [GRADE LEVEL]</p>
             showToast(warnings.length > 3 ? msg + `\n...and ${warnings.length - 3} more` : msg, { color: 'yellow', duration: 8000 });
         }
 
-        // ---- Block Management ----
         function addBlock(type) {
             let block;
             if (type === 'text') {
-                block = { id: genId('b'), type: 'text', content: '' };
+                block = { id: genId('b'), type: 'text', content: '', textFormat: 'markdown' };
             } else if (type === 'image') {
                 block = { id: genId('b'), type: 'image', url: '', alt: '', caption: '' };
             } else if (type === 'question') {
@@ -561,7 +564,6 @@ Reading level: [GRADE LEVEL]</p>
             }
             blocks.push(block);
             renderBlocks();
-            // Focus the new block's first input
             setTimeout(() => {
                 const el = document.querySelector(`[data-block-id="${block.id}"] textarea, [data-block-id="${block.id}"] input`);
                 if (el) { el.focus(); el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
@@ -570,7 +572,6 @@ Reading level: [GRADE LEVEL]</p>
 
         function deleteBlock(id) {
             blocks = blocks.filter(b => b.id !== id);
-            // Clean up checker
             delete checkerFunctions[id];
             if (activeCheckerBlockId === id) {
                 activeCheckerBlockId = null;
@@ -607,6 +608,7 @@ Reading level: [GRADE LEVEL]</p>
             ta.setRangeText(replacement, start, end, 'end');
             ta.focus();
             updateBlockField(blockId, 'content', ta.value);
+            updateTextPreview(card, ta.value, blocks.find(b => b.id === blockId)?.textFormat || 'markdown');
         }
 
         function updateChoiceCount(blockId, count) {
@@ -624,7 +626,131 @@ Reading level: [GRADE LEVEL]</p>
             }
         }
 
-        // ---- Render Blocks ----
+        function normalizeTextMarkup(text) {
+            const lines = String(text || '').replace(/\r\n/g, '\n').split('\n');
+            const out = [];
+            let inList = false;
+            let listType = null;
+            const closeList = () => {
+                if (inList) {
+                    out.push('</ul>');
+                    inList = false;
+                    listType = null;
+                }
+            };
+            lines.forEach(line => {
+                const trimmed = line.trim();
+                if (!trimmed) {
+                    closeList();
+                    out.push('<p></p>');
+                    return;
+                }
+                const heading = trimmed.match(/^(#{1,3})\s+(.*)$/);
+                if (heading) {
+                    closeList();
+                    const level = heading[1].length;
+                    out.push(`<h${level}>${heading[2]}</h${level}>`);
+                    return;
+                }
+                if (/^---+$/.test(trimmed)) {
+                    closeList();
+                    out.push('<hr>');
+                    return;
+                }
+                const bullet = trimmed.match(/^[-*]\s+(.*)$/);
+                const number = trimmed.match(/^\d+[.)]\s+(.*)$/);
+                if (bullet || number) {
+                    const type = bullet ? 'ul' : 'ol';
+                    const itemText = bullet ? bullet[1] : number[1];
+                    if (!inList || listType !== type) {
+                        closeList();
+                        out.push(type === 'ul' ? '<ul>' : '<ol>');
+                        inList = true;
+                        listType = type;
+                    }
+                    out.push(`<li>${itemText}</li>`);
+                    return;
+                }
+                closeList();
+                out.push(`<p>${trimmed}</p>`);
+            });
+            closeList();
+            return out.join('\n');
+        }
+
+        function formatTextMarkup(text) {
+            return String(text || '')
+                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                .replace(/(?<!\*)\*(?!\s)(.+?)(?<!\s)\*(?!\*)/g, '<em>$1</em>')
+                .replace(/\[(.+?)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+        }
+
+        function renderTextPreview(text, format) {
+            const markup = normalizeTextMarkup(text).replace(/<p>(.*?)<\/p>/g, (_, body) => `<p>${formatTextMarkup(body)}</p>`)
+                .replace(/<h([1-3])>(.*?)<\/h\1>/g, (_, lvl, body) => `<h${lvl}>${formatTextMarkup(body)}</h${lvl}>`)
+                .replace(/<li>(.*?)<\/li>/g, (_, body) => `<li>${formatTextMarkup(body)}</li>`);
+            return markup;
+        }
+
+        function updateTextPreview(card, text, format) {
+            const preview = card.querySelector('.text-preview');
+            if (preview) preview.innerHTML = renderTextPreview(text, format);
+        }
+
+        function ensureToolbarState(card, textarea) {
+            const boldBtn = card.querySelector('[data-format="bold"]');
+            const italicBtn = card.querySelector('[data-format="italic"]');
+            const h1Btn = card.querySelector('[data-format="h1"]');
+            const h2Btn = card.querySelector('[data-format="h2"]');
+            const h3Btn = card.querySelector('[data-format="h3"]');
+            const ulBtn = card.querySelector('[data-format="ul"]');
+            const olBtn = card.querySelector('[data-format="ol"]');
+            const linkBtn = card.querySelector('[data-format="link"]');
+            const hrBtn = card.querySelector('[data-format="hr"]');
+            [boldBtn, italicBtn, h1Btn, h2Btn, h3Btn, ulBtn, olBtn, linkBtn, hrBtn].forEach(btn => btn && btn.classList.remove('active'));
+            if (!textarea) return;
+            if (textarea.selectionStart !== textarea.selectionEnd) {
+                if (boldBtn) boldBtn.classList.add('active');
+                if (italicBtn) italicBtn.classList.add('active');
+            }
+        }
+
+        function insertAroundSelection(textarea, before, after, placeholder = '') {
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const selected = textarea.value.substring(start, end) || placeholder;
+            textarea.setRangeText(`${before}${selected}${after}`, start, end, 'end');
+            textarea.dispatchEvent(new Event('input', { bubbles: true }));
+            textarea.focus();
+        }
+
+        function insertLinePrefix(textarea, prefix) {
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const value = textarea.value;
+            const before = value.slice(0, start);
+            const selected = value.slice(start, end);
+            const after = value.slice(end);
+            const replacement = selected.split('\n').map(line => line ? `${prefix}${line}` : line).join('\n');
+            textarea.value = before + replacement + after;
+            textarea.dispatchEvent(new Event('input', { bubbles: true }));
+            textarea.focus();
+        }
+
+        function insertDivider(textarea) {
+            const start = textarea.selectionStart;
+            textarea.setRangeText('\n---\n', start, textarea.selectionEnd, 'end');
+            textarea.dispatchEvent(new Event('input', { bubbles: true }));
+            textarea.focus();
+        }
+
+        function insertLink(textarea) {
+            const url = prompt('Enter link URL (https://...)');
+            if (!url) return;
+            const label = textarea.value.substring(textarea.selectionStart, textarea.selectionEnd) || 'link text';
+            insertAroundSelection(textarea, '[', `](${url})`, label);
+        }
+
         function renderBlocks() {
             const container = document.getElementById('blocks-container');
             const noMsg = document.getElementById('no-blocks-msg');
@@ -643,27 +769,37 @@ Reading level: [GRADE LEVEL]</p>
                 card.dataset.blockId = block.id;
 
                 let innerHTML = '';
-
-                // Header
                 const typeLabel = block.type === 'text' ? '📝 Text' : block.type === 'image' ? '🖼️ Image' : '❓ Question';
                 innerHTML += `
                 <div class="flex justify-between items-center mb-3">
                     <span class="text-sm font-bold text-gray-400">${typeLabel}</span>
                     <div class="flex gap-2">
-                        <button onclick="moveBlock('${block.id}', 'up')" ${idx === 0 ? 'disabled' : ''} class="text-gray-400 hover:text-white disabled:opacity-30 px-2 py-1 rounded text-lg" title="Move up">↑</button>
-                        <button onclick="moveBlock('${block.id}', 'down')" ${idx === blocks.length - 1 ? 'disabled' : ''} class="text-gray-400 hover:text-white disabled:opacity-30 px-2 py-1 rounded text-lg" title="Move down">↓</button>
+                        <button onclick="moveBlock('${block.id}', 'up')" ${idx === 0 ? 'disabled' : ''} class="text-gray-400 hover:text-white disabled:opacity-30 px-2 py-1 rounded text-lg" title="Move Up">▲</button>
+                        <button onclick="moveBlock('${block.id}', 'down')" ${idx === blocks.length - 1 ? 'disabled' : ''} class="text-gray-400 hover:text-white disabled:opacity-30 px-2 py-1 rounded text-lg" title="Move Down">▼</button>
                         <button onclick="deleteBlock('${block.id}')" class="text-red-400 hover:text-red-300 font-bold px-2 py-1 rounded text-sm" title="Delete">🗑</button>
                     </div>
                 </div>`;
 
                 if (block.type === 'text') {
-                    innerHTML += `<div class="flex gap-2 mb-2">
-                        <button type="button" onclick="insertTextFormat('${block.id}', '**', '**')" class="bg-gray-600 hover:bg-gray-500 text-white text-xs font-bold px-2 py-1 rounded" title="Bold"><strong>B</strong></button>
-                        <button type="button" onclick="insertTextFormat('${block.id}', '*', '*')" class="bg-gray-600 hover:bg-gray-500 text-white text-xs italic px-2 py-1 rounded" title="Italic"><em>I</em></button>
-                    </div>
-                    <textarea oninput="updateBlockField('${block.id}', 'content', this.value)"
-                        rows="6" placeholder="Enter text content here... Use **bold** or *italic* for formatting."
-                        class="w-full p-3 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500 text-sm leading-relaxed" style="resize:vertical;">${escapeHtml(block.content || '')}</textarea>`;
+                    const textFormat = block.textFormat || 'markdown';
+                    innerHTML += `<div class="space-y-2">
+                        <div class="richtext-toolbar flex flex-wrap gap-2 items-center bg-gray-900/60 border border-gray-700 rounded-lg p-2">
+                            <button type="button" data-format="bold" onclick="insertAroundSelection(this.closest('[data-block-id]').querySelector('textarea'), '**', '**', 'bold text')" class="bg-gray-600 hover:bg-gray-500 text-white text-xs font-bold px-2 py-1 rounded" title="Bold"><strong>B</strong></button>
+                            <button type="button" data-format="italic" onclick="insertAroundSelection(this.closest('[data-block-id]').querySelector('textarea'), '*', '*', 'italic text')" class="bg-gray-600 hover:bg-gray-500 text-white text-xs italic px-2 py-1 rounded" title="Italic"><em>I</em></button>
+                            <button type="button" data-format="h1" onclick="insertLinePrefix(this.closest('[data-block-id]').querySelector('textarea'), '# ')" class="bg-gray-600 hover:bg-gray-500 text-white text-xs px-2 py-1 rounded" title="Heading 1">H1</button>
+                            <button type="button" data-format="h2" onclick="insertLinePrefix(this.closest('[data-block-id]').querySelector('textarea'), '## ')" class="bg-gray-600 hover:bg-gray-500 text-white text-xs px-2 py-1 rounded" title="Heading 2">H2</button>
+                            <button type="button" data-format="h3" onclick="insertLinePrefix(this.closest('[data-block-id]').querySelector('textarea'), '### ')" class="bg-gray-600 hover:bg-gray-500 text-white text-xs px-2 py-1 rounded" title="Heading 3">H3</button>
+                            <button type="button" data-format="ul" onclick="insertLinePrefix(this.closest('[data-block-id]').querySelector('textarea'), '- ')" class="bg-gray-600 hover:bg-gray-500 text-white text-xs px-2 py-1 rounded" title="Bulleted list">• List</button>
+                            <button type="button" data-format="ol" onclick="insertLinePrefix(this.closest('[data-block-id]').querySelector('textarea'), '1. ')" class="bg-gray-600 hover:bg-gray-500 text-white text-xs px-2 py-1 rounded" title="Numbered list">1.</button>
+                            <button type="button" data-format="link" onclick="insertLink(this.closest('[data-block-id]').querySelector('textarea'))" class="bg-gray-600 hover:bg-gray-500 text-white text-xs px-2 py-1 rounded" title="Link">🔗</button>
+                            <button type="button" data-format="hr" onclick="insertDivider(this.closest('[data-block-id]').querySelector('textarea'))" class="bg-gray-600 hover:bg-gray-500 text-white text-xs px-2 py-1 rounded" title="Divider">—</button>
+                        </div>
+                        <div class="text-xs text-gray-500">Use blank lines between paragraphs. Headings, lists, links, and dividers are supported.</div>
+                        <textarea oninput="updateBlockField('${block.id}', 'content', this.value); updateTextPreview(this.closest('[data-block-id]'), this.value, '${textFormat}')"
+                            rows="8" placeholder="Enter text content here... Use **bold**, *italic*, headings, lists, links, and --- for dividers."
+                            class="w-full p-3 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500 text-sm leading-relaxed whitespace-pre-wrap" style="resize:vertical;">${escapeHtml(block.content || '')}</textarea>
+                        <div class="richtext-preview prose prose-invert max-w-none bg-gray-900/50 border border-gray-700 rounded-lg p-3 text-sm"></div>
+                    </div>`;
                 } else if (block.type === 'image') {
                     const previewHtml = block.url ? `<img src="${escapeHtml(block.url)}" alt="preview" class="mt-2 max-h-32 rounded border border-gray-600 object-contain">` : '';
                     innerHTML += `
@@ -686,7 +822,14 @@ Reading level: [GRADE LEVEL]</p>
                 card.innerHTML = innerHTML;
                 container.appendChild(card);
 
-                // Wire up question type change after DOM insertion
+                if (block.type === 'text') {
+                    const ta = card.querySelector('textarea');
+                    updateTextPreview(card, block.content || '', block.textFormat || 'markdown');
+                    ta?.addEventListener('keyup', () => ensureToolbarState(card, ta));
+                    ta?.addEventListener('mouseup', () => ensureToolbarState(card, ta));
+                    ta?.addEventListener('input', () => updateTextPreview(card, ta.value, block.textFormat || 'markdown'));
+                }
+
                 if (block.type === 'question') {
                     const qTypeSelect = card.querySelector(`#qtype-${block.id}`);
                     if (qTypeSelect) {
@@ -765,7 +908,6 @@ Reading level: [GRADE LEVEL]</p>
                     <button onclick="removeChoice('${block.id}')" class="text-xs bg-gray-600 hover:bg-gray-500 px-2 py-1 rounded">- Remove Last</button>
                 </div></div>`;
             } else {
-                // Inline checker field
                 const ic = block.inlineChecker;
                 const icStr = ic ? serializeInlineChecker(ic) : '';
                 html += `<div>
@@ -776,7 +918,7 @@ Reading level: [GRADE LEVEL]</p>
                             class="flex-1 p-2 bg-gray-700 border border-gray-600 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                         <button onclick="applyInlineChecker('${block.id}')" class="bg-blue-700 hover:bg-blue-600 text-white text-xs px-3 py-1 rounded">Apply</button>
                     </div>
-                    ${ic ? `<p class="text-xs text-green-400 mt-1">✓ Inline checker active: ${escapeHtml(serializeInlineChecker(ic))} — <button onclick="clearInlineChecker('${block.id}')" class="text-yellow-400 hover:underline">Clear &amp; use Checker Widget</button></p>` : `<p class="text-xs text-gray-500 mt-1">No inline checker — configure in the Checker section below or enter a quick checker above.</p>`}
+                    ${ic ? `<p class="text-xs text-green-400 mt-1">✓ Inline checker active: ${escapeHtml(serializeInlineChecker(ic))} — <button onclick="clearInlineChecker('${block.id}')" class="underline">clear</button></p>` : ''}
                 </div>`;
             }
 
@@ -870,22 +1012,15 @@ Reading level: [GRADE LEVEL]</p>
             updateCheckerSection();
         }
 
-        // ---- Checker Section ----
         function updateCheckerSection() {
             const section = document.getElementById('checker-section');
             const select = document.getElementById('checker-question-select');
-
-            // Get questions that use CheckerWidget (non-choice, inlineChecker === null)
             const checkerQuestions = blocks.filter(b => b.type === 'question' && b.questionType !== 'choice' && !b.inlineChecker);
-
             if (checkerQuestions.length === 0) {
                 section.classList.add('hidden');
                 return;
             }
-
             section.classList.remove('hidden');
-
-            // Rebuild select options
             const currentVal = select.value;
             select.innerHTML = '<option value="">— choose a question —</option>';
             checkerQuestions.forEach(q => {
@@ -894,12 +1029,9 @@ Reading level: [GRADE LEVEL]</p>
                 opt.textContent = (q.prompt || `(no prompt)`).slice(0, 60);
                 select.appendChild(opt);
             });
-
-            // Restore selection if still valid
             if (currentVal && checkerQuestions.some(q => q.id === currentVal)) {
                 select.value = currentVal;
             } else if (activeCheckerBlockId && !checkerQuestions.some(q => q.id === activeCheckerBlockId)) {
-                // Active block was removed or changed type — clear
                 activeCheckerBlockId = null;
                 activeCheckerWidget = null;
                 document.getElementById('checker-widget-container').innerHTML = '';
@@ -914,35 +1046,26 @@ Reading level: [GRADE LEVEL]</p>
             container.innerHTML = '';
             activeCheckerWidget = null;
             activeCheckerBlockId = null;
-
             if (!blockId) return;
-
             const block = blocks.find(b => b.id === blockId);
             if (!block) return;
-
             activeCheckerBlockId = blockId;
-
             const template = document.getElementById('checkerTemplate');
             const fragment = template.content.cloneNode(true);
             const widgetDiv = fragment.querySelector('.checker-widget');
-
             const existing = checkerFunctions[blockId];
             const initialCode = existing ? (typeof existing === 'object' ? existing.code || '' : existing) : '';
             const initialMeta = existing && typeof existing === 'object' ? existing : null;
-
             CheckerWidget(widgetDiv, initialCode, initialMeta);
             container.appendChild(widgetDiv);
             activeCheckerWidget = container.querySelector('.checker-widget');
         }
 
-        // ---- Save ----
         async function saveAssignment() {
             const saveBtn = document.getElementById('saveBtn');
             saveBtn.disabled = true;
             saveBtn.textContent = 'Saving...';
-
             try {
-                // If in canvas mode, parse first
                 let blocksToSave = blocks;
                 if (currentMode === 'canvas') {
                     const markup = document.getElementById('canvas-textarea').value;
@@ -953,27 +1076,19 @@ Reading level: [GRADE LEVEL]</p>
                         showWarnings(result.warnings);
                     }
                 }
-
                 const name = document.getElementById('assignmentNameInput').value.trim() || assignmentData.name;
-
-                // Build checkerFunctions
                 const newCheckerFunctions = {};
-
                 blocksToSave.forEach(block => {
                     if (block.type !== 'question') return;
-
                     if (block.questionType === 'choice') {
-                        // Auto-generate checker for multiple choice
                         const correctIdx = Number.isInteger(block.correctChoiceIndex) ? block.correctChoiceIndex : 0;
                         const pts = Number.isFinite(block.points) && block.points > 0 ? block.points : 100;
                         const code = `function checkAnswer(studentAnswer) {\n    return parseInt(studentAnswer, 10) === ${correctIdx} ? ${pts} : 0;\n}`;
                         newCheckerFunctions[block.id] = { code, mode: 'auto' };
                     } else if (block.inlineChecker) {
-                        // Auto-generate checker from inline config
                         const code = generateInlineCheckerCode(block.inlineChecker);
                         newCheckerFunctions[block.id] = { code, mode: 'auto' };
                     } else {
-                        // CheckerWidget question
                         if (activeCheckerBlockId === block.id && activeCheckerWidget) {
                             const mode = activeCheckerWidget.getMode();
                             const code = activeCheckerWidget.getCode();
@@ -981,118 +1096,81 @@ Reading level: [GRADE LEVEL]</p>
                             if (mode === 'simple') {
                                 try {
                                     entry.simpleConfig = serializeSimpleConfig(activeCheckerWidget);
-                                } catch (e) { /* ignore */ }
+                                } catch (e) { }
                             }
                             newCheckerFunctions[block.id] = entry;
                         } else if (checkerFunctions[block.id]) {
-                            // Preserve existing checker for this block
                             newCheckerFunctions[block.id] = checkerFunctions[block.id];
                         }
                     }
                 });
 
-                // Orphan cleanup: drop checker entries for removed blocks
-                Object.keys(checkerFunctions).forEach(id => {
-                    if (!blocksToSave.some(b => b.id === id)) {
-                        // Orphan — don't include in newCheckerFunctions
-                    }
-                });
-
-                checkerFunctions = newCheckerFunctions;
-
-                const updateData = {
+                await db.collection('assignments').doc(assignmentId).update({
                     name,
                     blocks: blocksToSave,
                     checkerFunctions: newCheckerFunctions,
                     lastEditorMode: currentMode
-                };
+                });
 
-                await db.collection("assignments").doc(assignmentId).update(updateData);
-                showToast("Assignment saved!", { color: 'green' });
-
-                // Update local state
-                assignmentData = { ...assignmentData, ...updateData };
-
-                if (currentMode === 'structured') {
-                    renderBlocks();
-                }
-
+                assignmentData.name = name;
+                assignmentData.blocks = blocksToSave;
+                assignmentData.checkerFunctions = newCheckerFunctions;
+                document.getElementById('editorAssignmentTitle').textContent = name || 'Untitled Assignment';
+                showToast('Assignment saved!', { color: 'green' });
             } catch (error) {
-                console.error("Error saving assignment:", error);
-                showToast(`Error saving: ${error.message}`, { color: 'red' });
+                console.error(error);
+                showToast('Error saving assignment.', { color: 'red' });
             } finally {
                 saveBtn.disabled = false;
                 saveBtn.textContent = 'Save';
             }
         }
 
-        function generateInlineCheckerCode(ic) {
-            const pts = Number.isFinite(ic.points) && ic.points > 0 ? ic.points : 100;
-            const val = Number.isFinite(Number(ic.value)) ? Number(ic.value) : 0;
-            const val2 = Number.isFinite(Number(ic.value2)) ? Number(ic.value2) : 0;
-            const tol = Number.isFinite(Number(ic.tolerance)) ? Number(ic.tolerance) : 0;
-            switch (ic.op) {
-                case '==':
-                    if (tol > 0) {
-                        return `function checkAnswer(studentAnswer) {\n    const n = parseFloat(studentAnswer);\n    return Math.abs(n - ${val}) <= ${tol} ? ${pts} : 0;\n}`;
-                    }
-                    return `function checkAnswer(studentAnswer) {\n    const n = parseFloat(studentAnswer);\n    return n === ${val} ? ${pts} : 0;\n}`;
-                case '!=':
-                    return `function checkAnswer(studentAnswer) {\n    const n = parseFloat(studentAnswer);\n    return n !== ${val} ? ${pts} : 0;\n}`;
-                case '>':
-                    return `function checkAnswer(studentAnswer) {\n    const n = parseFloat(studentAnswer);\n    return n > ${val} ? ${pts} : 0;\n}`;
-                case '<':
-                    return `function checkAnswer(studentAnswer) {\n    const n = parseFloat(studentAnswer);\n    return n < ${val} ? ${pts} : 0;\n}`;
-                case 'between': {
-                    const lo = Math.min(val, val2), hi = Math.max(val, val2);
-                    return `function checkAnswer(studentAnswer) {\n    const n = parseFloat(studentAnswer);\n    return (n >= ${lo} && n <= ${hi}) ? ${pts} : 0;\n}`;
-                }
-                case 'contains':
-                    return `function checkAnswer(studentAnswer) {\n    return String(studentAnswer).toLowerCase().includes(${JSON.stringify(String(ic.value).toLowerCase())}) ? ${pts} : 0;\n}`;
-                case 'not_contains':
-                    return `function checkAnswer(studentAnswer) {\n    return !String(studentAnswer).toLowerCase().includes(${JSON.stringify(String(ic.value).toLowerCase())}) ? ${pts} : 0;\n}`;
-                default:
-                    return `function checkAnswer(studentAnswer) { return 0; }`;
-            }
-        }
-
-        // ---- Helpers ----
         function copyShareLink() {
             const input = document.getElementById('shareLink');
-            navigator.clipboard.writeText(input.value).then(() => showToast("Link copied!")).catch(() => {
-                input.select(); document.execCommand('copy'); showToast("Link copied!");
-            });
+            input.select();
+            document.execCommand('copy');
+            showToast('Share link copied!', { color: 'green' });
+        }
+
+        function toggleHelp() {
+            document.getElementById('help-drawer').classList.toggle('open');
+            document.getElementById('help-overlay').classList.toggle('hidden');
         }
 
         function copyTemplate(id) {
-            const el = document.getElementById(id);
-            if (!el) return;
-            navigator.clipboard.writeText(el.textContent.trim()).then(() => showToast("Template copied!")).catch(() => showToast("Copy failed.", { color: 'red' }));
-        }
-
-        let helpOpen = false;
-        function toggleHelp() {
-            helpOpen = !helpOpen;
-            document.getElementById('help-drawer').classList.toggle('open', helpOpen);
-            document.getElementById('help-overlay').classList.toggle('hidden', !helpOpen);
+            const text = document.getElementById(id).innerText;
+            navigator.clipboard.writeText(text).then(() => showToast('Template copied!', { color: 'green' }));
         }
 
         function showToast(message, options = {}) {
-            const wrapper = document.getElementById('toast-wrapper');
             const toast = document.createElement('div');
-            const color = options.color || 'blue';
-            const colors = { blue: 'bg-blue-600', green: 'bg-green-600', red: 'bg-red-600', yellow: 'bg-yellow-600' };
-            toast.className = `${colors[color] || colors.blue} text-white px-4 py-2 rounded shadow-lg flex items-center justify-between gap-3 animate-fade-in-right max-w-sm`;
-            toast.innerHTML = `<span class="text-sm">${escapeHtml(message)}</span><button class="text-white text-lg font-bold leading-none hover:text-gray-300">&times;</button>`;
-            toast.querySelector('button').onclick = () => toast.remove();
-            wrapper.appendChild(toast);
-            setTimeout(() => {
-                if (toast.parentNode) {
-                    toast.classList.add('animate-fade-out-right');
-                    setTimeout(() => toast.remove(), 350);
-                }
-            }, options.duration || 4000);
+            toast.className = 'bg-gray-800 border border-gray-700 px-4 py-3 rounded-lg shadow-lg text-sm animate-fade-in-right';
+            if (options.color === 'green') toast.classList.add('border-green-600');
+            if (options.color === 'red') toast.classList.add('border-red-600');
+            if (options.color === 'yellow') toast.classList.add('border-yellow-600');
+            toast.textContent = message;
+            document.getElementById('toast-wrapper').appendChild(toast);
+            setTimeout(() => toast.remove(), options.duration || 3000);
         }
+
+        function serializeInlineChecker(ic) {
+            if (!ic) return '';
+            if (ic.op === '==') return `answer==${ic.value}${ic.tolerance ? ` ±${ic.tolerance}` : ''}`;
+            if (ic.op === '!=') return `answer!=${ic.value}`;
+            if (ic.op === '>') return `answer>${ic.value}`;
+            if (ic.op === '<') return `answer<${ic.value}`;
+            if (ic.op === 'between') return `between ${ic.value} and ${ic.value2}`;
+            if (ic.op === 'contains') return `contains "${ic.value}"`;
+            if (ic.op === 'not_contains') return `not_contains "${ic.value}"`;
+            return '';
+        }
+
+        function generateInlineCheckerCode(ic) {
+            return `function checkAnswer(studentAnswer) {\n    const answer = String(studentAnswer ?? '').trim();\n    ${ic.op === 'contains' ? `return answer.includes(${JSON.stringify(ic.value)}) ? ${ic.points || 100} : 0;` : ''}\n    ${ic.op === 'not_contains' ? `return !answer.includes(${JSON.stringify(ic.value)}) ? ${ic.points || 100} : 0;` : ''}\n    ${ic.op === '==' ? `return Math.abs(Number(answer) - ${ic.value}) <= ${(ic.tolerance || 0)} ? ${ic.points || 100} : 0;` : ''}\n    ${ic.op === '!=' ? `return Number(answer) !== ${ic.value} ? ${ic.points || 100} : 0;` : ''}\n    ${ic.op === '>' ? `return Number(answer) > ${ic.value} ? ${ic.points || 100} : 0;` : ''}\n    ${ic.op === '<' ? `return Number(answer) < ${ic.value} ? ${ic.points || 100} : 0;` : ''}\n    ${ic.op === 'between' ? `return Number(answer) >= ${ic.value} && Number(answer) <= ${ic.value2} ? ${ic.points || 100} : 0;` : ''}\n}`;
+        }
+
+        function serializeSimpleConfig(widget) { return widget.serializeConfig ? widget.serializeConfig() : null; }
     </script>
 </body>
 </html>
