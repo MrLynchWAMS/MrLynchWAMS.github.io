@@ -11,6 +11,9 @@
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
     <style>
         .hidden { display: none; }
         textarea { resize: vertical; }
@@ -168,16 +171,17 @@
                     </tr>
                 </thead>
                 <tbody class="space-y-1">
-                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: text]</td><td class="py-1">Open text question</td></tr>
-                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: number | answer==36 | 100pts]</td><td class="py-1">Number, exact answer</td></tr>
-                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: number | answer between 30 and 40 | 100pts]</td><td class="py-1">Number, range</td></tr>
-                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: text | contains &quot;keyword&quot; | 100pts]</td><td class="py-1">Text must contain word</td></tr>
-                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: choice | A. opt, B. opt, C. correct*, D. opt | 100pts]</td><td class="py-1">Multiple choice</td></tr>
-                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300 whitespace-pre">## Question prompt&#10;[q: ...]</td><td class="py-1">Question heading on one line, tag on next</td></tr>
-                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">![alt](url)</td><td class="py-1">Image block</td></tr>
-                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">![alt](url &quot;caption&quot;)</td><td class="py-1">Image with caption</td></tr>
+                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300"># Title / ## Heading</td><td class="py-1">Section headings</td></tr>
+                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">**bold** *italic*</td><td class="py-1">Rich text</td></tr>
+                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[link](https://...)</td><td class="py-1">Clickable links</td></tr>
+                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">- List / 1. List</td><td class="py-1">Bulleted or numbered lists</td></tr>
+                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">$$a^2 + b^2 = c^2$$</td><td class="py-1">Math (LaTeX)</td></tr>
+                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">| Col 1 | Col 2 |</td><td class="py-1">Tables (simple pipes)</td></tr>
                     <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">---</td><td class="py-1">Horizontal divider</td></tr>
-                    <tr><td class="py-1 pr-4 font-mono text-yellow-300">**bold** *italic*</td><td class="py-1">Formatting in text blocks</td></tr>
+                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">![alt](url)</td><td class="py-1">Image block</td></tr>
+                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: text]</td><td class="py-1">Open text question</td></tr>
+                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: choice | A. opt, B. correct* | 100pts]</td><td class="py-1">Multiple choice</td></tr>
+                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: number | answer==5 ±0.1 | 100pts]</td><td class="py-1">Number with tolerance</td></tr>
                 </tbody>
             </table>
         </div>
@@ -192,28 +196,30 @@
                         <span class="text-sm font-semibold text-yellow-300">General Mixed Assignment</span>
                         <button onclick="copyTemplate('tpl-general')" class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded">Copy</button>
                     </div>
-                    <p id="tpl-general" class="text-xs text-gray-300 whitespace-pre-wrap">Create a science assignment with mixed question types using ONLY the following markup format. Output only valid markup with NO preamble, NO explanations, and NO code fences.
+                    <p id="tpl-general" class="text-xs text-gray-300 whitespace-pre-wrap">Create a science assignment using ONLY the following markup. Output raw markup with NO preamble and NO code fences.
 
-Rules:
-- Text blocks: write plain text paragraphs
-- Images: ![alt](url) or ![alt](url &quot;caption&quot;)
-- Open text questions:
-  ## Prompt
-  [q: text]
-- Number questions:
-  ## Prompt
-  [q: number | answer==VALUE | 100pts]
-- Range questions:
-  ## Prompt
-  [q: number | answer between MIN and MAX | 100pts]
-- Multiple choice:
-  ## Prompt
-  [q: choice | A. opt, B. opt, C. correct*, D. opt | 100pts]
-- Text contains:
-  ## Prompt
-  [q: text | contains &quot;keyword&quot; | 100pts]
-- The ## line is the question prompt; the [q: ...] line MUST immediately follow it
-- Separate questions with blank lines
+FORMAT RULES:
+1. TEXT BLOCKS: Use standard Markdown:
+   - # Title, ## Heading, ### Subheading
+   - **bold**, *italic*, [link](url)
+   - Bulleted (- ) or Numbered (1. ) lists
+   - Horizontal dividers: ---
+   - MATH: Use LaTeX between $$ for blocks or $ for inline. Example: $$\frac{1}{2}$$
+   - TABLES: Use pipe format: | Col 1 | Col 2 |
+
+2. IMAGES: ![alt](url) or ![alt](url "caption")
+
+3. QUESTIONS: Must follow a two-line pattern:
+   ## Question text here
+   [q: type | config | points]
+
+   Types:
+   - [q: text] (Open text)
+   - [q: choice | A. opt, B. correct*, C. opt | 100pts] (Mark correct with *)
+   - [q: number | answer==VALUE | 100pts] (Operators: ==, !=, >, <, between MIN and MAX)
+   - [q: text | contains "word" | 100pts]
+
+Separate sections with blank lines. 
 
 Topic: [YOUR TOPIC HERE]</p>
                 </div>
@@ -240,21 +246,17 @@ Number of questions: [N]</p>
                         <span class="text-sm font-semibold text-yellow-300">Reading Passage + Comprehension</span>
                         <button onclick="copyTemplate('tpl-reading')" class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded">Copy</button>
                     </div>
-                    <p id="tpl-reading" class="text-xs text-gray-300 whitespace-pre-wrap">Create a reading passage followed by comprehension questions using ONLY the following markup format. Output only valid markup with NO preamble, NO explanations, and NO code fences.
+                    <p id="tpl-reading" class="text-xs text-gray-300 whitespace-pre-wrap">Create a reading passage and comprehension questions using ONLY the following markup. Output raw markup with NO preamble and NO code fences.
 
-- Start with a text block containing the reading passage (plain paragraphs)
-- Follow with comprehension questions
-- Text questions:
-  ## Prompt
-  [q: text]
-- Number questions (e.g. dates, quantities):
-  ## Prompt
-  [q: number | answer==VALUE | 100pts]
-- Multiple choice:
-  ## Prompt
-  [q: choice | A. opt, B. opt, C. correct*, D. opt | 100pts]
-- The ## line is the question prompt; the [q: ...] line MUST immediately follow it
-- Separate questions with blank lines
+1. START with the reading passage. Use ## for a title, and standard Markdown (bold, lists, math) as needed.
+2. FOLLOW with questions using the two-line format:
+   ## Question Prompt
+   [q: type | config | points]
+
+3. TYPES:
+   - [q: text] for analysis
+   - [q: choice | A. opt, B. correct* | 100pts] for comprehension
+   - [q: number | answer==X | 100pts] for data
 
 Topic: [YOUR TOPIC HERE]
 Reading level: [GRADE LEVEL]</p>
@@ -638,8 +640,39 @@ Reading level: [GRADE LEVEL]</p>
                     listType = null;
                 }
             };
+            const closeTable = () => {
+                if (inTable) {
+                    let html = '<div class="overflow-x-auto my-4"><table class="w-full text-sm text-left border-collapse border border-gray-700">';
+                    tableRows.forEach((row, i) => {
+                        const isHeader = i === 0;
+                        const tag = isHeader ? 'th' : 'td';
+                        const bg = isHeader ? 'bg-gray-900/50' : '';
+                        html += `<tr class="${bg}">`;
+                        row.forEach(cell => {
+                            html += `<${tag} class="border border-gray-700 p-2">${cell}</${tag}>`;
+                        });
+                        html += '</tr>';
+                    });
+                    html += '</table></div>';
+                    out.push(html);
+                    inTable = false;
+                    tableRows = [];
+                }
+            };
             lines.forEach(line => {
                 const trimmed = line.trim();
+
+                // Table check
+                if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+                    closeList();
+                    const cells = trimmed.split('|').slice(1, -1).map(c => c.trim());
+                    if (cells.every(c => /^:?-+:?$/.test(c))) return;
+                    if (!inTable) inTable = true;
+                    tableRows.push(cells);
+                    return;
+                }
+                closeTable();
+
                 if (!trimmed) {
                     closeList();
                     out.push('<p></p>');
@@ -675,6 +708,7 @@ Reading level: [GRADE LEVEL]</p>
                 out.push(`<p>${trimmed}</p>`);
             });
             closeList();
+            closeTable();
             return out.join('\n');
         }
 
@@ -694,7 +728,22 @@ Reading level: [GRADE LEVEL]</p>
 
         function updateTextPreview(card, text, format) {
             const preview = card.querySelector('.richtext-preview');
-            if (preview) preview.innerHTML = renderTextPreview(text, format);
+            if (preview) {
+                preview.innerHTML = renderTextPreview(text, format);
+                renderMathContent(preview);
+            }
+        }
+
+        function renderMathContent(element) {
+            if (window.renderMathInElement) {
+                renderMathInElement(element, {
+                    delimiters: [
+                        { left: '$$', right: '$$', display: true },
+                        { left: '$', right: '$', display: false }
+                    ],
+                    throwOnError: false
+                });
+            }
         }
 
         function ensureToolbarState(card, textarea) {
