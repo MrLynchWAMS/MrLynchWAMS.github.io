@@ -155,6 +155,11 @@
                         <span>Simulation</span>
                     </label>
                     <label class="flex items-center cursor-pointer">
+                        <input type="radio" name="assignmentType" value="blank" onchange="toggleCreateFields()"
+                            class="mr-2">
+                        <span>Blank (Self-Contained)</span>
+                    </label>
+                    <label class="flex items-center cursor-pointer">
                         <input type="radio" name="assignmentType" value="lesson" onchange="toggleCreateFields()"
                             class="mr-2">
                         <span>Multimodal Lesson</span>
@@ -195,6 +200,9 @@
                 </div>
                 <div id="lessonFields" class="hidden">
                     <p class="text-sm text-gray-400 mb-4">You will build your lesson and link sections in the next step.</p>
+                </div>
+                <div id="blankFields" class="hidden">
+                    <p class="text-sm text-gray-400 mb-4">Build your assignment content directly in the editor — no external source needed.</p>
                 </div>
                 <div class="flex items-center mb-4">
                     <input type="checkbox" id="isPublicCheckbox" class="mr-2 w-4 h-4">
@@ -522,7 +530,7 @@
                 statusHTML += '</div>';
 
                 const escapedName = escapeHtml(assignment.name);
-                const editUrl = assignment.type === 'pdf' ? `pdf-editor.html?id=${assignment.id}` : assignment.type === 'video' ? `video-editor.html?id=${assignment.id}` : assignment.type === 'simulation' ? `sim-editor.html?id=${assignment.id}` : assignment.type === 'lesson' ? `lesson-editor.html?id=${assignment.id}` : `editor.html?id=${assignment.id}`;
+                const editUrl = assignment.type === 'pdf' ? `pdf-editor.html?id=${assignment.id}` : assignment.type === 'video' ? `video-editor.html?id=${assignment.id}` : assignment.type === 'simulation' ? `sim-editor.html?id=${assignment.id}` : assignment.type === 'lesson' ? `lesson-editor.html?id=${assignment.id}` : assignment.type === 'blank' ? `blank-editor.html?id=${assignment.id}` : `editor.html?id=${assignment.id}`;
 
                 card.innerHTML = `
                 <div>
@@ -567,6 +575,7 @@
             document.getElementById('videoFields').classList.toggle('hidden', type !== 'video');
             document.getElementById('simulationFields').classList.toggle('hidden', type !== 'simulation');
             document.getElementById('lessonFields').classList.toggle('hidden', type !== 'lesson');
+            document.getElementById('blankFields').classList.toggle('hidden', type !== 'blank');
         }
 
         function closeCreateModal() {
@@ -693,6 +702,10 @@
                 } else if (type === 'lesson') {
                     docData.sections = [];
                     docData.sectionStatus = {};
+                } else if (type === 'blank') {
+                    docData.blocks = [];
+                    docData.checkerFunctions = {};
+                    docData.lastEditorMode = 'structured';
                 } else {
                     docData.checkerCode = {};
                     docData.checkerMeta = {};
@@ -701,7 +714,7 @@
                 const newDoc = await db.collection("assignments").add(docData);
                 showToast("Assignment created!", { color: 'green' });
                 closeCreateModal();
-                const editorPage = type === 'pdf' ? 'pdf-editor.html' : type === 'video' ? 'video-editor.html' : type === 'simulation' ? 'sim-editor.html' : type === 'lesson' ? 'lesson-editor.html' : 'editor.html';
+                const editorPage = type === 'pdf' ? 'pdf-editor.html' : type === 'video' ? 'video-editor.html' : type === 'simulation' ? 'sim-editor.html' : type === 'lesson' ? 'lesson-editor.html' : type === 'blank' ? 'blank-editor.html' : 'editor.html';
                 window.location.href = `./${editorPage}?id=${newDoc.id}`;
             } catch (error) {
                 console.error("Error creating assignment:", error);
@@ -907,6 +920,10 @@
                     shareData.pdfUrl = source.pdfUrl || "";
                     shareData.questionZones = source.questionZones || [];
                     shareData.annotations = source.annotations || [];
+                } else if (source.type === 'blank') {
+                    shareData.blocks = source.blocks || [];
+                    shareData.checkerFunctions = source.checkerFunctions || {};
+                    shareData.lastEditorMode = source.lastEditorMode || 'structured';
                 } else {
                     // Slides
                     shareData.presentationId = source.presentationId || "";
