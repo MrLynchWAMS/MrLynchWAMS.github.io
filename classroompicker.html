@@ -394,6 +394,24 @@
         .disable-seeking .video-skip-overlay {
             display: block;
         }
+
+        /* --- Blank Assignment Text Block Rendering --- */
+        .blank-text-content h1, .blank-text-content h2, .blank-text-content h3 {
+            color: #fbbf24;
+            font-weight: 700;
+            margin: 0.9rem 0 0.35rem;
+            line-height: 1.2;
+        }
+        .blank-text-content h1 { font-size: 1.5rem; }
+        .blank-text-content h2 { font-size: 1.25rem; }
+        .blank-text-content h3 { font-size: 1.1rem; }
+        .blank-text-content p { margin: 0.4rem 0; }
+        .blank-text-content ul, .blank-text-content ol { margin: 0.5rem 0 0.5rem 1.25rem; padding-left: 1rem; }
+        .blank-text-content ul { list-style: disc; }
+        .blank-text-content ol { list-style: decimal; }
+        .blank-text-content li { margin: 0.2rem 0; }
+        .blank-text-content a { color: #60a5fa; text-decoration: underline; }
+        .blank-text-content hr { border-color: #4b5563; margin: 1rem 0; }
     </style>
 </head>
 
@@ -602,6 +620,7 @@
 
             <!-- Blank Assignment Student UI -->
             <div id="blank-student-content" class="hidden">
+                <h1 id="blank-assignment-title" class="text-3xl font-bold text-yellow-400 text-center mb-6 max-w-3xl mx-auto"></h1>
                 <div id="blank-student-blocks" class="space-y-6 max-w-3xl mx-auto pb-12"></div>
                 <div class="max-w-3xl mx-auto mt-6 flex gap-4">
                     <button onclick="showSummary()"
@@ -3312,6 +3331,9 @@
             const blocks = assignmentData.blocks || [];
             const questionBlocks = blocks.filter(b => b.type === 'question');
 
+            const titleEl = document.getElementById('blank-assignment-title');
+            if (titleEl) titleEl.textContent = assignmentData.name || '';
+
             // Ensure slideStates array is large enough without overwriting restored entries
             if (slideStates.length < questionBlocks.length) {
                 const extended = new Array(questionBlocks.length).fill(null);
@@ -3324,15 +3346,67 @@
 
         function renderTextBlockContent(content) {
             if (!content) return '';
-            let html = String(content)
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;');
-            html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-            html = html.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
-            html = html.replace(/\n/g, '<br>');
-            return html;
+
+            function formatInline(text) {
+                return String(text || '')
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                    .replace(/(?<!\*)\*(?!\s)(.+?)(?<!\s)\*(?!\*)/g, '<em>$1</em>')
+                    .replace(/\[(.+?)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+            }
+
+            const lines = String(content).replace(/\r\n/g, '\n').split('\n');
+            const out = [];
+            let inList = false;
+            let listType = null;
+            const closeList = () => {
+                if (inList) {
+                    out.push(listType === 'ul' ? '</ul>' : '</ol>');
+                    inList = false;
+                    listType = null;
+                }
+            };
+
+            lines.forEach(line => {
+                const trimmed = line.trim();
+                if (!trimmed) {
+                    closeList();
+                    return;
+                }
+                const heading = trimmed.match(/^(#{1,3})\s+(.*)$/);
+                if (heading) {
+                    closeList();
+                    const level = heading[1].length;
+                    out.push(`<h${level}>${formatInline(heading[2])}</h${level}>`);
+                    return;
+                }
+                if (/^---+$/.test(trimmed)) {
+                    closeList();
+                    out.push('<hr>');
+                    return;
+                }
+                const bullet = trimmed.match(/^[-*]\s+(.*)$/);
+                const number = trimmed.match(/^\d+[.)]\s+(.*)$/);
+                if (bullet || number) {
+                    const type = bullet ? 'ul' : 'ol';
+                    const itemText = bullet ? bullet[1] : number[1];
+                    if (!inList || listType !== type) {
+                        closeList();
+                        out.push(type === 'ul' ? '<ul>' : '<ol>');
+                        inList = true;
+                        listType = type;
+                    }
+                    out.push(`<li>${formatInline(itemText)}</li>`);
+                    return;
+                }
+                closeList();
+                out.push(`<p>${formatInline(trimmed)}</p>`);
+            });
+            closeList();
+            return out.join('\n');
         }
 
         function renderBlankStudentView() {
@@ -3350,7 +3424,7 @@
             blocks.forEach(block => {
                 if (block.type === 'text') {
                     const rendered = renderTextBlockContent(block.content || '');
-                    html += `<div class="bg-gray-800 p-4 rounded-lg text-gray-200 leading-relaxed">${rendered}</div>`;
+                    html += `<div class="blank-text-content bg-gray-800 p-4 rounded-lg text-gray-200 leading-relaxed">${rendered}</div>`;
                 } else if (block.type === 'image') {
                     const hasCaption = block.caption && block.caption.trim();
                     html += `<figure class="text-center">
