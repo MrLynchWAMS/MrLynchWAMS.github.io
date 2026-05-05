@@ -14,6 +14,9 @@
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="https://www.youtube.com/iframe_api"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
     <style>
         .hidden {
             display: none;
@@ -3366,6 +3369,9 @@
             const out = [];
             let inList = false;
             let listType = null;
+            let inTable = false;
+            let tableRows = [];
+
             const closeList = () => {
                 if (inList) {
                     out.push(listType === 'ul' ? '</ul>' : '</ol>');
@@ -3374,8 +3380,42 @@
                 }
             };
 
+            const closeTable = () => {
+                if (inTable) {
+                    let html = '<div class="overflow-x-auto my-4"><table class="w-full text-sm text-left border-collapse border border-gray-700">';
+                    tableRows.forEach((row, i) => {
+                        const isHeader = i === 0;
+                        const tag = isHeader ? 'th' : 'td';
+                        const bg = isHeader ? 'bg-gray-900/50' : '';
+                        html += `<tr class="${bg}">`;
+                        row.forEach(cell => {
+                            html += `<${tag} class="border border-gray-700 p-2">${formatInline(cell)}</${tag}>`;
+                        });
+                        html += '</tr>';
+                    });
+                    html += '</table></div>';
+                    out.push(html);
+                    inTable = false;
+                    tableRows = [];
+                }
+            };
+
             lines.forEach(line => {
                 const trimmed = line.trim();
+                
+                // Table check
+                if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+                    closeList();
+                    const cells = trimmed.split('|').slice(1, -1).map(c => c.trim());
+                    // Skip separator row like |---|---|
+                    if (cells.every(c => /^:?-+:?$/.test(c))) return;
+                    
+                    if (!inTable) inTable = true;
+                    tableRows.push(cells);
+                    return;
+                }
+                closeTable();
+
                 if (!trimmed) {
                     closeList();
                     return;
@@ -3410,6 +3450,7 @@
                 out.push(`<p>${formatInline(trimmed)}</p>`);
             });
             closeList();
+            closeTable();
             return out.join('\n');
         }
 
@@ -3491,6 +3532,19 @@
             });
 
             container.innerHTML = html;
+            renderMathContent(container);
+        }
+
+        function renderMathContent(element) {
+            if (window.renderMathInElement) {
+                renderMathInElement(element, {
+                    delimiters: [
+                        { left: '$$', right: '$$', display: true },
+                        { left: '$', right: '$', display: false }
+                    ],
+                    throwOnError: false
+                });
+            }
         }
 
         async function blankCheckAndSave(blockId, qIndex) {
