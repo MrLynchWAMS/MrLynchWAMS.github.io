@@ -633,7 +633,7 @@ Reading level: [GRADE LEVEL]</p>
             let listType = null;
             const closeList = () => {
                 if (inList) {
-                    out.push('</ul>');
+                    out.push(listType === 'ul' ? '</ul>' : '</ol>');
                     inList = false;
                     listType = null;
                 }
@@ -693,7 +693,7 @@ Reading level: [GRADE LEVEL]</p>
         }
 
         function updateTextPreview(card, text, format) {
-            const preview = card.querySelector('.text-preview');
+            const preview = card.querySelector('.richtext-preview');
             if (preview) preview.innerHTML = renderTextPreview(text, format);
         }
 
