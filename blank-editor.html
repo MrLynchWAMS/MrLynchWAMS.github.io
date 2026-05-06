@@ -122,6 +122,8 @@
                 <div class="flex gap-3 mb-6 flex-wrap">
                     <button onclick="addBlock('text')" class="bg-blue-700 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg text-sm">+ Add Text</button>
                     <button onclick="addBlock('image')" class="bg-purple-700 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded-lg text-sm">+ Add Image</button>
+                    <button onclick="addBlock('youtube')" class="bg-red-700 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg text-sm">+ Add YouTube</button>
+                    <button onclick="addBlock('iframe')" class="bg-indigo-700 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg text-sm">+ Add Embed</button>
                     <button onclick="addBlock('question')" class="bg-green-700 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg text-sm">+ Add Question</button>
                 </div>
                 <div id="blocks-container" class="space-y-4"></div>
@@ -207,6 +209,8 @@ FORMAT RULES:
    - Horizontal dividers: ---
    - MATH: Use LaTeX between $$ for blocks or $ for inline. Example: $$\frac{1}{2}$$
    - TABLES: Use pipe format: | Col 1 | Col 2 |
+   - VIDEOS: @[youtube](https://youtube.com/watch?v=...)
+   - WEB TOOLS: @[iframe](https://...) for PhET sims, interactive tools, etc.
 
 2. IMAGES: ![alt](url) or ![alt](url "caption")
 
@@ -562,6 +566,10 @@ Reading level: [GRADE LEVEL]</p>
                 block = { id: genId('b'), type: 'text', content: '', textFormat: 'markdown' };
             } else if (type === 'image') {
                 block = { id: genId('b'), type: 'image', url: '', alt: '', caption: '' };
+            } else if (type === 'youtube') {
+                block = { id: genId('b'), type: 'youtube', url: '' };
+            } else if (type === 'iframe') {
+                block = { id: genId('b'), type: 'iframe', url: '' };
             } else if (type === 'question') {
                 block = { id: genId('q'), type: 'question', prompt: '', questionType: 'text', points: 100, inlineChecker: null };
             }
@@ -759,6 +767,24 @@ Reading level: [GRADE LEVEL]</p>
                             class="w-full p-2 bg-gray-700 rounded border border-gray-600 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500">
                         <div id="img-preview-${block.id}">${previewHtml}</div>
                     </div>`;
+                } else if (block.type === 'youtube') {
+                    innerHTML += `
+                    <div class="space-y-2">
+                        <label class="text-xs text-gray-400">YouTube URL</label>
+                        <input type="text" oninput="updateBlockField('${block.id}', 'url', this.value); updateEmbedPreview('${block.id}', 'youtube', this.value)"
+                            value="${escapeHtml(block.url || '')}" placeholder="https://www.youtube.com/watch?v=..."
+                            class="w-full p-2 bg-gray-700 rounded border border-gray-600 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500">
+                        <div id="embed-preview-${block.id}">${block.url ? window.BlankRenderer.renderYoutube(block.url) : ''}</div>
+                    </div>`;
+                } else if (block.type === 'iframe') {
+                    innerHTML += `
+                    <div class="space-y-2">
+                        <label class="text-xs text-gray-400">Website/Embed URL</label>
+                        <input type="text" oninput="updateBlockField('${block.id}', 'url', this.value); updateEmbedPreview('${block.id}', 'iframe', this.value)"
+                            value="${escapeHtml(block.url || '')}" placeholder="https://..."
+                            class="w-full p-2 bg-gray-700 rounded border border-gray-600 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500">
+                        <div id="embed-preview-${block.id}">${block.url ? window.BlankRenderer.renderIframe(block.url) : ''}</div>
+                    </div>`;
                 } else if (block.type === 'question') {
                     innerHTML += renderQuestionCard(block);
                 }
@@ -805,6 +831,17 @@ Reading level: [GRADE LEVEL]</p>
             } else {
                 container.innerHTML = '';
             }
+        }
+
+        function updateEmbedPreview(blockId, type, url) {
+            const container = document.getElementById(`embed-preview-${blockId}`);
+            if (!container) return;
+            if (!url || !url.trim()) {
+                container.innerHTML = '';
+                return;
+            }
+            if (type === 'youtube') container.innerHTML = window.BlankRenderer.renderYoutube(url);
+            else if (type === 'iframe') container.innerHTML = window.BlankRenderer.renderIframe(url);
         }
 
         function renderQuestionCard(block) {
