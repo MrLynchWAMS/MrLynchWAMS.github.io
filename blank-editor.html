@@ -206,11 +206,8 @@ FORMAT RULES:
    - # Title, ## Heading, ### Subheading
    - **bold**, *italic*, [link](url)
    - Bulleted (- ) or Numbered (1. ) lists
-   - Horizontal dividers: ---
-   - MATH: Use LaTeX between $$ for blocks or $ for inline. Example: $$\frac{1}{2}$$
-   - TABLES: Use pipe format: | Col 1 | Col 2 |
-   - VIDEOS: @[youtube](https://youtube.com/watch?v=...)
-   - WEB TOOLS: @[iframe](https://...) for PhET sims, interactive tools, etc.
+   - VIDEOS: @[youtube](url) or @[youtube](url "height") (e.g. "400")
+   - WEB TOOLS: @[iframe](url) or @[iframe](url "height") (e.g. "600")
 
 2. IMAGES: ![alt](url) or ![alt](url "caption")
 
@@ -771,19 +768,27 @@ Reading level: [GRADE LEVEL]</p>
                     innerHTML += `
                     <div class="space-y-2">
                         <label class="text-xs text-gray-400">YouTube URL</label>
-                        <input type="text" oninput="updateBlockField('${block.id}', 'url', this.value); updateEmbedPreview('${block.id}', 'youtube', this.value)"
+                        <input type="text" oninput="updateBlockField('${block.id}', 'url', this.value); updateEmbedPreview('${block.id}', 'youtube', this.value, '${block.options||''}')"
                             value="${escapeHtml(block.url || '')}" placeholder="https://www.youtube.com/watch?v=..."
                             class="w-full p-2 bg-gray-700 rounded border border-gray-600 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500">
-                        <div id="embed-preview-${block.id}">${block.url ? window.BlankRenderer.renderYoutube(block.url) : ''}</div>
+                        <label class="text-xs text-gray-400">Height (optional, default: 16:9 aspect)</label>
+                        <input type="text" oninput="updateBlockField('${block.id}', 'options', this.value); updateEmbedPreview('${block.id}', 'youtube', '${block.url||''}', this.value)"
+                            value="${escapeHtml(block.options || '')}" placeholder="e.g. 400"
+                            class="w-full p-2 bg-gray-700 rounded border border-gray-600 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500">
+                        <div id="embed-preview-${block.id}">${block.url ? window.BlankRenderer.renderYoutube(block.url, block.options) : ''}</div>
                     </div>`;
                 } else if (block.type === 'iframe') {
                     innerHTML += `
                     <div class="space-y-2">
                         <label class="text-xs text-gray-400">Website/Embed URL</label>
-                        <input type="text" oninput="updateBlockField('${block.id}', 'url', this.value); updateEmbedPreview('${block.id}', 'iframe', this.value)"
+                        <input type="text" oninput="updateBlockField('${block.id}', 'url', this.value); updateEmbedPreview('${block.id}', 'iframe', this.value, '${block.options||''}')"
                             value="${escapeHtml(block.url || '')}" placeholder="https://..."
                             class="w-full p-2 bg-gray-700 rounded border border-gray-600 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500">
-                        <div id="embed-preview-${block.id}">${block.url ? window.BlankRenderer.renderIframe(block.url) : ''}</div>
+                        <label class="text-xs text-gray-400">Height (optional, default: 500)</label>
+                        <input type="text" oninput="updateBlockField('${block.id}', 'options', this.value); updateEmbedPreview('${block.id}', 'iframe', '${block.url||''}', this.value)"
+                            value="${escapeHtml(block.options || '')}" placeholder="e.g. 600"
+                            class="w-full p-2 bg-gray-700 rounded border border-gray-600 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500">
+                        <div id="embed-preview-${block.id}">${block.url ? window.BlankRenderer.renderIframe(block.url, block.options) : ''}</div>
                     </div>`;
                 } else if (block.type === 'question') {
                     innerHTML += renderQuestionCard(block);
@@ -833,15 +838,15 @@ Reading level: [GRADE LEVEL]</p>
             }
         }
 
-        function updateEmbedPreview(blockId, type, url) {
+        function updateEmbedPreview(blockId, type, url, options) {
             const container = document.getElementById(`embed-preview-${blockId}`);
             if (!container) return;
             if (!url || !url.trim()) {
                 container.innerHTML = '';
                 return;
             }
-            if (type === 'youtube') container.innerHTML = window.BlankRenderer.renderYoutube(url);
-            else if (type === 'iframe') container.innerHTML = window.BlankRenderer.renderIframe(url);
+            if (type === 'youtube') container.innerHTML = window.BlankRenderer.renderYoutube(url, options);
+            else if (type === 'iframe') container.innerHTML = window.BlankRenderer.renderIframe(url, options);
         }
 
         function renderQuestionCard(block) {
