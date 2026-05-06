@@ -136,6 +136,40 @@
                 </select>
             </div>
 
+            <!-- Attempt Tracking -->
+            <div class="bg-gray-800 p-6 rounded-lg mb-6 border border-orange-900/30">
+                <div class="flex items-center gap-3 mb-2">
+                    <span class="text-2xl">🔁</span>
+                    <label class="text-2xl font-bold text-yellow-400">Attempt Tracking</label>
+                </div>
+                <p class="text-gray-400 mb-4">Control how many times students can check their answers per question before the question locks.</p>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-1">Max Attempts Per Question</label>
+                        <input type="number" id="maxAttempts" value="0" min="0" step="1"
+                            class="w-full p-2 bg-gray-700 border border-gray-600 rounded">
+                        <p class="text-xs text-gray-500 mt-1">0 = unlimited attempts.</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-1">Points Lost Per Extra Attempt</label>
+                        <input type="number" id="attemptPenalty" value="0" min="0" step="1"
+                            class="w-full p-2 bg-gray-700 border border-gray-600 rounded">
+                        <p class="text-xs text-gray-500 mt-1">Deducted from question score for each attempt after the 1st.</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-1">Help Threshold (Attempts)</label>
+                        <input type="number" id="blankHelpThreshold" value="3" min="1" step="1"
+                            class="w-full p-2 bg-gray-700 border border-gray-600 rounded">
+                        <p class="text-xs text-gray-500 mt-1">Flag student on dashboard after this many attempts on one question.</p>
+                    </div>
+                </div>
+                <div class="mt-4 flex items-center gap-3">
+                    <input type="checkbox" id="lockOnMaxAttempts"
+                        class="w-4 h-4 rounded bg-gray-700 border-gray-600">
+                    <label for="lockOnMaxAttempts" class="text-sm text-white">Lock question when max attempts is reached (student can still submit the assignment)</label>
+                </div>
+            </div>
+
             <!-- Deadline Widget -->
             <div id="deadline-widget-container"></div>
 
@@ -394,6 +428,10 @@
                     <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: text]</td><td class="py-1">Open text question</td></tr>
                     <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: choice | A. opt, B. correct* | 100pts]</td><td class="py-1">Multiple choice</td></tr>
                     <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: number | answer==5 ±0.1 | 100pts]</td><td class="py-1">Number with tolerance</td></tr>
+                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: text | contains "a" AND contains "b" | 100pts]</td><td class="py-1">Both words required</td></tr>
+                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: text | contains "a" OR contains "b" | 100pts]</td><td class="py-1">Either word sufficient</td></tr>
+                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: text | contains "a", "b", "c" | 100pts]</td><td class="py-1">All three required (shorthand AND)</td></tr>
+                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: text | is "exact answer" | 100pts]</td><td class="py-1">Exact match (shorthand)</td></tr>
                 </tbody>
             </table>
         </div>
@@ -429,6 +467,9 @@ FORMAT RULES:
    - [q: choice | A. opt, B. correct*, C. opt | 100pts] (Mark correct with *)
    - [q: number | answer==VALUE | 100pts] (Operators: ==, !=, >, <, between MIN and MAX)
    - [q: text | contains "word" | 100pts]
+   - [q: text | contains "a" AND contains "b" | 100pts] (both words required)
+   - [q: text | contains "a" OR contains "b" | 100pts] (either word sufficient)
+   - [q: text | is "exact answer" | 100pts] (exact match)
 
 Separate sections with blank lines. 
 
@@ -468,6 +509,9 @@ Number of questions: [N]</p>
    - [q: text] for analysis
    - [q: choice | A. opt, B. correct* | 100pts] for comprehension
    - [q: number | answer==X | 100pts] for data
+   - [q: text | contains "word" | 100pts] for keyword check
+   - [q: text | contains "a" AND contains "b" | 100pts] for multiple required words
+   - [q: text | is "exact answer" | 100pts] for exact match
 
 Topic: [YOUR TOPIC HERE]
 Reading level: [GRADE LEVEL]</p>
@@ -735,6 +779,13 @@ Reading level: [GRADE LEVEL]</p>
                 document.getElementById('wordBankModsOnly').checked = toolsConfig.wordBankModsOnly || false;
                 document.getElementById('globalWordBankList').value = toolsConfig.globalWordBankList || '';
                 toggleWordBankSettings();
+
+                // Attempt Tracking
+                const at = assignmentData.attemptTracking || {};
+                document.getElementById('maxAttempts').value = at.maxAttempts ?? 0;
+                document.getElementById('attemptPenalty').value = at.attemptPenalty ?? 0;
+                document.getElementById('blankHelpThreshold').value = at.helpThreshold ?? 3;
+                document.getElementById('lockOnMaxAttempts').checked = at.lockOnMaxAttempts || false;
 
                 // Modifications
                 const mods = assignmentData.modifications || {};
@@ -1229,6 +1280,13 @@ Reading level: [GRADE LEVEL]</p>
 
         function serializeInlineChecker(ic) {
             if (!ic) return '';
+            if (ic.type === 'multi') {
+                const parts = ic.conditions.map(c => {
+                    if (c.op === 'equals_str') return `is "${c.value}"`;
+                    return `${c.op} "${c.value}"`;
+                });
+                return parts.join(` ${ic.logic} `);
+            }
             if (ic.op === '==') return `answer==${ic.value}${ic.tolerance ? ` ±${ic.tolerance}` : ''}`;
             if (ic.op === '!=') return `answer!=${ic.value}`;
             if (ic.op === '>') return `answer>${ic.value}`;
@@ -1236,6 +1294,7 @@ Reading level: [GRADE LEVEL]</p>
             if (ic.op === 'between') return `between ${ic.value} and ${ic.value2}`;
             if (ic.op === 'contains') return `contains "${ic.value}"`;
             if (ic.op === 'not_contains') return `not_contains "${ic.value}"`;
+            if (ic.op === 'equals_str') return `is "${ic.value}"`;
             return '';
         }
 
@@ -1322,6 +1381,18 @@ Reading level: [GRADE LEVEL]</p>
             const select = document.getElementById('checker-question-select');
             const blockId = select.value;
             const container = document.getElementById('checker-widget-container');
+
+            // Flush current widget state before switching questions
+            if (activeCheckerBlockId && activeCheckerWidget) {
+                const prevContainer = container.querySelector('.checker-widget');
+                if (prevContainer) {
+                    const prevCode = activeCheckerWidget.getCode() || '';
+                    const prevMode = activeCheckerWidget.getMode() || 'simple';
+                    const prevConfig = (prevMode === 'simple') ? serializeSimpleConfig(prevContainer) : null;
+                    checkerFunctions[activeCheckerBlockId] = { code: prevCode, mode: prevMode, simpleConfig: prevConfig };
+                }
+            }
+
             container.innerHTML = '';
             activeCheckerWidget = null;
             activeCheckerBlockId = null;
@@ -1424,11 +1495,17 @@ Reading level: [GRADE LEVEL]</p>
                     focusModeAction: document.getElementById('focusModeAction').value || 'log',
                     toolsConfig,
                     auraRules: auraRules.map(({ id, ...rest }) => rest),
-                    auraOnTime
+                    auraOnTime,
+                    attemptTracking: {
+                        maxAttempts: parseInt(document.getElementById('maxAttempts').value, 10) || 0,
+                        attemptPenalty: parseInt(document.getElementById('attemptPenalty').value, 10) || 0,
+                        helpThreshold: parseInt(document.getElementById('blankHelpThreshold').value, 10) || 3,
+                        lockOnMaxAttempts: document.getElementById('lockOnMaxAttempts').checked
+                    }
                 };
 
                 // Apply deadline widget data
-                if (allClassNames.length > 0 && window.DeadlineWidget) {
+                if (window.DeadlineWidget) {
                     DeadlineWidget.applyToSavePayload(updatePayload, allClassNames);
                 }
 
@@ -1642,6 +1719,13 @@ Reading level: [GRADE LEVEL]</p>
 
         function serializeInlineChecker(ic) {
             if (!ic) return '';
+            if (ic.type === 'multi') {
+                const parts = ic.conditions.map(c => {
+                    if (c.op === 'equals_str') return `is "${c.value}"`;
+                    return `${c.op} "${c.value}"`;
+                });
+                return parts.join(` ${ic.logic} `);
+            }
             if (ic.op === '==') return `answer==${ic.value}${ic.tolerance ? ` ±${ic.tolerance}` : ''}`;
             if (ic.op === '!=') return `answer!=${ic.value}`;
             if (ic.op === '>') return `answer>${ic.value}`;
@@ -1649,14 +1733,33 @@ Reading level: [GRADE LEVEL]</p>
             if (ic.op === 'between') return `between ${ic.value} and ${ic.value2}`;
             if (ic.op === 'contains') return `contains "${ic.value}"`;
             if (ic.op === 'not_contains') return `not_contains "${ic.value}"`;
+            if (ic.op === 'equals_str') return `is "${ic.value}"`;
             return '';
         }
 
         function generateInlineCheckerCode(ic) {
-            return `function checkAnswer(studentAnswer) {\n    const answer = String(studentAnswer ?? '').trim();\n    ${ic.op === 'contains' ? `return answer.includes(${JSON.stringify(ic.value)}) ? ${ic.points || 100} : 0;` : ''}\n    ${ic.op === 'not_contains' ? `return !answer.includes(${JSON.stringify(ic.value)}) ? ${ic.points || 100} : 0;` : ''}\n    ${ic.op === '==' ? `return Math.abs(Number(answer) - ${ic.value}) <= ${(ic.tolerance || 0)} ? ${ic.points || 100} : 0;` : ''}\n    ${ic.op === '!=' ? `return Number(answer) !== ${ic.value} ? ${ic.points || 100} : 0;` : ''}\n    ${ic.op === '>' ? `return Number(answer) > ${ic.value} ? ${ic.points || 100} : 0;` : ''}\n    ${ic.op === '<' ? `return Number(answer) < ${ic.value} ? ${ic.points || 100} : 0;` : ''}\n    ${ic.op === 'between' ? `return Number(answer) >= ${ic.value} && Number(answer) <= ${ic.value2} ? ${ic.points || 100} : 0;` : ''}\n}`;
+            if (!ic) return '';
+            const pts = ic.points || 100;
+            if (ic.type === 'multi') {
+                const condChecks = ic.conditions.map(c => {
+                    if (c.op === 'contains') return `answer.toLowerCase().includes(${JSON.stringify(String(c.value || '').toLowerCase())})`;
+                    if (c.op === 'not_contains') return `!answer.toLowerCase().includes(${JSON.stringify(String(c.value || '').toLowerCase())})`;
+                    if (c.op === 'equals_str') return `answer.toLowerCase().trim() === ${JSON.stringify(String(c.value || '').toLowerCase())}`;
+                    return 'false';
+                });
+                const joinOp = ic.logic === 'OR' ? ' || ' : ' && ';
+                const check = condChecks.join(joinOp);
+                return `function checkAnswer(studentAnswer) {\n    const answer = String(studentAnswer ?? '');\n    return (${check}) ? ${pts} : 0;\n}`;
+            }
+            return `function checkAnswer(studentAnswer) {\n    const answer = String(studentAnswer ?? '').trim();\n    ${ic.op === 'contains' ? `return answer.toLowerCase().includes(${JSON.stringify(String(ic.value || '').toLowerCase())}) ? ${pts} : 0;` : ''}\n    ${ic.op === 'not_contains' ? `return !answer.toLowerCase().includes(${JSON.stringify(String(ic.value || '').toLowerCase())}) ? ${pts} : 0;` : ''}\n    ${ic.op === 'equals_str' ? `return answer.toLowerCase() === ${JSON.stringify(String(ic.value || '').toLowerCase())} ? ${pts} : 0;` : ''}\n    ${ic.op === '==' ? `return Math.abs(Number(answer) - ${ic.value}) <= ${(ic.tolerance || 0)} ? ${pts} : 0;` : ''}\n    ${ic.op === '!=' ? `return Number(answer) !== ${ic.value} ? ${pts} : 0;` : ''}\n    ${ic.op === '>' ? `return Number(answer) > ${ic.value} ? ${pts} : 0;` : ''}\n    ${ic.op === '<' ? `return Number(answer) < ${ic.value} ? ${pts} : 0;` : ''}\n    ${ic.op === 'between' ? `return Number(answer) >= ${ic.value} && Number(answer) <= ${ic.value2} ? ${pts} : 0;` : ''}\n}`;
         }
 
-        function serializeSimpleConfig(widget) { return widget.serializeConfig ? widget.serializeConfig() : null; }
+        function getCheckerCode(blockId) {
+            const stored = checkerFunctions[blockId];
+            if (!stored) return '';
+            if (typeof stored === 'object') return stored.code || '';
+            return stored;
+        }
     </script>
 </body>
 </html>
