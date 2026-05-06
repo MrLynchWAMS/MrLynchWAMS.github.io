@@ -991,6 +991,13 @@
                         }
                         return;
                     }
+                } else {
+                    // Fail-safe: scheduled but no start time configured — deny access
+                    showAccessDenied("This assignment is scheduled but no start time has been configured. Please contact your teacher.");
+                    if (!accessEvaluationInterval) {
+                        accessEvaluationInterval = setInterval(evaluateAccess, 15000);
+                    }
+                    return;
                 }
             }
 
@@ -3336,6 +3343,47 @@
         // BLANK ASSIGNMENT STUDENT VIEW FUNCTIONS
         // =======================================
 
+        // Resolve the class start time for the current student (used for per-question deadlines)
+        function resolveBlankStartAt() {
+            if (!assignmentData || !userProfile) return null;
+            const policy = assignmentData.deadlinePolicy || {};
+            const studentClass = userProfile.class;
+            const classStartAt = policy.classStartAt?.[studentClass];
+            if (classStartAt) {
+                return classStartAt.toDate ? classStartAt.toDate() : new Date(classStartAt);
+            }
+            const classStartTimeStr = policy.classStartTimes?.[studentClass];
+            if (classStartTimeStr) {
+                const [hours, mins] = classStartTimeStr.split(':').map(Number);
+                const startAt = new Date();
+                startAt.setHours(hours, mins, 0, 0);
+                return startAt;
+            }
+            return null;
+        }
+
+        let blankQTimerIntervals = [];
+
+        function startBlankQTimer(blockId, dueAt) {
+            const timerEl = document.getElementById(`blank-q-timer-${blockId}`);
+            if (!timerEl) return;
+            const interval = setInterval(() => {
+                const now = new Date();
+                const diff = dueAt - now;
+                if (diff <= 0) {
+                    clearInterval(interval);
+                    timerEl.textContent = '⏰ Deadline passed';
+                    timerEl.className = 'text-xs text-red-400 font-mono';
+                    return;
+                }
+                const mins = Math.floor(diff / 60000);
+                const secs = Math.floor((diff % 60000) / 1000);
+                timerEl.textContent = `⏱ ${mins}:${secs.toString().padStart(2, '0')} left`;
+                timerEl.className = diff < 60000 ? 'text-xs text-red-400 font-mono font-bold' : 'text-xs text-yellow-400 font-mono';
+            }, 1000);
+            blankQTimerIntervals.push(interval);
+        }
+
         function evaluateInlineChecker(studentAnswer, checker) {
             return window.BlankRenderer.evaluateInlineChecker(studentAnswer, checker);
         }
@@ -3371,6 +3419,10 @@
         }
 
         function renderBlankStudentView() {
+            // Clear any previous per-question timers
+            blankQTimerIntervals.forEach(id => clearInterval(id));
+            blankQTimerIntervals = [];
+
             const renderer = window.BlankRenderer;
             const blocks = assignmentData.blocks || [];
             const questionBlocks = blocks.filter(b => b.type === 'question');
@@ -3379,9 +3431,18 @@
 
             const postRule = assignmentData.postSubmissionRule || 'open';
             const isLocked = isSubmitted && (postRule === 'lock' || postRule === 'hide');
+            const isTeacher = userProfile?.isTeacher || userProfile?.class === 'Teacher';
+
+            // Resolve start time for per-question deadline calculations
+            const startAt = isTeacher ? null : resolveBlankStartAt();
+            const policy = assignmentData.deadlinePolicy || {};
+            const mods = assignmentData.modifications || {};
+            const hasMods = mods.enabled && userProfile && mods.studentIds?.includes(userProfile.id || userProfile.email);
+            const deadlineMultiplier = hasMods ? (mods.timeMultiplier || 1.0) : 1.0;
 
             let html = '';
             let qIndex = 0;
+            const qTimerData = []; // [{blockId, dueAt}] — timers started after innerHTML set
 
             blocks.forEach(block => {
                 if (block.type === 'text') {
@@ -3399,11 +3460,12 @@
                     html += renderer.renderIframe(block.url || '', block.options);
                 } else if (block.type === 'question') {
                     const idx = qIndex;
+                    const qKey = `q${idx + 1}`;
                     const state = slideStates[idx] || {};
                     const savedAnswer = state.answer || '';
                     const savedScore = state.score;
 
-                    // Per-question deadline check
+                    // Per-question deadline check (legacy absolute openAt/closeAt)
                     const qDl = block.questionDeadline;
                     const now = new Date();
                     let qOpen = true;
@@ -3415,6 +3477,18 @@
                     if (qDl?.closeAt) {
                         const closeDate = new Date(qDl.closeAt);
                         if (now > closeDate) { qOpen = false; qDeadlineMsg = `Closed at ${closeDate.toLocaleString()}`; }
+                    }
+
+                    // Per-question relative deadline (deadlinePolicy.q{N})
+                    const qPolicy = policy[qKey];
+                    let qDueAt = null;
+                    let qTimerHTML = '';
+                    if (!isTeacher && qPolicy && qPolicy.deadlineMinutes > 0 && startAt) {
+                        const modifiedMinutes = qPolicy.deadlineMinutes * deadlineMultiplier;
+                        qDueAt = new Date(startAt.getTime() + modifiedMinutes * 60000);
+                        const isPast = now > qDueAt;
+                        qTimerHTML = `<span id="blank-q-timer-${block.id}" class="text-xs ${isPast ? 'text-red-400' : 'text-yellow-400'} font-mono">${isPast ? '⏰ Deadline passed' : '⏱ ...'}</span>`;
+                        if (!isPast) qTimerData.push({ blockId: block.id, dueAt: qDueAt });
                     }
 
                     const prog = questionProgressData[block.id];
@@ -3465,7 +3539,10 @@
                     html += `<div class="bg-gray-800 p-5 rounded-lg border border-gray-700" id="blank-q-card-${block.id}">
                         <div class="flex justify-between items-start mb-1">
                             <p class="font-semibold text-base text-white">${renderer.escapeHtml(block.prompt || '')}</p>
-                            <span class="text-xs text-gray-400 ml-2 whitespace-nowrap">${pts} pts</span>
+                            <div class="flex items-center gap-2 ml-2 shrink-0">
+                                ${qTimerHTML}
+                                <span class="text-xs text-gray-400 whitespace-nowrap">${pts} pts</span>
+                            </div>
                         </div>
                         ${inputHTML}
                         <div class="mt-3 flex items-center gap-3">
@@ -3487,6 +3564,9 @@
 
             container.innerHTML = html;
             renderer.renderMathContent(container);
+
+            // Start per-question countdown timers after DOM is set
+            qTimerData.forEach(({ blockId, dueAt }) => startBlankQTimer(blockId, dueAt));
         }
 
         async function blankCheckAndSave(blockId, qIndex) {
@@ -3581,6 +3661,53 @@
             // Apply attempt penalty
             const extraAttempts = Math.max(0, attemptCount - 1);
             score = Math.max(0, score - extraAttempts * attemptPenalty);
+
+            // Apply per-question lateness penalty (deadlinePolicy.q{N})
+            const policy = assignmentData.deadlinePolicy || {};
+            const qKey = `q${qIndex + 1}`;
+            const qPolicy = policy[qKey];
+            const mods = assignmentData.modifications || {};
+            const hasMods = mods.enabled && userProfile && mods.studentIds?.includes(userProfile.id || userProfile.email);
+            const deadlineMultiplier = hasMods ? (mods.timeMultiplier || 1.0) : 1.0;
+            const penaltyMultiplier = hasMods ? (mods.penaltyMultiplier || 1.0) : 1.0;
+            let isOnTime = true;
+
+            if (qPolicy && qPolicy.deadlineMinutes > 0 && userProfile?.class !== 'Teacher') {
+                const startAt = resolveBlankStartAt();
+                if (startAt) {
+                    const now = new Date();
+                    const modifiedMinutes = qPolicy.deadlineMinutes * deadlineMultiplier;
+                    const deadline = new Date(startAt.getTime() + modifiedMinutes * 60000);
+                    if (now > deadline) {
+                        isOnTime = false;
+                        const minutesLate = Math.ceil((now - deadline) / 60000);
+                        switch (qPolicy.penaltyType) {
+                            case 'zero':
+                                score = 0;
+                                showToast(`Submitted ${minutesLate} min${minutesLate !== 1 ? 's' : ''} late. Score is 0.`, { color: 'red', duration: 7000 });
+                                break;
+                            case 'deduction':
+                            case 'percent':
+                            case 'percentage': {
+                                const pct = (qPolicy.penaltyValue || 0) * penaltyMultiplier;
+                                const deducted = Math.round(score * (pct / 100));
+                                score = Math.max(0, score - deducted);
+                                showToast(`-${Math.round(pct)}% for being ${minutesLate} min${minutesLate !== 1 ? 's' : ''} late.`, { color: 'red', duration: 7000 });
+                                break;
+                            }
+                            case 'incremental':
+                            case 'points':
+                            case 'per_minute': {
+                                const perMin = (qPolicy.penaltyValue || 0) * penaltyMultiplier;
+                                const deducted = Math.round(minutesLate * perMin);
+                                score = Math.max(0, score - deducted);
+                                showToast(`-${deducted} points for being ${minutesLate} min${minutesLate !== 1 ? 's' : ''} late.`, { color: 'red', duration: 7000 });
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
 
             progress.bestScore = Math.max(progress.bestScore || 0, score);
             if (maxAttempts > 0 && attemptCount >= maxAttempts && lockOnMax) {

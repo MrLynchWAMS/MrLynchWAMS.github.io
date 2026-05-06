@@ -722,6 +722,22 @@ Reading level: [GRADE LEVEL]</p>
                 blocks = JSON.parse(JSON.stringify(assignmentData.blocks || []));
                 checkerFunctions = JSON.parse(JSON.stringify(assignmentData.checkerFunctions || {}));
 
+                // Restore per-question deadline fields from deadlinePolicy.q{N}
+                if (assignmentData.deadlinePolicy) {
+                    const dp = assignmentData.deadlinePolicy;
+                    let qLoadIndex = 0;
+                    blocks.forEach(block => {
+                        if (block.type !== 'question') return;
+                        qLoadIndex++;
+                        const qPolicy = dp[`q${qLoadIndex}`];
+                        if (qPolicy) {
+                            block.deadlineMinutes = qPolicy.deadlineMinutes || 0;
+                            block.penaltyType = qPolicy.penaltyType || 'none';
+                            block.penaltyValue = qPolicy.penaltyValue || 0;
+                        }
+                    });
+                }
+
                 document.getElementById('assignmentNameInput').value = assignmentData.name || '';
                 document.getElementById('editorAssignmentTitle').textContent = assignmentData.name || 'Untitled Assignment';
                 document.getElementById('assignmentTitleBar').classList.remove('hidden');
@@ -1315,6 +1331,21 @@ Reading level: [GRADE LEVEL]</p>
             if (panel) panel.classList.toggle('hidden');
         }
 
+        function updateBlockDeadline(blockId, field, value) {
+            const block = blocks.find(b => b.id === blockId);
+            if (block) block[field] = value;
+        }
+
+        function toggleQPenaltyFields(blockId, deadlineMinutes) {
+            const el = document.getElementById(`q-penalty-fields-${blockId}`);
+            if (el) el.classList.toggle('hidden', !deadlineMinutes || deadlineMinutes <= 0);
+        }
+
+        function toggleQPenaltyValue(blockId, penaltyType) {
+            const el = document.getElementById(`q-penalty-value-wrap-${blockId}`);
+            if (el) el.classList.toggle('hidden', !penaltyType || penaltyType === 'none' || penaltyType === 'zero');
+        }
+
         function updateBlockAttemptOverrides(blockId) {
             const panel = document.getElementById(`q-attempt-override-${blockId}`);
             if (!panel) return;
@@ -1440,20 +1471,36 @@ Reading level: [GRADE LEVEL]</p>
 </div>`;
 
             html += `
-<div class="mt-2">
+<div class="mt-2 pt-2 border-t border-gray-700/30">
   <button class="text-xs text-gray-500 hover:text-yellow-400" onclick="toggleQDeadline('${block.id}')">
-    ⏰ Question Deadline ▶
+    ⏱ Deadline &amp; Lateness ▶
   </button>
   <div id="q-deadline-${block.id}" class="hidden mt-2 bg-gray-900/40 p-3 rounded space-y-2">
-    <p class="text-xs text-gray-500">Overrides assignment deadline for this question only. Applies to all students equally.</p>
-    <div class="grid grid-cols-2 gap-2">
-      <div>
-        <label class="text-xs text-gray-400">Opens at (optional)</label>
-        <input type="datetime-local" class="q-open-at w-full p-1.5 bg-gray-700 border border-gray-600 rounded text-sm text-white" value="${block.questionDeadline?.openAt || ''}">
-      </div>
-      <div>
-        <label class="text-xs text-gray-400">Closes at (optional)</label>
-        <input type="datetime-local" class="q-close-at w-full p-1.5 bg-gray-700 border border-gray-600 rounded text-sm text-white" value="${block.questionDeadline?.closeAt || ''}">
+    <p class="text-xs text-gray-500">Set a per-question deadline relative to class start time. 0 = no deadline.</p>
+    <div class="flex items-center gap-2">
+      <label class="text-xs text-gray-400 whitespace-nowrap">Due:</label>
+      <input type="number" min="0" value="${block.deadlineMinutes || 0}"
+        oninput="updateBlockDeadline('${block.id}', 'deadlineMinutes', parseInt(this.value)||0); toggleQPenaltyFields('${block.id}', parseInt(this.value)||0)"
+        class="w-20 p-1.5 bg-gray-700 border border-gray-600 rounded text-sm">
+      <span class="text-xs text-gray-400">mins after class start</span>
+    </div>
+    <div id="q-penalty-fields-${block.id}" class="${(block.deadlineMinutes || 0) > 0 ? '' : 'hidden'} space-y-2">
+      <div class="flex flex-wrap items-center gap-2">
+        <label class="text-xs text-gray-400 whitespace-nowrap">If late:</label>
+        <select onchange="updateBlockDeadline('${block.id}', 'penaltyType', this.value); toggleQPenaltyValue('${block.id}', this.value)"
+          class="p-1.5 bg-gray-700 border border-gray-600 rounded text-sm">
+          <option value="none" ${!block.penaltyType || block.penaltyType === 'none' ? 'selected' : ''}>None</option>
+          <option value="deduction" ${block.penaltyType === 'deduction' ? 'selected' : ''}>% off total</option>
+          <option value="incremental" ${block.penaltyType === 'incremental' ? 'selected' : ''}>Points per minute late</option>
+          <option value="points" ${block.penaltyType === 'points' ? 'selected' : ''}>Points off total</option>
+          <option value="zero" ${block.penaltyType === 'zero' ? 'selected' : ''}>Zero if late</option>
+        </select>
+        <span id="q-penalty-value-wrap-${block.id}" class="${block.penaltyType && block.penaltyType !== 'none' && block.penaltyType !== 'zero' ? '' : 'hidden'} flex items-center gap-1">
+          <span class="text-xs text-gray-400">Value:</span>
+          <input type="number" min="0" value="${block.penaltyValue || 0}"
+            oninput="updateBlockDeadline('${block.id}', 'penaltyValue', parseFloat(this.value)||0)"
+            class="w-20 p-1.5 bg-gray-700 border border-gray-600 rounded text-sm">
+        </span>
       </div>
     </div>
   </div>
@@ -1654,6 +1701,23 @@ Reading level: [GRADE LEVEL]</p>
                 if (window.DeadlineWidget) {
                     DeadlineWidget.applyToSavePayload(updatePayload, allClassNames);
                 }
+
+                // Serialize per-question deadline policy (same schema as slides editor)
+                let qPolicyIndex = 0;
+                blocksToSave.forEach(block => {
+                    if (block.type !== 'question') return;
+                    qPolicyIndex++;
+                    const key = `deadlinePolicy.q${qPolicyIndex}`;
+                    if (block.deadlineMinutes && block.deadlineMinutes > 0) {
+                        updatePayload[key] = {
+                            deadlineMinutes: block.deadlineMinutes,
+                            penaltyType: block.penaltyType || 'none',
+                            penaltyValue: block.penaltyValue || 0
+                        };
+                    } else {
+                        updatePayload[key] = firebase.firestore.FieldValue.delete();
+                    }
+                });
 
                 if (auraDueAt) {
                     updatePayload.auraDueAt = auraDueAt;
@@ -1924,14 +1988,6 @@ Reading level: [GRADE LEVEL]</p>
 
             if (e.target.matches('.q-override-enabled, .q-max-attempts, .q-attempt-penalty, .q-help-threshold, .q-lock-on-max')) {
                 updateBlockAttemptOverrides(blockId);
-            }
-
-            if (e.target.matches('.q-open-at, .q-close-at')) {
-                const block = blocks.find(b => b.id === blockId);
-                if (!block) return;
-                const openAt = card.querySelector('.q-open-at')?.value || null;
-                const closeAt = card.querySelector('.q-close-at')?.value || null;
-                block.questionDeadline = { openAt: openAt || null, closeAt: closeAt || null };
             }
         });
     </script>
