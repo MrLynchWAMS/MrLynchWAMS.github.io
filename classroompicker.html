@@ -3508,6 +3508,21 @@
                     locked: false
                 };
                 await db.collection("submissions").add(submission);
+
+                // Also upsert a questionProgress doc so the dashboard live view picks it up
+                const progressDocId = `${assignmentData.id}_${userProfile.email}_${qIndex}`;
+                await db.collection("questionProgress").doc(progressDocId).set({
+                    studentName: userProfile.name,
+                    studentEmail: userProfile.email,
+                    assignmentId: assignmentData.id,
+                    slideIndex: qIndex,
+                    bestScore: score,
+                    latestScore: score,
+                    attemptCount: 1,
+                    locked: false,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                }, { merge: true });
+
                 showToast("Answer saved!", { color: 'blue', position: 'bottom-right', duration: 2000 });
             } catch (error) {
                 console.error("Error saving blank answer:", error);

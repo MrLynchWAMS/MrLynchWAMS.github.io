@@ -862,7 +862,7 @@
                 });
                 numQuestions = questionsList.length;
             } else {
-                numQuestions = assignmentData.type === 'pdf' ? (assignmentData.questionZones ? assignmentData.questionZones.length : 0) : assignmentData.type === 'video' ? (assignmentData.videoQuestions ? assignmentData.videoQuestions.length : 0) : assignmentData.type === 'simulation' ? (assignmentData.simQuestions ? assignmentData.simQuestions.length : 0) : (assignmentData.slideIds ? assignmentData.slideIds.length : 0);
+                numQuestions = assignmentData.type === 'pdf' ? (assignmentData.questionZones ? assignmentData.questionZones.length : 0) : assignmentData.type === 'video' ? (assignmentData.videoQuestions ? assignmentData.videoQuestions.length : 0) : assignmentData.type === 'simulation' ? (assignmentData.simQuestions ? assignmentData.simQuestions.length : 0) : assignmentData.type === 'blank' ? (assignmentData.blocks || []).filter(b => b.type === 'question').length : (assignmentData.slideIds ? assignmentData.slideIds.length : 0);
             }
 
             const classes = [...new Set(studentsInAssignment.map(s => String(s.class)))];
@@ -1102,7 +1102,7 @@
                 });
                 numQuestions = questionsList.length;
             } else {
-                numQuestions = assignmentData.type === 'pdf' ? (assignmentData.questionZones ? assignmentData.questionZones.length : 0) : assignmentData.type === 'video' ? (assignmentData.videoQuestions ? assignmentData.videoQuestions.length : 0) : assignmentData.type === 'simulation' ? (assignmentData.simQuestions ? assignmentData.simQuestions.length : 0) : (assignmentData.slideIds ? assignmentData.slideIds.length : 0);
+                numQuestions = assignmentData.type === 'pdf' ? (assignmentData.questionZones ? assignmentData.questionZones.length : 0) : assignmentData.type === 'video' ? (assignmentData.videoQuestions ? assignmentData.videoQuestions.length : 0) : assignmentData.type === 'simulation' ? (assignmentData.simQuestions ? assignmentData.simQuestions.length : 0) : assignmentData.type === 'blank' ? (assignmentData.blocks || []).filter(b => b.type === 'question').length : (assignmentData.slideIds ? assignmentData.slideIds.length : 0);
             }
 
             const sortedStudents = getCurrentlySortedStudents();

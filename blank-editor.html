@@ -15,6 +15,7 @@
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
     <script src="./shared/blank-renderer.js"></script>
+    <script src="./shared/deadline-widget.js"></script>
     <style>
         .hidden { display: none; }
         textarea { resize: vertical; }
@@ -28,6 +29,11 @@
         }
         .animate-fade-in-right { animation: fade-in-right 0.35s ease-out forwards; }
         .animate-fade-out-right { animation: fade-out-right 0.35s ease-in forwards; }
+        .collapsible-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
         #toast-wrapper {
             position: fixed; top: 1rem; right: 1rem; z-index: 50;
             display: flex; flex-direction: column; gap: 0.5rem;
@@ -115,6 +121,209 @@
                         class="w-full p-2 bg-gray-700 border border-gray-600 rounded text-sm">
                     <button onclick="copyShareLink()"
                         class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-3 rounded-lg text-sm">Copy</button>
+                </div>
+            </div>
+
+            <!-- Post-Submission Policy -->
+            <div class="bg-gray-800 p-6 rounded-lg mb-6">
+                <label for="postSubmissionRule" class="block text-2xl font-bold text-yellow-400 mb-2">Post-Submission Policy</label>
+                <p class="text-gray-400 mb-4">Choose what happens after a student officially submits this assignment.</p>
+                <select id="postSubmissionRule"
+                    class="w-full md:w-1/2 p-2 bg-gray-700 rounded border border-gray-600 focus:border-yellow-400 focus:outline-none">
+                    <option value="open">Remain Open (Students can review and resubmit)</option>
+                    <option value="lock">Lock (Students can review but not edit)</option>
+                    <option value="hide">Lock &amp; Hide (Students cannot see answers or scores)</option>
+                </select>
+            </div>
+
+            <!-- Deadline Widget -->
+            <div id="deadline-widget-container"></div>
+
+            <!-- Focus Mode -->
+            <div class="bg-gray-800 p-6 rounded-lg mb-6 border border-red-900/30">
+                <div class="flex items-center gap-3 mb-2">
+                    <span class="text-2xl">🔒</span>
+                    <label class="text-2xl font-bold text-yellow-400">Focus Mode</label>
+                </div>
+                <p class="text-gray-400 mb-4">When enabled, students will be monitored for tab switches, right-clicks, and other potential cheating behaviors.</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="flex items-center cursor-pointer">
+                            <input type="checkbox" id="focusModeEnabled"
+                                class="w-5 h-5 text-red-500 rounded focus:ring-red-500 bg-gray-700 border-gray-500">
+                            <span class="ml-3 text-lg font-semibold text-white">Enable Focus Mode</span>
+                        </label>
+                        <p class="text-xs text-gray-500 mt-2">When enabled, right-click, drag-and-drop, and certain keyboard shortcuts will be blocked.</p>
+                    </div>
+                    <div id="focusModeOptions" class="hidden">
+                        <label class="block text-sm text-gray-400 mb-2">On Violation (tab switch, sidebar click, etc.)</label>
+                        <select id="focusModeAction" class="w-full p-2 bg-gray-700 rounded border border-gray-600">
+                            <option value="log">Log Only (record violation, student continues)</option>
+                            <option value="warn">Warn &amp; Log (show overlay, must click to continue)</option>
+                            <option value="submit">Auto-Submit &amp; Lock (immediately submit and lock assignment)</option>
+                        </select>
+                        <p class="text-xs text-gray-500 mt-2">All violations are logged to the dashboard regardless of this setting.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Special Ed Modifications -->
+            <div id="modifications-section" class="bg-gray-800 rounded-lg mb-6 overflow-hidden border border-purple-900/30">
+                <div id="modifications-header" class="p-6 cursor-pointer" onclick="toggleModificationsSection()">
+                    <div class="flex justify-between items-center">
+                        <h2 class="text-2xl font-bold text-yellow-400">🧩 Special Ed. Modifications</h2>
+                        <span id="modifications-chevron" class="text-2xl transform transition-transform">▶</span>
+                    </div>
+                    <p class="text-gray-400 mt-2">Configure accommodations like extra time and attempts for specific students.</p>
+                </div>
+                <div id="modifications-content" class="collapsible-content">
+                    <div class="px-6 pb-6">
+                        <div class="mb-6 bg-gray-700/30 p-4 rounded-lg border border-gray-700">
+                            <label class="flex items-center cursor-pointer mb-4">
+                                <input type="checkbox" id="modificationsEnabled" onchange="toggleModificationsEnabled()"
+                                    class="w-5 h-5 text-purple-500 rounded focus:ring-purple-500 bg-gray-800 border-gray-600">
+                                <span class="ml-3 font-semibold text-white text-lg">Enable Modifications for this Assignment</span>
+                            </label>
+                            <div id="modificationsSettings" class="hidden space-y-4">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-300 mb-1">Time Limit Multiplier</label>
+                                        <input type="number" id="modTimeMultiplier" value="1.5" min="1.0" step="0.1"
+                                            class="w-full p-2 bg-gray-800 border border-gray-600 rounded">
+                                        <p class="text-xs text-gray-500 mt-1">Ex: 1.5x gives 15 mins for a 10 min deadline.</p>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-300 mb-1">Attempt Penalty Multiplier</label>
+                                        <input type="number" id="modPenaltyMultiplier" value="0.5" min="0" max="1.0" step="0.1"
+                                            class="w-full p-2 bg-gray-800 border border-gray-600 rounded">
+                                        <p class="text-xs text-gray-500 mt-1">Ex: 0.5x cuts the point deduction in half.</p>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-300 mb-1">Max Attempts Bonus</label>
+                                        <input type="number" id="modAttemptsBonus" value="2" min="0" step="1"
+                                            class="w-full p-2 bg-gray-800 border border-gray-600 rounded">
+                                        <p class="text-xs text-gray-500 mt-1">Ex: +2 adds 2 extra tries before locking.</p>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-300 mb-1">Help Threshold Override (Attempts)</label>
+                                        <input type="number" id="modHelpThreshold" value="1" min="1" step="1"
+                                            class="w-full p-2 bg-gray-800 border border-gray-600 rounded">
+                                        <p class="text-xs text-gray-500 mt-1">Show "Help" notifications after this many attempts.</p>
+                                    </div>
+                                    <div>
+                                        <label class="flex items-center cursor-pointer mt-6">
+                                            <input type="checkbox" id="modIgnoreDeduction"
+                                                class="w-5 h-5 text-purple-500 rounded bg-gray-800 border-gray-600">
+                                            <span class="ml-3 font-semibold text-white text-sm">Ignore Attempt Penalty</span>
+                                        </label>
+                                        <p class="text-xs text-gray-500 mt-1">If enabled, point deductions for extra attempts are ignored for modified students.</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-3 mt-2">
+                                    <input type="checkbox" id="modFuzzyMatch" class="w-4 h-4 rounded bg-gray-700 border-gray-600">
+                                    <div>
+                                        <label for="modFuzzyMatch" class="text-sm font-medium text-gray-300">Allow Fuzzy Spelling</label>
+                                        <p class="text-xs text-gray-500">If enabled, "is exactly" text checks will tolerate minor spelling errors for modified students.</p>
+                                    </div>
+                                </div>
+                                <div class="mt-4 pt-4 border-t border-gray-700">
+                                    <h3 class="font-semibold text-white mb-2">Apply to Students:</h3>
+                                    <p class="text-xs text-gray-400 mb-3">Students flagged in the Roster with "Has Modifications" are auto-selected.</p>
+                                    <div id="modStudentList"
+                                        class="max-h-48 overflow-y-auto bg-gray-900 p-2 rounded border border-gray-700 grid grid-cols-1 md:grid-cols-2 gap-2">
+                                        <p class="text-gray-500 italic p-2">Loading students...</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Aura Rewards -->
+            <div id="aura-section" class="bg-gray-800 rounded-lg mb-6 overflow-hidden">
+                <div id="aura-header" class="p-6 cursor-pointer" onclick="toggleAuraSection()">
+                    <div class="flex justify-between items-center">
+                        <h2 class="text-2xl font-bold text-yellow-400">✧ Aura Rewards</h2>
+                        <span id="aura-chevron" class="text-2xl transform transition-transform">▶</span>
+                    </div>
+                    <p class="text-gray-400 mt-2">Set up automatic behaviors to reward student performance with extra Aura points upon submission.</p>
+                </div>
+                <div id="aura-content" class="collapsible-content border-t border-gray-700">
+                    <div class="px-6 pb-6">
+                        <p class="text-gray-400 mb-4 mt-4 text-sm">Aura is awarded once per assignment at submit time, based on the overall assignment average. If multiple rules match, the highest matching reward is given (non-cumulative).</p>
+                        <div id="aura-rules-container" class="space-y-4"></div>
+                        <div class="mt-6 flex justify-between items-center">
+                            <button onclick="addAuraRule()"
+                                class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm">+ Add Aura Condition</button>
+                            <div class="flex items-center">
+                                <input type="checkbox" id="auraOnTime"
+                                    class="w-4 h-4 text-yellow-500 rounded focus:ring-yellow-500 bg-gray-700 border-gray-500">
+                                <label for="auraOnTime" class="ml-2 text-sm text-gray-300">"Must be on time" applies to ALL rules</label>
+                            </div>
+                        </div>
+                        <div id="aura-global-deadline"
+                            class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6 p-4 bg-gray-700/30 rounded-lg border border-gray-700 hidden">
+                            <div>
+                                <label class="block text-sm text-gray-400 mb-1">Global Aura Deadline Date</label>
+                                <input type="date" id="auraDueDate"
+                                    class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-sm text-gray-400 mb-1">Global Aura Deadline Time</label>
+                                <input type="time" id="auraDueTime"
+                                    class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none">
+                            </div>
+                            <p class="text-xs text-gray-500 md:col-span-2">This deadline applies if "Must be on time" is checked. Students must submit before this deadline to earn any Aura.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tools & Features -->
+            <div id="tools-section" class="bg-gray-800 rounded-lg mb-6 overflow-hidden border border-blue-900/30">
+                <div id="tools-header" class="p-6 cursor-pointer" onclick="toggleToolsSection()">
+                    <div class="flex justify-between items-center">
+                        <h2 class="text-2xl font-bold text-yellow-400">🧰 Tools &amp; Features</h2>
+                        <span id="tools-chevron" class="text-2xl transform transition-transform">▶</span>
+                    </div>
+                    <p class="text-gray-400 mt-2">Enable additional tools like a floating calculator or word bank for students.</p>
+                </div>
+                <div id="tools-content" class="collapsible-content">
+                    <div class="px-6 pb-6 space-y-6">
+                        <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-700">
+                            <label class="flex items-center cursor-pointer">
+                                <input type="checkbox" id="calculatorEnabled"
+                                    class="w-5 h-5 text-blue-500 rounded focus:ring-blue-500 bg-gray-800 border-gray-600">
+                                <span class="ml-3 font-semibold text-white">Enable Floating Calculator (+-x÷)</span>
+                            </label>
+                            <div class="ml-8 mt-2 flex items-center gap-2">
+                                <input type="checkbox" id="calculatorModsOnly"
+                                    class="w-4 h-4 text-purple-600 rounded bg-gray-800 border-gray-600">
+                                <label for="calculatorModsOnly" class="text-xs text-purple-300">Only for Modified Students (Accommodated)</label>
+                            </div>
+                            <p class="text-xs text-gray-400 mt-2">Adds a button for students to open a movable basic calculator.</p>
+                        </div>
+                        <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-700">
+                            <label class="block font-semibold text-white mb-2">Word Bank Mode</label>
+                            <select id="wordBankMode" onchange="toggleWordBankSettings()"
+                                class="w-full md:w-1/2 p-2 bg-gray-800 rounded border border-gray-600 focus:border-yellow-400 focus:outline-none mb-4">
+                                <option value="none">None (Disabled)</option>
+                                <option value="assignment">Assignment-Wide (Same list for all questions)</option>
+                            </select>
+                            <div id="wordBankModsOnlyContainer" class="ml-2 mt-2 flex items-center gap-2 hidden">
+                                <input type="checkbox" id="wordBankModsOnly"
+                                    class="w-4 h-4 text-purple-600 rounded bg-gray-800 border-gray-600">
+                                <label for="wordBankModsOnly" class="text-xs text-purple-300">Only for Modified Students (Accommodated)</label>
+                            </div>
+                            <div id="global-wordbank-container" class="hidden">
+                                <label class="block text-sm text-gray-400 mb-2">Global Word List (comma separated)</label>
+                                <textarea id="globalWordBankList" rows="3"
+                                    class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-sm"
+                                    placeholder="e.g. Mitochondria, Nucleus, Ribosome..."></textarea>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -342,6 +551,9 @@ Reading level: [GRADE LEVEL]</p>
         let activeCheckerBlockId = null;
         let activeCheckerWidget = null;
         let canvasDebounceTimer = null;
+        let allClassNames = [];
+        let teacherDefaults = {};
+        let auraRules = [];
 
         function genId(prefix) {
             const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
@@ -453,6 +665,87 @@ Reading level: [GRADE LEVEL]</p>
                 document.getElementById('editorAssignmentTitle').textContent = assignmentData.name || 'Untitled Assignment';
                 document.getElementById('assignmentTitleBar').classList.remove('hidden');
                 document.getElementById('shareLink').value = `https://custom.scienceclass.rocks/classroompicker.html?assignmentId=${assignmentId}`;
+
+                // Post-Submission Policy
+                document.getElementById('postSubmissionRule').value = assignmentData.postSubmissionRule || 'open';
+
+                // Load teacher defaults and student list for DeadlineWidget and Modifications
+                try {
+                    const teacherDoc = await db.collection("teachers").doc(currentUserEmail).get();
+                    if (teacherDoc.exists) teacherDefaults = teacherDoc.data();
+                } catch (e) { /* ignore */ }
+
+                const studentSnapshot = await db.collection("students").where("teacherEmail", "==", currentUserEmail).get();
+                const teacherStudents = studentSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                window.allTeacherStudents = teacherStudents;
+                allClassNames = [...new Set(teacherStudents.map(s => String(s.class)))].sort();
+
+                // Deadline Widget
+                if (window.DeadlineWidget) {
+                    DeadlineWidget.render(allClassNames);
+                    DeadlineWidget.populate(assignmentData, teacherDefaults, allClassNames);
+                }
+
+                // Focus Mode
+                const focusModeEnabled = document.getElementById('focusModeEnabled');
+                const focusModeAction = document.getElementById('focusModeAction');
+                const focusModeOptions = document.getElementById('focusModeOptions');
+                focusModeEnabled.checked = assignmentData.focusModeEnabled || false;
+                focusModeAction.value = assignmentData.focusModeAction || 'log';
+                focusModeOptions.classList.toggle('hidden', !focusModeEnabled.checked);
+                focusModeEnabled.addEventListener('change', () => {
+                    focusModeOptions.classList.toggle('hidden', !focusModeEnabled.checked);
+                });
+
+                // Aura Rewards
+                const auraOnTimeEl = document.getElementById('auraOnTime');
+                const auraDueDateInput = document.getElementById('auraDueDate');
+                const auraDueTimeInput = document.getElementById('auraDueTime');
+                const auraGlobalDeadline = document.getElementById('aura-global-deadline');
+
+                auraOnTimeEl.checked = assignmentData.auraOnTime || false;
+                auraGlobalDeadline.classList.toggle('hidden', !auraOnTimeEl.checked);
+                auraOnTimeEl.addEventListener('change', () => {
+                    auraGlobalDeadline.classList.toggle('hidden', !auraOnTimeEl.checked);
+                });
+
+                auraRules = [];
+                if (assignmentData.auraRules && Array.isArray(assignmentData.auraRules)) {
+                    assignmentData.auraRules.forEach(rule => addAuraRule(rule));
+                } else if (assignmentData.auraAmount !== undefined) {
+                    addAuraRule({ amount: assignmentData.auraAmount, minScore: assignmentData.auraMinScore || 0 });
+                } else {
+                    addAuraRule({ amount: 1, minScore: 0 });
+                }
+
+                if (assignmentData.auraDueAt) {
+                    const dueAt = assignmentData.auraDueAt.toDate ? assignmentData.auraDueAt.toDate() : new Date(assignmentData.auraDueAt);
+                    auraDueDateInput.value = `${dueAt.getFullYear()}-${String(dueAt.getMonth()+1).padStart(2,'0')}-${String(dueAt.getDate()).padStart(2,'0')}`;
+                    auraDueTimeInput.value = `${String(dueAt.getHours()).padStart(2,'0')}:${String(dueAt.getMinutes()).padStart(2,'0')}`;
+                } else {
+                    auraDueDateInput.value = '';
+                    auraDueTimeInput.value = '';
+                }
+
+                // Tools & Features
+                const toolsConfig = assignmentData.toolsConfig || {};
+                document.getElementById('calculatorEnabled').checked = toolsConfig.calculatorEnabled || false;
+                document.getElementById('calculatorModsOnly').checked = toolsConfig.calculatorModsOnly || false;
+                document.getElementById('wordBankMode').value = toolsConfig.wordBankMode || 'none';
+                document.getElementById('wordBankModsOnly').checked = toolsConfig.wordBankModsOnly || false;
+                document.getElementById('globalWordBankList').value = toolsConfig.globalWordBankList || '';
+                toggleWordBankSettings();
+
+                // Modifications
+                const mods = assignmentData.modifications || {};
+                document.getElementById('modificationsEnabled').checked = mods.enabled || false;
+                document.getElementById('modTimeMultiplier').value = mods.timeMultiplier || 1.5;
+                document.getElementById('modPenaltyMultiplier').value = mods.penaltyMultiplier || 0.5;
+                document.getElementById('modAttemptsBonus').value = mods.maxAttemptsBonus || 2;
+                document.getElementById('modHelpThreshold').value = mods.helpThreshold || 1;
+                document.getElementById('modIgnoreDeduction').checked = mods.ignoreDeduction || false;
+                document.getElementById('modFuzzyMatch').checked = mods.fuzzy || false;
+                toggleModificationsEnabled();
 
                 const lastMode = assignmentData.lastEditorMode || 'structured';
                 currentMode = lastMode;
@@ -1091,12 +1384,79 @@ Reading level: [GRADE LEVEL]</p>
                     }
                 });
 
-                await db.collection('assignments').doc(assignmentId).update({
+                // Aura Rules
+                const auraOnTime = document.getElementById('auraOnTime').checked;
+                const auraDueDateStr = document.getElementById('auraDueDate').value;
+                const auraDueTimeStr = document.getElementById('auraDueTime').value;
+
+                if (auraOnTime && (!auraDueDateStr || !auraDueTimeStr)) {
+                    showToast("To require 'Must be on time', please set BOTH Aura deadline date and time.", { color: 'red' });
+                    saveBtn.disabled = false;
+                    saveBtn.textContent = 'Save';
+                    return;
+                }
+
+                let auraDueAt = null;
+                if (auraDueDateStr && auraDueTimeStr) {
+                    const [year, month, day] = auraDueDateStr.split('-').map(Number);
+                    const [hour, minute] = auraDueTimeStr.split(':').map(Number);
+                    if (!isNaN(year) && !isNaN(month) && !isNaN(day) && !isNaN(hour) && !isNaN(minute)) {
+                        auraDueAt = firebase.firestore.Timestamp.fromDate(new Date(year, month - 1, day, hour, minute, 0, 0));
+                    }
+                }
+
+                // Tools Config
+                const toolsConfig = {
+                    calculatorEnabled: document.getElementById('calculatorEnabled').checked,
+                    calculatorModsOnly: document.getElementById('calculatorModsOnly').checked,
+                    wordBankMode: document.getElementById('wordBankMode').value,
+                    wordBankModsOnly: document.getElementById('wordBankModsOnly').checked,
+                    globalWordBankList: document.getElementById('globalWordBankList').value.trim()
+                };
+
+                const updatePayload = {
                     name,
                     blocks: blocksToSave,
                     checkerFunctions: newCheckerFunctions,
-                    lastEditorMode: currentMode
-                });
+                    lastEditorMode: currentMode,
+                    postSubmissionRule: document.getElementById('postSubmissionRule').value || 'open',
+                    focusModeEnabled: document.getElementById('focusModeEnabled').checked,
+                    focusModeAction: document.getElementById('focusModeAction').value || 'log',
+                    toolsConfig,
+                    auraRules: auraRules.map(({ id, ...rest }) => rest),
+                    auraOnTime
+                };
+
+                // Apply deadline widget data
+                if (allClassNames.length > 0 && window.DeadlineWidget) {
+                    DeadlineWidget.applyToSavePayload(updatePayload, allClassNames);
+                }
+
+                if (auraDueAt) {
+                    updatePayload.auraDueAt = auraDueAt;
+                } else {
+                    updatePayload.auraDueAt = firebase.firestore.FieldValue.delete();
+                }
+
+                // Modifications
+                const modsEnabled = document.getElementById('modificationsEnabled').checked;
+                if (modsEnabled) {
+                    const modStudentIds = Array.from(document.querySelectorAll('.mod-student-checkbox:checked')).map(cb => cb.value);
+                    updatePayload.modifications = {
+                        enabled: true,
+                        timeMultiplier: parseFloat(document.getElementById('modTimeMultiplier').value) || 1.0,
+                        penaltyMultiplier: parseFloat(document.getElementById('modPenaltyMultiplier').value) || 1.0,
+                        maxAttemptsBonus: parseInt(document.getElementById('modAttemptsBonus').value) || 0,
+                        helpThreshold: parseInt(document.getElementById('modHelpThreshold').value) || 1,
+                        ignoreDeduction: document.getElementById('modIgnoreDeduction').checked,
+                        fuzzy: document.getElementById('modFuzzyMatch').checked,
+                        studentIds: modStudentIds
+                    };
+                } else {
+                    updatePayload.modifications = firebase.firestore.FieldValue.delete();
+                }
+
+                await db.collection('assignments').doc(assignmentId).update(updatePayload);
 
                 assignmentData.name = name;
                 assignmentData.blocks = blocksToSave;
@@ -1109,6 +1469,146 @@ Reading level: [GRADE LEVEL]</p>
             } finally {
                 saveBtn.disabled = false;
                 saveBtn.textContent = 'Save';
+            }
+        }
+
+        // Aura helpers
+        function addAuraRule(ruleData = { amount: 1, minScore: 0 }) {
+            const id = Date.now() + Math.random().toString(36).slice(2, 11);
+            auraRules.push({ id, ...ruleData });
+            renderAuraRules();
+        }
+
+        function removeAuraRule(id) {
+            auraRules = auraRules.filter(r => r.id !== id);
+            renderAuraRules();
+        }
+
+        function updateAuraRule(index, field, value) {
+            auraRules[index][field] = parseFloat(value) || 0;
+        }
+
+        function renderAuraRules() {
+            const container = document.getElementById('aura-rules-container');
+            if (!container) return;
+            container.innerHTML = '';
+            if (auraRules.length === 0) {
+                container.innerHTML = '<p class="text-gray-500 italic text-sm">No aura rewards configured. Click "Add Aura Condition" to start.</p>';
+                return;
+            }
+            auraRules.forEach((rule, index) => {
+                const div = document.createElement('div');
+                div.className = "grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-700/50 rounded-lg border border-gray-600 relative animate-fade-in-right";
+                div.innerHTML = `
+                <div>
+                    <label class="block text-xs text-gray-400 mb-1">Aura Points</label>
+                    <input type="number" value="${rule.amount}" step="0.1" onchange="updateAuraRule(${index}, 'amount', this.value)" class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-400 mb-1">Min Score %</label>
+                    <input type="number" value="${rule.minScore}" min="0" max="100" onchange="updateAuraRule(${index}, 'minScore', this.value)" class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none text-sm">
+                </div>
+                <div class="flex items-end justify-between">
+                    <p class="text-[10px] text-gray-500 mb-2">Rule #${index + 1}</p>
+                    <button onclick="removeAuraRule('${rule.id}')" class="text-red-400 hover:text-red-300 text-sm font-bold mb-1">Remove</button>
+                </div>`;
+                container.appendChild(div);
+            });
+        }
+
+        function toggleAuraSection(forceOpen = false) {
+            const content = document.getElementById('aura-content');
+            const chevron = document.getElementById('aura-chevron');
+            const isOpen = content.style.maxHeight && content.style.maxHeight !== '0px';
+            if (isOpen && !forceOpen) {
+                content.style.maxHeight = '0';
+                chevron.style.transform = 'rotate(0deg)';
+            } else {
+                content.style.maxHeight = '2000px';
+                chevron.style.transform = 'rotate(90deg)';
+            }
+        }
+
+        function toggleToolsSection() {
+            const content = document.getElementById('tools-content');
+            const chevron = document.getElementById('tools-chevron');
+            if (content.style.maxHeight && content.style.maxHeight !== '0px') {
+                content.style.maxHeight = '0';
+                chevron.style.transform = 'rotate(0deg)';
+            } else {
+                content.style.maxHeight = '2000px';
+                chevron.style.transform = 'rotate(90deg)';
+            }
+        }
+
+        function toggleWordBankSettings() {
+            const mode = document.getElementById('wordBankMode').value;
+            const globalContainer = document.getElementById('global-wordbank-container');
+            globalContainer.classList.toggle('hidden', mode !== 'assignment');
+            document.getElementById('wordBankModsOnlyContainer').classList.toggle('hidden', mode === 'none');
+        }
+
+        function toggleModificationsSection(forceOpen = false) {
+            const content = document.getElementById('modifications-content');
+            const chevron = document.getElementById('modifications-chevron');
+            const isOpen = content.style.maxHeight && content.style.maxHeight !== '0px';
+            if (isOpen && !forceOpen) {
+                content.style.maxHeight = '0';
+                chevron.style.transform = 'rotate(0deg)';
+            } else {
+                content.style.maxHeight = '2000px';
+                chevron.style.transform = 'rotate(90deg)';
+                const list = document.getElementById('modStudentList');
+                if (list.children.length <= 1 && list.innerText.includes('Loading')) {
+                    loadModificationsStudentList();
+                }
+            }
+        }
+
+        function toggleModificationsEnabled() {
+            const enabled = document.getElementById('modificationsEnabled').checked;
+            const settings = document.getElementById('modificationsSettings');
+            if (enabled) {
+                settings.classList.remove('hidden');
+                const content = document.getElementById('modifications-content');
+                content.style.maxHeight = '2000px';
+                loadModificationsStudentList();
+            } else {
+                settings.classList.add('hidden');
+            }
+        }
+
+        async function loadModificationsStudentList() {
+            const list = document.getElementById('modStudentList');
+            if (allClassNames.length === 0) {
+                list.innerHTML = '<p class="text-gray-500 italic p-2">No classes assigned yet. Add classes to the assignment first.</p>';
+                return;
+            }
+            try {
+                let students = window.allTeacherStudents || [];
+                students.sort((a, b) => a.name.localeCompare(b.name));
+                if (students.length === 0) {
+                    list.innerHTML = '<p class="text-gray-500 italic p-2">No students found.</p>';
+                    return;
+                }
+                list.innerHTML = '';
+                const savedModIds = (assignmentData.modifications && assignmentData.modifications.studentIds) || [];
+                const useRosterFlags = savedModIds.length === 0 && (!assignmentData.modifications || !assignmentData.modifications.studentIds);
+                students.forEach(student => {
+                    const isSelected = savedModIds.includes(student.id) || (useRosterFlags && student.hasModifications);
+                    const div = document.createElement('div');
+                    div.className = "flex items-center space-x-2 p-1 hover:bg-gray-800 rounded";
+                    div.innerHTML = `
+                        <label class="flex items-center space-x-2 cursor-pointer w-full">
+                            <input type="checkbox" value="${student.id}" class="mod-student-checkbox w-4 h-4 text-purple-500 rounded bg-gray-800 border-gray-600 focus:ring-purple-500" ${isSelected ? 'checked' : ''}>
+                            <span class="text-sm text-gray-300">${escapeHtml(student.name)}</span>
+                            ${student.hasModifications ? '<span title="Has IEP/504 Flag" class="text-xs">🧩</span>' : ''}
+                        </label>`;
+                    list.appendChild(div);
+                });
+            } catch (error) {
+                console.error("Error loading mod students:", error);
+                list.innerHTML = '<p class="text-red-400 p-2">Error loading students.</p>';
             }
         }
 
