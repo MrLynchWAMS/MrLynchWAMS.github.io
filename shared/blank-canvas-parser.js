@@ -177,6 +177,22 @@
                 continue;
             }
 
+            // @[youtube](url)
+            const ytMatch = line.match(/^@\[youtube\]\((https?:\/\/[^\s)]+)\)\s*$/);
+            if (ytMatch) {
+                flushText();
+                blocks.push({ id: genId('b'), type: 'youtube', url: ytMatch[1] });
+                continue;
+            }
+
+            // @[iframe](url)
+            const ifMatch = line.match(/^@\[iframe\]\((https?:\/\/[^\s)]+)\)\s*$/);
+            if (ifMatch) {
+                flushText();
+                blocks.push({ id: genId('b'), type: 'iframe', url: ifMatch[1] });
+                continue;
+            }
+
             // --- Divider ---
             if (/^\s*---\s*$/.test(line)) {
                 flushText();
@@ -276,6 +292,10 @@
             } else if (block.type === 'image') {
                 const caption = block.caption ? ` "${block.caption}"` : '';
                 lines.push(`![${block.alt || ''}](${block.url || ''}${caption})`);
+            } else if (block.type === 'youtube') {
+                lines.push(`@[youtube](${block.url || ''})`);
+            } else if (block.type === 'iframe') {
+                lines.push(`@[iframe](${block.url || ''})`);
             } else if (block.type === 'question') {
                 const prompt = block.prompt || '';
                 lines.push(`## ${prompt}`);
