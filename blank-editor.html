@@ -372,18 +372,7 @@
                 <div id="blocks-container" class="space-y-4"></div>
                 <p id="no-blocks-msg" class="text-gray-500 italic text-center py-8">No blocks yet. Click a button above to add content.</p>
 
-                <div id="checker-section" class="hidden mt-8 bg-gray-800 p-6 rounded-lg border border-gray-700">
-                    <h2 class="text-xl font-bold text-yellow-400 mb-4">Question Checkers</h2>
-                    <p class="text-gray-400 text-sm mb-4">Configure auto-grading for open text/number questions below. Multiple choice and inline-checker questions are graded automatically.</p>
-                    <div class="mb-4">
-                        <label class="block text-sm font-medium text-gray-300 mb-1">Select Question</label>
-                        <select id="checker-question-select" onchange="loadCheckerForQuestion()"
-                            class="w-full p-2 bg-gray-700 border border-gray-600 rounded-lg">
-                            <option value="">— choose a question —</option>
-                        </select>
-                    </div>
-                    <div id="checker-widget-container"></div>
-                </div>
+
             </div>
 
             <div id="canvas-mode" class="hidden">
@@ -407,46 +396,73 @@
             <button onclick="toggleHelp()" class="text-gray-400 hover:text-white text-2xl">&times;</button>
         </div>
 
-        <div class="mb-8">
-            <h3 class="text-lg font-bold text-white mb-3">Syntax Reference</h3>
-            <table class="w-full text-sm text-gray-300 border-collapse">
-                <thead>
-                    <tr class="border-b border-gray-600">
-                        <th class="text-left py-1 pr-4 text-gray-400">Syntax</th>
-                        <th class="text-left py-1 text-gray-400">Effect</th>
-                    </tr>
-                </thead>
-                <tbody class="space-y-1">
-                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300"># Title / ## Heading</td><td class="py-1">Section headings</td></tr>
-                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">**bold** *italic*</td><td class="py-1">Rich text</td></tr>
-                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[link](https://...)</td><td class="py-1">Clickable links</td></tr>
-                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">- List / 1. List</td><td class="py-1">Bulleted or numbered lists</td></tr>
-                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">$$a^2 + b^2 = c^2$$</td><td class="py-1">Math (LaTeX)</td></tr>
-                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">| Col 1 | Col 2 |</td><td class="py-1">Tables (simple pipes)</td></tr>
-                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">---</td><td class="py-1">Horizontal divider</td></tr>
-                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">![alt](url)</td><td class="py-1">Image block</td></tr>
-                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: text]</td><td class="py-1">Open text question</td></tr>
-                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: choice | A. opt, B. correct* | 100pts]</td><td class="py-1">Multiple choice</td></tr>
-                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: number | answer==5 ±0.1 | 100pts]</td><td class="py-1">Number with tolerance</td></tr>
-                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: text | contains "a" AND contains "b" | 100pts]</td><td class="py-1">Both words required</td></tr>
-                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: text | contains "a" OR contains "b" | 100pts]</td><td class="py-1">Either word sufficient</td></tr>
-                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: text | contains "a", "b", "c" | 100pts]</td><td class="py-1">All three required (shorthand AND)</td></tr>
-                    <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: text | is "exact answer" | 100pts]</td><td class="py-1">Exact match (shorthand)</td></tr>
-                </tbody>
-            </table>
+        <div id="help-structured-content">
+            <div class="mb-8">
+                <h3 class="text-lg font-bold text-white mb-3">Checker Syntax Quick Reference</h3>
+                <table class="w-full text-sm text-gray-300 border-collapse">
+                    <thead>
+                        <tr class="border-b border-gray-600">
+                            <th class="text-left py-1 pr-4 text-gray-400">Syntax</th>
+                            <th class="text-left py-1 text-gray-400">Effect</th>
+                        </tr>
+                    </thead>
+                    <tbody class="space-y-1">
+                        <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">contains "word"</td><td class="py-1">Answer must include this word</td></tr>
+                        <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">contains "a", "b"</td><td class="py-1">Answer must include all words (AND)</td></tr>
+                        <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">contains "a" AND contains "b"</td><td class="py-1">Explicit AND</td></tr>
+                        <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">contains "a" OR contains "b"</td><td class="py-1">Either word</td></tr>
+                        <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">is "exact phrase"</td><td class="py-1">Exact match (case-insensitive)</td></tr>
+                        <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">answer == 42</td><td class="py-1">Number equals</td></tr>
+                        <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">answer == 42 ±5</td><td class="py-1">Number with tolerance</td></tr>
+                        <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">answer &gt; 10</td><td class="py-1">Number greater than</td></tr>
+                        <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">answer &lt; 100</td><td class="py-1">Number less than</td></tr>
+                        <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">answer between 30 and 40</td><td class="py-1">Number range</td></tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
-        <div>
-            <h3 class="text-lg font-bold text-white mb-3">AI Prompt Templates</h3>
-            <p class="text-sm text-gray-400 mb-3">Copy one of these prompts to paste into your AI assistant. It will output valid markup you can paste into the Canvas tab.</p>
+        <div id="help-canvas-content" class="hidden">
+            <div class="mb-8">
+                <h3 class="text-lg font-bold text-white mb-3">Syntax Reference</h3>
+                <table class="w-full text-sm text-gray-300 border-collapse">
+                    <thead>
+                        <tr class="border-b border-gray-600">
+                            <th class="text-left py-1 pr-4 text-gray-400">Syntax</th>
+                            <th class="text-left py-1 text-gray-400">Effect</th>
+                        </tr>
+                    </thead>
+                    <tbody class="space-y-1">
+                        <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300"># Title / ## Heading</td><td class="py-1">Section headings</td></tr>
+                        <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">**bold** *italic*</td><td class="py-1">Rich text</td></tr>
+                        <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[link](https://...)</td><td class="py-1">Clickable links</td></tr>
+                        <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">- List / 1. List</td><td class="py-1">Bulleted or numbered lists</td></tr>
+                        <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">$$a^2 + b^2 = c^2$$</td><td class="py-1">Math (LaTeX)</td></tr>
+                        <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">| Col 1 | Col 2 |</td><td class="py-1">Tables (simple pipes)</td></tr>
+                        <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">---</td><td class="py-1">Horizontal divider</td></tr>
+                        <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">![alt](url)</td><td class="py-1">Image block</td></tr>
+                        <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: text]</td><td class="py-1">Open text question</td></tr>
+                        <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: choice | A. opt, B. correct* | 100pts]</td><td class="py-1">Multiple choice</td></tr>
+                        <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: number | answer==5 ±0.1 | 100pts]</td><td class="py-1">Number with tolerance</td></tr>
+                        <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: text | contains "a" AND contains "b" | 100pts]</td><td class="py-1">Both words required</td></tr>
+                        <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: text | contains "a" OR contains "b" | 100pts]</td><td class="py-1">Either word sufficient</td></tr>
+                        <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: text | contains "a", "b", "c" | 100pts]</td><td class="py-1">All three required (shorthand AND)</td></tr>
+                        <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: text | is "exact answer" | 100pts]</td><td class="py-1">Exact match (shorthand)</td></tr>
+                    </tbody>
+                </table>
+            </div>
 
-            <div class="space-y-4">
-                <div class="bg-gray-700 rounded-lg p-3">
-                    <div class="flex justify-between items-center mb-2">
-                        <span class="text-sm font-semibold text-yellow-300">General Mixed Assignment</span>
-                        <button onclick="copyTemplate('tpl-general')" class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded">Copy</button>
-                    </div>
-                    <p id="tpl-general" class="text-xs text-gray-300 whitespace-pre-wrap">Create a science assignment using ONLY the following markup. Output raw markup with NO preamble and NO code fences.
+            <div>
+                <h3 class="text-lg font-bold text-white mb-3">AI Prompt Templates</h3>
+                <p class="text-sm text-gray-400 mb-3">Copy one of these prompts to paste into your AI assistant. It will output valid markup you can paste into the Canvas tab.</p>
+
+                <div class="space-y-4">
+                    <div class="bg-gray-700 rounded-lg p-3">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-sm font-semibold text-yellow-300">General Mixed Assignment</span>
+                            <button onclick="copyTemplate('tpl-general')" class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded">Copy</button>
+                        </div>
+                        <p id="tpl-general" class="text-xs text-gray-300 whitespace-pre-wrap">Create a science assignment using ONLY the following markup. Output raw markup with NO preamble and NO code fences.
 
 FORMAT RULES:
 1. TEXT BLOCKS: Use standard Markdown:
@@ -474,14 +490,14 @@ FORMAT RULES:
 Separate sections with blank lines. 
 
 Topic: [YOUR TOPIC HERE]</p>
-                </div>
-
-                <div class="bg-gray-700 rounded-lg p-3">
-                    <div class="flex justify-between items-center mb-2">
-                        <span class="text-sm font-semibold text-yellow-300">Multiple Choice Focused</span>
-                        <button onclick="copyTemplate('tpl-mc')" class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded">Copy</button>
                     </div>
-                    <p id="tpl-mc" class="text-xs text-gray-300 whitespace-pre-wrap">Create a multiple choice quiz using ONLY the following markup format. Output only valid markup with NO preamble, NO explanations, and NO code fences.
+
+                    <div class="bg-gray-700 rounded-lg p-3">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-sm font-semibold text-yellow-300">Multiple Choice Focused</span>
+                            <button onclick="copyTemplate('tpl-mc')" class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded">Copy</button>
+                        </div>
+                        <p id="tpl-mc" class="text-xs text-gray-300 whitespace-pre-wrap">Create a multiple choice quiz using ONLY the following markup format. Output only valid markup with NO preamble, NO explanations, and NO code fences.
 
 Format for each question:
 ## Question text here
@@ -491,14 +507,14 @@ Mark exactly ONE correct answer with * at the end of that choice. Separate each 
 
 Topic: [YOUR TOPIC HERE]
 Number of questions: [N]</p>
-                </div>
-
-                <div class="bg-gray-700 rounded-lg p-3">
-                    <div class="flex justify-between items-center mb-2">
-                        <span class="text-sm font-semibold text-yellow-300">Reading Passage + Comprehension</span>
-                        <button onclick="copyTemplate('tpl-reading')" class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded">Copy</button>
                     </div>
-                    <p id="tpl-reading" class="text-xs text-gray-300 whitespace-pre-wrap">Create a reading passage and comprehension questions using ONLY the following markup. Output raw markup with NO preamble and NO code fences.
+
+                    <div class="bg-gray-700 rounded-lg p-3">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-sm font-semibold text-yellow-300">Reading Passage + Comprehension</span>
+                            <button onclick="copyTemplate('tpl-reading')" class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded">Copy</button>
+                        </div>
+                        <p id="tpl-reading" class="text-xs text-gray-300 whitespace-pre-wrap">Create a reading passage and comprehension questions using ONLY the following markup. Output raw markup with NO preamble and NO code fences.
 
 1. START with the reading passage. Use ## for a title, and standard Markdown (bold, lists, math) as needed.
 2. FOLLOW with questions using the two-line format:
@@ -515,6 +531,7 @@ Number of questions: [N]</p>
 
 Topic: [YOUR TOPIC HERE]
 Reading level: [GRADE LEVEL]</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -592,8 +609,8 @@ Reading level: [GRADE LEVEL]</p>
         let blocks = [];
         let checkerFunctions = {};
         let currentMode = 'structured';
-        let activeCheckerBlockId = null;
-        let activeCheckerWidget = null;
+        let checkerWidgets = {};        // blockId -> DOM element with getCode/getMode
+        let checkerWidgetContainers = {}; // blockId -> same DOM element
         let canvasDebounceTimer = null;
         let allClassNames = [];
         let teacherDefaults = {};
@@ -839,6 +856,7 @@ Reading level: [GRADE LEVEL]</p>
             document.getElementById('btn-structured').className = 'px-4 py-2 font-semibold text-sm bg-yellow-500 text-gray-900';
             document.getElementById('btn-canvas').className = 'px-4 py-2 font-semibold text-sm text-gray-400 hover:bg-gray-700';
             renderBlocks();
+            updateHelpContent('structured');
         }
 
         function activateCanvasMode(fromStructured) {
@@ -862,6 +880,7 @@ Reading level: [GRADE LEVEL]</p>
             };
             const result = validateCanvas(ta.value);
             updateWarningBadge(result.warnings);
+            updateHelpContent('canvas');
         }
 
         function updateWarningBadge(warnings) {
@@ -925,12 +944,8 @@ Reading level: [GRADE LEVEL]</p>
         function deleteBlock(id) {
             blocks = blocks.filter(b => b.id !== id);
             delete checkerFunctions[id];
-            if (activeCheckerBlockId === id) {
-                activeCheckerBlockId = null;
-                activeCheckerWidget = null;
-                document.getElementById('checker-widget-container').innerHTML = '';
-                document.getElementById('checker-question-select').value = '';
-            }
+            delete checkerWidgets[id];
+            delete checkerWidgetContainers[id];
             renderBlocks();
         }
 
@@ -1047,11 +1062,13 @@ Reading level: [GRADE LEVEL]</p>
         function renderBlocks() {
             const container = document.getElementById('blocks-container');
             const noMsg = document.getElementById('no-blocks-msg');
+            Object.keys(checkerWidgets).forEach(id => flushCheckerWidget(id));
+            checkerWidgets = {};
+            checkerWidgetContainers = {};
             container.innerHTML = '';
 
             if (!blocks.length) {
                 noMsg.classList.remove('hidden');
-                document.getElementById('checker-section').classList.add('hidden');
                 return;
             }
             noMsg.classList.add('hidden');
@@ -1060,18 +1077,35 @@ Reading level: [GRADE LEVEL]</p>
                 const card = document.createElement('div');
                 card.className = 'block-card bg-gray-800 rounded-lg border border-gray-700 p-4';
                 card.dataset.blockId = block.id;
+                if (block.type === 'question') card.id = `q-block-${block.id}`;
 
                 let innerHTML = '';
                 const typeLabel = block.type === 'text' ? '📝 Text' : block.type === 'image' ? '🖼️ Image' : '❓ Question';
-                innerHTML += `
-                <div class="flex justify-between items-center mb-3">
-                    <span class="text-sm font-bold text-gray-400">${typeLabel}</span>
-                    <div class="flex gap-2">
-                        <button onclick="moveBlock('${block.id}', 'up')" ${idx === 0 ? 'disabled' : ''} class="text-gray-400 hover:text-white disabled:opacity-30 px-2 py-1 rounded text-lg" title="Move Up">▲</button>
-                        <button onclick="moveBlock('${block.id}', 'down')" ${idx === blocks.length - 1 ? 'disabled' : ''} class="text-gray-400 hover:text-white disabled:opacity-30 px-2 py-1 rounded text-lg" title="Move Down">▼</button>
-                        <button onclick="deleteBlock('${block.id}')" class="text-red-400 hover:text-red-300 font-bold px-2 py-1 rounded text-sm" title="Delete">🗑</button>
-                    </div>
-                </div>`;
+                if (block.type === 'question') {
+                    innerHTML += `
+                    <div class="block-card-header flex justify-between items-center mb-3">
+                        <span class="text-sm font-bold text-gray-400">${typeLabel}</span>
+                        <div class="flex gap-2">
+                            <button onclick="moveBlock('${block.id}', 'up')" ${idx === 0 ? 'disabled' : ''} class="text-gray-400 hover:text-white disabled:opacity-30 px-2 py-1 rounded text-lg" title="Move Up">▲</button>
+                            <button onclick="moveBlock('${block.id}', 'down')" ${idx === blocks.length - 1 ? 'disabled' : ''} class="text-gray-400 hover:text-white disabled:opacity-30 px-2 py-1 rounded text-lg" title="Move Down">▼</button>
+                            <button onclick="toggleCheckerPanel('${block.id}')" class="checker-toggle-btn relative text-xs bg-indigo-700 hover:bg-indigo-600 text-white px-2 py-1 rounded" aria-label="Configure grader for this question">
+                                <span aria-hidden="true">⚙</span> Grader
+                                <span class="checker-dot absolute -top-1 -right-1 w-2 h-2 rounded-full bg-green-400" style="display:none" aria-hidden="true"></span>
+                            </button>
+                            <button onclick="deleteBlock('${block.id}')" class="text-red-400 hover:text-red-300 font-bold px-2 py-1 rounded text-sm" title="Delete">🗑</button>
+                        </div>
+                    </div>`;
+                } else {
+                    innerHTML += `
+                    <div class="flex justify-between items-center mb-3">
+                        <span class="text-sm font-bold text-gray-400">${typeLabel}</span>
+                        <div class="flex gap-2">
+                            <button onclick="moveBlock('${block.id}', 'up')" ${idx === 0 ? 'disabled' : ''} class="text-gray-400 hover:text-white disabled:opacity-30 px-2 py-1 rounded text-lg" title="Move Up">▲</button>
+                            <button onclick="moveBlock('${block.id}', 'down')" ${idx === blocks.length - 1 ? 'disabled' : ''} class="text-gray-400 hover:text-white disabled:opacity-30 px-2 py-1 rounded text-lg" title="Move Down">▼</button>
+                            <button onclick="deleteBlock('${block.id}')" class="text-red-400 hover:text-red-300 font-bold px-2 py-1 rounded text-sm" title="Delete">🗑</button>
+                        </div>
+                    </div>`;
+                }
 
                 if (block.type === 'text') {
                     const textFormat = block.textFormat || 'markdown';
@@ -1169,7 +1203,8 @@ Reading level: [GRADE LEVEL]</p>
                 }
             });
 
-            updateCheckerSection();
+            updateAllCheckerIndicators();
+            updateAllUngradedHighlights();
         }
 
         function renderImagePreview(blockId, url) {
@@ -1181,6 +1216,125 @@ Reading level: [GRADE LEVEL]</p>
                 container.innerHTML = '';
             }
         }
+
+        function toggleCheckerPanel(blockId) {
+            const panel = document.getElementById(`checker-panel-${blockId}`);
+            if (!panel) return;
+            const isHidden = panel.style.display === 'none' || panel.style.display === '';
+            if (isHidden) {
+                panel.style.display = 'block';
+                if (!checkerWidgets[blockId]) initCheckerWidget(blockId);
+                panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            } else {
+                flushCheckerWidget(blockId);
+                panel.style.display = 'none';
+            }
+            updateBlockCheckerIndicator(blockId);
+        }
+
+        function initCheckerWidget(blockId) {
+            const host = document.querySelector(`.checker-widget-host-${blockId}`);
+            if (!host || checkerWidgets[blockId]) return;
+            const tpl = document.getElementById('checkerTemplate');
+            const clone = tpl.content.cloneNode(true);
+            host.innerHTML = '';
+            host.appendChild(clone);
+            const widgetContainer = host.querySelector('.checker-widget');
+            checkerWidgetContainers[blockId] = widgetContainer;
+            const stored = checkerFunctions[blockId];
+            let initialCode = '';
+            let initialMeta = null;
+            if (stored && typeof stored === 'object') {
+                initialCode = stored.code || '';
+                initialMeta = { mode: stored.mode || 'simple', simpleConfig: stored.simpleConfig || null };
+            } else if (typeof stored === 'string') {
+                initialCode = stored;
+            }
+            CheckerWidget(widgetContainer, initialCode, initialMeta);
+            checkerWidgets[blockId] = widgetContainer;
+        }
+
+        function flushCheckerWidget(blockId) {
+            const widget = checkerWidgets[blockId];
+            if (!widget) return;
+            const code = widget.getCode() || '';
+            const mode = widget.getMode() || 'simple';
+            const simpleConfig = (mode === 'simple' && typeof serializeSimpleConfig === 'function')
+                ? serializeSimpleConfig(widget) : null;
+            checkerFunctions[blockId] = { code, mode, simpleConfig };
+            updateBlockCheckerIndicator(blockId);
+        }
+
+        function updateBlockCheckerIndicator(blockId) {
+            const btn = document.querySelector(`#q-block-${blockId} .checker-toggle-btn`);
+            if (!btn) return;
+            const stored = checkerFunctions[blockId];
+            const hasChecker = stored && (typeof stored === 'object' ? stored.code : stored);
+            const dot = btn.querySelector('.checker-dot');
+            if (dot) dot.style.display = hasChecker ? 'inline-block' : 'none';
+        }
+
+        function updateAllCheckerIndicators() {
+            blocks.filter(b => b.type === 'question').forEach(b => updateBlockCheckerIndicator(b.id));
+        }
+
+        function updateAllUngradedHighlights() {
+            blocks.filter(b => b.type === 'question').forEach(block => {
+                const card = document.getElementById(`q-block-${block.id}`);
+                if (!card) return;
+                const isChoiceType = block.questionType === 'choice';
+                const hasInline = !!block.inlineChecker;
+                const stored = checkerFunctions[block.id];
+                const hasWidget = stored && (typeof stored === 'object' ? !!stored.code : !!stored);
+                const needsGrader = !isChoiceType && !hasInline && !hasWidget;
+                let badge = card.querySelector('.no-grader-badge');
+                if (needsGrader) {
+                    card.style.boxShadow = '0 0 0 2px rgba(245, 158, 11, 0.5)';
+                    if (!badge) {
+                        badge = document.createElement('span');
+                        badge.className = 'no-grader-badge text-xs text-amber-400 font-semibold ml-2';
+                        badge.setAttribute('aria-label', 'Warning: No grader configured, this question will be unscored');
+                        badge.innerHTML = '<span aria-hidden="true">⚠</span> No grader — unscored';
+                        const header = card.querySelector('.block-card-header');
+                        if (header) header.appendChild(badge);
+                    }
+                } else {
+                    card.style.boxShadow = '';
+                    if (badge) badge.remove();
+                }
+            });
+        }
+
+        function toggleQAttemptOverride(blockId) {
+            const panel = document.getElementById(`q-attempt-override-${blockId}`);
+            if (panel) panel.classList.toggle('hidden');
+        }
+
+        function toggleQDeadline(blockId) {
+            const panel = document.getElementById(`q-deadline-${blockId}`);
+            if (panel) panel.classList.toggle('hidden');
+        }
+
+        function updateBlockAttemptOverrides(blockId) {
+            const panel = document.getElementById(`q-attempt-override-${blockId}`);
+            if (!panel) return;
+            const enabledCb = panel.querySelector('.q-override-enabled');
+            const maxInput = panel.querySelector('.q-max-attempts');
+            const penaltyInput = panel.querySelector('.q-attempt-penalty');
+            const helpInput = panel.querySelector('.q-help-threshold');
+            const lockCb = panel.querySelector('.q-lock-on-max');
+            const block = blocks.find(b => b.id === blockId);
+            if (!block) return;
+            block.attemptOverrides = {
+                enabled: enabledCb?.checked || false,
+                maxAttempts: parseInt(maxInput?.value || '0') || 0,
+                attemptPenalty: parseInt(penaltyInput?.value || '0') || 0,
+                helpThreshold: parseInt(helpInput?.value || '3') || 3,
+                lockOnMaxAttempts: lockCb?.checked || false
+            };
+            panel.querySelector('.q-override-fields')?.classList.toggle('hidden', !enabledCb?.checked);
+        }
+
 
         function updateEmbedPreview(blockId, type, url, options) {
             const container = document.getElementById(`embed-preview-${blockId}`);
@@ -1253,6 +1407,66 @@ Reading level: [GRADE LEVEL]</p>
             }
 
             html += `</div>`;
+
+            html += `
+<div class="mt-2 pt-2 border-t border-gray-700/30">
+  <button class="text-xs text-gray-500 hover:text-orange-400" onclick="toggleQAttemptOverride('${block.id}')">
+    🔁 Attempt Overrides ▶
+  </button>
+  <div id="q-attempt-override-${block.id}" class="hidden mt-2 space-y-2 bg-gray-900/40 p-3 rounded">
+    <label class="flex items-center gap-2">
+      <input type="checkbox" class="q-override-enabled w-4 h-4 rounded bg-gray-700 border-gray-600" ${block.attemptOverrides?.enabled ? 'checked' : ''}>
+      <span class="text-sm text-white">Override assignment-wide attempt settings for this question</span>
+    </label>
+    <div class="q-override-fields ${block.attemptOverrides?.enabled ? '' : 'hidden'} grid grid-cols-2 gap-2 mt-2">
+      <div>
+        <label class="text-xs text-gray-400">Max Attempts (0=∞)</label>
+        <input type="number" class="q-max-attempts w-full p-1.5 bg-gray-700 border border-gray-600 rounded text-sm" min="0" value="${block.attemptOverrides?.maxAttempts ?? 0}">
+      </div>
+      <div>
+        <label class="text-xs text-gray-400">Pts Lost Per Extra Attempt</label>
+        <input type="number" class="q-attempt-penalty w-full p-1.5 bg-gray-700 border border-gray-600 rounded text-sm" min="0" value="${block.attemptOverrides?.attemptPenalty ?? 0}">
+      </div>
+      <div>
+        <label class="text-xs text-gray-400">Help Threshold</label>
+        <input type="number" class="q-help-threshold w-full p-1.5 bg-gray-700 border border-gray-600 rounded text-sm" min="1" value="${block.attemptOverrides?.helpThreshold ?? 3}">
+      </div>
+      <div class="flex items-center gap-2 mt-3">
+        <input type="checkbox" class="q-lock-on-max w-4 h-4 rounded bg-gray-700 border-gray-600" ${block.attemptOverrides?.lockOnMaxAttempts ? 'checked' : ''}>
+        <label class="text-xs text-white">Lock on max</label>
+      </div>
+    </div>
+  </div>
+</div>`;
+
+            html += `
+<div class="mt-2">
+  <button class="text-xs text-gray-500 hover:text-yellow-400" onclick="toggleQDeadline('${block.id}')">
+    ⏰ Question Deadline ▶
+  </button>
+  <div id="q-deadline-${block.id}" class="hidden mt-2 bg-gray-900/40 p-3 rounded space-y-2">
+    <p class="text-xs text-gray-500">Overrides assignment deadline for this question only. Applies to all students equally.</p>
+    <div class="grid grid-cols-2 gap-2">
+      <div>
+        <label class="text-xs text-gray-400">Opens at (optional)</label>
+        <input type="datetime-local" class="q-open-at w-full p-1.5 bg-gray-700 border border-gray-600 rounded text-sm text-white" value="${block.questionDeadline?.openAt || ''}">
+      </div>
+      <div>
+        <label class="text-xs text-gray-400">Closes at (optional)</label>
+        <input type="datetime-local" class="q-close-at w-full p-1.5 bg-gray-700 border border-gray-600 rounded text-sm text-white" value="${block.questionDeadline?.closeAt || ''}">
+      </div>
+    </div>
+  </div>
+</div>`;
+
+            html += `
+<div id="checker-panel-${block.id}" class="mt-3 pt-3 border-t border-gray-700" style="display:none">
+    <div class="mb-2">
+        <a href="#" onclick="event.preventDefault(); document.getElementById('q-block-${block.id}').scrollIntoView({behavior:'smooth',block:'nearest'})" class="text-xs text-gray-500 hover:text-gray-300">↑ Back to question</a>
+    </div>
+    <div class="checker-widget-host-${block.id}"></div>
+</div>`;
+
             return html;
         }
 
@@ -1339,7 +1553,6 @@ Reading level: [GRADE LEVEL]</p>
                 }
             }
             renderBlocks();
-            updateCheckerSection();
         }
 
         function clearInlineChecker(blockId) {
@@ -1347,69 +1560,10 @@ Reading level: [GRADE LEVEL]</p>
             if (!block) return;
             block.inlineChecker = null;
             renderBlocks();
-            updateCheckerSection();
         }
 
-        function updateCheckerSection() {
-            const section = document.getElementById('checker-section');
-            const select = document.getElementById('checker-question-select');
-            const checkerQuestions = blocks.filter(b => b.type === 'question' && b.questionType !== 'choice' && !b.inlineChecker);
-            if (checkerQuestions.length === 0) {
-                section.classList.add('hidden');
-                return;
-            }
-            section.classList.remove('hidden');
-            const currentVal = select.value;
-            select.innerHTML = '<option value="">— choose a question —</option>';
-            checkerQuestions.forEach(q => {
-                const opt = document.createElement('option');
-                opt.value = q.id;
-                opt.textContent = (q.prompt || `(no prompt)`).slice(0, 60);
-                select.appendChild(opt);
-            });
-            if (currentVal && checkerQuestions.some(q => q.id === currentVal)) {
-                select.value = currentVal;
-            } else if (activeCheckerBlockId && !checkerQuestions.some(q => q.id === activeCheckerBlockId)) {
-                activeCheckerBlockId = null;
-                activeCheckerWidget = null;
-                document.getElementById('checker-widget-container').innerHTML = '';
-                select.value = '';
-            }
-        }
-
-        function loadCheckerForQuestion() {
-            const select = document.getElementById('checker-question-select');
-            const blockId = select.value;
-            const container = document.getElementById('checker-widget-container');
-
-            // Flush current widget state before switching questions
-            if (activeCheckerBlockId && activeCheckerWidget) {
-                const prevContainer = container.querySelector('.checker-widget');
-                if (prevContainer) {
-                    const prevCode = activeCheckerWidget.getCode() || '';
-                    const prevMode = activeCheckerWidget.getMode() || 'simple';
-                    const prevConfig = (prevMode === 'simple') ? serializeSimpleConfig(prevContainer) : null;
-                    checkerFunctions[activeCheckerBlockId] = { code: prevCode, mode: prevMode, simpleConfig: prevConfig };
-                }
-            }
-
-            container.innerHTML = '';
-            activeCheckerWidget = null;
-            activeCheckerBlockId = null;
-            if (!blockId) return;
-            const block = blocks.find(b => b.id === blockId);
-            if (!block) return;
-            activeCheckerBlockId = blockId;
-            const template = document.getElementById('checkerTemplate');
-            const fragment = template.content.cloneNode(true);
-            const widgetDiv = fragment.querySelector('.checker-widget');
-            const existing = checkerFunctions[blockId];
-            const initialCode = existing ? (typeof existing === 'object' ? existing.code || '' : existing) : '';
-            const initialMeta = existing && typeof existing === 'object' ? existing : null;
-            CheckerWidget(widgetDiv, initialCode, initialMeta);
-            container.appendChild(widgetDiv);
-            activeCheckerWidget = container.querySelector('.checker-widget');
-        }
+        // Stub retained so any lingering references (e.g. canvas-parser callbacks) don't throw.
+        function updateCheckerSection() { }
 
         async function saveAssignment() {
             const saveBtn = document.getElementById('saveBtn');
@@ -1427,6 +1581,8 @@ Reading level: [GRADE LEVEL]</p>
                     }
                 }
                 const name = document.getElementById('assignmentNameInput').value.trim() || assignmentData.name;
+                // Flush all open checker widgets before saving
+                Object.keys(checkerWidgets).forEach(id => flushCheckerWidget(id));
                 const newCheckerFunctions = {};
                 blocksToSave.forEach(block => {
                     if (block.type !== 'question') return;
@@ -1439,17 +1595,7 @@ Reading level: [GRADE LEVEL]</p>
                         const code = generateInlineCheckerCode(block.inlineChecker);
                         newCheckerFunctions[block.id] = { code, mode: 'auto' };
                     } else {
-                        if (activeCheckerBlockId === block.id && activeCheckerWidget) {
-                            const mode = activeCheckerWidget.getMode();
-                            const code = activeCheckerWidget.getCode();
-                            const entry = { code, mode };
-                            if (mode === 'simple') {
-                                try {
-                                    entry.simpleConfig = serializeSimpleConfig(activeCheckerWidget);
-                                } catch (e) { }
-                            }
-                            newCheckerFunctions[block.id] = entry;
-                        } else if (checkerFunctions[block.id]) {
+                        if (checkerFunctions[block.id]) {
                             newCheckerFunctions[block.id] = checkerFunctions[block.id];
                         }
                     }
@@ -1699,6 +1845,7 @@ Reading level: [GRADE LEVEL]</p>
         function toggleHelp() {
             document.getElementById('help-drawer').classList.toggle('open');
             document.getElementById('help-overlay').classList.toggle('hidden');
+            updateHelpContent(currentMode);
         }
 
         function copyTemplate(id) {
@@ -1760,6 +1907,33 @@ Reading level: [GRADE LEVEL]</p>
             if (typeof stored === 'object') return stored.code || '';
             return stored;
         }
+
+        function updateHelpContent(mode) {
+            const s = document.getElementById('help-structured-content');
+            const c = document.getElementById('help-canvas-content');
+            if (!s || !c) return;
+            if (mode === 'canvas') { s.classList.add('hidden'); c.classList.remove('hidden'); }
+            else { c.classList.add('hidden'); s.classList.remove('hidden'); }
+        }
+
+        document.addEventListener('change', function(e) {
+            const card = e.target.closest('[data-block-id]');
+            if (!card) return;
+            const blockId = card.dataset.blockId;
+            if (!blockId) return;
+
+            if (e.target.matches('.q-override-enabled, .q-max-attempts, .q-attempt-penalty, .q-help-threshold, .q-lock-on-max')) {
+                updateBlockAttemptOverrides(blockId);
+            }
+
+            if (e.target.matches('.q-open-at, .q-close-at')) {
+                const block = blocks.find(b => b.id === blockId);
+                if (!block) return;
+                const openAt = card.querySelector('.q-open-at')?.value || null;
+                const closeAt = card.querySelector('.q-close-at')?.value || null;
+                block.questionDeadline = { openAt: openAt || null, closeAt: closeAt || null };
+            }
+        });
     </script>
 </body>
 </html>

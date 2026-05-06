@@ -1443,6 +1443,39 @@
                         slideStates[idx] = { answer: sub.answer, score: sub.score };
                     }
                 });
+                // For blank assignments, restore attempt progress from questionProgress docs
+                if (assignmentData.type === 'blank') {
+                    try {
+                        const allBlocks = assignmentData.blocks || [];
+                        const questionBlocks = allBlocks.filter(b => b.type === 'question');
+                        const progressSnap = await db.collection("questionProgress")
+                            .where("studentEmail", "==", userProfile.email)
+                            .where("assignmentId", "==", assignmentData.id)
+                            .get();
+                        progressSnap.docs.forEach(doc => {
+                            const data = doc.data();
+                            const blockId = data.blockId;
+                            if (blockId) {
+                                questionProgressData[blockId] = {
+                                    attemptCount: data.attemptCount || 0,
+                                    bestScore: data.bestScore || 0,
+                                    locked: data.locked || false
+                                };
+                            }
+                        });
+                        // Re-evaluate locks
+                        questionBlocks.forEach(block => {
+                            const at2 = assignmentData.attemptTracking || {};
+                            const qo = block.attemptOverrides?.enabled ? block.attemptOverrides : null;
+                            const mx = qo?.maxAttempts ?? (at2.maxAttempts || 0);
+                            const lk = qo?.lockOnMaxAttempts ?? (at2.lockOnMaxAttempts || false);
+                            const prog = questionProgressData[block.id];
+                            if (prog && mx > 0 && prog.attemptCount >= mx && lk) prog.locked = true;
+                        });
+                    } catch (e) {
+                        console.error("Error restoring blank attempt data:", e);
+                    }
+                }
             } catch (error) {
                 console.error("Error fetching previous submissions:", error);
                 showToast("Could not load your previous work.", { color: 'red' });
@@ -3369,17 +3402,40 @@
                     const state = slideStates[idx] || {};
                     const savedAnswer = state.answer || '';
                     const savedScore = state.score;
-                    const scoreDisplay = savedScore !== undefined
-                        ? `<span class="ml-2 font-bold ${savedScore >= 90 ? 'text-green-400' : 'text-yellow-400'}">Score: ${savedScore}</span>`
+
+                    // Per-question deadline check
+                    const qDl = block.questionDeadline;
+                    const now = new Date();
+                    let qOpen = true;
+                    let qDeadlineMsg = '';
+                    if (qDl?.openAt) {
+                        const openDate = new Date(qDl.openAt);
+                        if (now < openDate) { qOpen = false; qDeadlineMsg = `Available after ${openDate.toLocaleString()}`; }
+                    }
+                    if (qDl?.closeAt) {
+                        const closeDate = new Date(qDl.closeAt);
+                        if (now > closeDate) { qOpen = false; qDeadlineMsg = `Closed at ${closeDate.toLocaleString()}`; }
+                    }
+
+                    const prog = questionProgressData[block.id];
+                    const at = assignmentData.attemptTracking || {};
+                    const qOver = block.attemptOverrides?.enabled ? block.attemptOverrides : null;
+                    const maxAttempts = qOver?.maxAttempts ?? (at.maxAttempts || 0);
+                    const attemptLabel = prog && prog.attemptCount > 0 && (prog.attemptCount > 1 || maxAttempts > 0)
+                        ? ` • Attempt ${prog.attemptCount}${maxAttempts > 0 ? '/' + maxAttempts : ''}`
                         : '';
-                    
+                    const scoreDisplay = savedScore !== undefined
+                        ? `<span class="font-bold ${savedScore >= 90 ? 'text-green-400' : savedScore > 0 ? 'text-yellow-400' : 'text-red-400'}">Score: ${savedScore}</span><span class="text-xs text-gray-500 ml-1">${attemptLabel}</span>`
+                        : '';
+
+                    const inputDisabled = isLocked || !qOpen;
                     let inputHTML = '';
                     if (block.questionType === 'choice' && block.choices && block.choices.length > 0) {
                         inputHTML = `<div class="space-y-2 mt-2" id="blank-q-choices-${block.id}">`;
                         block.choices.forEach((choice, ci) => {
                             const checked = String(savedAnswer) === String(ci) ? 'checked' : '';
                             inputHTML += `<label class="flex items-center gap-3 cursor-pointer p-2 rounded hover:bg-gray-700">
-                                <input type="radio" name="blank-choice-${block.id}" value="${ci}" ${checked} ${isLocked ? 'disabled' : ''}
+                                <input type="radio" name="blank-choice-${block.id}" value="${ci}" ${checked} ${inputDisabled ? 'disabled' : ''}
                                     id="blank-q-input-${block.id}-${ci}"
                                     class="w-4 h-4 text-yellow-400">
                                 <span>${renderer.escapeHtml(choice)}</span>
@@ -3391,13 +3447,18 @@
                     } else if (block.questionType === 'number') {
                         inputHTML = `<input type="number" id="blank-q-input-${block.id}" value="${renderer.escapeHtml(String(savedAnswer))}"
                             placeholder="Enter a number..."
-                            ${isLocked ? 'disabled' : ''}
+                            ${inputDisabled ? 'disabled' : ''}
                             class="w-full mt-2 p-3 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500">`;
                     } else {
                         inputHTML = `<textarea id="blank-q-input-${block.id}" rows="4"
                             placeholder="Your answer here..."
-                            ${isLocked ? 'disabled' : ''}
+                            ${inputDisabled ? 'disabled' : ''}
                             class="w-full mt-2 p-3 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500">${renderer.escapeHtml(String(savedAnswer))}</textarea>`;
+                    }
+
+                    // Append deadline message below input if question is deadline-closed
+                    if (!qOpen) {
+                        inputHTML += `<p class="text-xs text-orange-400 mt-1">🔒 ${renderer.escapeHtml(qDeadlineMsg)}</p>`;
                     }
 
                     const pts = block.points || 100;
@@ -3408,10 +3469,15 @@
                         </div>
                         ${inputHTML}
                         <div class="mt-3 flex items-center gap-3">
-                            ${!isLocked ? `<button onclick="blankCheckAndSave('${block.id}', ${idx})"
-                                class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-colors">
-                                Check &amp; Save
-                            </button>` : ''}
+                            ${(!isLocked && qOpen) ? (() => {
+                                if (prog && prog.locked) {
+                                    return `<button disabled aria-label="Maximum attempts reached for this question" class="blank-check-btn bg-green-600 text-white font-bold py-2 px-4 rounded opacity-50 cursor-not-allowed">🔒 Max Attempts Reached</button>`;
+                                }
+                                const btnLabel = (maxAttempts > 0 && prog)
+                                    ? `Check &amp; Save (${maxAttempts - prog.attemptCount} left)`
+                                    : 'Check &amp; Save';
+                                return `<button onclick="blankCheckAndSave('${block.id}', ${idx})" class="blank-check-btn bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-colors">${btnLabel}</button>`;
+                            })() : (!isLocked && !qOpen ? `<span class="text-xs text-orange-400">🔒 ${renderer.escapeHtml(qDeadlineMsg)}</span>` : '')}
                             <span id="blank-q-result-${block.id}" class="text-sm font-semibold">${scoreDisplay}</span>
                         </div>
                     </div>`;
@@ -3438,6 +3504,14 @@
             const block = questionBlocks[qIndex];
             if (!block || block.id !== blockId) return;
 
+            // Per-question deadline check
+            const qDl = block.questionDeadline;
+            if (qDl) {
+                const now = new Date();
+                if (qDl.openAt && now < new Date(qDl.openAt)) { showToast("This question is not open yet.", { color: 'red' }); return; }
+                if (qDl.closeAt && now > new Date(qDl.closeAt)) { showToast("This question has closed.", { color: 'red' }); return; }
+            }
+
             let studentAnswer;
             if (block.questionType === 'choice') {
                 const checked = document.querySelector(`input[name="blank-choice-${block.id}"]:checked`);
@@ -3454,6 +3528,27 @@
                 }
                 studentAnswer = inputEl.value.trim();
             }
+
+            // Read attempt config
+            const at = assignmentData.attemptTracking || {};
+            const qOver = block.attemptOverrides?.enabled ? block.attemptOverrides : null;
+            const maxAttempts = qOver?.maxAttempts ?? (at.maxAttempts || 0);
+            const attemptPenalty = qOver?.attemptPenalty ?? (at.attemptPenalty || 0);
+            const helpThreshold = qOver?.helpThreshold ?? (at.helpThreshold || 3);
+            const lockOnMax = qOver?.lockOnMaxAttempts ?? (at.lockOnMaxAttempts || false);
+
+            // Track attempts
+            const progressKey = block.id;
+            if (!questionProgressData[progressKey]) {
+                questionProgressData[progressKey] = { attemptCount: 0, bestScore: 0, locked: false };
+            }
+            const progress = questionProgressData[progressKey];
+            if (progress.locked) {
+                showToast("This question is locked — max attempts reached.", { color: 'red' });
+                return;
+            }
+            progress.attemptCount += 1;
+            const attemptCount = progress.attemptCount;
 
             // Compute score
             let score = 0;
@@ -3483,12 +3578,37 @@
                 }
             }
 
+            // Apply attempt penalty
+            const extraAttempts = Math.max(0, attemptCount - 1);
+            score = Math.max(0, score - extraAttempts * attemptPenalty);
+
+            progress.bestScore = Math.max(progress.bestScore || 0, score);
+            if (maxAttempts > 0 && attemptCount >= maxAttempts && lockOnMax) {
+                progress.locked = true;
+            }
+            const shouldFlagHelp = attemptCount >= helpThreshold && helpThreshold > 0;
+
             slideStates[qIndex] = { answer: studentAnswer, score };
+
+            // Update Check & Save button
+            const checkBtn = document.querySelector(`#blank-q-card-${block.id} .blank-check-btn`);
+            if (checkBtn) {
+                if (progress.locked) {
+                    checkBtn.disabled = true;
+                    checkBtn.textContent = '🔒 Max Attempts Reached';
+                    checkBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                } else if (maxAttempts > 0) {
+                    const remaining = maxAttempts - attemptCount;
+                    checkBtn.textContent = `Check & Save (${remaining} left)`;
+                }
+            }
 
             // Update result display
             const resultEl = document.getElementById(`blank-q-result-${block.id}`);
             if (resultEl) {
-                resultEl.innerHTML = `<span class="font-bold ${score >= 90 ? 'text-green-400' : 'text-yellow-400'}">Score: ${score}</span>`;
+                const attemptLabel = attemptCount > 1 || maxAttempts > 0
+                    ? ` • Attempt ${attemptCount}${maxAttempts > 0 ? '/' + maxAttempts : ''}` : '';
+                resultEl.innerHTML = `<span class="font-bold ${score >= 90 ? 'text-green-400' : score > 0 ? 'text-yellow-400' : 'text-red-400'}">Score: ${score}</span><span class="text-xs text-gray-500 ml-1">${attemptLabel}</span>`;
             }
 
             // Save to Firestore
@@ -3516,10 +3636,12 @@
                     studentEmail: userProfile.email,
                     assignmentId: assignmentData.id,
                     slideIndex: qIndex,
-                    bestScore: score,
+                    blockId: block.id,
+                    bestScore: progress.bestScore,
                     latestScore: score,
-                    attemptCount: 1,
-                    locked: false,
+                    attemptCount: attemptCount,
+                    locked: progress.locked,
+                    ...(shouldFlagHelp ? { helpFlag: true } : {}),
                     timestamp: firebase.firestore.FieldValue.serverTimestamp()
                 }, { merge: true });
 
