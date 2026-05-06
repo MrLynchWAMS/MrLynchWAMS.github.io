@@ -147,7 +147,7 @@
         return pass ? (points || 100) : 0;
     }
 
-    function renderYoutube(url) {
+    function renderYoutube(url, options) {
         let videoId = '';
         const youtubeIdRegex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
         const match = url.match(youtubeIdRegex);
@@ -155,7 +155,12 @@
 
         if (!videoId) return `<div class="bg-red-900/20 p-4 rounded text-red-400 text-sm">Invalid YouTube URL: ${escapeHtml(url)}</div>`;
         
-        return `<div class="relative w-full pb-[56.25%] h-0 rounded-lg overflow-hidden border border-gray-700 bg-black">
+        let style = '';
+        if (options && !isNaN(options)) {
+            style = `style="height: ${options}px; padding-bottom: 0;"`;
+        }
+
+        return `<div class="relative w-full pb-[56.25%] h-0 rounded-lg overflow-hidden border border-gray-700 bg-black" ${style}>
             <iframe src="https://www.youtube.com/embed/${videoId}" 
                 class="absolute top-0 left-0 w-full h-full" 
                 frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
@@ -163,8 +168,12 @@
         </div>`;
     }
 
-    function renderIframe(url) {
-        return `<div class="relative w-full h-[500px] rounded-lg overflow-hidden border border-gray-700 bg-gray-900">
+    function renderIframe(url, options) {
+        let height = '500px';
+        if (options && !isNaN(options)) height = options + 'px';
+        else if (options) height = options; // Allow strings like "80vh"
+
+        return `<div class="relative w-full rounded-lg overflow-hidden border border-gray-700 bg-gray-900" style="height: ${height};">
             <iframe src="${escapeHtml(url)}" 
                 class="w-full h-full" 
                 frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
