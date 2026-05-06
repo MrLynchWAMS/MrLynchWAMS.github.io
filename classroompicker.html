@@ -3361,9 +3361,9 @@
                         ${hasCaption ? `<figcaption class="mt-2 text-sm text-gray-400 italic">${renderer.escapeHtml(block.caption)}</figcaption>` : ''}
                     </figure>`;
                 } else if (block.type === 'youtube') {
-                    html += renderer.renderYoutube(block.url || '');
+                    html += renderer.renderYoutube(block.url || '', block.options);
                 } else if (block.type === 'iframe') {
-                    html += renderer.renderIframe(block.url || '');
+                    html += renderer.renderIframe(block.url || '', block.options);
                 } else if (block.type === 'question') {
                     const idx = qIndex;
                     const state = slideStates[idx] || {};
