@@ -125,6 +125,21 @@
 
     function evaluateInlineChecker(studentAnswer, checker) {
         if (!checker) return 0;
+
+        // Multi-condition support (from canvas AND/OR syntax)
+        if (checker.type === 'multi') {
+            const ctx = {};
+            const results = checker.conditions.map(c => {
+                const s = String(studentAnswer || '').toLowerCase().trim();
+                if (c.op === 'contains') return s.includes(String(c.value || '').toLowerCase());
+                if (c.op === 'not_contains') return !s.includes(String(c.value || '').toLowerCase());
+                if (c.op === 'equals_str') return s === String(c.value || '').toLowerCase();
+                return false;
+            });
+            const pass = checker.logic === 'AND' ? results.every(Boolean) : results.some(Boolean);
+            return pass ? (checker.points || 100) : 0;
+        }
+
         const { op, value, value2, tolerance, points } = checker;
         const studentNum = parseFloat(studentAnswer);
         const checkNum = parseFloat(value);

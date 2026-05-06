@@ -24,6 +24,81 @@
         return (String(block.prompt || '').toLowerCase().trim()) + '|' + (block.questionType || 'text');
     }
 
+    // ------------------------------------------------------------------ condition helpers
+
+    /**
+     * parseSingleCondition(condStr, points)
+     * Parses one simple condition string into an inlineChecker-style object.
+     * Returns null if unrecognized.
+     */
+    function parseSingleCondition(condStr, points) {
+        const s = (condStr || '').trim();
+        const isMatch = s.match(/^is\s+"([^"]+)"$/i);
+        if (isMatch) return { op: 'equals_str', value: isMatch[1], value2: null, tolerance: 0, points };
+        const containsMatch = s.match(/^contains\s+"([^"]+)"$/i);
+        if (containsMatch) return { op: 'contains', value: containsMatch[1], value2: null, tolerance: 0, points };
+        const notContainsMatch = s.match(/^not_contains\s+"([^"]+)"$/i);
+        if (notContainsMatch) return { op: 'not_contains', value: notContainsMatch[1], value2: null, tolerance: 0, points };
+        return null;
+    }
+
+    /**
+     * parseMultiCondition(condStr, points, warnings)
+     * Parses a possibly multi-condition string for text questions.
+     * Supports:
+     *   - contains "a" AND contains "b"
+     *   - contains "a" OR contains "b"
+     *   - contains "a", "b", "c"  (implicit AND)
+     *   - is "exact"              (shorthand for equals_str)
+     *   - contains "a"            (single condition, falls back)
+     * Returns an inlineChecker object or null.
+     */
+    function parseMultiCondition(condStr, points, warnings) {
+        const s = (condStr || '').trim();
+
+        // AND split
+        if (/\bAND\b/.test(s)) {
+            const parts = s.split(/\bAND\b/).map(p => p.trim());
+            const conditions = parts.map(p => parseSingleCondition(p, points)).filter(Boolean);
+            if (conditions.length === parts.length && conditions.length > 0) {
+                return { type: 'multi', logic: 'AND', conditions, points };
+            }
+        }
+
+        // OR split
+        if (/\bOR\b/.test(s)) {
+            const parts = s.split(/\bOR\b/).map(p => p.trim());
+            const conditions = parts.map(p => parseSingleCondition(p, points)).filter(Boolean);
+            if (conditions.length === parts.length && conditions.length > 0) {
+                return { type: 'multi', logic: 'OR', conditions, points };
+            }
+        }
+
+        // Comma-separated contains shorthand: contains "a", "b", "c"
+        const commaContainsMatch = s.match(/^contains\s+"([^"]+)"(?:\s*,\s*"([^"]+)")+$/i);
+        if (commaContainsMatch) {
+            const values = [];
+            const re = /"([^"]+)"/g;
+            let m;
+            while ((m = re.exec(s)) !== null) values.push(m[1]);
+            if (values.length > 1) {
+                return {
+                    type: 'multi',
+                    logic: 'AND',
+                    conditions: values.map(v => ({ op: 'contains', value: v, value2: null, tolerance: 0, points })),
+                    points
+                };
+            }
+        }
+
+        // Single condition fallback
+        const single = parseSingleCondition(s, points);
+        if (single) return single;
+
+        if (warnings) warnings.push(`Unrecognized condition for text question: "${condStr}". Treating as open text.`);
+        return null;
+    }
+
     // ------------------------------------------------------------------ parser
 
     /**
@@ -86,17 +161,8 @@
             if (typePart === 'text') {
                 questionType = 'text';
                 if (parts.length > 1) {
-                    // Try to parse inline checker: contains "keyword"
                     const condPart = parts[1].trim();
-                    const containsMatch = condPart.match(/^contains\s+"([^"]+)"$/i);
-                    const notContainsMatch = condPart.match(/^not_contains\s+"([^"]+)"$/i);
-                    if (containsMatch) {
-                        inlineChecker = { op: 'contains', value: containsMatch[1], value2: null, tolerance: 0, points };
-                    } else if (notContainsMatch) {
-                        inlineChecker = { op: 'not_contains', value: notContainsMatch[1], value2: null, tolerance: 0, points };
-                    } else {
-                        warnings.push(`Unrecognized condition for text question: "${condPart}". Treating as open text.`);
-                    }
+                    inlineChecker = parseMultiCondition(condPart, points, warnings);
                 }
             } else if (typePart === 'number') {
                 questionType = 'number';
@@ -326,6 +392,13 @@
 
         if (block.inlineChecker) {
             const ic = block.inlineChecker;
+            if (ic.type === 'multi') {
+                const parts = ic.conditions.map(c => {
+                    if (c.op === 'equals_str') return `is "${c.value}"`;
+                    return `${c.op} "${c.value}"`;
+                });
+                return `[q: ${block.questionType} | ${parts.join(` ${ic.logic} `)}${ptsStr}]`;
+            }
             if (ic.op === '==') {
                 const tol = ic.tolerance ? ` ±${ic.tolerance}` : '';
                 return `[q: ${block.questionType} | answer==${ic.value}${tol}${ptsStr}]`;
@@ -341,6 +414,8 @@
                 return `[q: ${block.questionType} | contains "${ic.value}"${ptsStr}]`;
             } else if (ic.op === 'not_contains') {
                 return `[q: ${block.questionType} | not_contains "${ic.value}"${ptsStr}]`;
+            } else if (ic.op === 'equals_str') {
+                return `[q: ${block.questionType} | is "${ic.value}"${ptsStr}]`;
             }
         }
 
