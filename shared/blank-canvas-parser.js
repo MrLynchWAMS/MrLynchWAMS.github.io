@@ -177,19 +177,19 @@
                 continue;
             }
 
-            // @[youtube](url)
-            const ytMatch = line.match(/^@\[youtube\]\((https?:\/\/[^\s)]+)\)\s*$/);
+            // @[youtube](url "options")
+            const ytMatch = line.match(/^\s*@\[youtube\]\(([^\s)]+)(?:\s+"([^"]*)")?\)\s*$/i);
             if (ytMatch) {
                 flushText();
-                blocks.push({ id: genId('b'), type: 'youtube', url: ytMatch[1] });
+                blocks.push({ id: genId('b'), type: 'youtube', url: ytMatch[1], options: ytMatch[2] || '' });
                 continue;
             }
 
-            // @[iframe](url)
-            const ifMatch = line.match(/^@\[iframe\]\((https?:\/\/[^\s)]+)\)\s*$/);
+            // @[iframe](url "options")
+            const ifMatch = line.match(/^\s*@\[iframe\]\(([^\s)]+)(?:\s+"([^"]*)")?\)\s*$/i);
             if (ifMatch) {
                 flushText();
-                blocks.push({ id: genId('b'), type: 'iframe', url: ifMatch[1] });
+                blocks.push({ id: genId('b'), type: 'iframe', url: ifMatch[1], options: ifMatch[2] || '' });
                 continue;
             }
 
@@ -293,9 +293,11 @@
                 const caption = block.caption ? ` "${block.caption}"` : '';
                 lines.push(`![${block.alt || ''}](${block.url || ''}${caption})`);
             } else if (block.type === 'youtube') {
-                lines.push(`@[youtube](${block.url || ''})`);
+                const opt = block.options ? ` "${block.options}"` : '';
+                lines.push(`@[youtube](${block.url || ''}${opt})`);
             } else if (block.type === 'iframe') {
-                lines.push(`@[iframe](${block.url || ''})`);
+                const opt = block.options ? ` "${block.options}"` : '';
+                lines.push(`@[iframe](${block.url || ''}${opt})`);
             } else if (block.type === 'question') {
                 const prompt = block.prompt || '';
                 lines.push(`## ${prompt}`);
@@ -383,6 +385,15 @@
                 const inlineQ = line.match(/\[q:\s*(.*?)\]/);
                 if (!inlineQ) {
                     warnings.push(`Line ${i + 1}: Malformed [q:] tag.`);
+                }
+            }
+
+            // Check for malformed embeds
+            if (line.includes('@[')) {
+                const isYT = line.includes('@[youtube]');
+                const isIF = line.includes('@[iframe]');
+                if ((isYT || isIF) && !ytMatch && !ifMatch) {
+                    warnings.push(`Line ${i + 1}: Malformed ${isYT ? 'YouTube' : 'Iframe'} tag. Ensure it follows the format: @[type](url) or @[type](url "height")`);
                 }
             }
         });
