@@ -1088,9 +1088,9 @@ Reading level: [GRADE LEVEL]</p>
                         <div class="flex gap-2">
                             <button onclick="moveBlock('${block.id}', 'up')" ${idx === 0 ? 'disabled' : ''} class="text-gray-400 hover:text-white disabled:opacity-30 px-2 py-1 rounded text-lg" title="Move Up">▲</button>
                             <button onclick="moveBlock('${block.id}', 'down')" ${idx === blocks.length - 1 ? 'disabled' : ''} class="text-gray-400 hover:text-white disabled:opacity-30 px-2 py-1 rounded text-lg" title="Move Down">▼</button>
-                            <button onclick="toggleCheckerPanel('${block.id}')" class="checker-toggle-btn relative text-xs bg-indigo-700 hover:bg-indigo-600 text-white px-2 py-1 rounded">
-                                ⚙ Grader
-                                <span class="checker-dot absolute -top-1 -right-1 w-2 h-2 rounded-full bg-green-400" style="display:none"></span>
+                            <button onclick="toggleCheckerPanel('${block.id}')" class="checker-toggle-btn relative text-xs bg-indigo-700 hover:bg-indigo-600 text-white px-2 py-1 rounded" aria-label="Configure grader for this question">
+                                <span aria-hidden="true">⚙</span> Grader
+                                <span class="checker-dot absolute -top-1 -right-1 w-2 h-2 rounded-full bg-green-400" style="display:none" aria-hidden="true"></span>
                             </button>
                             <button onclick="deleteBlock('${block.id}')" class="text-red-400 hover:text-red-300 font-bold px-2 py-1 rounded text-sm" title="Delete">🗑</button>
                         </div>
@@ -1293,7 +1293,8 @@ Reading level: [GRADE LEVEL]</p>
                     if (!badge) {
                         badge = document.createElement('span');
                         badge.className = 'no-grader-badge text-xs text-amber-400 font-semibold ml-2';
-                        badge.textContent = '⚠ No grader — unscored';
+                        badge.setAttribute('aria-label', 'Warning: No grader configured, this question will be unscored');
+                        badge.innerHTML = '<span aria-hidden="true">⚠</span> No grader — unscored';
                         const header = card.querySelector('.block-card-header');
                         if (header) header.appendChild(badge);
                     }
