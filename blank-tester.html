@@ -83,9 +83,9 @@
         const previewContainer = document.getElementById('previewContainer');
         const warningBadge = document.getElementById('warningBadge');
         let debounceTimer = null;
+        let currentBlocks = [];
 
-        // Load help content from blank-editor.html (or just hardcode the relevant parts)
-        // For the tester, we'll just hardcode a clean version.
+        // Load help content
         const syntaxReference = `
             <div class="space-y-6 text-sm">
                 <div>
@@ -107,19 +107,33 @@
                     </ul>
                 </div>
                 <div>
-                    <h3 class="font-bold text-white mb-2 border-b border-gray-700 pb-1">Media</h3>
+                    <h3 class="font-bold text-white mb-2 border-b border-gray-700 pb-1">Embeds & Media</h3>
                     <ul class="space-y-1 text-gray-300">
                         <li><code class="text-yellow-300">![alt](url)</code> (Image)</li>
-                        <li><code class="text-yellow-300">![alt](url "caption")</code> (with Caption)</li>
+                        <li><code class="text-yellow-300">@[youtube](url)</code> (YouTube Video)</li>
+                        <li><code class="text-yellow-300">@[iframe](url)</code> (Website/Simulation)</li>
                     </ul>
                 </div>
                 <div>
                     <h3 class="font-bold text-white mb-2 border-b border-gray-700 pb-1">Questions</h3>
-                    <p class="text-xs text-gray-400 mb-2">Two-line format: Heading then Tag</p>
+                    <p class="text-[10px] text-gray-400 mb-2 uppercase tracking-tighter">Two-line format: ## Heading then [q: Tag]</p>
                     <ul class="space-y-2 text-gray-300">
-                        <li><code class="text-yellow-300">[q: text]</code> (Open text)</li>
-                        <li><code class="text-yellow-300">[q: choice | A. Opt1, B. Opt2* | 100pts]</code> (Choice)</li>
-                        <li><code class="text-yellow-300">[q: number | answer==5 ±0.1 | 100pts]</code> (Number)</li>
+                        <li>
+                            <code class="text-yellow-300">[q: text]</code><br>
+                            <span class="text-[10px] text-gray-500 italic">Open-ended response (requires JS Checker in Editor)</span>
+                        </li>
+                        <li>
+                            <code class="text-yellow-300">[q: text | contains "word"]</code><br>
+                            <span class="text-[10px] text-gray-500 italic">Checks if response contains a keyword</span>
+                        </li>
+                        <li>
+                            <code class="text-yellow-300">[q: choice | A. Opt, B. Correct* | 100pts]</code><br>
+                            <span class="text-[10px] text-gray-500 italic">Multiple choice (mark correct with *)</span>
+                        </li>
+                        <li>
+                            <code class="text-yellow-300">[q: number | answer==10 ±0.1]</code><br>
+                            <span class="text-[10px] text-gray-500 italic">Numeric with tolerance</span>
+                        </li>
                     </ul>
                 </div>
             </div>
@@ -135,8 +149,8 @@
             const markup = markupInput.value;
             const result = window.parseCanvasToBlocks(markup);
             const renderer = window.BlankRenderer;
+            currentBlocks = result.blocks;
             
-            // Warnings
             if (result.warnings.length > 0) {
                 warningBadge.textContent = `${result.warnings.length} warning${result.warnings.length > 1 ? 's' : ''}`;
                 warningBadge.classList.remove('hidden');
@@ -151,45 +165,45 @@
             }
 
             let html = '';
-            let qIndex = 0;
-
-            result.blocks.forEach(block => {
+            currentBlocks.forEach((block, idx) => {
                 if (block.type === 'text') {
                     const rendered = renderer.renderTextBlockContent(block.content || '');
-                    html += `<div class="blank-text-content bg-gray-800/40 p-4 rounded-lg text-gray-200 leading-relaxed border border-gray-800">${rendered}</div>`;
+                    html += `<div class="blank-text-content bg-gray-800/40 p-4 rounded-lg text-gray-200 border border-gray-800">${rendered}</div>`;
                 } else if (block.type === 'image') {
-                    const hasCaption = block.caption && block.caption.trim();
                     html += `<figure class="text-center">
                         <img src="${renderer.escapeHtml(block.url || '')}" alt="${renderer.escapeHtml(block.alt || '')}" class="max-w-full mx-auto rounded-lg border border-gray-800">
-                        ${hasCaption ? `<figcaption class="mt-2 text-sm text-gray-400 italic">${renderer.escapeHtml(block.caption)}</figcaption>` : ''}
+                        ${block.caption ? `<figcaption class="mt-2 text-sm text-gray-400 italic">${renderer.escapeHtml(block.caption)}</figcaption>` : ''}
                     </figure>`;
+                } else if (block.type === 'youtube') {
+                    html += renderer.renderYoutube(block.url || '');
+                } else if (block.type === 'iframe') {
+                    html += renderer.renderIframe(block.url || '');
                 } else if (block.type === 'question') {
                     let inputHTML = '';
                     if (block.questionType === 'choice' && block.choices && block.choices.length > 0) {
-                        inputHTML = `<div class="space-y-2 mt-2">`;
+                        inputHTML = `<div class="space-y-2 mt-2" id="q-input-${block.id}">`;
                         block.choices.forEach((choice, ci) => {
                             inputHTML += `<label class="flex items-center gap-3 cursor-pointer p-2 rounded hover:bg-gray-800/50">
-                                <input type="radio" name="tester-choice-${block.id}" value="${ci}" class="w-4 h-4 text-yellow-400">
+                                <input type="radio" name="choice-${block.id}" value="${ci}" class="w-4 h-4 text-yellow-400">
                                 <span>${renderer.escapeHtml(choice)}</span>
                             </label>`;
                         });
                         inputHTML += `</div>`;
                     } else if (block.questionType === 'number') {
-                        inputHTML = `<input type="number" placeholder="Enter a number..." class="w-full mt-2 p-3 bg-gray-800 border border-gray-700 rounded focus:outline-none focus:ring-1 focus:ring-yellow-500">`;
+                        inputHTML = `<input type="number" id="q-input-${block.id}" placeholder="Enter a number..." class="w-full mt-2 p-3 bg-gray-800 border border-gray-700 rounded focus:outline-none focus:ring-1 focus:ring-yellow-500">`;
                     } else {
-                        inputHTML = `<textarea rows="3" placeholder="Your answer here..." class="w-full mt-2 p-3 bg-gray-800 border border-gray-700 rounded focus:outline-none focus:ring-1 focus:ring-yellow-500"></textarea>`;
+                        inputHTML = `<textarea id="q-input-${block.id}" rows="3" placeholder="Your answer here..." class="w-full mt-2 p-3 bg-gray-800 border border-gray-700 rounded focus:outline-none focus:ring-1 focus:ring-yellow-500"></textarea>`;
                     }
 
-                    const pts = block.points || 100;
-                    html += `<div class="bg-gray-800 p-5 rounded-lg border border-gray-700 shadow-lg">
+                    html += `<div class="bg-gray-800 p-5 rounded-lg border border-gray-700 shadow-lg" id="card-${block.id}">
                         <div class="flex justify-between items-start mb-1">
                             <p class="font-semibold text-base text-white">${renderer.escapeHtml(block.prompt || '')}</p>
-                            <span class="text-[10px] uppercase tracking-wider text-gray-500 bg-gray-900 px-2 py-0.5 rounded">${pts} pts</span>
+                            <span class="text-[10px] uppercase tracking-wider text-gray-500 bg-gray-900 px-2 py-0.5 rounded">${block.points || 100} pts</span>
                         </div>
                         ${inputHTML}
                         <div class="mt-4 pt-4 border-t border-gray-700/50 flex items-center justify-between">
-                            <button class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-1.5 px-4 rounded text-sm transition-colors">Check & Save</button>
-                            <span class="text-xs text-gray-500 italic">Preview Mode</span>
+                            <button onclick="testCheck('${block.id}', ${idx})" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-1.5 px-4 rounded text-sm transition-colors">Check Answer</button>
+                            <span id="result-${block.id}" class="text-sm font-bold"></span>
                         </div>
                     </div>`;
                 }
@@ -199,15 +213,42 @@
             renderer.renderMathContent(previewContainer);
         }
 
+        function testCheck(blockId, blockIdx) {
+            const block = currentBlocks[blockIdx];
+            if (!block) return;
+            
+            let studentAnswer = '';
+            if (block.questionType === 'choice') {
+                const checked = document.querySelector(`input[name="choice-${blockId}"]:checked`);
+                studentAnswer = checked ? checked.value : '';
+            } else {
+                studentAnswer = document.getElementById(`q-input-${blockId}`).value;
+            }
+
+            let score = 0;
+            if (block.questionType === 'choice') {
+                score = (parseInt(studentAnswer) === block.correctChoiceIndex) ? (block.points || 100) : 0;
+            } else if (block.inlineChecker) {
+                score = window.BlankRenderer.evaluateInlineChecker(studentAnswer, block.inlineChecker);
+            } else {
+                // Open text with no inline checker
+                score = studentAnswer.trim() ? "?? (No Rule)" : 0;
+            }
+
+            const resultEl = document.getElementById(`result-${blockId}`);
+            if (typeof score === 'string') {
+                resultEl.textContent = score;
+                resultEl.className = "text-sm font-bold text-gray-400";
+            } else {
+                resultEl.textContent = `Score: ${score}`;
+                resultEl.className = `text-sm font-bold ${score >= 90 ? 'text-green-400' : 'text-yellow-400'}`;
+            }
+        }
+
         markupInput.oninput = () => {
             clearTimeout(debounceTimer);
             debounceTimer = setTimeout(updatePreview, 300);
         };
-
-        // Initialize with default content if empty
-        if (!markupInput.value.trim()) {
-            // Optional: load some example content?
-        }
     </script>
 </body>
 </html>
