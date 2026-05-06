@@ -3304,22 +3304,7 @@
         // =======================================
 
         function evaluateInlineChecker(studentAnswer, checker) {
-            const { op, value, value2, tolerance, points } = checker;
-            const pts = points || 100;
-            const s = String(studentAnswer).toLowerCase().trim();
-            const sLower = String(value).toLowerCase();
-            const n = parseFloat(s);
-            if (op === 'contains') return s.includes(sLower) ? pts : 0;
-            if (op === 'not_contains') return !s.includes(sLower) ? pts : 0;
-            if (op === '==') return (tolerance > 0 ? Math.abs(n - value) <= tolerance : n === value) ? pts : 0;
-            if (op === '!=') return n !== value ? pts : 0;
-            if (op === '>') return n > value ? pts : 0;
-            if (op === '<') return n < value ? pts : 0;
-            if (op === 'between') {
-                const lo = Math.min(value, value2), hi = Math.max(value, value2);
-                return n >= lo && n <= hi ? pts : 0;
-            }
-            return 0;
+            return window.BlankRenderer.evaluateInlineChecker(studentAnswer, checker);
         }
 
         function jumpToBlankQuestion(index) {
@@ -3375,6 +3360,10 @@
                         <img src="${renderer.escapeHtml(block.url || '')}" alt="${renderer.escapeHtml(block.alt || '')}" class="max-w-full mx-auto rounded-lg border border-gray-700">
                         ${hasCaption ? `<figcaption class="mt-2 text-sm text-gray-400 italic">${renderer.escapeHtml(block.caption)}</figcaption>` : ''}
                     </figure>`;
+                } else if (block.type === 'youtube') {
+                    html += renderer.renderYoutube(block.url || '');
+                } else if (block.type === 'iframe') {
+                    html += renderer.renderIframe(block.url || '');
                 } else if (block.type === 'question') {
                     const idx = qIndex;
                     const state = slideStates[idx] || {};
