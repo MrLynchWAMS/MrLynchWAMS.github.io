@@ -3408,20 +3408,20 @@
                     const now = new Date();
                     let qOpen = true;
                     let qDeadlineMsg = '';
-                    if (qDl?.openAt && now < new Date(qDl.openAt)) {
-                        qOpen = false;
-                        qDeadlineMsg = `Available after ${new Date(qDl.openAt).toLocaleString()}`;
+                    if (qDl?.openAt) {
+                        const openDate = new Date(qDl.openAt);
+                        if (now < openDate) { qOpen = false; qDeadlineMsg = `Available after ${openDate.toLocaleString()}`; }
                     }
-                    if (qDl?.closeAt && now > new Date(qDl.closeAt)) {
-                        qOpen = false;
-                        qDeadlineMsg = `Closed at ${new Date(qDl.closeAt).toLocaleString()}`;
+                    if (qDl?.closeAt) {
+                        const closeDate = new Date(qDl.closeAt);
+                        if (now > closeDate) { qOpen = false; qDeadlineMsg = `Closed at ${closeDate.toLocaleString()}`; }
                     }
 
                     const prog = questionProgressData[block.id];
                     const at = assignmentData.attemptTracking || {};
                     const qOver = block.attemptOverrides?.enabled ? block.attemptOverrides : null;
                     const maxAttempts = qOver?.maxAttempts ?? (at.maxAttempts || 0);
-                    const attemptLabel = prog && (prog.attemptCount > 1 || maxAttempts > 0)
+                    const attemptLabel = prog && prog.attemptCount > 0 && (prog.attemptCount > 1 || maxAttempts > 0)
                         ? ` • Attempt ${prog.attemptCount}${maxAttempts > 0 ? '/' + maxAttempts : ''}`
                         : '';
                     const scoreDisplay = savedScore !== undefined
@@ -3471,7 +3471,7 @@
                         <div class="mt-3 flex items-center gap-3">
                             ${(!isLocked && qOpen) ? (() => {
                                 if (prog && prog.locked) {
-                                    return `<button disabled class="blank-check-btn bg-green-600 text-white font-bold py-2 px-4 rounded opacity-50 cursor-not-allowed">🔒 Max Attempts Reached</button>`;
+                                    return `<button disabled aria-label="Maximum attempts reached for this question" class="blank-check-btn bg-green-600 text-white font-bold py-2 px-4 rounded opacity-50 cursor-not-allowed">🔒 Max Attempts Reached</button>`;
                                 }
                                 const btnLabel = (maxAttempts > 0 && prog)
                                     ? `Check &amp; Save (${maxAttempts - prog.attemptCount} left)`
