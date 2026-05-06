@@ -110,12 +110,23 @@ const DeadlineWidget = (() => {
 
           <!-- Per-Class Deadlines (Collapsible) -->
           <div id="dw-per-class-config" class="hidden">
-            <div class="flex justify-between items-center mb-4">
+            <div class="flex flex-wrap justify-between items-center gap-3 mb-4">
               <p class="text-gray-400 text-sm">Set the official start time and due date for each class period.</p>
               <button id="dw-apply-all-btn"
                 class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg text-sm">
                 Apply First Class to All
               </button>
+            </div>
+            <div class="mb-4 bg-gray-700/40 p-3 rounded-lg border border-gray-600 flex flex-wrap items-center gap-2">
+              <span class="text-sm text-gray-300 whitespace-nowrap">Quick fill: due = start +</span>
+              <input type="number" id="dw-quick-fill-mins" min="0" value="50"
+                class="w-20 p-1.5 bg-gray-800 border border-gray-600 rounded text-sm text-white">
+              <span class="text-sm text-gray-300 whitespace-nowrap">mins for all classes</span>
+              <button id="dw-quick-fill-btn"
+                class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-1.5 px-3 rounded text-sm">
+                Apply
+              </button>
+              <span class="text-xs text-gray-500">(sets due time only; set due date separately)</span>
             </div>
             <div id="dw-class-start-times" class="flex flex-wrap gap-4"></div>
             <div class="mt-4 border-t border-gray-700 pt-4 flex justify-end">
@@ -241,6 +252,29 @@ const DeadlineWidget = (() => {
         if (ea) ea.value = earlyAccess;
       });
       if (typeof showToast === 'function') showToast('Applied to all classes!', { color: 'green' });
+    });
+
+    // Quick fill: due = start + X mins
+    document.getElementById('dw-quick-fill-btn').addEventListener('click', () => {
+      const offsetMins = parseInt(document.getElementById('dw-quick-fill-mins')?.value, 10) || 0;
+      if (offsetMins <= 0) {
+        if (typeof showToast === 'function') showToast('Enter a positive number of minutes.', { color: 'red' });
+        return;
+      }
+      allClassNames.forEach(cn => {
+        const startTimeEl = document.getElementById(`dw-start-time-${cn}`);
+        const dueTimeEl = document.getElementById(`dw-due-time-${cn}`);
+        if (!startTimeEl || !dueTimeEl) return;
+        const startTimeStr = startTimeEl.value;
+        if (!startTimeStr) return;
+        const [hours, mins] = startTimeStr.split(':').map(Number);
+        if (isNaN(hours) || isNaN(mins)) return;
+        const totalMins = hours * 60 + mins + offsetMins;
+        const dueHours = Math.floor(totalMins / 60) % 24;
+        const dueMins = totalMins % 60;
+        dueTimeEl.value = `${String(dueHours).padStart(2, '0')}:${String(dueMins).padStart(2, '0')}`;
+      });
+      if (typeof showToast === 'function') showToast(`Due times set to start + ${offsetMins} mins!`, { color: 'green' });
     });
 
     // Save teacher defaults
