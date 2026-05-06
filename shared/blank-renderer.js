@@ -123,10 +123,62 @@
         }
     }
 
+    function evaluateInlineChecker(studentAnswer, checker) {
+        if (!checker) return 0;
+        const { op, value, value2, tolerance, points } = checker;
+        const studentNum = parseFloat(studentAnswer);
+        const checkNum = parseFloat(value);
+        const checkNum2 = parseFloat(value2);
+        const tol = parseFloat(tolerance || 0);
+
+        let pass = false;
+        const s = String(studentAnswer || '').toLowerCase().trim();
+        const v = String(value || '').toLowerCase().trim();
+
+        switch (op) {
+            case 'contains': pass = s.includes(v); break;
+            case 'not_contains': pass = !s.includes(v); break;
+            case '==': pass = Math.abs(studentNum - checkNum) <= tol; break;
+            case '!=': pass = Math.abs(studentNum - checkNum) > tol; break;
+            case '>': pass = studentNum > checkNum; break;
+            case '<': pass = studentNum < checkNum; break;
+            case 'between': pass = studentNum >= checkNum && studentNum <= checkNum2; break;
+        }
+        return pass ? (points || 100) : 0;
+    }
+
+    function renderYoutube(url) {
+        let videoId = '';
+        const youtubeIdRegex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
+        const match = url.match(youtubeIdRegex);
+        if (match && match[1]) videoId = match[1];
+
+        if (!videoId) return `<div class="bg-red-900/20 p-4 rounded text-red-400 text-sm">Invalid YouTube URL: ${escapeHtml(url)}</div>`;
+        
+        return `<div class="relative w-full pb-[56.25%] h-0 rounded-lg overflow-hidden border border-gray-700 bg-black">
+            <iframe src="https://www.youtube.com/embed/${videoId}" 
+                class="absolute top-0 left-0 w-full h-full" 
+                frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                allowfullscreen></iframe>
+        </div>`;
+    }
+
+    function renderIframe(url) {
+        return `<div class="relative w-full h-[500px] rounded-lg overflow-hidden border border-gray-700 bg-gray-900">
+            <iframe src="${escapeHtml(url)}" 
+                class="w-full h-full" 
+                frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                allowfullscreen></iframe>
+        </div>`;
+    }
+
     // Export to window
     window.BlankRenderer = {
         renderTextBlockContent,
         renderMathContent,
+        evaluateInlineChecker,
+        renderYoutube,
+        renderIframe,
         escapeHtml,
         formatInline
     };
