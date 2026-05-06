@@ -15,7 +15,6 @@
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
     <script src="./shared/blank-renderer.js"></script>
-    <script src="./shared/deadline-widget.js"></script>
     <style>
         .hidden { display: none; }
         textarea { resize: vertical; }
@@ -33,6 +32,15 @@
             max-height: 0;
             overflow: hidden;
             transition: max-height 0.3s ease-out;
+        }
+        .sticky-header {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(17, 24, 39, 0.95);
+            backdrop-filter: blur(8px);
+            border-bottom: 1px solid #374151;
+            padding: 1rem 0;
         }
         #toast-wrapper {
             position: fixed; top: 1rem; right: 1rem; z-index: 50;
@@ -86,30 +94,56 @@
     </div>
 
     <div id="editorContent" class="hidden">
-        <div id="assignmentTitleBar" class="hidden sticky top-0 z-40 bg-gray-950/95 border-b border-gray-700 px-4 py-2">
-            <div class="max-w-5xl mx-auto flex items-center gap-3">
-                <span class="text-xs uppercase tracking-widest text-gray-400 font-bold">Assignment</span>
-                <h2 id="editorAssignmentTitle" class="text-xl font-bold text-yellow-400 truncate"></h2>
-            </div>
-        </div>
-        <!-- Sticky Toolbar -->
-        <div class="sticky top-0 z-50 bg-gray-900 border-b border-gray-700 px-4 py-3">
-            <div class="max-w-5xl mx-auto flex flex-wrap items-center gap-3">
-                <a href="./assignments.html" class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-3 rounded-lg text-sm">&larr; Back</a>
-                <input type="text" id="assignmentNameInput" placeholder="Assignment Title"
-                    class="flex-1 min-w-0 p-2 bg-gray-800 border border-gray-600 rounded-lg text-yellow-400 font-bold text-lg focus:outline-none focus:ring-2 focus:ring-yellow-500">
-                <div class="flex items-center bg-gray-800 rounded-lg border border-gray-600 overflow-hidden">
-                    <button id="btn-structured" onclick="switchMode('structured')"
-                        class="px-4 py-2 font-semibold text-sm bg-yellow-500 text-gray-900">Structured</button>
-                    <button id="btn-canvas" onclick="switchMode('canvas')"
-                        class="px-4 py-2 font-semibold text-sm text-gray-400 hover:bg-gray-700">Canvas</button>
+        <div class="sticky-header mb-6">
+            <div class="max-w-5xl mx-auto px-4 flex justify-between items-center flex-wrap gap-4">
+                <div class="flex items-center gap-3">
+                    <div id="titleDisplay" class="flex items-center gap-2">
+                        <h1 id="assignmentTitle" class="text-3xl font-bold text-yellow-400"></h1>
+                        <button onclick="startEditingTitle()" class="text-gray-400 hover:text-white transition-colors"
+                            title="Rename Assignment">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                            </svg>
+                        </button>
+                    </div>
+                    <div id="titleEditor" class="hidden flex items-center gap-2">
+                        <input type="text" id="titleInput"
+                            class="bg-gray-700 text-white text-xl p-1 rounded border border-gray-600 focus:outline-none focus:border-yellow-400">
+                        <button onclick="saveTitle()" class="text-green-400 hover:text-green-300" title="Save">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd"
+                                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                                    clip-rule="evenodd" />
+                            </svg>
+                        </button>
+                        <button onclick="cancelEditingTitle()" class="text-red-400 hover:text-red-300" title="Cancel">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd"
+                                    d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                                    clip-rule="evenodd" />
+                            </svg>
+                        </button>
+                    </div>
                 </div>
-                <button onclick="saveAssignment()" id="saveBtn"
-                    class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg">Save</button>
-                <button onclick="toggleHelp()" title="Help"
-                    class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-3 rounded-lg">?</button>
-                <button id="signOutButton"
-                    class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-3 rounded-lg text-sm">Sign Out</button>
+                <div class="flex flex-wrap items-center gap-3">
+                    <div class="flex items-center bg-gray-800 rounded-lg border border-gray-600 overflow-hidden">
+                        <button id="btn-structured" onclick="switchMode('structured')"
+                            class="px-4 py-2 font-semibold text-sm bg-yellow-500 text-gray-900">Structured</button>
+                        <button id="btn-canvas" onclick="switchMode('canvas')"
+                            class="px-4 py-2 font-semibold text-sm text-gray-400 hover:bg-gray-700">Canvas</button>
+                    </div>
+                    <a href="./assignments.html"
+                        class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg">&larr; Back to
+                        Assignments</a>
+                    <button onclick="saveAssignment()" id="saveBtn"
+                        class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg">Save Assignment</button>
+                    <button onclick="toggleHelp()" title="Help"
+                        class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-3 rounded-lg">?</button>
+                    <button id="signOutButton"
+                        class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Sign Out</button>
+                </div>
             </div>
         </div>
 
@@ -170,8 +204,58 @@
                 </div>
             </div>
 
-            <!-- Deadline Widget -->
-            <div id="deadline-widget-container"></div>
+            <!-- Class Start Times & Deadlines -->
+            <div id="deadline-section" class="bg-gray-800 rounded-lg mb-6 overflow-hidden">
+                <div id="deadline-header" class="p-6 cursor-pointer" onclick="toggleDeadlineSection()">
+                    <div class="flex justify-between items-center">
+                        <h2 class="text-2xl font-bold text-yellow-400">Class Start Times &amp; Deadlines</h2>
+                        <span id="deadline-chevron" class="text-2xl transform transition-transform">&#9654;</span>
+                    </div>
+                    <p class="text-gray-400 mt-2">Manage per-period start times and individual class deadlines to control when
+                        students can access and finish work.</p>
+                </div>
+                <div id="deadline-content" class="collapsible-content">
+                    <div class="px-6 pb-6">
+                        <div class="mb-6 bg-gray-700/30 p-4 rounded-lg border border-gray-700">
+                            <label class="flex items-center cursor-pointer mb-2">
+                                <input type="checkbox" id="perClassDeadlines" onchange="togglePerClassDeadlines()"
+                                    class="w-5 h-5 text-yellow-500 rounded focus:ring-yellow-500 bg-gray-800 border-gray-600">
+                                <span class="ml-3 font-semibold text-white">Specify individual deadlines by class</span>
+                            </label>
+                            <p class="text-xs text-gray-400">If unchecked, all periods share a single global deadline. If checked, each
+                                period can have its own start time and due date.</p>
+                        </div>
+
+                        <!-- Global Deadline Section -->
+                        <div id="global-deadline-config" class="space-y-4 mb-6">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm text-gray-400 mb-1">Global Due Date</label>
+                                    <input type="date" id="globalDueDate"
+                                        class="w-full p-2 bg-gray-700 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-sm text-gray-400 mb-1">Global Due Time</label>
+                                    <input type="time" id="globalDueTime"
+                                        class="w-full p-2 bg-gray-700 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Per-Class Deadlines (Collapsible) -->
+                        <div id="per-class-config" class="hidden">
+                            <p class="text-gray-400 mb-4 text-sm">Set the official start time and due date for each class period.
+                                Per-question deadlines are calculated in minutes after the start time.</p>
+                            <div id="class-start-times" class="flex flex-wrap gap-4"></div>
+                            <div class="mt-4 border-t border-gray-700 pt-4 flex justify-end">
+                                <button onclick="saveTeacherDefaults()"
+                                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg text-sm">Save These
+                                    Start Times as My Defaults</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
             <!-- Focus Mode -->
             <div class="bg-gray-800 p-6 rounded-lg mb-6 border border-red-900/30">
@@ -738,15 +822,13 @@ Reading level: [GRADE LEVEL]</p>
                     });
                 }
 
-                document.getElementById('assignmentNameInput').value = assignmentData.name || '';
-                document.getElementById('editorAssignmentTitle').textContent = assignmentData.name || 'Untitled Assignment';
-                document.getElementById('assignmentTitleBar').classList.remove('hidden');
+                document.getElementById('assignmentTitle').textContent = `Editing: ${assignmentData.name || 'Untitled Assignment'}`;
                 document.getElementById('shareLink').value = `https://custom.scienceclass.rocks/classroompicker.html?assignmentId=${assignmentId}`;
 
                 // Post-Submission Policy
                 document.getElementById('postSubmissionRule').value = assignmentData.postSubmissionRule || 'open';
 
-                // Load teacher defaults and student list for DeadlineWidget and Modifications
+                // Load teacher defaults and student list for Deadlines and Modifications
                 try {
                     const teacherDoc = await db.collection("teachers").doc(currentUserEmail).get();
                     if (teacherDoc.exists) teacherDefaults = teacherDoc.data();
@@ -757,11 +839,30 @@ Reading level: [GRADE LEVEL]</p>
                 window.allTeacherStudents = teacherStudents;
                 allClassNames = [...new Set(teacherStudents.map(s => String(s.class)))].sort();
 
-                // Deadline Widget
-                if (window.DeadlineWidget) {
-                    DeadlineWidget.render(allClassNames);
-                    DeadlineWidget.populate(assignmentData, teacherDefaults, allClassNames);
+                // Deadlines initialization
+                const perClassDeadlines = document.getElementById('perClassDeadlines');
+                const globalDueDateInput = document.getElementById('globalDueDate');
+                const globalDueTimeInput = document.getElementById('globalDueTime');
+
+                const isPerClass = (assignmentData.deadlinePolicy?.perClass !== undefined)
+                    ? assignmentData.deadlinePolicy.perClass
+                    : true;
+
+                perClassDeadlines.checked = isPerClass;
+                togglePerClassDeadlines();
+
+                if (assignmentData.deadlinePolicy?.globalDueAt) {
+                    const dueAt = assignmentData.deadlinePolicy.globalDueAt.toDate ? assignmentData.deadlinePolicy.globalDueAt.toDate() : new Date(assignmentData.deadlinePolicy.globalDueAt);
+                    const year = dueAt.getFullYear();
+                    const month = String(dueAt.getMonth() + 1).padStart(2, '0');
+                    const day = String(dueAt.getDate()).padStart(2, '0');
+                    globalDueDateInput.value = `${year}-${month}-${day}`;
+                    const hours = String(dueAt.getHours()).padStart(2, '0');
+                    const minutes = String(dueAt.getMinutes()).padStart(2, '0');
+                    globalDueTimeInput.value = `${hours}:${minutes}`;
                 }
+
+                renderDeadlineUI();
 
                 // Focus Mode
                 const focusModeEnabled = document.getElementById('focusModeEnabled');
@@ -1627,7 +1728,7 @@ Reading level: [GRADE LEVEL]</p>
                         showWarnings(result.warnings);
                     }
                 }
-                const name = document.getElementById('assignmentNameInput').value.trim() || assignmentData.name;
+                const name = assignmentData.name || '';
                 // Flush all open checker widgets before saving
                 Object.keys(checkerWidgets).forEach(id => flushCheckerWidget(id));
                 const newCheckerFunctions = {};
@@ -1656,7 +1757,7 @@ Reading level: [GRADE LEVEL]</p>
                 if (auraOnTime && (!auraDueDateStr || !auraDueTimeStr)) {
                     showToast("To require 'Must be on time', please set BOTH Aura deadline date and time.", { color: 'red' });
                     saveBtn.disabled = false;
-                    saveBtn.textContent = 'Save';
+                    saveBtn.textContent = 'Save Assignment';
                     return;
                 }
 
@@ -1697,9 +1798,47 @@ Reading level: [GRADE LEVEL]</p>
                     }
                 };
 
-                // Apply deadline widget data
-                if (window.DeadlineWidget) {
-                    DeadlineWidget.applyToSavePayload(updatePayload, allClassNames);
+                // Build inline deadline policy
+                const deadlinePolicy = { classStartTimes: {}, classStartAt: {}, classDueAt: {}, earlyAccessPadding: {} };
+                allClassNames.forEach(className => {
+                    const startTimeValue = document.getElementById(`start-time-${className}`)?.value || '';
+                    const startDateValue = document.getElementById(`start-date-${className}`)?.value || '';
+                    if (startTimeValue) {
+                        deadlinePolicy.classStartTimes[String(className)] = startTimeValue;
+                    }
+                    if (startDateValue && startTimeValue) {
+                        const [y, mo, d] = startDateValue.split('-').map(Number);
+                        const [h, mi] = startTimeValue.split(':').map(Number);
+                        if (!isNaN(y) && !isNaN(mo) && !isNaN(d) && !isNaN(h) && !isNaN(mi)) {
+                            deadlinePolicy.classStartAt[String(className)] = firebase.firestore.Timestamp.fromDate(new Date(y, mo - 1, d, h, mi, 0, 0));
+                        }
+                    }
+                    const dueDateStr = document.getElementById(`due-date-${className}`)?.value || '';
+                    const dueTimeStr = document.getElementById(`due-time-${className}`)?.value || '';
+                    if (dueDateStr && dueTimeStr) {
+                        const [y, mo, d] = dueDateStr.split('-').map(Number);
+                        const [h, mi] = dueTimeStr.split(':').map(Number);
+                        if (!isNaN(y) && !isNaN(mo) && !isNaN(d) && !isNaN(h) && !isNaN(mi)) {
+                            deadlinePolicy.classDueAt[String(className)] = firebase.firestore.Timestamp.fromDate(new Date(y, mo - 1, d, h, mi, 0, 0));
+                        }
+                    }
+                    deadlinePolicy.earlyAccessPadding[String(className)] = parseInt(document.getElementById(`early-access-padding-${className}`)?.value, 10) || 0;
+                });
+                updatePayload.deadlinePolicy = deadlinePolicy;
+                const isPerClass = document.getElementById('perClassDeadlines').checked;
+                updatePayload["deadlinePolicy.perClass"] = isPerClass;
+                const globalDueDateStr = document.getElementById('globalDueDate').value;
+                const globalDueTimeStr = document.getElementById('globalDueTime').value;
+                if (globalDueDateStr && globalDueTimeStr) {
+                    const [gy, gmo, gd] = globalDueDateStr.split('-').map(Number);
+                    const [gh, gmi] = globalDueTimeStr.split(':').map(Number);
+                    if (!isNaN(gy) && !isNaN(gmo) && !isNaN(gd) && !isNaN(gh) && !isNaN(gmi)) {
+                        updatePayload["deadlinePolicy.globalDueAt"] = firebase.firestore.Timestamp.fromDate(new Date(gy, gmo - 1, gd, gh, gmi, 0, 0));
+                    } else {
+                        updatePayload["deadlinePolicy.globalDueAt"] = firebase.firestore.FieldValue.delete();
+                    }
+                } else {
+                    updatePayload["deadlinePolicy.globalDueAt"] = firebase.firestore.FieldValue.delete();
                 }
 
                 // Serialize per-question deadline policy (same schema as slides editor)
@@ -1745,17 +1884,15 @@ Reading level: [GRADE LEVEL]</p>
 
                 await db.collection('assignments').doc(assignmentId).update(updatePayload);
 
-                assignmentData.name = name;
                 assignmentData.blocks = blocksToSave;
                 assignmentData.checkerFunctions = newCheckerFunctions;
-                document.getElementById('editorAssignmentTitle').textContent = name || 'Untitled Assignment';
                 showToast('Assignment saved!', { color: 'green' });
             } catch (error) {
                 console.error(error);
                 showToast('Error saving assignment.', { color: 'red' });
             } finally {
                 saveBtn.disabled = false;
-                saveBtn.textContent = 'Save';
+                saveBtn.textContent = 'Save Assignment';
             }
         }
 
@@ -1833,6 +1970,132 @@ Reading level: [GRADE LEVEL]</p>
             const globalContainer = document.getElementById('global-wordbank-container');
             globalContainer.classList.toggle('hidden', mode !== 'assignment');
             document.getElementById('wordBankModsOnlyContainer').classList.toggle('hidden', mode === 'none');
+        }
+
+        function toggleDeadlineSection() {
+            const content = document.getElementById('deadline-content');
+            const chevron = document.getElementById('deadline-chevron');
+            if (content.style.maxHeight && content.style.maxHeight !== '0px') {
+                content.style.maxHeight = '0';
+                chevron.style.transform = 'rotate(0deg)';
+            } else {
+                content.style.maxHeight = content.scrollHeight + 'px';
+                chevron.style.transform = 'rotate(90deg)';
+            }
+        }
+
+        function togglePerClassDeadlines() {
+            const isChecked = document.getElementById('perClassDeadlines').checked;
+            document.getElementById('per-class-config').classList.toggle('hidden', !isChecked);
+            document.getElementById('global-deadline-config').classList.toggle('hidden', isChecked);
+            const content = document.getElementById('deadline-content');
+            if (content.style.maxHeight && content.style.maxHeight !== '0px') {
+                content.style.maxHeight = '2000px';
+            }
+        }
+
+        function renderDeadlineUI() {
+            const container = document.getElementById('class-start-times');
+            container.innerHTML = '';
+            const assignmentStartTimes = assignmentData.deadlinePolicy?.classStartTimes;
+            const classDueAt = assignmentData.deadlinePolicy?.classDueAt || {};
+            const defaultStartTimes = teacherDefaults.classStartTimes;
+            const hardcodedDefaults = { '1': '08:01', '2': '08:50', '5': '11:17', '7': '12:55', '8': '13:44' }; // School-specific period start times
+            allClassNames.forEach(className => {
+                const startTimeValue = assignmentStartTimes?.[className] || defaultStartTimes?.[className] || hardcodedDefaults[className] || '08:00';
+                let startDateValue = '';
+                const classStart = assignmentData.deadlinePolicy?.classStartAt?.[className];
+                if (classStart) {
+                    const startAt = classStart.toDate ? classStart.toDate() : new Date(classStart);
+                    if (!isNaN(startAt.getTime())) {
+                        startDateValue = `${startAt.getFullYear()}-${String(startAt.getMonth() + 1).padStart(2, '0')}-${String(startAt.getDate()).padStart(2, '0')}`;
+                    }
+                }
+                let dueDateValue = '';
+                let dueTimeValue = '';
+                const classDue = classDueAt[className];
+                if (classDue) {
+                    const dueAt = classDue.toDate ? classDue.toDate() : new Date(classDue);
+                    if (!isNaN(dueAt.getTime())) {
+                        dueDateValue = `${dueAt.getFullYear()}-${String(dueAt.getMonth() + 1).padStart(2, '0')}-${String(dueAt.getDate()).padStart(2, '0')}`;
+                        dueTimeValue = `${String(dueAt.getHours()).padStart(2, '0')}:${String(dueAt.getMinutes()).padStart(2, '0')}`;
+                    }
+                }
+                container.innerHTML += `
+                    <div class="bg-gray-700 p-3 rounded-lg">
+                        <label class="block text-sm font-semibold mb-2">Period ${className}</label>
+                        <div class="flex flex-col gap-2">
+                            <div class="flex items-center gap-2">
+                                <label for="start-date-${className}" class="text-xs text-gray-400 w-20">Start Date</label>
+                                <input type="date" id="start-date-${className}" value="${startDateValue}" class="p-2 bg-gray-800 border border-gray-600 rounded text-sm">
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <label for="start-time-${className}" class="text-xs text-gray-400 w-20">Start Time</label>
+                                <input type="time" id="start-time-${className}" value="${startTimeValue}" class="p-2 bg-gray-800 border border-gray-600 rounded w-28 text-sm">
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <label for="due-date-${className}" class="text-xs text-gray-400 w-20">Due Date</label>
+                                <input type="date" id="due-date-${className}" value="${dueDateValue}" class="p-2 bg-gray-800 border border-gray-600 rounded text-sm">
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <label for="due-time-${className}" class="text-xs text-gray-400 w-20">Due Time</label>
+                                <input type="time" id="due-time-${className}" value="${dueTimeValue}" class="p-2 bg-gray-800 border border-gray-600 rounded w-28 text-sm">
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <label for="early-access-padding-${className}" class="text-xs text-gray-400 w-20">Early Access (mins)</label>
+                                <input type="number" id="early-access-padding-${className}" value="${assignmentData.deadlinePolicy?.earlyAccessPadding?.[className] || 0}" class="p-2 bg-gray-800 border border-gray-600 rounded w-28 text-sm">
+                            </div>
+                        </div>
+                    </div>`;
+            });
+        }
+
+        async function saveTeacherDefaults() {
+            try {
+                const classStartTimes = {};
+                allClassNames.forEach(className => {
+                    const timeValue = document.getElementById(`start-time-${className}`)?.value;
+                    if (timeValue) classStartTimes[String(className)] = timeValue;
+                });
+                await db.collection("teachers").doc(auth.currentUser.email).set({ classStartTimes }, { merge: true });
+                showToast("Default start times saved!", { color: 'green' });
+            } catch (e) {
+                console.error("Error saving teacher defaults:", e);
+                showToast("Error saving defaults.", { color: 'red' });
+            }
+        }
+
+        function startEditingTitle() {
+            const titleDisplay = document.getElementById('titleDisplay');
+            const titleEditor = document.getElementById('titleEditor');
+            const titleInput = document.getElementById('titleInput');
+            titleInput.value = assignmentData.name || '';
+            titleDisplay.classList.add('hidden');
+            titleEditor.classList.remove('hidden');
+            titleInput.focus();
+        }
+
+        function cancelEditingTitle() {
+            document.getElementById('titleDisplay').classList.remove('hidden');
+            document.getElementById('titleEditor').classList.add('hidden');
+        }
+
+        async function saveTitle() {
+            const newName = document.getElementById('titleInput').value.trim();
+            if (!newName) {
+                showToast("Assignment name cannot be empty.", { color: 'red' });
+                return;
+            }
+            try {
+                await db.collection('assignments').doc(assignmentId).update({ name: newName });
+                assignmentData.name = newName;
+                document.getElementById('assignmentTitle').textContent = `Editing: ${newName}`;
+                showToast("Assignment renamed successfully!", { color: 'green' });
+                cancelEditingTitle();
+            } catch (error) {
+                console.error("Error updating title:", error);
+                showToast("Error renaming assignment.", { color: 'red' });
+            }
         }
 
         function toggleModificationsSection(forceOpen = false) {
