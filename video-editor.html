@@ -1237,6 +1237,10 @@
       const container = document.getElementById('questionsContainer');
       const noMsg = document.getElementById('noQuestionsMsg');
 
+      // Sort source arrays by timestamp to ensure chronological order in memory and storage
+      videoQuestions.sort((a, b) => a.time - b.time);
+      videoNotes.sort((a, b) => a.time - b.time);
+
       // Combine questions and notes
       // We'll use a secondary sort key (array position) to keep order stable for items at same time
       const allItems = [
@@ -1510,7 +1514,7 @@
           document.getElementById('assignmentTitle').textContent = `Editing: ${data.title}`;
         }
 
-        // Import questions
+        // Import questions (without IDs initially, so we can sort first)
         const importedQuestions = (data.questions || []).map(q => {
           const bodyHtml = q.body?.[0]?.html || q.body?.[0]?.text || '';
           const bodyText = stripHtml(bodyHtml);
@@ -1521,7 +1525,6 @@
           const hasMultipleCorrect = choices.filter(c => c.isCorrect).length > 1;
 
           return {
-            id: `vq${nextQId++}`,
             type: 'multiple-choice',
             time: q.time || 0,
             body: bodyText,
@@ -1530,15 +1533,22 @@
           };
         });
 
-        // Import notes
+        // Import notes (without IDs initially, so we can sort first)
         const importedNotes = (data.notes || []).map(n => {
           const bodyHtml = n.body?.[0]?.html || n.body?.[0]?.text || '';
           return {
-            id: `vn${nextNId++}`,
             time: n.time || 0,
             body: stripHtml(bodyHtml)
           };
         });
+
+        // Sort by time before assigning IDs so IDs are in chronological order
+        importedQuestions.sort((a, b) => a.time - b.time);
+        importedNotes.sort((a, b) => a.time - b.time);
+
+        // Now assign IDs in sorted order
+        importedQuestions.forEach(q => q.id = `vq${nextQId++}`);
+        importedNotes.forEach(n => n.id = `vn${nextNId++}`);
 
         videoQuestions.push(...importedQuestions);
         videoNotes.push(...importedNotes);

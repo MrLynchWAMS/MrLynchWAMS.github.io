@@ -4257,10 +4257,12 @@
             const sidebarList = document.getElementById('video-sidebar-list');
             if (!sidebarList) return;
 
+            let qCounter = 0;
             sidebarList.innerHTML = sortedVideoItems.map(item => {
                 const icon = item._kind === 'note' ? '📌' : '❓';
                 const mmss = Math.floor(item.time / 60) + ':' + String(Math.floor(item.time % 60)).padStart(2, '0');
-                const title = item._kind === 'note' ? 'Note' : `Q${item._index + 1}`;
+                if (item._kind !== 'note') qCounter++;
+                const title = item._kind === 'note' ? 'Note' : `Q${qCounter}`;
                 return `<div id="vsb_${item.id}" class="p-3 bg-gray-700/50 border border-gray-600 rounded-lg text-sm mb-2 text-gray-300 transition-colors">
                     <span class="font-bold text-yellow-400 mr-2">${title}</span> 
                     <span class="text-xs text-gray-400 opacity-70">[${mmss}]</span>
@@ -4292,10 +4294,13 @@
                 playerContainer.innerHTML = `<iframe src="https://drive.google.com/file/d/${assignmentData.videoSourceId}/preview" class="w-full h-full" allow="autoplay" frameborder="0" style="position: absolute; top:0; left:0;"></iframe>`;
                 if (sidebarList) {
                     sidebarList.innerHTML = `<p class="text-sm text-gray-400 mb-4 italic p-2 border border-gray-600 rounded">Google Drive videos cannot automatically pause. Please watch the video and answer the questions interactively below.</p>`;
+                    let qCounterDrive = 0;
                     sortedVideoItems.forEach(item => {
                         const existingAnswerHtml = (item._kind === 'question' && slideStates[item._index] && slideStates[item._index].answer) ? `<span class="ml-2 text-green-400 text-xs">✅ Answered</span>` : '';
+                        if (item._kind !== 'note') qCounterDrive++;
+                        const driveTitle = item._kind === 'note' ? '📌 Note' : `❓ Q${qCounterDrive}`;
                         sidebarList.innerHTML += `<div class="mb-4 bg-gray-700/60 border border-gray-600 p-4 rounded-lg shadow-sm">
-                            <p class="text-sm font-bold text-yellow-500 mb-2">${item._kind === 'note' ? '📌 Note' : '❓ Q' + (item._index + 1)} <span class="text-gray-400 text-xs ml-1">[${Math.floor(item.time / 60)}:${String(Math.floor(item.time % 60)).padStart(2, '0')}]</span>${existingAnswerHtml}</p>
+                            <p class="text-sm font-bold text-yellow-500 mb-2">${driveTitle} <span class="text-gray-400 text-xs ml-1">[${Math.floor(item.time / 60)}:${String(Math.floor(item.time % 60)).padStart(2, '0')}]</span>${existingAnswerHtml}</p>
                             <p class="text-sm text-gray-200 mb-3 leading-relaxed">${escapeHtml(item.body)}</p>
                             ${item._kind === 'question' ? `<button onclick="showVideoOverlay('${item.id}', true)" class="w-full bg-blue-600 hover:bg-blue-700 font-bold px-3 py-2 rounded text-sm text-white transition-colors">Answer Question</button>` : ''}
                         </div>`;
