@@ -1237,8 +1237,11 @@
       const container = document.getElementById('questionsContainer');
       const noMsg = document.getElementById('noQuestionsMsg');
 
+      // Always sort source arrays by timestamp to ensure chronological order in memory, storage, and display
+      videoQuestions.sort((a, b) => a.time - b.time);
+      videoNotes.sort((a, b) => a.time - b.time);
+
       // Combine questions and notes
-      // We'll use a secondary sort key (array position) to keep order stable for items at same time
       const allItems = [
         ...videoQuestions.map((q, idx) => ({ ...q, _kind: 'question', _srcIdx: idx })),
         ...videoNotes.map((n, idx) => ({ ...n, _kind: 'note', _srcIdx: idx }))
@@ -1521,7 +1524,6 @@
           const hasMultipleCorrect = choices.filter(c => c.isCorrect).length > 1;
 
           return {
-            id: `vq${nextQId++}`,
             type: 'multiple-choice',
             time: q.time || 0,
             body: bodyText,
@@ -1534,11 +1536,18 @@
         const importedNotes = (data.notes || []).map(n => {
           const bodyHtml = n.body?.[0]?.html || n.body?.[0]?.text || '';
           return {
-            id: `vn${nextNId++}`,
             time: n.time || 0,
             body: stripHtml(bodyHtml)
           };
         });
+
+        // Sort imported items by time before assigning IDs to maintain chronological ID order
+        importedQuestions.sort((a, b) => a.time - b.time);
+        importedNotes.sort((a, b) => a.time - b.time);
+
+        // Assign IDs now that they are sorted
+        importedQuestions.forEach(q => q.id = `vq${nextQId++}`);
+        importedNotes.forEach(n => n.id = `vn${nextNId++}`);
 
         videoQuestions.push(...importedQuestions);
         videoNotes.push(...importedNotes);
