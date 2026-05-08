@@ -337,6 +337,11 @@
           <span class="text-lg text-gray-200">Prevent students from skipping & seeking ahead</span>
         </label>
         <label class="flex items-center gap-3 cursor-pointer">
+          <input type="checkbox" id="preventGoingBack"
+            class="w-5 h-5 bg-gray-700 border-gray-600 rounded text-yellow-500 focus:ring-yellow-500">
+          <span class="text-lg text-gray-200">Prevent students from going back (One-way progression)</span>
+        </label>
+        <label class="flex items-center gap-3 cursor-pointer">
           <input type="checkbox" id="lockPlaybackSpeed"
             class="w-5 h-5 bg-gray-700 border-gray-600 rounded text-yellow-500 focus:ring-yellow-500">
           <span class="text-lg text-gray-200">Lock playback speed (No speeding up/slowing down)</span>
@@ -855,8 +860,10 @@
         // Load playback settings
         if (assignmentData.playbackSettings) {
           const skipEl = document.getElementById('preventSkipping');
+          const backEl = document.getElementById('preventGoingBack');
           const speedEl = document.getElementById('lockPlaybackSpeed');
           if (skipEl) skipEl.checked = !!assignmentData.playbackSettings.skipPrevention;
+          if (backEl) backEl.checked = !!assignmentData.playbackSettings.preventGoingBack;
           if (speedEl) speedEl.checked = !!assignmentData.playbackSettings.speedLock;
         }
 
@@ -1607,6 +1614,7 @@
 
         const playbackSettings = {
           skipPrevention: document.getElementById('preventSkipping').checked,
+          preventGoingBack: document.getElementById('preventGoingBack').checked,
           speedLock: document.getElementById('lockPlaybackSpeed').checked
         };
 
