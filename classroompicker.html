@@ -2074,7 +2074,7 @@
 
             //disables question links when hidden
             const postRule = assignmentData.postSubmissionRule || 'open';
-            const shouldDisableLinks = isSubmitted && postRule === 'hide';
+            let shouldDisableLinks = isSubmitted && postRule === 'hide';
 
             const isPDF = assignmentData.type === 'pdf';
             const isVideo = assignmentData.type === 'video';
@@ -2107,11 +2107,22 @@
                     }
                 }
 
+                let disableThisLink = shouldDisableLinks;
+                if (isVideo && assignmentData.videoSourceType === 'youtube') {
+                    const settings = assignmentData.playbackSettings || {};
+                    const qItem = sortedVideoItems.find(it => it._kind === 'question' && it._index === index);
+                    if (qItem) {
+                        const isAhead = settings.skipPrevention && (qItem.time > furthestReachedTime + 1);
+                        const isBehind = settings.preventGoingBack && (qItem.time < furthestReachedTime - 5);
+                        disableThisLink = disableThisLink || isAhead || isBehind;
+                    }
+                }
+
                 const jumpFunc = isVideo ? `jumpToVideoItemByQuestionIndex` : isSimulation ? `jumpToSimulationQuestion` : isBlank ? `jumpToBlankQuestion` : `jumpToSlide`;
-                const clickHandler = shouldDisableLinks ? '' : (isPDF ? `onclick="focusPDFZone(${index})"` : `onclick="${jumpFunc}(${index})"`);
-                const cursorClass = shouldDisableLinks ? 'cursor-not-allowed' : 'cursor-pointer';
-                const hoverClass = shouldDisableLinks ? '' : 'hover:bg-gray-600';
-                const opacityClass = shouldDisableLinks ? 'opacity-50' : '';
+                const clickHandler = disableThisLink ? '' : (isPDF ? `onclick="focusPDFZone(${index})"` : `onclick="${jumpFunc}(${index})"`);
+                const cursorClass = disableThisLink ? 'cursor-not-allowed' : 'cursor-pointer';
+                const hoverClass = disableThisLink ? '' : 'hover:bg-gray-600';
+                const opacityClass = disableThisLink ? 'opacity-50' : '';
                 const questionLabel = isSimulation
                     ? (assignmentData.simQuestions?.[index]?.body || `Question ${index + 1}`)
                     : isBlank
@@ -4440,6 +4451,7 @@
                     studentEmail: userProfile.email.toLowerCase(),
                     watchTime: watchTimeSeconds,
                     furthestReachedTime: furthestReachedTime,
+                    videoDuration: (assignmentData.type === 'video' && typeof videoPlayer !== 'undefined' && videoPlayer && typeof videoPlayer.getDuration === 'function') ? videoPlayer.getDuration() : 0,
                     score: currentAvg,
                     lastAccessed: firebase.firestore.FieldValue.serverTimestamp()
                 }, { merge: true });
@@ -4704,10 +4716,29 @@
         function jumpToVideoItemByQuestionIndex(qIndex) {
             const item = sortedVideoItems.find(it => it._kind === 'question' && it._index === qIndex);
             if (item) {
+                if (assignmentData.videoSourceType === 'youtube') {
+                    const settings = assignmentData.playbackSettings || {};
+                    const preventSkipping = settings.skipPrevention;
+                    const preventGoingBack = settings.preventGoingBack;
+
+                    if (preventSkipping && item.time > furthestReachedTime + 1) {
+                        showToast("Skipping forward is disabled.", { color: 'red' });
+                        return;
+                    }
+                    if (preventGoingBack && item.time < furthestReachedTime - 5) {
+                        showToast("Going back to previous questions is disabled.", { color: 'red' });
+                        return;
+                    }
+                }
+
                 const summary = document.getElementById('summaryContainer');
                 if (summary) summary.classList.add('hidden');
                 const main = document.getElementById('mainContainer');
                 if (main) main.classList.remove('hidden');
+
+                if (assignmentData.videoSourceType === 'youtube' && videoPlayer && typeof videoPlayer.seekTo === 'function') {
+                    videoPlayer.seekTo(item.time);
+                }
 
                 showVideoOverlay(item.id, true);
             }

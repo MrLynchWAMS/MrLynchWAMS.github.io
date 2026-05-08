@@ -563,7 +563,9 @@
                                     assignmentId: data.assignmentId,
                                     status: data.status || 'none',
                                     score: typeof data.score === 'number' ? data.score : 0,
-                                    watchTime: data.watchTimeSeconds || data.watchTime || 0
+                                    watchTime: data.watchTimeSeconds || data.watchTime || 0,
+                                    furthestReachedTime: data.furthestReachedTime || 0,
+                                    videoDuration: data.videoDuration || 0
                                 });
                             }
                         });
@@ -691,6 +693,8 @@
                         auraAwarded: auraData.auraAwarded,
                         auraAmount: auraData.auraAmount,
                         watchTime: statusData.watchTime || 0,
+                        furthestReachedTime: statusData.furthestReachedTime || 0,
+                        videoDuration: statusData.videoDuration || 0,
                         questionProgress,
                         simData: simDataByStudentLocal.get(student.email) || null,
                         sectionSubmissions
@@ -1229,7 +1233,12 @@
                     const mins = Math.floor(student.watchTime / 60);
                     const secs = student.watchTime % 60;
                     const watchStr = `${mins}:${String(secs).padStart(2, '0')}`;
-                    watchTimeCell = `<td class="px-2 py-4 whitespace-nowrap text-center text-sm font-mono text-blue-400">${watchStr}</td>`;
+                    let percentStr = '';
+                    if (student.videoDuration > 0) {
+                        const pct = Math.min(100, Math.floor((student.furthestReachedTime / student.videoDuration) * 100));
+                        percentStr = `<br><span class="text-[10px] text-gray-400 font-bold">${pct}%</span>`;
+                    }
+                    watchTimeCell = `<td class="px-2 py-4 whitespace-nowrap text-center text-sm font-mono text-blue-400">${watchStr}${percentStr}</td>`;
                 }
                 let simDataCell = '';
                 if (showSimData && assignmentData.type === 'simulation') {
