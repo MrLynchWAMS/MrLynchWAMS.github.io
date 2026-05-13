@@ -291,7 +291,7 @@
                 // Walk backward through pending lines to find the nearest ## heading
                 let headingIdx = -1;
                 for (let j = pendingTextLines.length - 1; j >= 0; j--) {
-                    if (/^##\s/.test(pendingTextLines[j])) {
+                    if (/^##\s+/.test(pendingTextLines[j])) {
                         headingIdx = j;
                         break;
                     }
