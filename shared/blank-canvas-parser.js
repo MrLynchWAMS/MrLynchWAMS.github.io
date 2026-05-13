@@ -300,7 +300,7 @@
                     // Splice from heading onward (heading + any continuation lines)
                     const promptLines = pendingTextLines.splice(headingIdx);
                     promptLines[0] = promptLines[0].replace(/^##\s+/, '').trim();
-                    promptRaw = promptLines.map(l => l.trim()).filter(Boolean).join(' ');
+                    promptRaw = promptLines.map(l => l.trim()).filter(l => l.length > 0).join(' ');
                 }
                 flushText();
                 const qTagRaw = qTagSeparateMatch[1];
