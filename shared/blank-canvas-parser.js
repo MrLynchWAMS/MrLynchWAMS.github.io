@@ -288,12 +288,19 @@
             if (qTagSeparateMatch) {
                 // Bare [q: ...] — check if previous lines had a ## heading
                 let promptRaw = '';
-                // The prompt would have been accumulated in pendingTextLines
-                // Check if the last line in pendingTextLines was a ## heading
-                const lastIdx = pendingTextLines.length - 1;
-                if (lastIdx >= 0 && /^##\s+/.test(pendingTextLines[lastIdx])) {
-                    promptRaw = pendingTextLines[lastIdx].replace(/^##\s+/, '').trim();
-                    pendingTextLines.splice(lastIdx, 1);
+                // Walk backward through pending lines to find the nearest ## heading
+                let headingIdx = -1;
+                for (let j = pendingTextLines.length - 1; j >= 0; j--) {
+                    if (/^##\s/.test(pendingTextLines[j])) {
+                        headingIdx = j;
+                        break;
+                    }
+                }
+                if (headingIdx >= 0) {
+                    // Splice from heading onward (heading + any continuation lines)
+                    const promptLines = pendingTextLines.splice(headingIdx);
+                    promptLines[0] = promptLines[0].replace(/^##\s+/, '').trim();
+                    promptRaw = promptLines.map(l => l.trim()).filter(Boolean).join(' ');
                 }
                 flushText();
                 const qTagRaw = qTagSeparateMatch[1];
@@ -370,7 +377,7 @@
                 const opt = block.options ? ` "${block.options}"` : '';
                 lines.push(`@[iframe](${block.url || ''}${opt})`);
             } else if (block.type === 'question') {
-                const prompt = block.prompt || '';
+                const prompt = (block.prompt || '').replace(/[\r\n]+/g, ' ').trim();
                 lines.push(`## ${prompt}`);
                 let qTag = serializeQuestionTag(block);
                 lines.push(qTag);
@@ -440,11 +447,15 @@
         if (!markupText || !markupText.trim()) return { warnings };
 
         const lines = markupText.split('\n');
-        let lastWasPrompt = false;
+        let lastHeadingLineIdx = -1;
 
         lines.forEach((line, i) => {
             const qTagMatch = line.match(/^\[q:\s*(.*?)\]\s*$/);
             if (qTagMatch) {
+                if (lastHeadingLineIdx === -1) {
+                    warnings.push(`Line ${i + 1}: [q:] tag has no preceding ## question prompt.`);
+                }
+                lastHeadingLineIdx = -1;
                 const inner = qTagMatch[1].trim();
                 const typePart = inner.split('|')[0].trim().toLowerCase();
                 if (!['text', 'number', 'choice'].includes(typePart)) {
@@ -453,11 +464,8 @@
                 if (typePart === 'choice' && !inner.includes('*')) {
                     warnings.push(`Line ${i + 1}: Multiple choice question has no correct answer marked with *.`);
                 }
-                lastWasPrompt = false;
             } else if (/^##\s+/.test(line)) {
-                lastWasPrompt = true;
-            } else {
-                lastWasPrompt = false;
+                lastHeadingLineIdx = i;
             }
 
             // Check for malformed [q: tags
