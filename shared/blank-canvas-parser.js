@@ -116,6 +116,8 @@
             const fp = fingerprint(b);
             if (fp && b.id) fingerprintMap[fp] = b.id;
         });
+        // Track IDs already claimed in this parse pass to avoid duplicate-fingerprint collisions
+        const usedIds = new Set();
         const existingCheckerIds = new Set(
             existingBlocks
                 .filter(b => b.type === 'question')
@@ -278,7 +280,7 @@
                 const promptRaw = qTagInlineMatch[1].trim();
                 const qTagRaw = qTagInlineMatch[2];
                 const parsed = parseQuestionLine(promptRaw, qTagRaw);
-                const qBlock = buildQuestionBlock(promptRaw, parsed, fingerprintMap, existingCheckerIds, warnings);
+                const qBlock = buildQuestionBlock(promptRaw, parsed, fingerprintMap, existingCheckerIds, usedIds, warnings);
                 blocks.push(qBlock);
                 continue;
             }
@@ -296,7 +298,7 @@
                 flushText();
                 const qTagRaw = qTagSeparateMatch[1];
                 const parsed = parseQuestionLine(promptRaw, qTagRaw);
-                const qBlock = buildQuestionBlock(promptRaw, parsed, fingerprintMap, existingCheckerIds, warnings);
+                const qBlock = buildQuestionBlock(promptRaw, parsed, fingerprintMap, existingCheckerIds, usedIds, warnings);
                 blocks.push(qBlock);
                 continue;
             }
@@ -318,10 +320,13 @@
         return { blocks, warnings };
     }
 
-    function buildQuestionBlock(promptRaw, parsed, fingerprintMap, existingCheckerIds, warnings) {
+    function buildQuestionBlock(promptRaw, parsed, fingerprintMap, existingCheckerIds, usedIds, warnings) {
         const { questionType, inlineChecker, choices, correctChoiceIndex, points } = parsed;
         const fp = (promptRaw.toLowerCase().trim()) + '|' + questionType;
-        const id = fingerprintMap[fp] || genId('q');
+        const candidate = fingerprintMap[fp];
+        // Only reuse the existing ID if it hasn't been claimed already in this parse pass
+        const id = (candidate && !usedIds.has(candidate)) ? candidate : genId('q');
+        usedIds.add(id);
 
         const block = {
             id,
