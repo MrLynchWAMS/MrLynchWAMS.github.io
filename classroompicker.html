@@ -3395,8 +3395,12 @@
             blankQTimerIntervals.push(interval);
         }
 
-        function evaluateInlineChecker(studentAnswer, checker) {
-            return window.BlankRenderer.evaluateInlineChecker(studentAnswer, checker);
+        function evaluateInlineChecker(checker, studentAnswer) {
+            const passed = window.evaluateInlineChecker(checker, studentAnswer, {
+                assignmentData,
+                userProfile
+            });
+            return passed ? (checker.points || 100) : 0;
         }
 
         function jumpToBlankQuestion(index) {
@@ -3646,7 +3650,7 @@
             if (block.questionType === 'choice') {
                 score = parseInt(studentAnswer, 10) === block.correctChoiceIndex ? (block.points || 100) : 0;
             } else if (block.inlineChecker) {
-                score = evaluateInlineChecker(studentAnswer, block.inlineChecker);
+                score = evaluateInlineChecker(block.inlineChecker, studentAnswer);
             } else {
                 // Use checkerFunctions keyed by block ID
                 const checkerEntry = checkerFunctionStrings[block.id];
