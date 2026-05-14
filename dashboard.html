@@ -1354,8 +1354,13 @@
                 checkerKey = dataToUse.videoQuestions?.[slideIndex]?.id || checkerKey;
             } else if (dataToUse.type === 'simulation') {
                 checkerKey = dataToUse.simQuestions?.[slideIndex]?.id || checkerKey;
+            } else if (dataToUse.type === 'blank') {
+                const questionBlocks = (dataToUse.blocks || []).filter(b => b.type === 'question');
+                const block = questionBlocks[slideIndex];
+                checkerKey = block?.id || checkerKey;
             }
-            const funcString = dataToUse.checkerFunctions?.[checkerKey] || dataToUse.checkerFunctions?.[`calc${slideIndex + 1}`];
+            const funcEntry = dataToUse.checkerFunctions?.[checkerKey] ?? dataToUse.checkerFunctions?.[`calc${slideIndex + 1}`];
+            const funcString = funcEntry ? (typeof funcEntry === 'object' ? funcEntry.code : funcEntry) : null;
             if (!funcString) return 0;
             try {
                 const userProfile = { name: submission.studentName, email: submission.studentEmail };
