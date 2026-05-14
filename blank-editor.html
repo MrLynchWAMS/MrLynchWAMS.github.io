@@ -139,6 +139,10 @@
                         Assignments</a>
                     <button onclick="saveAssignment()" id="saveBtn"
                         class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg">Save Assignment</button>
+                    <button onclick="restorePreviousVersion()" title="Restore Previous Version"
+                        class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-3 rounded-lg flex items-center gap-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd" /></svg>
+                    </button>
                     <button onclick="toggleHelp()" title="Help"
                         class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-3 rounded-lg">?</button>
                     <button id="signOutButton"
@@ -197,10 +201,15 @@
                         <p class="text-xs text-gray-500 mt-1">Flag student on dashboard after this many attempts on one question.</p>
                     </div>
                 </div>
-                <div class="mt-4 flex items-center gap-3">
-                    <input type="checkbox" id="lockOnMaxAttempts"
-                        class="w-4 h-4 rounded bg-gray-700 border-gray-600">
-                    <label for="lockOnMaxAttempts" class="text-sm text-white">Lock question when max attempts is reached (student can still submit the assignment)</label>
+                <div class="mt-4 flex flex-wrap items-center gap-6">
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" id="lockOnMaxAttempts" class="w-4 h-4 rounded bg-gray-700 border-gray-600">
+                        <label for="lockOnMaxAttempts" class="text-sm text-white">Lock question when max attempts is reached</label>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" id="retainHighestScore" checked class="w-4 h-4 rounded bg-gray-700 border-gray-600">
+                        <label for="retainHighestScore" class="text-sm text-white">Retain Highest Score (improving answer won't lower score)</label>
+                    </div>
                 </div>
             </div>
 
@@ -915,11 +924,12 @@ Reading level: [GRADE LEVEL]</p>
                 toggleWordBankSettings();
 
                 // Attempt Tracking
-                const at = assignmentData.attemptTracking || {};
-                document.getElementById('maxAttempts').value = at.maxAttempts ?? 0;
-                document.getElementById('attemptPenalty').value = at.attemptPenalty ?? 0;
-                document.getElementById('blankHelpThreshold').value = at.helpThreshold ?? 3;
-                document.getElementById('lockOnMaxAttempts').checked = at.lockOnMaxAttempts || false;
+                const attemptTracking = assignmentData.attemptTracking || {};
+                document.getElementById('maxAttempts').value = attemptTracking.maxAttempts || 0;
+                document.getElementById('attemptPenalty').value = attemptTracking.attemptPenalty || 0;
+                document.getElementById('blankHelpThreshold').value = attemptTracking.helpThreshold || 3;
+                document.getElementById('lockOnMaxAttempts').checked = attemptTracking.lockOnMaxAttempts || false;
+                document.getElementById('retainHighestScore').checked = attemptTracking.retainHighestScore !== false;
 
                 // Modifications
                 const mods = assignmentData.modifications || {};
@@ -1455,6 +1465,7 @@ Reading level: [GRADE LEVEL]</p>
             const penaltyInput = panel.querySelector('.q-attempt-penalty');
             const helpInput = panel.querySelector('.q-help-threshold');
             const lockCb = panel.querySelector('.q-lock-on-max');
+            const retainCb = panel.querySelector('.q-retain-best');
             const block = blocks.find(b => b.id === blockId);
             if (!block) return;
             block.attemptOverrides = {
@@ -1462,7 +1473,8 @@ Reading level: [GRADE LEVEL]</p>
                 maxAttempts: parseInt(maxInput?.value || '0') || 0,
                 attemptPenalty: parseInt(penaltyInput?.value || '0') || 0,
                 helpThreshold: parseInt(helpInput?.value || '3') || 3,
-                lockOnMaxAttempts: lockCb?.checked || false
+                lockOnMaxAttempts: lockCb?.checked || false,
+                retainHighestScore: retainCb?.checked !== false
             };
             panel.querySelector('.q-override-fields')?.classList.toggle('hidden', !enabledCb?.checked);
         }
@@ -1547,25 +1559,37 @@ Reading level: [GRADE LEVEL]</p>
   </button>
   <div id="q-attempt-override-${block.id}" class="hidden mt-2 space-y-2 bg-gray-900/40 p-3 rounded">
     <label class="flex items-center gap-2">
-      <input type="checkbox" class="q-override-enabled w-4 h-4 rounded bg-gray-700 border-gray-600" ${block.attemptOverrides?.enabled ? 'checked' : ''}>
+      <input type="checkbox" class="q-override-enabled w-4 h-4 rounded bg-gray-700 border-gray-600" ${block.attemptOverrides?.enabled ? 'checked' : ''}
+        onchange="updateBlockAttemptOverrides('${block.id}')">
       <span class="text-sm text-white">Override assignment-wide attempt settings for this question</span>
     </label>
     <div class="q-override-fields ${block.attemptOverrides?.enabled ? '' : 'hidden'} grid grid-cols-2 gap-2 mt-2">
       <div>
         <label class="text-xs text-gray-400">Max Attempts (0=∞)</label>
-        <input type="number" class="q-max-attempts w-full p-1.5 bg-gray-700 border border-gray-600 rounded text-sm" min="0" value="${block.attemptOverrides?.maxAttempts ?? 0}">
+        <input type="number" class="q-max-attempts w-full p-1.5 bg-gray-700 border border-gray-600 rounded text-sm" min="0" value="${block.attemptOverrides?.maxAttempts ?? 0}"
+          oninput="updateBlockAttemptOverrides('${block.id}')">
       </div>
       <div>
         <label class="text-xs text-gray-400">Pts Lost Per Extra Attempt</label>
-        <input type="number" class="q-attempt-penalty w-full p-1.5 bg-gray-700 border border-gray-600 rounded text-sm" min="0" value="${block.attemptOverrides?.attemptPenalty ?? 0}">
+        <input type="number" class="q-attempt-penalty w-full p-1.5 bg-gray-700 border border-gray-600 rounded text-sm" min="0" value="${block.attemptOverrides?.attemptPenalty ?? 0}"
+          oninput="updateBlockAttemptOverrides('${block.id}')">
       </div>
       <div>
         <label class="text-xs text-gray-400">Help Threshold</label>
-        <input type="number" class="q-help-threshold w-full p-1.5 bg-gray-700 border border-gray-600 rounded text-sm" min="1" value="${block.attemptOverrides?.helpThreshold ?? 3}">
+        <input type="number" class="q-help-threshold w-full p-1.5 bg-gray-700 border border-gray-600 rounded text-sm" min="1" value="${block.attemptOverrides?.helpThreshold ?? 3}"
+          oninput="updateBlockAttemptOverrides('${block.id}')">
       </div>
-      <div class="flex items-center gap-2 mt-3">
-        <input type="checkbox" class="q-lock-on-max w-4 h-4 rounded bg-gray-700 border-gray-600" ${block.attemptOverrides?.lockOnMaxAttempts ? 'checked' : ''}>
-        <label class="text-xs text-white">Lock on max</label>
+      <div class="flex items-center gap-4 mt-3">
+        <div class="flex items-center gap-2">
+          <input type="checkbox" class="q-lock-on-max w-4 h-4 rounded bg-gray-700 border-gray-600" ${block.attemptOverrides?.lockOnMaxAttempts ? 'checked' : ''}
+            onchange="updateBlockAttemptOverrides('${block.id}')">
+          <label class="text-xs text-white">Lock on max</label>
+        </div>
+        <div class="flex items-center gap-2">
+          <input type="checkbox" class="q-retain-best w-4 h-4 rounded bg-gray-700 border-gray-600" ${block.attemptOverrides?.retainHighestScore !== false ? 'checked' : ''}
+            onchange="updateBlockAttemptOverrides('${block.id}')">
+          <label class="text-xs text-white">Retain best</label>
+        </div>
       </div>
     </div>
   </div>
@@ -1723,6 +1747,16 @@ Reading level: [GRADE LEVEL]</p>
                     const markup = document.getElementById('canvas-textarea').value;
                     const result = parseCanvasToBlocks(markup, blocks);
                     blocksToSave = result.blocks;
+                    
+                    if (blocksToSave.length === 0 && assignmentData.blocks && assignmentData.blocks.length > 0) {
+                        const confirmSave = confirm("Warning: You are about to save an empty assignment, which will delete all existing questions and text. Are you sure you want to proceed?");
+                        if (!confirmSave) {
+                            saveBtn.disabled = false;
+                            saveBtn.textContent = 'Save Assignment';
+                            return;
+                        }
+                    }
+                    
                     blocks = blocksToSave;
                     if (result.warnings.length > 0) {
                         showWarnings(result.warnings);
@@ -1794,9 +1828,22 @@ Reading level: [GRADE LEVEL]</p>
                         maxAttempts: parseInt(document.getElementById('maxAttempts').value, 10) || 0,
                         attemptPenalty: parseInt(document.getElementById('attemptPenalty').value, 10) || 0,
                         helpThreshold: parseInt(document.getElementById('blankHelpThreshold').value, 10) || 3,
-                        lockOnMaxAttempts: document.getElementById('lockOnMaxAttempts').checked
+                        lockOnMaxAttempts: document.getElementById('lockOnMaxAttempts').checked,
+                        retainHighestScore: document.getElementById('retainHighestScore').checked
                     }
                 };
+
+                const prevData = assignmentData;
+                if (prevData && prevData.blocks) {
+                    const revisions = prevData.revisions || [];
+                    revisions.push({
+                        timestamp: Date.now(),
+                        blocks: prevData.blocks,
+                        checkerFunctions: prevData.checkerFunctions || {}
+                    });
+                    if (revisions.length > 10) revisions.shift();
+                    updatePayload.revisions = revisions;
+                }
 
                 // Build inline deadline policy
                 const deadlinePolicy = { classStartTimes: {}, classStartAt: {}, classDueAt: {}, earlyAccessPadding: {} };
@@ -1881,6 +1928,15 @@ Reading level: [GRADE LEVEL]</p>
                 } else {
                     updatePayload.modifications = firebase.firestore.FieldValue.delete();
                 }
+
+                // Global Attempt Tracking
+                updatePayload.attemptTracking = {
+                    maxAttempts: parseInt(document.getElementById('maxAttempts').value) || 0,
+                    attemptPenalty: parseInt(document.getElementById('attemptPenalty').value) || 0,
+                    helpThreshold: parseInt(document.getElementById('blankHelpThreshold').value) || 0,
+                    lockOnMaxAttempts: document.getElementById('lockOnMaxAttempts').checked,
+                    retainHighestScore: document.getElementById('retainHighestScore').checked
+                };
 
                 await db.collection('assignments').doc(assignmentId).update(updatePayload);
 
@@ -2249,10 +2305,30 @@ Reading level: [GRADE LEVEL]</p>
             const blockId = card.dataset.blockId;
             if (!blockId) return;
 
-            if (e.target.matches('.q-override-enabled, .q-max-attempts, .q-attempt-penalty, .q-help-threshold, .q-lock-on-max')) {
+            if (e.target.matches('.q-override-enabled, .q-max-attempts, .q-attempt-penalty, .q-help-threshold, .q-lock-on-max, .q-retain-best')) {
                 updateBlockAttemptOverrides(blockId);
             }
         });
+
+        async function restorePreviousVersion() {
+            if (!assignmentData || !assignmentData.revisions || assignmentData.revisions.length === 0) {
+                showToast("No previous versions available to restore.", { color: 'blue' });
+                return;
+            }
+            if (confirm("Restore the last saved version of this assignment? Any unsaved changes will be lost.")) {
+                const lastRev = assignmentData.revisions[assignmentData.revisions.length - 1];
+                blocks = lastRev.blocks || [];
+                checkerFunctions = lastRev.checkerFunctions || {};
+                
+                if (currentMode === 'canvas') {
+                    document.getElementById('canvas-textarea').value = serializeBlocksToCanvas(blocks);
+                    updateWarningBadge([]);
+                } else {
+                    renderBlocks();
+                }
+                showToast("Restored previous version. Click 'Save Assignment' to commit changes.", { color: 'green' });
+            }
+        }
     </script>
 </body>
 </html>

@@ -150,25 +150,49 @@
             let correctChoiceIndex = null;
             let points = 100;
 
-            // Parse points from last part like "100pts" or "50pts"
-            const lastPart = parts[parts.length - 1];
-            const ptsMatch = lastPart.match(/^(\d+)\s*pts?$/i);
-            if (ptsMatch) {
-                points = parseInt(ptsMatch[1], 10);
-                parts.pop();
+            // --- Modifier Parsing ---
+            // Iterate through all parts to find modifiers like "100pts", "maxAttempts:3", etc.
+            // Remaining parts are used for question type configuration.
+            const attemptOverrides = { enabled: false, maxAttempts: 0, attemptPenalty: 0, lockOnMaxAttempts: false, retainHighestScore: true, helpThreshold: 3 };
+            const configParts = [];
+
+            for (let j = 1; j < parts.length; j++) {
+                const p = parts[j].trim();
+                
+                // Points
+                const ptsMatch = p.match(/^(\d+)\s*pts?$/i);
+                if (ptsMatch) {
+                    points = parseInt(ptsMatch[1], 10);
+                    continue;
+                }
+
+                // Attempt Overrides
+                const mMax = p.match(/^maxAttempts[:=]\s*(\d+)$/i);
+                const mPen = p.match(/^penalty[:=]\s*(\d+)$/i);
+                const mLock = p.match(/^lock[:=]\s*(true|false)$/i);
+                const mRetain = p.match(/^retain[:=]\s*(true|false)$/i);
+                const mHelp = p.match(/^helpThreshold[:=]\s*(\d+)$/i);
+
+                if (mMax) { attemptOverrides.enabled = true; attemptOverrides.maxAttempts = parseInt(mMax[1], 10); }
+                else if (mPen) { attemptOverrides.enabled = true; attemptOverrides.attemptPenalty = parseInt(mPen[1], 10); }
+                else if (mLock) { attemptOverrides.enabled = true; attemptOverrides.lockOnMaxAttempts = mLock[1].toLowerCase() === 'true'; }
+                else if (mRetain) { attemptOverrides.enabled = true; attemptOverrides.retainHighestScore = mRetain[1].toLowerCase() === 'true'; }
+                else if (mHelp) { attemptOverrides.enabled = true; attemptOverrides.helpThreshold = parseInt(mHelp[1], 10); }
+                else {
+                    // Not a known modifier, must be a config part (e.g. choices or inline checker)
+                    configParts.push(p);
+                }
             }
 
             if (typePart === 'text') {
                 questionType = 'text';
-                if (parts.length > 1) {
-                    const condPart = parts[1].trim();
-                    inlineChecker = parseMultiCondition(condPart, points, warnings);
+                if (configParts.length > 0) {
+                    inlineChecker = parseMultiCondition(configParts[0], points, warnings);
                 }
             } else if (typePart === 'number') {
                 questionType = 'number';
-                if (parts.length > 1) {
-                    const condPart = parts[1].trim();
-                    // answer==X | answer between X and Y | contains / not_contains also valid
+                if (configParts.length > 0) {
+                    const condPart = configParts[0];
                     const eqMatch = condPart.match(/^answer\s*==\s*([\d.]+)$/i);
                     const neqMatch = condPart.match(/^answer\s*!=\s*([\d.]+)$/i);
                     const gtMatch = condPart.match(/^answer\s*>\s*([\d.]+)$/i);
@@ -189,19 +213,18 @@
                     } else if (betweenMatch) {
                         inlineChecker = { op: 'between', value: parseFloat(betweenMatch[1]), value2: parseFloat(betweenMatch[2]), tolerance: 0, points };
                     } else {
-                        warnings.push(`Unrecognized condition for number question: "${condPart}". Treating as open number.`);
+                        // Fallback: check if the config part itself contains text-like conditions
+                        inlineChecker = parseMultiCondition(condPart, points, warnings);
                     }
                 }
             } else if (typePart === 'choice') {
                 questionType = 'choice';
-                if (parts.length > 1) {
-                    const choicePart = parts[1];
-                    // Parse "A. opt, B. opt, C. correct*, D. opt"
+                if (configParts.length > 0) {
+                    const choicePart = configParts[0];
                     const rawChoices = choicePart.split(',').map(c => c.trim());
                     choices = [];
                     correctChoiceIndex = null;
                     rawChoices.forEach((raw, ci) => {
-                        // Strip leading "A. " or "1. " prefix
                         const stripped = raw.replace(/^[A-Za-z0-9]+\.\s*/, '').trim();
                         if (stripped.endsWith('*')) {
                             correctChoiceIndex = ci;
@@ -223,7 +246,7 @@
                 questionType = 'text';
             }
 
-            return { questionType, inlineChecker, choices, correctChoiceIndex, points };
+            return { questionType, inlineChecker, choices, correctChoiceIndex, points, attemptOverrides };
         }
 
         for (let i = 0; i < lines.length; i++) {
@@ -329,7 +352,8 @@
             prompt: promptRaw,
             questionType,
             points,
-            inlineChecker: inlineChecker || null
+            inlineChecker: inlineChecker || null,
+            attemptOverrides: parsed.attemptOverrides || { enabled: false }
         };
         if (questionType === 'choice' && choices) {
             block.choices = choices;
@@ -378,8 +402,8 @@
 
     function serializeQuestionTag(block) {
         const pts = block.points !== undefined ? block.points : 100;
-        const ptsStr = pts !== 100 ? ` | ${pts}pts` : '';
-
+        // Base tag
+        let qTag = '';
         if (block.questionType === 'choice' && block.choices && block.choices.length > 0) {
             const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
             const choicesStr = block.choices.map((c, i) => {
@@ -387,41 +411,43 @@
                 const star = i === block.correctChoiceIndex ? '*' : '';
                 return `${letter}. ${c}${star}`;
             }).join(', ');
-            return `[q: choice | ${choicesStr}${ptsStr}]`;
-        }
-
-        if (block.inlineChecker) {
+            qTag = `[q: choice | ${choicesStr}`;
+        } else if (block.inlineChecker) {
             const ic = block.inlineChecker;
+            let configStr = '';
             if (ic.type === 'multi') {
-                const parts = ic.conditions.map(c => {
+                configStr = ic.conditions.map(c => {
                     if (c.op === 'equals_str') return `is "${c.value}"`;
                     return `${c.op} "${c.value}"`;
-                });
-                return `[q: ${block.questionType} | ${parts.join(` ${ic.logic} `)}${ptsStr}]`;
+                }).join(` ${ic.logic} `);
+            } else {
+                if (ic.op === '==') configStr = `answer==${ic.value}${ic.tolerance ? ` ±${ic.tolerance}` : ''}`;
+                else if (ic.op === '!=') configStr = `answer!=${ic.value}`;
+                else if (ic.op === '>') configStr = `answer>${ic.value}`;
+                else if (ic.op === '<') configStr = `answer<${ic.value}`;
+                else if (ic.op === 'between') configStr = `answer between ${ic.value} and ${ic.value2}`;
+                else if (ic.op === 'contains') configStr = `contains "${ic.value}"`;
+                else if (ic.op === 'not_contains') configStr = `not_contains "${ic.value}"`;
+                else if (ic.op === 'equals_str') configStr = `is "${ic.value}"`;
             }
-            if (ic.op === '==') {
-                const tol = ic.tolerance ? ` ±${ic.tolerance}` : '';
-                return `[q: ${block.questionType} | answer==${ic.value}${tol}${ptsStr}]`;
-            } else if (ic.op === '!=') {
-                return `[q: ${block.questionType} | answer!=${ic.value}${ptsStr}]`;
-            } else if (ic.op === '>') {
-                return `[q: ${block.questionType} | answer>${ic.value}${ptsStr}]`;
-            } else if (ic.op === '<') {
-                return `[q: ${block.questionType} | answer<${ic.value}${ptsStr}]`;
-            } else if (ic.op === 'between') {
-                return `[q: ${block.questionType} | answer between ${ic.value} and ${ic.value2}${ptsStr}]`;
-            } else if (ic.op === 'contains') {
-                return `[q: ${block.questionType} | contains "${ic.value}"${ptsStr}]`;
-            } else if (ic.op === 'not_contains') {
-                return `[q: ${block.questionType} | not_contains "${ic.value}"${ptsStr}]`;
-            } else if (ic.op === 'equals_str') {
-                return `[q: ${block.questionType} | is "${ic.value}"${ptsStr}]`;
-            }
+            qTag = `[q: ${block.questionType} | ${configStr}`;
+        } else {
+            qTag = `[q: ${block.questionType || 'text'}`;
         }
 
-        // Open question (no inline checker)
-        const typeTag = block.questionType || 'text';
-        return `[q: ${typeTag}${ptsStr}]`;
+        // Add Modifiers
+        if (pts !== 100) qTag += ` | ${pts}pts`;
+        
+        if (block.attemptOverrides && block.attemptOverrides.enabled) {
+            const ao = block.attemptOverrides;
+            if (ao.maxAttempts) qTag += ` | maxAttempts:${ao.maxAttempts}`;
+            if (ao.attemptPenalty) qTag += ` | penalty:${ao.attemptPenalty}`;
+            if (ao.lockOnMaxAttempts) qTag += ` | lock:true`;
+            if (ao.retainHighestScore === false) qTag += ` | retain:false`;
+            if (ao.helpThreshold && ao.helpThreshold !== 3) qTag += ` | helpThreshold:${ao.helpThreshold}`;
+        }
+
+        return qTag + ']';
     }
 
     // ---------------------------------------------------------------- validator

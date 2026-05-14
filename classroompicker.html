@@ -1466,7 +1466,8 @@
                                 questionProgressData[blockId] = {
                                     attemptCount: data.attemptCount || 0,
                                     bestScore: data.bestScore || 0,
-                                    locked: data.locked || false
+                                    locked: data.locked || false,
+                                    normalizedAnswers: data.normalizedAnswers || []
                                 };
                             }
                         });
@@ -2456,22 +2457,10 @@
             let scoreToPersist = finalScore;
 
             if (attemptsConfig.enabled && attemptsConfig.retainBestScore !== false) {
+                scoreToPersist = Math.max(finalScore, bestScore);
                 if (finalScore >= bestScore) {
-                    // True improvement in total score
                     bestScore = finalScore;
                     bestAnswer = studentAnswer;
-                    scoreToPersist = finalScore;
-                } else if (baseScore >= bestScore) {
-                    // Current total score is lower (due to penalties), 
-                    // but raw quality is still >= the previous best penalized score.
-                    // Retain the higher previous bestScore.
-                    scoreToPersist = bestScore;
-                } else {
-                    // Quality dropped below the previous high score.
-                    // Student loses their "banked" high score.
-                    bestScore = finalScore;
-                    bestAnswer = studentAnswer;
-                    scoreToPersist = finalScore;
                 }
             } else {
                 bestScore = finalScore;
@@ -3620,14 +3609,29 @@
             // Track attempts
             const progressKey = block.id;
             if (!questionProgressData[progressKey]) {
-                questionProgressData[progressKey] = { attemptCount: 0, bestScore: 0, locked: false };
+                questionProgressData[progressKey] = { attemptCount: 0, bestScore: 0, locked: false, uniqueAttempts: [] };
             }
             const progress = questionProgressData[progressKey];
             if (progress.locked) {
                 showToast("This question is locked — max attempts reached.", { color: 'red' });
                 return;
             }
-            progress.attemptCount += 1;
+
+            const retainHighestScore = qOver?.retainHighestScore ?? (at.retainHighestScore !== false);
+
+            const normalizedAnswer = normalizeAnswer(String(studentAnswer || ''), false, false);
+            progress.normalizedAnswers = progress.normalizedAnswers || [];
+            
+            let isUniqueAttempt = true;
+            if (progress.normalizedAnswers.includes(normalizedAnswer)) {
+                isUniqueAttempt = false;
+            } else {
+                progress.normalizedAnswers.push(normalizedAnswer);
+            }
+
+            if (isUniqueAttempt) {
+                progress.attemptCount += 1;
+            }
             const attemptCount = progress.attemptCount;
 
             // Compute score
@@ -3709,6 +3713,9 @@
                 }
             }
 
+            if (retainHighestScore) {
+                score = Math.max(score, progress.bestScore || 0);
+            }
             progress.bestScore = Math.max(progress.bestScore || 0, score);
             if (maxAttempts > 0 && attemptCount >= maxAttempts && lockOnMax) {
                 progress.locked = true;
@@ -3748,11 +3755,10 @@
                     answer: String(studentAnswer),
                     score: score,
                     timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-                    attemptIndex: 1,
-                    normalizedAnswer: String(studentAnswer).toLowerCase().trim(),
-                    bestScoreToDate: score,
-                    attemptsEnabled: false,
-                    locked: false
+                    attemptIndex: attemptCount,
+                    normalizedAnswer: normalizedAnswer,
+                    attemptsEnabled: maxAttempts > 0,
+                    locked: progress.locked
                 };
                 await db.collection("submissions").add(submission);
 
@@ -3767,6 +3773,7 @@
                     bestScore: progress.bestScore,
                     latestScore: score,
                     attemptCount: attemptCount,
+                    normalizedAnswers: progress.normalizedAnswers,
                     locked: progress.locked,
                     ...(shouldFlagHelp ? { helpFlag: true } : {}),
                     timestamp: firebase.firestore.FieldValue.serverTimestamp()
@@ -4254,13 +4261,17 @@
                 }
             }
 
-            const sidebarList = document.getElementById('video-sidebar-list');
-            if (!sidebarList) return;
-
+            let qCounter = 0;
             sidebarList.innerHTML = sortedVideoItems.map(item => {
                 const icon = item._kind === 'note' ? '📌' : '❓';
                 const mmss = Math.floor(item.time / 60) + ':' + String(Math.floor(item.time % 60)).padStart(2, '0');
-                const title = item._kind === 'note' ? 'Note' : `Q${item._index + 1}`;
+                let title;
+                if (item._kind === 'note') {
+                    title = 'Note';
+                } else {
+                    qCounter++;
+                    title = `Q${qCounter}`;
+                }
                 return `<div id="vsb_${item.id}" class="p-3 bg-gray-700/50 border border-gray-600 rounded-lg text-sm mb-2 text-gray-300 transition-colors">
                     <span class="font-bold text-yellow-400 mr-2">${title}</span> 
                     <span class="text-xs text-gray-400 opacity-70">[${mmss}]</span>
@@ -4292,10 +4303,18 @@
                 playerContainer.innerHTML = `<iframe src="https://drive.google.com/file/d/${assignmentData.videoSourceId}/preview" class="w-full h-full" allow="autoplay" frameborder="0" style="position: absolute; top:0; left:0;"></iframe>`;
                 if (sidebarList) {
                     sidebarList.innerHTML = `<p class="text-sm text-gray-400 mb-4 italic p-2 border border-gray-600 rounded">Google Drive videos cannot automatically pause. Please watch the video and answer the questions interactively below.</p>`;
+                    let qCounterDrive = 0;
                     sortedVideoItems.forEach(item => {
                         const existingAnswerHtml = (item._kind === 'question' && slideStates[item._index] && slideStates[item._index].answer) ? `<span class="ml-2 text-green-400 text-xs">✅ Answered</span>` : '';
+                        let title;
+                        if (item._kind === 'note') {
+                            title = '📌 Note';
+                        } else {
+                            qCounterDrive++;
+                            title = `❓ Q${qCounterDrive}`;
+                        }
                         sidebarList.innerHTML += `<div class="mb-4 bg-gray-700/60 border border-gray-600 p-4 rounded-lg shadow-sm">
-                            <p class="text-sm font-bold text-yellow-500 mb-2">${item._kind === 'note' ? '📌 Note' : '❓ Q' + (item._index + 1)} <span class="text-gray-400 text-xs ml-1">[${Math.floor(item.time / 60)}:${String(Math.floor(item.time % 60)).padStart(2, '0')}]</span>${existingAnswerHtml}</p>
+                            <p class="text-sm font-bold text-yellow-500 mb-2">${title} <span class="text-gray-400 text-xs ml-1">[${Math.floor(item.time / 60)}:${String(Math.floor(item.time % 60)).padStart(2, '0')}]</span>${existingAnswerHtml}</p>
                             <p class="text-sm text-gray-200 mb-3 leading-relaxed">${escapeHtml(item.body)}</p>
                             ${item._kind === 'question' ? `<button onclick="showVideoOverlay('${item.id}', true)" class="w-full bg-blue-600 hover:bg-blue-700 font-bold px-3 py-2 rounded text-sm text-white transition-colors">Answer Question</button>` : ''}
                         </div>`;
