@@ -81,6 +81,61 @@ function evaluateInlineChecker(ic, studentAnswer, context) {
 }
 window.evaluateInlineChecker = evaluateInlineChecker;
 
+function buildInlineConditionExpr(c) {
+  const val = c.value;
+  const tol = c.tolerance || 0;
+  const safeStr = JSON.stringify(String(val == null ? '' : val).toLowerCase().trim());
+
+  if (c.op === 'contains') return `answerStr.includes(${safeStr})`;
+  if (c.op === 'not_contains') return `!answerStr.includes(${safeStr})`;
+  if (c.op === 'equals_str') return `answerStr === ${safeStr}`;
+
+  const numVal = parseFloat(val);
+  const numVal2 = parseFloat(c.value2);
+  if (c.op === '==') {
+    return tol > 0
+      ? `(!isNaN(answerNum) && Math.abs(answerNum - ${numVal}) <= ${tol})`
+      : `(!isNaN(answerNum) && answerNum === ${numVal})`;
+  }
+  if (c.op === '!=') {
+    return tol > 0
+      ? `(!isNaN(answerNum) && Math.abs(answerNum - ${numVal}) > ${tol})`
+      : `(!isNaN(answerNum) && answerNum !== ${numVal})`;
+  }
+  if (c.op === '>') return `(!isNaN(answerNum) && answerNum > ${numVal})`;
+  if (c.op === '<') return `(!isNaN(answerNum) && answerNum < ${numVal})`;
+  if (c.op === 'between') {
+    const lo = Math.min(numVal, isNaN(numVal2) ? numVal : numVal2);
+    const hi = Math.max(numVal, isNaN(numVal2) ? numVal : numVal2);
+    return `(!isNaN(answerNum) && answerNum >= ${lo} && answerNum <= ${hi})`;
+  }
+  return 'false';
+}
+window.buildInlineConditionExpr = buildInlineConditionExpr;
+
+function generateInlineCheckerCode(ic) {
+  if (!ic) return null;
+  const pts = (typeof ic.points === 'number' && ic.points > 0) ? ic.points : 100;
+
+  let conditionExpr;
+  if (ic.type === 'multi' && Array.isArray(ic.conditions) && ic.conditions.length > 0) {
+    const subExprs = ic.conditions.map(c => buildInlineConditionExpr(c));
+    const join = ic.logic === 'AND' ? ' && ' : ' || ';
+    conditionExpr = `(${subExprs.join(join)})`;
+  } else {
+    conditionExpr = buildInlineConditionExpr(ic);
+  }
+
+  return (
+    `function checkAnswer(studentAnswer) {\n` +
+    `    var answerStr = String(studentAnswer == null ? '' : studentAnswer).toLowerCase().trim();\n` +
+    `    var answerNum = parseFloat(answerStr.replace(/,/g, ''));\n` +
+    `    return (${conditionExpr}) ? ${pts} : 0;\n` +
+    `}`
+  );
+}
+window.generateInlineCheckerCode = generateInlineCheckerCode;
+
 function executeCheckerFunction(funcString, studentAnswer, options = {}) {
   if (!funcString || !String(funcString).trim()) return 0;
 

@@ -1347,27 +1347,47 @@
 
         function executeChecker(submission) {
             const slideIndex = submission.slideIndex;
-            const dataToUse = (window.linkedAssignmentsData && window.linkedAssignmentsData[submission.assignmentId]) ? window.linkedAssignmentsData[submission.assignmentId] : assignmentData;
-            
+            const dataToUse = (window.linkedAssignmentsData && window.linkedAssignmentsData[submission.assignmentId])
+                ? window.linkedAssignmentsData[submission.assignmentId]
+                : assignmentData;
+
             let checkerKey = `calc${slideIndex + 1}`;
+            let questionBlock = null;
+
             if (dataToUse.type === 'video') {
                 checkerKey = dataToUse.videoQuestions?.[slideIndex]?.id || checkerKey;
             } else if (dataToUse.type === 'simulation') {
                 checkerKey = dataToUse.simQuestions?.[slideIndex]?.id || checkerKey;
             } else if (dataToUse.type === 'blank') {
                 const questionBlocks = (dataToUse.blocks || []).filter(b => b.type === 'question');
-                const block = questionBlocks[slideIndex];
-                checkerKey = block?.id || checkerKey;
+                questionBlock = questionBlocks[slideIndex] || null;
+                checkerKey = questionBlock?.id || checkerKey;
             }
+
             const funcEntry = dataToUse.checkerFunctions?.[checkerKey] ?? dataToUse.checkerFunctions?.[`calc${slideIndex + 1}`];
             const funcString = funcEntry ? (typeof funcEntry === 'object' ? funcEntry.code : funcEntry) : null;
-            if (!funcString) return 0;
+
+            if (!funcString) {
+                if (dataToUse.type === 'blank' && questionBlock?.inlineChecker) {
+                    try {
+                        const matched = evaluateInlineChecker(questionBlock.inlineChecker, submission.answer);
+                        const pts = questionBlock.inlineChecker.points || questionBlock.points || 100;
+                        return matched ? pts : 0;
+                    } catch (e) {
+                        console.error(`Error evaluating inlineChecker for Q${slideIndex + 1}:`, e);
+                        return 0;
+                    }
+                }
+                return 0;
+            }
+
             try {
                 const userProfile = { name: submission.studentName, email: submission.studentEmail };
-                return executeCheckerFunction(funcString, submission.answer, {
+                const result = executeCheckerFunction(funcString, submission.answer, {
                     userProfile,
                     showToast: () => {}
                 });
+                return typeof result === 'number' ? result : 0;
             } catch (e) {
                 console.error(`Error executing checker function for submission ${submission.id}:`, e);
                 showToast(`Error in checker for Q${slideIndex + 1}: ${e.message}`, { color: 'red' });
@@ -1383,51 +1403,64 @@
             regradeBtn.textContent = 'Regrading...';
             showToast("Starting to regrade all submissions...", { color: 'blue' });
 
+            async function commitBatches(batches) {
+                for (const b of batches) await b.commit();
+            }
+
+            function buildBatches(updates) {
+                const LIMIT = 499;
+                const batches = [];
+                let current = db.batch();
+                let count = 0;
+                for (const { ref, data } of updates) {
+                    if (count >= LIMIT) {
+                        batches.push(current);
+                        current = db.batch();
+                        count = 0;
+                    }
+                    current.update(ref, data);
+                    count++;
+                }
+                if (count > 0) batches.push(current);
+                return batches;
+            }
+
             try {
-                let submissionsSnapshot;
                 if (assignmentData.type === 'lesson') {
-                    // For lessons, we just use the loaded allStudentData to find submissions to regrade
-                    // since querying all linked assignment IDs would be complex.
-                    const allSubmissionsToRegrade = allStudentData.flatMap(s => s.submissions);
-                    if (allSubmissionsToRegrade.length === 0) {
+                    const allSubmissions = allStudentData.flatMap(s => s.submissions);
+                    if (allSubmissions.length === 0) {
                         showToast("No submissions found to regrade.", { color: 'default' });
-                        regradeBtn.disabled = false;
-                        regradeBtn.textContent = 'Regrade All';
                         return;
                     }
-                    const batch = db.batch();
-                    let count = 0;
-                    allSubmissionsToRegrade.forEach(sub => {
-                        const newScore = executeChecker(sub);
-                        const submissionRef = db.collection("submissions").doc(sub.id);
-                        batch.update(submissionRef, { score: newScore, isManualGrade: false });
-                        count++;
-                    });
-                    await batch.commit();
-                    showToast(`Successfully regraded ${count} submissions! Refreshing data...`, { color: 'green' });
-                    regradeBtn.disabled = false;
-                    regradeBtn.textContent = 'Regrade All';
+                    const updates = allSubmissions.map(sub => ({
+                        ref: db.collection("submissions").doc(sub.id),
+                        data: { score: executeChecker(sub) ?? 0, isManualGrade: false }
+                    }));
+                    await commitBatches(buildBatches(updates));
+                    showToast(`Successfully regraded ${updates.length} submissions!`, { color: 'green' });
                     return;
                 }
 
-                submissionsSnapshot = await db.collection("submissions").where("assignmentId", "==", assignmentId).get();
+                const submissionsSnapshot = await db.collection("submissions")
+                    .where("assignmentId", "==", assignmentId)
+                    .get();
+
                 if (submissionsSnapshot.empty) {
                     showToast("No submissions found to regrade.", { color: 'default' });
                     return;
                 }
 
-                const batch = db.batch();
-                let count = 0;
+                const updates = [];
                 submissionsSnapshot.forEach(doc => {
                     const submission = { id: doc.id, ...doc.data() };
-                    const newScore = executeChecker(submission);
-                    const submissionRef = db.collection("submissions").doc(doc.id);
-                    batch.update(submissionRef, { score: newScore, isManualGrade: false });
-                    count++;
+                    updates.push({
+                        ref: db.collection("submissions").doc(doc.id),
+                        data: { score: executeChecker(submission) ?? 0, isManualGrade: false }
+                    });
                 });
 
-                await batch.commit();
-                showToast(`Successfully regraded ${count} submissions! Refreshing data...`, { color: 'green' });
+                await commitBatches(buildBatches(updates));
+                showToast(`Successfully regraded ${updates.length} submissions!`, { color: 'green' });
             } catch (error) {
                 console.error("Error during regrade all:", error);
                 showToast("An error occurred during regrading.", { color: 'red' });
@@ -1458,7 +1491,7 @@
                 let count = 0;
                 submissionsSnapshot.forEach(doc => {
                     const submission = { id: doc.id, ...doc.data() };
-                    const newScore = executeChecker(submission);
+                    const newScore = executeChecker(submission) ?? 0;
                     const submissionRef = db.collection("submissions").doc(doc.id);
                     batch.update(submissionRef, { score: newScore, isManualGrade: false });
                     count++;
