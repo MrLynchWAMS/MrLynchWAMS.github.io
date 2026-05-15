@@ -2075,7 +2075,7 @@
 
             //disables question links when hidden
             const postRule = assignmentData.postSubmissionRule || 'open';
-            const shouldDisableLinks = isSubmitted && postRule === 'hide';
+            let shouldDisableLinks = isSubmitted && postRule === 'hide';
 
             const isPDF = assignmentData.type === 'pdf';
             const isVideo = assignmentData.type === 'video';
@@ -2108,11 +2108,22 @@
                     }
                 }
 
+                let disableThisLink = shouldDisableLinks;
+                if (isVideo && assignmentData.videoSourceType === 'youtube') {
+                    const settings = assignmentData.playbackSettings || {};
+                    const qItem = sortedVideoItems.find(it => it._kind === 'question' && it._index === index);
+                    if (qItem) {
+                        const isAhead = settings.skipPrevention && (qItem.time > furthestReachedTime + 1);
+                        const isBehind = settings.preventGoingBack && (qItem.time < furthestReachedTime - 5);
+                        disableThisLink = disableThisLink || isAhead || isBehind;
+                    }
+                }
+
                 const jumpFunc = isVideo ? `jumpToVideoItemByQuestionIndex` : isSimulation ? `jumpToSimulationQuestion` : isBlank ? `jumpToBlankQuestion` : `jumpToSlide`;
-                const clickHandler = shouldDisableLinks ? '' : (isPDF ? `onclick="focusPDFZone(${index})"` : `onclick="${jumpFunc}(${index})"`);
-                const cursorClass = shouldDisableLinks ? 'cursor-not-allowed' : 'cursor-pointer';
-                const hoverClass = shouldDisableLinks ? '' : 'hover:bg-gray-600';
-                const opacityClass = shouldDisableLinks ? 'opacity-50' : '';
+                const clickHandler = disableThisLink ? '' : (isPDF ? `onclick="focusPDFZone(${index})"` : `onclick="${jumpFunc}(${index})"`);
+                const cursorClass = disableThisLink ? 'cursor-not-allowed' : 'cursor-pointer';
+                const hoverClass = disableThisLink ? '' : 'hover:bg-gray-600';
+                const opacityClass = disableThisLink ? 'opacity-50' : '';
                 const questionLabel = isSimulation
                     ? (assignmentData.simQuestions?.[index]?.body || `Question ${index + 1}`)
                     : isBlank
@@ -3373,8 +3384,12 @@
             blankQTimerIntervals.push(interval);
         }
 
-        function evaluateInlineChecker(studentAnswer, checker) {
-            return window.BlankRenderer.evaluateInlineChecker(studentAnswer, checker);
+        function evaluateInlineChecker(checker, studentAnswer) {
+            const passed = window.evaluateInlineChecker(checker, studentAnswer, {
+                assignmentData,
+                userProfile
+            });
+            return passed ? (checker.points || 100) : 0;
         }
 
         function jumpToBlankQuestion(index) {
@@ -3639,7 +3654,7 @@
             if (block.questionType === 'choice') {
                 score = parseInt(studentAnswer, 10) === block.correctChoiceIndex ? (block.points || 100) : 0;
             } else if (block.inlineChecker) {
-                score = evaluateInlineChecker(studentAnswer, block.inlineChecker);
+                score = evaluateInlineChecker(block.inlineChecker, studentAnswer);
             } else {
                 // Use checkerFunctions keyed by block ID
                 const checkerEntry = checkerFunctionStrings[block.id];
@@ -4261,17 +4276,16 @@
                 }
             }
 
+            const sidebarList = document.getElementById('video-sidebar-list');
+            if (!sidebarList) return;
+
             let qCounter = 0;
             sidebarList.innerHTML = sortedVideoItems.map(item => {
                 const icon = item._kind === 'note' ? '📌' : '❓';
                 const mmss = Math.floor(item.time / 60) + ':' + String(Math.floor(item.time % 60)).padStart(2, '0');
-                let title;
-                if (item._kind === 'note') {
-                    title = 'Note';
-                } else {
-                    qCounter++;
-                    title = `Q${qCounter}`;
-                }
+                if (item._kind !== 'note') qCounter++;
+                const title = item._kind === 'note' ? 'Note' : `Q${qCounter}`;
+
                 return `<div id="vsb_${item.id}" class="p-3 bg-gray-700/50 border border-gray-600 rounded-lg text-sm mb-2 text-gray-300 transition-colors">
                     <span class="font-bold text-yellow-400 mr-2">${title}</span> 
                     <span class="text-xs text-gray-400 opacity-70">[${mmss}]</span>
@@ -4306,15 +4320,11 @@
                     let qCounterDrive = 0;
                     sortedVideoItems.forEach(item => {
                         const existingAnswerHtml = (item._kind === 'question' && slideStates[item._index] && slideStates[item._index].answer) ? `<span class="ml-2 text-green-400 text-xs">✅ Answered</span>` : '';
-                        let title;
-                        if (item._kind === 'note') {
-                            title = '📌 Note';
-                        } else {
-                            qCounterDrive++;
-                            title = `❓ Q${qCounterDrive}`;
-                        }
+                        if (item._kind !== 'note') qCounterDrive++;
+                        const driveTitle = item._kind === 'note' ? '📌 Note' : `❓ Q${qCounterDrive}`;
                         sidebarList.innerHTML += `<div class="mb-4 bg-gray-700/60 border border-gray-600 p-4 rounded-lg shadow-sm">
-                            <p class="text-sm font-bold text-yellow-500 mb-2">${title} <span class="text-gray-400 text-xs ml-1">[${Math.floor(item.time / 60)}:${String(Math.floor(item.time % 60)).padStart(2, '0')}]</span>${existingAnswerHtml}</p>
+                            <p class="text-sm font-bold text-yellow-500 mb-2">${driveTitle} <span class="text-gray-400 text-xs ml-1">[${Math.floor(item.time / 60)}:${String(Math.floor(item.time % 60)).padStart(2, '0')}]</span>${existingAnswerHtml}</p>
+
                             <p class="text-sm text-gray-200 mb-3 leading-relaxed">${escapeHtml(item.body)}</p>
                             ${item._kind === 'question' ? `<button onclick="showVideoOverlay('${item.id}', true)" class="w-full bg-blue-600 hover:bg-blue-700 font-bold px-3 py-2 rounded text-sm text-white transition-colors">Answer Question</button>` : ''}
                         </div>`;
@@ -4454,6 +4464,7 @@
                     studentEmail: userProfile.email.toLowerCase(),
                     watchTime: watchTimeSeconds,
                     furthestReachedTime: furthestReachedTime,
+                    videoDuration: (assignmentData.type === 'video' && typeof videoPlayer !== 'undefined' && videoPlayer && typeof videoPlayer.getDuration === 'function') ? videoPlayer.getDuration() : 0,
                     score: currentAvg,
                     lastAccessed: firebase.firestore.FieldValue.serverTimestamp()
                 }, { merge: true });
@@ -4718,10 +4729,29 @@
         function jumpToVideoItemByQuestionIndex(qIndex) {
             const item = sortedVideoItems.find(it => it._kind === 'question' && it._index === qIndex);
             if (item) {
+                if (assignmentData.videoSourceType === 'youtube') {
+                    const settings = assignmentData.playbackSettings || {};
+                    const preventSkipping = settings.skipPrevention;
+                    const preventGoingBack = settings.preventGoingBack;
+
+                    if (preventSkipping && item.time > furthestReachedTime + 1) {
+                        showToast("Skipping forward is disabled.", { color: 'red' });
+                        return;
+                    }
+                    if (preventGoingBack && item.time < furthestReachedTime - 5) {
+                        showToast("Going back to previous questions is disabled.", { color: 'red' });
+                        return;
+                    }
+                }
+
                 const summary = document.getElementById('summaryContainer');
                 if (summary) summary.classList.add('hidden');
                 const main = document.getElementById('mainContainer');
                 if (main) main.classList.remove('hidden');
+
+                if (assignmentData.videoSourceType === 'youtube' && videoPlayer && typeof videoPlayer.seekTo === 'function') {
+                    videoPlayer.seekTo(item.time);
+                }
 
                 showVideoOverlay(item.id, true);
             }
