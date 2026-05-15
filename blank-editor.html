@@ -950,7 +950,7 @@ Reading level: [GRADE LEVEL]</p>
                 const lastMode = assignmentData.lastEditorMode || 'structured';
                 currentMode = lastMode;
                 if (lastMode === 'canvas') {
-                    activateCanvasMode(false);
+                    activateCanvasMode(true);
                 } else {
                     activateStructuredMode();
                 }
