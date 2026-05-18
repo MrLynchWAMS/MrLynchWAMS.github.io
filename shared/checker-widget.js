@@ -278,22 +278,16 @@
         function hideLockedOverlay() { lockedOverlay.style.display = 'none'; }
 
         lockedOverlay.querySelector('.overlay-return-btn').addEventListener('click', () => {
-          showDialog(
-            "Delete advanced code and switch to Simple Mode?",
-            "This will discard your advanced changes and restore the simple editor.",
-            () => {
-              advTextarea.value = "";
-              code = getDefaultCheckerCode();
-              mode = "simple";
-              advancedEdited = false;
-              simpleDisabled = false;
-              hideLockedOverlay();
-              showSimpleMode();
-              ruleGroupsContainer.innerHTML = "";
-              ruleGroupsContainer.appendChild(createRuleGroupElement(1));
-              updateCodeFromSimple();
-            }
-          );
+          advTextarea.value = "";
+          code = getDefaultCheckerCode();
+          mode = "simple";
+          advancedEdited = false;
+          simpleDisabled = false;
+          hideLockedOverlay();
+          showSimpleMode();
+          ruleGroupsContainer.innerHTML = "";
+          ruleGroupsContainer.appendChild(createRuleGroupElement(1));
+          updateCodeFromSimple();
         });
 
         lockedOverlay.querySelector('.overlay-keep-btn').addEventListener('click', () => {

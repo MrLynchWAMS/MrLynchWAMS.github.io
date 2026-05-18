@@ -1781,8 +1781,7 @@ Reading level: [GRADE LEVEL]</p>
                         const code = `function checkAnswer(studentAnswer) {\n    return parseInt(studentAnswer, 10) === ${correctIdx} ? ${pts} : 0;\n}`;
                         newCheckerFunctions[block.id] = { code, mode: 'auto' };
                     } else if (block.inlineChecker) {
-                        const code = generateInlineCheckerCode(block.inlineChecker);
-                        newCheckerFunctions[block.id] = { code, mode: 'auto' };
+                        return;
                     } else {
                         if (checkerFunctions[block.id]) {
                             newCheckerFunctions[block.id] = checkerFunctions[block.id];
