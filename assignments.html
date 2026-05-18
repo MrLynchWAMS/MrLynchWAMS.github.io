@@ -504,6 +504,8 @@
                 loadingState.classList.add('hidden');
             }
 
+            const typeLabels = { slides: 'Google Slides', pdf: 'PDF', video: 'Video', simulation: 'Simulation', blank: 'Blank', lesson: 'Multimodal Lesson' };
+
             filteredAssignments.forEach(assignment => {
                 const card = document.createElement('div');
                 card.className = "bg-gray-800 rounded-lg p-6 shadow-lg flex flex-col justify-between";
@@ -537,9 +539,14 @@
                                 assignment.type === 'blank' ? `blank-editor.html?id=${assignment.id}` : 
                                 `editor.html?id=${assignment.id}`;
 
+                const typeLabel = typeLabels[assignment.type] || typeLabels['slides'];
+
                 card.innerHTML = `
                 <div>
-                    <h3 class="text-2xl font-bold text-yellow-400 mb-2">${escapedName}</h3>
+                    <div class="flex justify-between items-start mb-2">
+                        <h3 class="text-2xl font-bold text-yellow-400">${escapedName}</h3>
+                        <span class="ml-2 shrink-0 text-xs uppercase px-2 py-1 bg-gray-700 text-gray-300 rounded border border-gray-600 font-semibold tracking-wider">${typeLabel}</span>
+                    </div>
                     <div class="mb-2">${statusHTML}</div>
                     <p class="text-gray-500 text-xs mt-2">Created: ${date}</p>
                     ${assignment.isPublic ? '<p class="text-purple-400 text-xs">🌐 Public</p>' : ''}
