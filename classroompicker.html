@@ -3384,7 +3384,7 @@
             blankQTimerIntervals.push(interval);
         }
 
-        function evaluateInlineChecker(checker, studentAnswer) {
+        function evaluateBlockInlineChecker(checker, studentAnswer) {
             const passed = window.evaluateInlineChecker(checker, studentAnswer, {
                 assignmentData,
                 userProfile
@@ -3655,7 +3655,7 @@
                 score = parseInt(studentAnswer, 10) === block.correctChoiceIndex ? (block.points || 100) : 0;
             } else if (block.inlineChecker) {
                 try {
-                    const passed = evaluateInlineChecker(block.inlineChecker, studentAnswer);
+                    const passed = evaluateBlockInlineChecker(block.inlineChecker, studentAnswer);
                     score = passed ? (block.inlineChecker.points || block.points || 100) : 0;
                 } catch (e) {
                     console.error('Inline checker error for block', block.id, e);
