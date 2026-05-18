@@ -2270,7 +2270,7 @@
             const maxPoints = parseFloat(document.getElementById('maxPoints').value) || 100;
             const decimalPlaces = parseInt(document.getElementById('decimalPlaces').value, 10) || 0;
             const studentsToExport = getCurrentlySortedStudents();
-            const numQuestions = assignmentData.type === 'pdf' ? (assignmentData.questionZones ? assignmentData.questionZones.length : 0) : assignmentData.type === 'video' ? (assignmentData.videoQuestions ? assignmentData.videoQuestions.length : 0) : assignmentData.type === 'simulation' ? (assignmentData.simQuestions ? assignmentData.simQuestions.length : 0) : (assignmentData.slideIds ? assignmentData.slideIds.length : 0);
+            const numQuestions = assignmentData.type === 'pdf' ? (assignmentData.questionZones ? assignmentData.questionZones.length : 0) : assignmentData.type === 'video' ? (assignmentData.videoQuestions ? assignmentData.videoQuestions.length : 0) : assignmentData.type === 'simulation' ? (assignmentData.simQuestions ? assignmentData.simQuestions.length : 0) : assignmentData.type === 'blank' ? (assignmentData.blocks || []).filter(b => b.type === 'question').length : (assignmentData.slideIds ? assignmentData.slideIds.length : 0);
 
             const outputData = studentsToExport.map(student => {
                 const nameParts = student.name.split(' ').filter(Boolean);
@@ -2310,7 +2310,7 @@
 
         function exportToCSV() {
             let csvContent = "\uFEFF"; // Add BOM for Excel UTF-8 support
-            const numQuestions = assignmentData.type === 'pdf' ? (assignmentData.questionZones ? assignmentData.questionZones.length : 0) : assignmentData.type === 'video' ? (assignmentData.videoQuestions ? assignmentData.videoQuestions.length : 0) : assignmentData.type === 'simulation' ? (assignmentData.simQuestions ? assignmentData.simQuestions.length : 0) : (assignmentData.slideIds ? assignmentData.slideIds.length : 0);
+            const numQuestions = assignmentData.type === 'pdf' ? (assignmentData.questionZones ? assignmentData.questionZones.length : 0) : assignmentData.type === 'video' ? (assignmentData.videoQuestions ? assignmentData.videoQuestions.length : 0) : assignmentData.type === 'simulation' ? (assignmentData.simQuestions ? assignmentData.simQuestions.length : 0) : assignmentData.type === 'blank' ? (assignmentData.blocks || []).filter(b => b.type === 'question').length : (assignmentData.slideIds ? assignmentData.slideIds.length : 0);
             const hasFocusMode = assignmentData.focusModeEnabled;
 
             let headers = ["Email", "Last Name", "First Name", "Full Name (Last, First)", "Class", "Average Score %", "Completion %"];

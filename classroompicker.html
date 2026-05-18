@@ -3654,8 +3654,14 @@
             if (block.questionType === 'choice') {
                 score = parseInt(studentAnswer, 10) === block.correctChoiceIndex ? (block.points || 100) : 0;
             } else if (block.inlineChecker) {
-                const passed = evaluateInlineChecker(block.inlineChecker, studentAnswer);
-                score = passed ? (block.inlineChecker.points || block.points || 100) : 0;
+                try {
+                    const passed = evaluateInlineChecker(block.inlineChecker, studentAnswer);
+                    score = passed ? (block.inlineChecker.points || block.points || 100) : 0;
+                } catch (e) {
+                    console.error('Inline checker error for block', block.id, e);
+                    showToast(`Checker error: ${e.message}. Answer saved with score 0.`, { color: 'red' });
+                    score = 0;
+                }
             } else {
                 // Use checkerFunctions keyed by block ID
                 const checkerEntry = checkerFunctionStrings[block.id];
