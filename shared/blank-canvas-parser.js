@@ -39,6 +39,21 @@
         if (containsMatch) return { op: 'contains', value: containsMatch[1], value2: null, tolerance: 0, points };
         const notContainsMatch = s.match(/^not_contains\s+"([^"]+)"$/i);
         if (notContainsMatch) return { op: 'not_contains', value: notContainsMatch[1], value2: null, tolerance: 0, points };
+        
+        // Numeric conditions (supports optional 'answer ' prefix)
+        const tolMatch = s.match(/^(?:answer\s*==\s*)?([\d.]+)\s*±\s*([\d.]+)$/i);
+        if (tolMatch) return { op: '==', value: parseFloat(tolMatch[1]), value2: null, tolerance: parseFloat(tolMatch[2]), points };
+        const eqMatch = s.match(/^(?:answer\s*==\s*)?([\d.]+)$/i);
+        if (eqMatch) return { op: '==', value: parseFloat(eqMatch[1]), value2: null, tolerance: 0, points };
+        const neqMatch = s.match(/^(?:answer\s*!=\s*)?([\d.]+)$/i);
+        if (neqMatch) return { op: '!=', value: parseFloat(neqMatch[1]), value2: null, tolerance: 0, points };
+        const gtMatch = s.match(/^(?:answer\s*>\s*)?([\d.]+)$/i);
+        if (gtMatch) return { op: '>', value: parseFloat(gtMatch[1]), value2: null, tolerance: 0, points };
+        const ltMatch = s.match(/^(?:answer\s*<\s*)?([\d.]+)$/i);
+        if (ltMatch) return { op: '<', value: parseFloat(ltMatch[1]), value2: null, tolerance: 0, points };
+        const btwMatch = s.match(/^(?:answer\s+)?between\s+([\d.]+)\s+and\s+([\d.]+)$/i);
+        if (btwMatch) return { op: 'between', value: parseFloat(btwMatch[1]), value2: parseFloat(btwMatch[2]), tolerance: 0, points };
+
         return null;
     }
 
@@ -57,8 +72,8 @@
         const s = (condStr || '').trim();
 
         // AND split
-        if (/\bAND\b/.test(s)) {
-            const parts = s.split(/\bAND\b/).map(p => p.trim());
+        if (/\bAND\b/i.test(s)) {
+            const parts = s.split(/\bAND\b/i).map(p => p.trim());
             const conditions = parts.map(p => parseSingleCondition(p, points)).filter(Boolean);
             if (conditions.length === parts.length && conditions.length > 0) {
                 return { type: 'multi', logic: 'AND', conditions, points };
@@ -66,8 +81,8 @@
         }
 
         // OR split
-        if (/\bOR\b/.test(s)) {
-            const parts = s.split(/\bOR\b/).map(p => p.trim());
+        if (/\bOR\b/i.test(s)) {
+            const parts = s.split(/\bOR\b/i).map(p => p.trim());
             const conditions = parts.map(p => parseSingleCondition(p, points)).filter(Boolean);
             if (conditions.length === parts.length && conditions.length > 0) {
                 return { type: 'multi', logic: 'OR', conditions, points };
@@ -194,30 +209,7 @@
             } else if (typePart === 'number') {
                 questionType = 'number';
                 if (configParts.length > 0) {
-                    const condPart = configParts[0];
-                    const eqMatch = condPart.match(/^answer\s*==\s*([\d.]+)$/i);
-                    const neqMatch = condPart.match(/^answer\s*!=\s*([\d.]+)$/i);
-                    const gtMatch = condPart.match(/^answer\s*>\s*([\d.]+)$/i);
-                    const ltMatch = condPart.match(/^answer\s*<\s*([\d.]+)$/i);
-                    const betweenMatch = condPart.match(/^answer\s+between\s+([\d.]+)\s+and\s+([\d.]+)$/i);
-                    const tolMatch = condPart.match(/^answer\s*==\s*([\d.]+)\s*±\s*([\d.]+)$/i);
-
-                    if (tolMatch) {
-                        inlineChecker = { op: '==', value: parseFloat(tolMatch[1]), value2: null, tolerance: parseFloat(tolMatch[2]), points };
-                    } else if (eqMatch) {
-                        inlineChecker = { op: '==', value: parseFloat(eqMatch[1]), value2: null, tolerance: 0, points };
-                    } else if (neqMatch) {
-                        inlineChecker = { op: '!=', value: parseFloat(neqMatch[1]), value2: null, tolerance: 0, points };
-                    } else if (gtMatch) {
-                        inlineChecker = { op: '>', value: parseFloat(gtMatch[1]), value2: null, tolerance: 0, points };
-                    } else if (ltMatch) {
-                        inlineChecker = { op: '<', value: parseFloat(ltMatch[1]), value2: null, tolerance: 0, points };
-                    } else if (betweenMatch) {
-                        inlineChecker = { op: 'between', value: parseFloat(betweenMatch[1]), value2: parseFloat(betweenMatch[2]), tolerance: 0, points };
-                    } else {
-                        // Fallback: check if the config part itself contains text-like conditions
-                        inlineChecker = parseMultiCondition(condPart, points, warnings);
-                    }
+                    inlineChecker = parseMultiCondition(configParts[0], points, warnings);
                 }
             } else if (typePart === 'choice') {
                 questionType = 'choice';

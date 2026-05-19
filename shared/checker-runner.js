@@ -49,21 +49,7 @@ function checkTextCondition(studentVal, targetVal, op, context = {}) {
  * Returns true/false (not a score — multiply by points to get score).
  * Handles both single-condition and multi-condition (type: 'multi') objects.
  */
-function evaluateInlineChecker(ic, studentAnswer, context) {
-  if (!ic) return false;
-  context = context || {};
-
-  if (ic.type === 'multi') {
-    const results = ic.conditions.map(c => {
-      if (c.op === 'contains' || c.op === 'not_contains' || c.op === 'equals_str') {
-        return checkTextCondition(studentAnswer, c.value, c.op, context);
-      }
-      return false;
-    });
-    return ic.logic === 'AND' ? results.every(Boolean) : results.some(Boolean);
-  }
-
-  // Single-condition handling
+function evaluateSingleCondition(ic, studentAnswer, context) {
   const text = String(studentAnswer || '').toLowerCase().trim();
   if (ic.op === 'contains') return text.includes(String(ic.value || '').toLowerCase());
   if (ic.op === 'not_contains') return !text.includes(String(ic.value || '').toLowerCase());
@@ -78,6 +64,18 @@ function evaluateInlineChecker(ic, studentAnswer, context) {
   if (ic.op === 'between') return num >= Math.min(ic.value, ic.value2) && num <= Math.max(ic.value, ic.value2);
 
   return false;
+}
+
+function evaluateInlineChecker(ic, studentAnswer, context) {
+  if (!ic) return false;
+  context = context || {};
+
+  if (ic.type === 'multi') {
+    const results = ic.conditions.map(c => evaluateSingleCondition(c, studentAnswer, context));
+    return ic.logic === 'AND' ? results.every(Boolean) : results.some(Boolean);
+  }
+
+  return evaluateSingleCondition(ic, studentAnswer, context);
 }
 window.evaluateInlineChecker = evaluateInlineChecker;
 
