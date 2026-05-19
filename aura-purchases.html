@@ -194,11 +194,28 @@
             return email.toLowerCase().replace(/\s+/g, '').trim();
         }
 
+        function checkImpersonation() {
+            const impersonatedEmail = localStorage.getItem('impersonatedUserEmail');
+            if (impersonatedEmail) {
+                const banner = document.createElement('div');
+                banner.className = 'bg-red-600 text-white text-center p-2 font-bold fixed top-0 w-full z-[200] flex justify-center items-center gap-4';
+                banner.innerHTML = `<span>⚠️ IMPERSONATING: ${impersonatedEmail}</span><button onclick="stopImpersonating()" class="bg-white text-red-600 px-3 py-1 rounded text-xs hover:bg-gray-200">Stop</button>`;
+                document.body.prepend(banner);
+                document.body.style.paddingTop = '40px';
+                return impersonatedEmail;
+            }
+            return null;
+        }
+
+        function stopImpersonating() {
+            localStorage.removeItem('impersonatedUserEmail');
+            window.location.reload();
+        }
+
         auth.onAuthStateChanged(async user => {
             if (user) {
                 let email = user.email;
-                const impersonated = localStorage.getItem('impersonatedUserEmail');
-                if (impersonated) email = impersonated;
+                checkImpersonation();
                 
                 currentUserEmail = normalizeTeacherEmail(email);
                 
