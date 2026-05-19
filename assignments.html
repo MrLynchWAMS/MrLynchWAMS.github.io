@@ -375,8 +375,7 @@
             if (user) {
                 try {
                     let emailToCheck = user.email.toLowerCase();
-                    const impersonated = checkImpersonation();
-                    if (impersonated) emailToCheck = impersonated;
+                    checkImpersonation();
 
                     const teacherDoc = await db.collection("teachers").doc(emailToCheck).get();
                     let isTeacher = teacherDoc.exists;

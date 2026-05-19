@@ -427,8 +427,7 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
             if (user) {
                 try {
                     let emailToCheck = user.email.toLowerCase();
-                    const impersonated = checkImpersonation();
-                    if (impersonated) emailToCheck = impersonated;
+                    checkImpersonation();
 
                     // Check teachers collection first, then fallback to hardcoded list
                     const teacherDoc = await db.collection("teachers").doc(emailToCheck).get();
@@ -589,6 +588,7 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
                                 <span class="text-gray-500">/</span>
                                 <span class="text-purple-400" title="Lifetime Aura">${lifetime} ✧</span>
                             </div>
+                            <button onclick="startImpersonating('${student.email.replace(/'/g, "\\'")}', '${student.name.replace(/'/g, "\\'")}', '${className.replace(/'/g, "\\'")}')" class="text-yellow-400 hover:text-yellow-300 text-sm font-semibold mr-1">🎭 Impersonate</button>
                             <button onclick='openStudentModal(${JSON.stringify(student)})' class="text-blue-400 hover:text-blue-300 text-sm">Edit</button>
                             <button onclick="handleDeleteStudent('${student.id}', '${student.name}')" class="text-red-400 hover:text-red-300 text-sm">Delete</button>
                         </div>
@@ -1302,6 +1302,28 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
                 closeStoreConfig();
             }
         });
+
+        function startImpersonating(email, name, className) {
+            localStorage.setItem('impersonatedUserEmail', email.toLowerCase());
+            showToast(`Now impersonating: ${name || email}`, { color: 'green' });
+            
+            const classAssignments = Object.entries(assignmentMap).filter(([id, data]) => {
+                const assigned = data.assignedClasses || [];
+                return assigned.map(c => String(c).toLowerCase()).includes(String(className).toLowerCase());
+            });
+            
+            setTimeout(() => {
+                if (classAssignments.length > 0) {
+                    const firstAssignmentId = classAssignments[0][0];
+                    if (confirm(`🎭 Impersonation Active!\n\nWould you like to open the assignment view as ${name} in a new tab?`)) {
+                        window.open(`./classroompicker.html?assignmentId=${firstAssignmentId}`, '_blank');
+                    }
+                } else {
+                    alert(`🎭 Impersonating: ${name}\n\nNo assignments are currently active/assigned for class "${className}". You can preview any assignment manually.`);
+                }
+                window.location.reload();
+            }, 300);
+        }
 
         function showToast(message, options = {}) { const { color = 'default', duration = 3000 } = options; const wrapper = document.getElementById('toast-wrapper'); if (!wrapper) return; const toast = document.createElement('div'); toast.className = 'flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm animate-fade-in-right'; const colors = { default: 'bg-gray-700', green: 'bg-green-600', red: 'bg-red-600', blue: 'bg-blue-600' }; toast.classList.add(colors[color] || colors['default']); const messageSpan = document.createElement('span'); messageSpan.textContent = message; toast.appendChild(messageSpan); const closeButton = document.createElement('button'); closeButton.innerHTML = '&times;'; closeButton.className = 'ml-4 text-2xl font-bold leading-none hover:text-gray-300 focus:outline-none'; let timeoutId = null; const dismiss = () => { if (timeoutId) clearTimeout(timeoutId); toast.classList.remove('animate-fade-in-right'); toast.classList.add('animate-fade-out-right'); toast.addEventListener('animationend', () => toast.remove()); }; closeButton.onclick = dismiss; toast.appendChild(closeButton); wrapper.appendChild(toast); timeoutId = setTimeout(dismiss, duration); };
     </script>
