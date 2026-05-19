@@ -46,11 +46,14 @@
             position: fixed; top: 1rem; right: 1rem; z-index: 50;
             display: flex; flex-direction: column; gap: 0.5rem;
         }
+        body { transition: padding-right 0.3s ease; }
+        body.with-drawer-open { padding-right: 420px; }
         .help-drawer {
             position: fixed; top: 0; right: -420px; width: 420px; height: 100vh;
             background: #1f2937; border-left: 1px solid #374151;
             z-index: 200; overflow-y: auto; transition: right 0.3s ease;
             padding: 1.5rem;
+            box-shadow: -4px 0 15px rgba(0,0,0,0.5);
         }
         .help-drawer.open { right: 0; }
         .block-card { transition: box-shadow 0.15s; }
@@ -510,6 +513,7 @@
                         <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">answer &gt; 10</td><td class="py-1">Number greater than</td></tr>
                         <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">answer &lt; 100</td><td class="py-1">Number less than</td></tr>
                         <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">answer between 30 and 40</td><td class="py-1">Number range</td></tr>
+                        <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-green-300">answer &gt; 10 and answer &lt; 20</td><td class="py-1">Combine logic (case-insensitive AND/OR)</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -629,7 +633,7 @@ Reading level: [GRADE LEVEL]</p>
             </div>
         </div>
     </div>
-    <div id="help-overlay" class="hidden fixed inset-0 bg-black bg-opacity-50 z-[190]" onclick="toggleHelp()"></div>
+
 
     <template id="checkerTemplate">
         <div class="checker-widget">
@@ -2233,7 +2237,7 @@ Reading level: [GRADE LEVEL]</p>
 
         function toggleHelp() {
             document.getElementById('help-drawer').classList.toggle('open');
-            document.getElementById('help-overlay').classList.toggle('hidden');
+            document.body.classList.toggle('with-drawer-open');
             updateHelpContent(currentMode);
         }
 

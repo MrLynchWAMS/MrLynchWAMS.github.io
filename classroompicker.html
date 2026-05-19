@@ -422,9 +422,14 @@
 <body class="bg-gray-900 text-white font-sans flex items-center justify-center min-h-screen">
 
     <div class="container mx-auto p-4">
-        <div id="pageLoader" class="text-center">
-            <h1 class="text-3xl font-bold text-yellow-400">Loading Assignment...</h1>
-            <p id="loadingError" class="text-red-500 mt-4"></p>
+        <div id="pageLoader" class="flex flex-col items-center justify-center min-h-[50vh] transition-opacity duration-300">
+            <div class="relative w-20 h-20 mb-6">
+                <div class="absolute inset-0 rounded-full border-4 border-gray-700"></div>
+                <div class="absolute inset-0 rounded-full border-4 border-yellow-400 border-t-transparent animate-spin"></div>
+            </div>
+            <h1 class="text-3xl font-bold text-yellow-400 mb-3 drop-shadow-md">Loading Workspace...</h1>
+            <p class="text-gray-400 animate-pulse">Initializing components, please wait</p>
+            <p id="loadingError" class="text-red-500 mt-4 max-w-md text-center"></p>
         </div>
 
         <div id="loginContainer" class="hidden">
