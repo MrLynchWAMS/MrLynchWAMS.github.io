@@ -81,8 +81,8 @@
             <h1 class="text-3xl font-bold text-yellow-400">Your Assignments</h1>
             <div class="flex items-center gap-4 flex-wrap">
                 <div class="flex items-center gap-2 bg-gray-800 p-2 rounded-lg border border-gray-700">
-                    <input type="checkbox" id="showSubAssignments" onchange="renderAssignments()" class="w-4 h-4 text-blue-600 rounded focus:ring-blue-500">
-                    <label for="showSubAssignments" class="text-xs font-semibold text-gray-400 cursor-pointer">Show hidden lesson parts</label>
+                    <input type="checkbox" id="showSubAssignments" onchange="displayFilteredAssignments()" class="w-4 h-4 text-blue-600 rounded focus:ring-blue-500">
+                    <label for="showSubAssignments" class="text-xs font-semibold text-gray-400 cursor-pointer">Show Hidden & Archived Assignments</label>
                 </div>
                 <button onclick="openCreateModal()"
                     class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg btn-action">+ New
@@ -108,9 +108,29 @@
             </div>
         </div>
 
-        <div class="mb-6">
-            <input type="search" id="searchInput" placeholder="Search assignments by name..."
-                class="w-full p-3 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500">
+        <div class="flex flex-col md:flex-row gap-4 mb-6">
+            <div class="flex-1">
+                <input type="search" id="searchInput" placeholder="Search assignments by name..."
+                    class="w-full p-3 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500 text-white">
+            </div>
+            <div class="flex gap-4">
+                <div class="w-48 md:w-56">
+                    <select id="folderFilter" onchange="displayFilteredAssignments()"
+                        class="w-full p-3 bg-gray-700 rounded border border-gray-600 text-gray-300 focus:outline-none focus:ring-2 focus:ring-yellow-500">
+                        <option value="">All Folders / Categories</option>
+                    </select>
+                </div>
+                <div class="w-48 md:w-56">
+                    <select id="sortBySelect" onchange="displayFilteredAssignments()"
+                        class="w-full p-3 bg-gray-700 rounded border border-gray-600 text-gray-300 focus:outline-none focus:ring-2 focus:ring-yellow-500">
+                        <option value="date-desc">Newest First</option>
+                        <option value="date-asc">Oldest First</option>
+                        <option value="alpha-asc">Name (A-Z)</option>
+                        <option value="alpha-desc">Name (Z-A)</option>
+                        <option value="type">Type</option>
+                    </select>
+                </div>
+            </div>
         </div>
 
         <div id="loadingState" class="text-center py-10">
@@ -132,7 +152,11 @@
             <div class="p-6">
                 <label for="assignmentName" class="block text-sm font-medium text-gray-300 mb-2">Assignment Name</label>
                 <input type="text" id="assignmentName" placeholder="e.g., Chapter 5 Review"
-                    class="w-full p-3 mb-4 bg-gray-700 rounded border border-gray-600">
+                    class="w-full p-3 mb-4 bg-gray-700 rounded border border-gray-600 text-white">
+                
+                <label for="assignmentFolder" class="block text-sm font-medium text-gray-300 mb-2">Folder / Category (Optional)</label>
+                <input type="text" id="assignmentFolder" placeholder="e.g., Unit 1, Homework"
+                    class="w-full p-3 mb-4 bg-gray-700 rounded border border-gray-600 text-white">
                 <div class="flex gap-4 mb-4 flex-wrap">
                     <label class="flex items-center cursor-pointer">
                         <input type="radio" name="assignmentType" value="slides" checked onchange="toggleCreateFields()"
@@ -320,6 +344,30 @@
         </div>
     </div>
 
+    <!-- Edit Metadata Modal -->
+    <div id="editMetadataModal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
+        <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-lg">
+            <div class="flex justify-between items-center p-4 border-b border-gray-700">
+                <h2 class="text-2xl font-bold text-yellow-400">Edit Assignment Details</h2>
+                <button onclick="closeEditMetadataModal()" class="text-gray-400 hover:text-white text-3xl">&times;</button>
+            </div>
+            <div class="p-6">
+                <label for="editAssignmentName" class="block text-sm font-medium text-gray-300 mb-2">Assignment Name</label>
+                <input type="text" id="editAssignmentName" class="w-full p-3 mb-4 bg-gray-700 rounded border border-gray-600 text-white">
+                
+                <label for="editAssignmentFolder" class="block text-sm font-medium text-gray-300 mb-2">Folder / Category</label>
+                <input type="text" id="editAssignmentFolder" placeholder="e.g., Unit 1, Homework" class="w-full p-3 mb-4 bg-gray-700 rounded border border-gray-600 text-white">
+                
+                <div id="edit-metadata-error" class="text-red-500 mb-4 text-sm"></div>
+                
+                <div class="flex justify-end gap-3 border-t border-gray-700 pt-4 mt-4">
+                    <button onclick="closeEditMetadataModal()" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Cancel</button>
+                    <button id="saveMetadataBtn" onclick="saveAssignmentMetadata()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg btn-action">Save Changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="toast-wrapper" class="fixed top-4 right-4 z-[100] space-y-3 w-full max-w-sm"></div>
 
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
@@ -352,6 +400,7 @@
         const coTeacherModal = document.getElementById('coTeacherModal');
         const defaultCoTeacherModal = document.getElementById('defaultCoTeacherModal');
         const shareModal = document.getElementById('shareModal');
+        const editMetadataModal = document.getElementById('editMetadataModal');
 
         function checkImpersonation() {
             const impersonatedEmail = localStorage.getItem('impersonatedUserEmail');
@@ -458,6 +507,7 @@
                 assignmentsBySource[sourceKey].forEach(assignment => combinedAssignments.set(assignment.id, assignment));
             }
             allAssignments = Array.from(combinedAssignments.values());
+            populateFolderDropdown();
             displayFilteredAssignments();
         }
 
@@ -483,16 +533,33 @@
             const listContainer = document.getElementById('assignmentsList');
             const loadingState = document.getElementById('loadingState');
             const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-            const showSub = document.getElementById('showSubAssignments')?.checked || false;
+            const showHiddenAndArchived = document.getElementById('showSubAssignments')?.checked || false;
+            const selectedFolder = document.getElementById('folderFilter')?.value || "";
 
             const filteredAssignments = allAssignments.filter(a => {
                 const matchesSearch = (a.name || '').toLowerCase().includes(searchTerm);
-                const matchesSub = showSub || !a.isSubAssignment;
-                return matchesSearch && matchesSub;
+                const matchesSub = showHiddenAndArchived || !a.isSubAssignment;
+                const matchesArchive = showHiddenAndArchived || !a.isArchived;
+                const matchesFolder = !selectedFolder || a.folder === selectedFolder;
+                return matchesSearch && matchesSub && matchesArchive && matchesFolder;
             }).sort((a, b) => {
-                const ta = a.createdAt ? (a.createdAt.seconds || 0) : 0;
-                const tb = b.createdAt ? (b.createdAt.seconds || 0) : 0;
-                return tb - ta;
+                const sortBy = document.getElementById('sortBySelect')?.value || 'date-desc';
+                if (sortBy === 'date-desc') {
+                    const ta = a.createdAt ? (a.createdAt.seconds || 0) : 0;
+                    const tb = b.createdAt ? (b.createdAt.seconds || 0) : 0;
+                    return tb - ta;
+                } else if (sortBy === 'date-asc') {
+                    const ta = a.createdAt ? (a.createdAt.seconds || 0) : 0;
+                    const tb = b.createdAt ? (b.createdAt.seconds || 0) : 0;
+                    return ta - tb;
+                } else if (sortBy === 'alpha-asc') {
+                    return (a.name || '').localeCompare(b.name || '');
+                } else if (sortBy === 'alpha-desc') {
+                    return (b.name || '').localeCompare(a.name || '');
+                } else if (sortBy === 'type') {
+                    return (a.type || '').localeCompare(b.type || '');
+                }
+                return 0;
             });
 
             listContainer.innerHTML = '';
@@ -543,12 +610,19 @@
                 card.innerHTML = `
                 <div>
                     <div class="flex justify-between items-start mb-2">
-                        <h3 class="text-2xl font-bold text-yellow-400">${escapedName}</h3>
+                        <h3 class="text-2xl font-bold text-yellow-400 flex items-center gap-2">
+                            <span class="truncate max-w-[200px]" title="${escapedName}">${escapedName}</span>
+                            <button onclick="openEditMetadataModal('${assignment.id}')" title="Edit name & folder" class="text-gray-500 hover:text-yellow-400 text-base transition-colors shrink-0">✏️</button>
+                        </h3>
                         <span class="ml-2 shrink-0 text-xs uppercase px-2 py-1 bg-gray-700 text-gray-300 rounded border border-gray-600 font-semibold tracking-wider">${typeLabel}</span>
                     </div>
+                    ${assignment.folder ? `<div class="mt-1 mb-2"><span class="inline-block text-xs px-2.5 py-0.5 rounded-full bg-blue-900/50 text-blue-300 border border-blue-700/30">📁 ${escapeHtml(assignment.folder)}</span></div>` : ''}
                     <div class="mb-2">${statusHTML}</div>
                     <p class="text-gray-500 text-xs mt-2">Created: ${date}</p>
-                    ${assignment.isPublic ? '<p class="text-purple-400 text-xs">🌐 Public</p>' : ''}
+                    <div class="flex gap-2 flex-wrap">
+                        ${assignment.isPublic ? '<span class="text-purple-400 text-xs font-semibold">🌐 Public</span>' : ''}
+                        ${assignment.isArchived ? '<span class="text-yellow-500 text-xs font-semibold">📁 Archived</span>' : ''}
+                    </div>
                 </div>
                 <div class="mt-4 pt-4 border-t border-gray-700 flex flex-col gap-2">
                     <div class="flex justify-between gap-2">
@@ -561,9 +635,10 @@
                          <button onclick="deleteAssignment('${assignment.id}', '${escapedName}')" class="flex-1 text-center bg-red-700 hover:bg-red-800 text-white font-bold py-2 px-3 rounded-lg btn-action">Delete</button>
                     </div>
                     <div class="flex justify-between gap-2">
-                        <button onclick="openCoTeacherModal('${assignment.id}')" class="flex-1 text-center bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold py-2 px-2 rounded-lg btn-action">Co-Teachers</button>
-                        <button onclick="openShareModal('${assignment.id}')" class="flex-1 text-center bg-green-600 hover:bg-green-700 text-white text-sm font-bold py-2 px-2 rounded-lg btn-action">Share</button>
-                        <button onclick="togglePublic('${assignment.id}', ${assignment.isPublic || false})" class="flex-1 text-center bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold py-2 px-2 rounded-lg btn-action">Public</button>
+                        <button onclick="openCoTeacherModal('${assignment.id}')" class="flex-1 text-center bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2 px-1.5 rounded-lg btn-action truncate">Co-Teachers</button>
+                        <button onclick="openShareModal('${assignment.id}')" class="flex-1 text-center bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-2 px-1.5 rounded-lg btn-action truncate">Share</button>
+                        <button onclick="togglePublic('${assignment.id}', ${assignment.isPublic || false})" class="flex-1 text-center bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold py-2 px-1.5 rounded-lg btn-action truncate">Public</button>
+                        <button onclick="toggleArchive('${assignment.id}', ${assignment.isArchived || false})" class="flex-1 text-center ${assignment.isArchived ? 'bg-gray-600 hover:bg-gray-500' : 'bg-yellow-700/80 hover:bg-yellow-700'} text-white text-xs font-bold py-2 px-1.5 rounded-lg btn-action truncate">${assignment.isArchived ? 'Unarchive' : 'Archive'}</button>
                     </div>
                 </div>`;
                 listContainer.appendChild(card);
@@ -592,6 +667,7 @@
         function closeCreateModal() {
             createModal.classList.add('hidden');
             document.getElementById('assignmentName').value = '';
+            document.getElementById('assignmentFolder').value = '';
             document.getElementById('slidesLink').value = '';
             document.getElementById('pdfFile').value = '';
             document.getElementById('videoLink').value = '';
@@ -692,6 +768,8 @@
                     assignedClasses: [],
                     classStatus: {},
                     isPublic,
+                    folder: document.getElementById('assignmentFolder').value.trim() || "",
+                    isArchived: false,
                     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                     slideIds: [],
                     postSubmissionRule: 'open',
@@ -951,6 +1029,82 @@
         async function togglePublic(id, current) {
             await db.collection("assignments").doc(id).update({ isPublic: !current });
             showToast("Public status updated!", { color: 'blue' });
+        }
+
+        async function toggleArchive(id, current) {
+            try {
+                await db.collection("assignments").doc(id).update({ isArchived: !current });
+                showToast(current ? "Assignment unarchived!" : "Assignment archived!", { color: 'blue' });
+            } catch (e) {
+                console.error("Error toggling archive status:", e);
+                showToast("Failed to update archive status.", { color: 'red' });
+            }
+        }
+
+        let metadataEditId = null;
+        function openEditMetadataModal(id) {
+            const assignment = allAssignments.find(a => a.id === id);
+            if (!assignment) return;
+            metadataEditId = id;
+            document.getElementById('editAssignmentName').value = assignment.name || "";
+            document.getElementById('editAssignmentFolder').value = assignment.folder || "";
+            document.getElementById('edit-metadata-error').innerText = "";
+            document.getElementById('editMetadataModal').classList.remove('hidden');
+        }
+
+        function closeEditMetadataModal() {
+            document.getElementById('editMetadataModal').classList.add('hidden');
+            metadataEditId = null;
+        }
+
+        async function saveAssignmentMetadata() {
+            if (!metadataEditId) return;
+            const newName = document.getElementById('editAssignmentName').value.trim();
+            const newFolder = document.getElementById('editAssignmentFolder').value.trim();
+            const errorP = document.getElementById('edit-metadata-error');
+
+            if (!newName) {
+                errorP.innerText = "Assignment name is required.";
+                return;
+            }
+
+            const saveBtn = document.getElementById('saveMetadataBtn');
+            saveBtn.disabled = true;
+            saveBtn.innerText = "Saving...";
+
+            try {
+                await db.collection("assignments").doc(metadataEditId).update({
+                    name: newName,
+                    folder: newFolder
+                });
+                showToast("Assignment updated successfully!", { color: 'green' });
+                closeEditMetadataModal();
+            } catch (e) {
+                console.error("Error saving metadata:", e);
+                errorP.innerText = "Failed to save changes. Please try again.";
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.innerText = "Save Changes";
+            }
+        }
+
+        function populateFolderDropdown() {
+            const select = document.getElementById('folderFilter');
+            if (!select) return;
+            const selectedValue = select.value;
+            select.innerHTML = '<option value="">All Folders / Categories</option>';
+            
+            const folders = [...new Set(allAssignments.map(a => a.folder).filter(Boolean))].sort();
+            folders.forEach(f => {
+                const opt = document.createElement('option');
+                opt.value = f;
+                opt.textContent = f;
+                select.appendChild(opt);
+            });
+            
+            if (folders.includes(selectedValue)) {
+                select.value = selectedValue;
+            }
         }
 
         function showToast(message, options = {}) {
