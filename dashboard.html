@@ -1250,7 +1250,7 @@
                 <td class="px-3 py-4 whitespace-nowrap text-sm font-medium text-white sticky-col-1">
                     <div class="flex items-center justify-between gap-2">
                         <span class="cursor-pointer hover:text-yellow-400 truncate flex-1" onclick="showStudentSubmissions('${escapedEmail}')">${displayName}${avgScoreDisplay}</span>
-                        <button onclick="startImpersonating('${escapedEmail}', '${student.name.replace(/'/g, "\\'")}')" title="Impersonate ${student.name}" class="opacity-0 group-hover:opacity-100 focus:opacity-100 ml-2 text-yellow-400 hover:text-yellow-300 text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-800 border border-yellow-500/30 hover:border-yellow-400 transition-all shrink-0">🎭 Impersonate</button>
+                        <button onclick="startImpersonating('${escapedEmail}', '${student.name.replace(/'/g, "\\'")}')" title="Impersonate ${student.name}" class="hidden group-hover:inline-block ml-2 text-yellow-400 hover:text-yellow-300 text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-800 border border-yellow-500/30 hover:border-yellow-400 transition-all shrink-0">🎭 Impersonate</button>
                     </div>
                 </td>
                 <td class="px-2 py-4 whitespace-nowrap text-center sticky-col-2"><input type="checkbox" onchange="toggleSubmissionStatus('${escapedEmail}', this.checked)" ${student.isSubmitted ? 'checked' : ''} class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"></td>
