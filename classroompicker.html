@@ -4284,7 +4284,7 @@
 
         function formatCalculatorNumber(value) {
             // Normalize JavaScript's -0 so the display matches what students expect from a calculator.
-            if (Object.is(value, -0)) return '0';
+            if (Object.is(value, -0)) return String(0);
 
             const abs = Math.abs(value);
             if ((abs >= 1e10 || (abs > 0 && abs < 1e-6))) {
@@ -4444,7 +4444,7 @@
                         if (!Number.isFinite(value)) return null;
                         return { name, value };
                     } catch (error) {
-                        console.warn('Invalid calculator constant ignored:', line, error);
+                        console.warn('Invalid calculator constant ignored (use "name = finite number"):', line, error);
                         return null;
                     }
                 })
