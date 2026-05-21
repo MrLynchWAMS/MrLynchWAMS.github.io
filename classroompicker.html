@@ -113,11 +113,22 @@
             border: 1px solid #374151;
             border-radius: 12px;
             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
-            user-select: none;
             display: none;
             flex-direction: column;
             overflow: hidden;
             min-width: 200px;
+        }
+
+        #calculator-popup {
+            user-select: text;
+        }
+
+        #wordbank-popup,
+        .popup-header,
+        .calc-buttons,
+        .calc-scientific-panel,
+        .calc-constants-grid {
+            user-select: none;
         }
 
         .popup-header {
@@ -145,13 +156,15 @@
 
         /* Calculator Specific */
         #calculator-popup {
-            width: 260px;
+            width: min(92vw, 360px);
         }
 
         .calc-display {
             background: #111827;
-            padding: 15px;
-            text-align: right;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
             font-family: monospace;
             border-bottom: 1px solid #374151;
         }
@@ -159,19 +172,106 @@
         #calc-history {
             font-size: 0.75rem;
             color: #6b7280;
-            height: 1.2rem;
-            overflow: hidden;
+            min-height: 1.2rem;
+            overflow-wrap: anywhere;
         }
 
-        #calc-current {
-            font-size: 1.5rem;
+        .calc-display-actions {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .calc-mini-btn {
+            background: #374151;
+            border: 1px solid #4b5563;
+            color: #d1d5db;
+            border-radius: 8px;
+            padding: 4px 10px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .calc-mini-btn:hover,
+        .calc-mini-btn.active {
+            background: #4b5563;
+        }
+
+        .calc-input {
+            width: 100%;
+            min-height: 66px;
+            resize: none;
+            background: #030712;
             color: #fff;
-            margin-top: 4px;
+            border: 1px solid #374151;
+            border-radius: 10px;
+            padding: 10px 12px;
+            font-size: 1.35rem;
+            line-height: 1.4;
+            text-align: right;
+            outline: none;
+            font-family: inherit;
+        }
+
+        .calc-input:focus {
+            border-color: #fbbf24;
+            box-shadow: 0 0 0 1px #fbbf24;
+        }
+
+        .calc-status {
+            font-size: 0.72rem;
+            color: #9ca3af;
+            line-height: 1.35;
+        }
+
+        .calc-scientific-panel {
+            background: #0f172a;
+            border-bottom: 1px solid #374151;
+        }
+
+        .calc-constants-wrapper {
+            padding: 10px 12px 12px;
+            border-top: 1px solid #1f2937;
+        }
+
+        .calc-constants-title {
+            color: #fbbf24;
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+        }
+
+        .calc-constants-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .calc-constant-btn {
+            background: #1f2937;
+            border: 1px solid #4b5563;
+            color: #e5e7eb;
+            border-radius: 9999px;
+            padding: 6px 10px;
+            font-size: 0.8rem;
+            line-height: 1;
+            cursor: pointer;
+            transition: background 0.2s ease, border-color 0.2s ease;
+        }
+
+        .calc-constant-btn:hover {
+            background: #374151;
+            border-color: #6b7280;
         }
 
         .calc-buttons {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(5, minmax(0, 1fr));
             gap: 1px;
             background: #374151;
         }
@@ -180,14 +280,21 @@
             background: #1f2937;
             border: none;
             color: #fff;
-            padding: 15px;
-            font-size: 1.1rem;
+            padding: 14px 8px;
+            font-size: 1rem;
             cursor: pointer;
             transition: background 0.2s;
         }
 
         .calc-btn:hover {
             background: #374151;
+        }
+
+        .calc-btn:focus-visible,
+        .calc-constant-btn:focus-visible,
+        .calc-mini-btn:focus-visible {
+            outline: 2px solid #fbbf24;
+            outline-offset: -2px;
         }
 
         .calc-btn.op {
@@ -199,6 +306,30 @@
             background: #fbbf24;
             color: #000;
             font-weight: bold;
+        }
+
+        .calc-btn.wide {
+            grid-column: span 2;
+        }
+
+        .calc-btn.scientific {
+            font-size: 0.9rem;
+        }
+
+        @media (max-width: 640px) {
+            #calculator-popup {
+                width: min(96vw, 360px);
+            }
+
+            .calc-btn {
+                padding: 12px 6px;
+                font-size: 0.95rem;
+            }
+
+            .calc-input {
+                min-height: 58px;
+                font-size: 1.15rem;
+            }
         }
 
         /* Word Bank Specific */
@@ -3826,6 +3957,7 @@
             const calcBtn = document.getElementById('calc-toggle-btn');
             const calcPopup = document.getElementById('calculator-popup');
             const calcEnabled = tools.calculatorEnabled && (!tools.calculatorModsOnly || userProfile.hasModifications);
+            initializeCalculatorTools(tools);
 
             if (calcEnabled) {
                 calcBtn.classList.remove('hidden');
@@ -3854,6 +3986,7 @@
         function makeDraggable(elmnt, header) {
             let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
             header.onmousedown = dragMouseDown;
+            header.ontouchstart = dragTouchStart;
 
             function dragMouseDown(e) {
                 e = e || window.event;
@@ -3881,10 +4014,62 @@
                 document.onmouseup = null;
                 document.onmousemove = null;
             }
+
+            function dragTouchStart(e) {
+                if (!e.touches || e.touches.length !== 1) return;
+                const touch = e.touches[0];
+                pos3 = touch.clientX;
+                pos4 = touch.clientY;
+                document.ontouchend = closeTouchDrag;
+                document.ontouchmove = elementTouchDrag;
+            }
+
+            function elementTouchDrag(e) {
+                if (!e.touches || e.touches.length !== 1) return;
+                const touch = e.touches[0];
+                pos1 = pos3 - touch.clientX;
+                pos2 = pos4 - touch.clientY;
+                pos3 = touch.clientX;
+                pos4 = touch.clientY;
+                elmnt.style.top = (elmnt.offsetTop - pos2) + "px";
+                elmnt.style.left = (elmnt.offsetLeft - pos1) + "px";
+                elmnt.style.bottom = 'auto';
+                elmnt.style.right = 'auto';
+            }
+
+            function closeTouchDrag() {
+                document.ontouchend = null;
+                document.ontouchmove = null;
+            }
         }
 
         // --- Calculator Logic ---
         let calcExpression = '';
+        let calcLastAnswer = null;
+        let calcScientificMode = false;
+        let calcCustomConstants = [];
+        let calcHandlersInitialized = false;
+
+        function initializeCalculatorTools(tools = {}) {
+            calcCustomConstants = parseCalculatorConstants(tools.calculatorScientificConstants || '');
+            renderCalculatorConstants();
+            setCalculatorMode(calcScientificMode, false);
+            refreshCalcDisplay();
+
+            if (calcHandlersInitialized) return;
+
+            const input = document.getElementById('calc-input');
+            if (input) {
+                input.addEventListener('input', () => {
+                    calcExpression = input.value;
+                });
+                input.addEventListener('keydown', handleCalcKeyDown);
+                input.addEventListener('paste', handleCalcPaste);
+            }
+
+            calcHandlersInitialized = true;
+        }
+
         function toggleCalculator() {
             const calc = document.getElementById('calculator-popup');
             if (calc.style.display === 'flex') {
@@ -3895,44 +4080,398 @@
                     calc.style.top = '100px';
                     calc.style.left = '100px';
                 }
+                focusCalcInput();
             }
         }
 
         function clearCalc() {
             calcExpression = '';
-            document.getElementById('calc-current').textContent = '0';
             document.getElementById('calc-history').textContent = '';
+            refreshCalcDisplay();
         }
 
         function appendCalc(val) {
-            if (calcExpression === 'Error') calcExpression = '';
-            calcExpression += val;
-            document.getElementById('calc-current').textContent = calcExpression;
+            insertCalcText(val);
         }
 
         function backspaceCalc() {
-            if (calcExpression === 'Error') {
+            const input = document.getElementById('calc-input');
+            if (!input) return;
+
+            if (calcExpression === 'Error' || input.value === 'Error') {
                 clearCalc();
                 return;
             }
-            calcExpression = calcExpression.slice(0, -1);
-            document.getElementById('calc-current').textContent = calcExpression || '0';
+
+            const start = input.selectionStart ?? input.value.length;
+            const end = input.selectionEnd ?? input.value.length;
+            if (start !== end) {
+                input.setRangeText('', start, end, 'end');
+            } else if (start > 0) {
+                input.setRangeText('', start - 1, end, 'end');
+            }
+            calcExpression = input.value;
+            input.focus();
         }
 
         function calculateResult() {
             try {
-                const history = calcExpression;
-                // Basic sanitization: only allow numbers, operators, dots, and parentheses
-                const sanitized = calcExpression.replace(/[^-()\d/*+.]/g, '');
-                // Using Function constructor instead of eval for a bit more safety
-                const result = new Function('return ' + sanitized)();
+                const history = (document.getElementById('calc-input')?.value || calcExpression || '').trim();
+                if (!history) return;
+                const result = evaluateCalculatorExpression(history);
+                if (!Number.isFinite(result)) throw new Error('Result is not finite.');
+
                 document.getElementById('calc-history').textContent = history + ' =';
-                calcExpression = String(result);
-                document.getElementById('calc-current').textContent = calcExpression;
-            } catch (e) {
-                document.getElementById('calc-current').textContent = 'Error';
+                calcLastAnswer = result;
+                calcExpression = formatCalculatorNumber(result);
+                refreshCalcDisplay();
+            } catch (error) {
                 calcExpression = 'Error';
+                refreshCalcDisplay();
+                showToast(`Calculator error: ${error.message || 'Invalid expression.'}`, { color: 'red', position: 'bottom-right', duration: 2500 });
             }
+        }
+
+        function refreshCalcDisplay() {
+            const input = document.getElementById('calc-input');
+            if (!input) return;
+            input.value = calcExpression || '';
+            input.placeholder = '0';
+        }
+
+        function focusCalcInput(selectAll = false) {
+            const input = document.getElementById('calc-input');
+            if (!input) return;
+            input.focus();
+            const caret = input.value.length;
+            if (selectAll) {
+                input.select();
+            } else {
+                input.setSelectionRange(caret, caret);
+            }
+        }
+
+        function insertCalcText(text) {
+            const input = document.getElementById('calc-input');
+            if (!input) return;
+
+            if (calcExpression === 'Error' || input.value === 'Error') {
+                calcExpression = '';
+                input.value = '';
+            }
+
+            const start = input.selectionStart ?? input.value.length;
+            const end = input.selectionEnd ?? input.value.length;
+            input.setRangeText(text, start, end, 'end');
+            calcExpression = input.value;
+            input.focus();
+        }
+
+        function handleCalcKeyDown(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                calculateResult();
+                return;
+            }
+
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                toggleCalculator();
+                return;
+            }
+
+            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'l') {
+                event.preventDefault();
+                clearCalc();
+            }
+        }
+
+        function handleCalcPaste(event) {
+            const pasted = event.clipboardData?.getData('text');
+            if (typeof pasted !== 'string') return;
+
+            event.preventDefault();
+            insertCalcText(normalizePastedCalculatorText(pasted));
+        }
+
+        function normalizePastedCalculatorText(text) {
+            const normalized = `${text || ''}`.replace(/\r?\n/g, ' ').trim();
+            let result = '';
+
+            for (let i = 0; i < normalized.length; i++) {
+                const char = normalized[i];
+                const prev = normalized[i - 1];
+                const next = normalized[i + 1];
+                if (char === ',' && /\d/.test(prev || '') && /\d/.test(next || '')) {
+                    continue;
+                }
+                result += char;
+            }
+
+            return result;
+        }
+
+        function toggleCalculatorMode() {
+            setCalculatorMode(!calcScientificMode);
+        }
+
+        function setCalculatorMode(isScientific, shouldFocus = true) {
+            calcScientificMode = !!isScientific;
+            const button = document.getElementById('calc-mode-btn');
+            const panel = document.getElementById('calc-scientific-panel');
+            if (button) {
+                button.textContent = calcScientificMode ? 'Basic' : 'Sci';
+                button.classList.toggle('active', calcScientificMode);
+                button.setAttribute('aria-pressed', calcScientificMode ? 'true' : 'false');
+            }
+            if (panel) {
+                panel.classList.toggle('hidden', !calcScientificMode);
+            }
+            if (shouldFocus) {
+                const input = document.getElementById('calc-input');
+                if (input) input.focus();
+            }
+        }
+
+        async function copyCalcDisplay() {
+            const input = document.getElementById('calc-input');
+            const text = (input?.value || calcExpression || '').trim();
+            if (!text) {
+                showToast('Nothing to copy yet.', { color: 'orange', position: 'bottom-right' });
+                return;
+            }
+
+            try {
+                await navigator.clipboard.writeText(text);
+                showToast('Calculator text copied.', { color: 'blue', position: 'bottom-right', duration: 2000 });
+            } catch (error) {
+                if (input) {
+                    input.focus();
+                    input.select();
+                }
+                showToast('Select the calculator text and press copy.', { color: 'orange', position: 'bottom-right', duration: 2500 });
+            }
+        }
+
+        function useLastAnswer() {
+            if (calcLastAnswer === null) {
+                showToast('No previous answer yet.', { color: 'orange', position: 'bottom-right', duration: 2000 });
+                return;
+            }
+            insertCalcText(formatCalculatorNumber(calcLastAnswer));
+        }
+
+        function toggleCalcSign() {
+            const input = document.getElementById('calc-input');
+            if (!input) return;
+
+            const value = input.value;
+            const end = input.selectionStart ?? value.length;
+            const numberMatch = value.slice(0, end).match(/(?:^|[^\w.])(-?\d*\.?\d+(?:e[+-]?\d+)?)$/i);
+            if (!numberMatch) {
+                insertCalcText('-');
+                return;
+            }
+
+            const numberText = numberMatch[1];
+            const numberStart = end - numberText.length;
+            const replacement = numberText.startsWith('-') ? numberText.slice(1) : `-${numberText}`;
+            input.setSelectionRange(numberStart, end);
+            input.setRangeText(replacement, numberStart, end, 'end');
+            calcExpression = input.value;
+            input.focus();
+        }
+
+        function formatCalculatorNumber(value) {
+            // Normalize JavaScript's -0 so the display matches what students expect.
+            if (Object.is(value, -0)) return String(0);
+
+            const abs = Math.abs(value);
+            if ((abs >= 1e10 || (abs > 0 && abs < 1e-6))) {
+                return value.toExponential(10).replace(/\.?0+e/, 'e');
+            }
+
+            return Number(value.toPrecision(12)).toString();
+        }
+
+        function evaluateCalculatorExpression(expression, options = {}) {
+            const context = buildCalculatorContext(options.includeAnswer !== false, options.customConstants);
+            const allowedNames = new Set(Object.keys(context));
+            const normalized = normalizeCalculatorExpression(expression);
+            const tokens = tokenizeCalculatorExpression(normalized);
+            const evaluable = buildEvaluableCalculatorExpression(tokens, allowedNames);
+            const argNames = Object.keys(context);
+            const argValues = Object.values(context);
+            return Function(...argNames, `"use strict"; return (${evaluable});`)(...argValues);
+        }
+
+        function buildCalculatorContext(includeAnswer = true, customConstants = calcCustomConstants) {
+            const context = {
+                pi: Math.PI,
+                e: Math.E,
+                sin: (value) => Math.sin(value),
+                cos: (value) => Math.cos(value),
+                tan: (value) => Math.tan(value),
+                asin: (value) => Math.asin(value),
+                acos: (value) => Math.acos(value),
+                atan: (value) => Math.atan(value),
+                sqrt: (value) => Math.sqrt(value),
+                log: (value) => Math.log10(value),
+                ln: (value) => Math.log(value),
+                abs: (value) => Math.abs(value),
+                exp: (value) => Math.exp(value)
+            };
+
+            if (includeAnswer) {
+                context.ans = calcLastAnswer ?? 0;
+            }
+
+            (customConstants || []).forEach(({ name, value }) => {
+                context[name] = value;
+            });
+
+            return context;
+        }
+
+        function normalizeCalculatorExpression(expression) {
+            return normalizePastedCalculatorText(expression)
+                .replace(/[−–]/g, '-')
+                .replace(/÷/g, '/')
+                .replace(/×/g, '*')
+                .replace(/π/g, 'pi')
+                .replace(/√/g, 'sqrt');
+        }
+
+        function tokenizeCalculatorExpression(expression) {
+            const tokens = [];
+            let index = 0;
+
+            while (index < expression.length) {
+                const slice = expression.slice(index);
+                const char = expression[index];
+
+                if (/\s/.test(char)) {
+                    index++;
+                    continue;
+                }
+
+                const numberMatch = slice.match(/^\d*\.?\d+(?:e[+-]?\d+)?/i);
+                if (numberMatch) {
+                    tokens.push({ type: 'number', value: numberMatch[0] });
+                    index += numberMatch[0].length;
+                    continue;
+                }
+
+                const identifierMatch = slice.match(/^[A-Za-z_][A-Za-z0-9_]*/);
+                if (identifierMatch) {
+                    tokens.push({ type: 'identifier', value: identifierMatch[0] });
+                    index += identifierMatch[0].length;
+                    continue;
+                }
+
+                if ('()+-*/^'.includes(char)) {
+                    tokens.push({ type: char === '(' || char === ')' ? 'paren' : 'operator', value: char });
+                    index++;
+                    continue;
+                }
+
+                throw new Error(`Unexpected character "${char}"`);
+            }
+
+            return tokens;
+        }
+
+        function buildEvaluableCalculatorExpression(tokens, allowedNames) {
+            const functionNames = new Set(['sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'sqrt', 'log', 'ln', 'abs', 'exp']);
+            const parts = [];
+
+            tokens.forEach((token, index) => {
+                const previous = tokens[index - 1];
+                if (shouldInsertImplicitMultiply(previous, token, functionNames)) {
+                    parts.push('*');
+                }
+
+                if (token.type === 'identifier') {
+                    if (!allowedNames.has(token.value)) {
+                        throw new Error(`"${token.value}" is not available.`);
+                    }
+                    parts.push(token.value);
+                    return;
+                }
+
+                if (token.value === '^') {
+                    parts.push('**');
+                    return;
+                }
+
+                parts.push(token.value);
+            });
+
+            return parts.join('');
+        }
+
+        function shouldInsertImplicitMultiply(previous, current, functionNames) {
+            if (!previous) return false;
+
+            const previousEndsValue = previous.type === 'number'
+                || previous.value === ')'
+                || (previous.type === 'identifier' && !functionNames.has(previous.value));
+            const currentStartsValue = current.type === 'number'
+                || current.value === '('
+                || current.type === 'identifier';
+
+            if (!previousEndsValue || !currentStartsValue) return false;
+            if (previous.type === 'identifier' && functionNames.has(previous.value) && current.value === '(') return false;
+            return true;
+        }
+
+        function parseCalculatorConstants(raw) {
+            const reserved = new Set(['pi', 'e', 'ans', 'sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'sqrt', 'log', 'ln', 'abs', 'exp']);
+
+            return `${raw || ''}`
+                .split(/\r?\n/)
+                .map(line => line.trim())
+                .filter(Boolean)
+                .map(line => {
+                    const match = line.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*(?:=|:)\s*(.+)$/);
+                    if (!match) return null;
+
+                    const [, name, valueExpression] = match;
+                    if (reserved.has(name)) return null;
+
+                    try {
+                        const value = evaluateCalculatorExpression(valueExpression, { includeAnswer: false, customConstants: [] });
+                        if (!Number.isFinite(value)) return null;
+                        return { name, value };
+                    } catch (error) {
+                        console.warn('Invalid calculator constant ignored (use "name = finite number"):', line, error);
+                        return null;
+                    }
+                })
+                .filter(Boolean);
+        }
+
+        function renderCalculatorConstants() {
+            const wrapper = document.getElementById('calc-constants-wrapper');
+            const container = document.getElementById('calc-constants-buttons');
+            if (!wrapper || !container) return;
+
+            container.innerHTML = '';
+            if (!calcCustomConstants.length) {
+                wrapper.classList.add('hidden');
+                return;
+            }
+
+            wrapper.classList.remove('hidden');
+            calcCustomConstants.forEach(constant => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'calc-constant-btn';
+                button.textContent = constant.name;
+                button.title = `${constant.name} = ${formatCalculatorNumber(constant.value)}`;
+                button.onclick = () => appendCalc(constant.name);
+                container.appendChild(button);
+            });
         }
 
         // --- Word Bank Logic ---
@@ -4946,38 +5485,76 @@
         <div class="popup-header" id="calc-header">
             <span>CALCULATOR</span>
             <div class="flex gap-2 items-center">
+                <button type="button" id="calc-mode-btn" class="calc-mini-btn" onclick="toggleCalculatorMode()"
+                    aria-pressed="false" aria-label="Toggle scientific calculator mode">Sci</button>
                 <span class="popup-close" onclick="toggleCalculator()">×</span>
             </div>
         </div>
         <div class="calc-display">
-            <div id="calc-history"></div>
-            <div id="calc-current">0</div>
+            <div class="calc-display-actions">
+                <div id="calc-history"></div>
+                <button type="button" class="calc-mini-btn" onclick="copyCalcDisplay()"
+                    aria-label="Copy calculator text">Copy</button>
+            </div>
+            <textarea id="calc-input" class="calc-input" rows="2" spellcheck="false" autocapitalize="off"
+                autocomplete="off" autocorrect="off" inputmode="decimal"
+                aria-label="Calculator expression input" aria-describedby="calc-status" placeholder="0"></textarea>
+            <div id="calc-status" class="calc-status">Enter evaluates • EE adds scientific notation • Sci mode adds functions and constants</div>
+        </div>
+        <div id="calc-scientific-panel" class="calc-scientific-panel hidden">
+            <div class="calc-buttons">
+                <button type="button" class="calc-btn scientific op" onclick="appendCalc('^')">xʸ</button>
+                <button type="button" class="calc-btn scientific op" onclick="appendCalc('^2')">x²</button>
+                <button type="button" class="calc-btn scientific op" onclick="appendCalc('sqrt(')">√</button>
+                <button type="button" class="calc-btn scientific op" onclick="appendCalc('pi')">π</button>
+                <button type="button" class="calc-btn scientific op" onclick="appendCalc('e')">e</button>
+
+                <button type="button" class="calc-btn scientific op" onclick="appendCalc('sin(')">sin</button>
+                <button type="button" class="calc-btn scientific op" onclick="appendCalc('cos(')">cos</button>
+                <button type="button" class="calc-btn scientific op" onclick="appendCalc('tan(')">tan</button>
+                <button type="button" class="calc-btn scientific op" onclick="appendCalc('log(')">log</button>
+                <button type="button" class="calc-btn scientific op" onclick="appendCalc('ln(')">ln</button>
+
+                <button type="button" class="calc-btn scientific op" onclick="appendCalc('asin(')">asin</button>
+                <button type="button" class="calc-btn scientific op" onclick="appendCalc('acos(')">acos</button>
+                <button type="button" class="calc-btn scientific op" onclick="appendCalc('atan(')">atan</button>
+                <button type="button" class="calc-btn scientific op" onclick="appendCalc('abs(')">abs</button>
+                <button type="button" class="calc-btn scientific op" onclick="appendCalc('exp(')">exp</button>
+            </div>
+            <div id="calc-constants-wrapper" class="calc-constants-wrapper hidden">
+                <div class="calc-constants-title">Assignment Constants</div>
+                <div id="calc-constants-buttons" class="calc-constants-grid"></div>
+            </div>
         </div>
         <div class="calc-buttons">
-            <button class="calc-btn op" onclick="clearCalc()">C</button>
-            <button class="calc-btn op" onclick="appendCalc('(')">(</button>
-            <button class="calc-btn op" onclick="appendCalc(')')">)</button>
-            <button class="calc-btn op" onclick="appendCalc('/')">÷</button>
+            <button type="button" class="calc-btn op" onclick="clearCalc()">C</button>
+            <button type="button" class="calc-btn op" onclick="appendCalc('(')">(</button>
+            <button type="button" class="calc-btn op" onclick="appendCalc(')')">)</button>
+            <button type="button" class="calc-btn op" onclick="backspaceCalc()">⌫</button>
+            <button type="button" class="calc-btn op" onclick="appendCalc('/')">÷</button>
 
-            <button class="calc-btn" onclick="appendCalc('7')">7</button>
-            <button class="calc-btn" onclick="appendCalc('8')">8</button>
-            <button class="calc-btn" onclick="appendCalc('9')">9</button>
-            <button class="calc-btn op" onclick="appendCalc('*')">×</button>
+            <button type="button" class="calc-btn" onclick="appendCalc('7')">7</button>
+            <button type="button" class="calc-btn" onclick="appendCalc('8')">8</button>
+            <button type="button" class="calc-btn" onclick="appendCalc('9')">9</button>
+            <button type="button" class="calc-btn op" onclick="appendCalc('^')">^</button>
+            <button type="button" class="calc-btn op" onclick="appendCalc('*')">×</button>
 
-            <button class="calc-btn" onclick="appendCalc('4')">4</button>
-            <button class="calc-btn" onclick="appendCalc('5')">5</button>
-            <button class="calc-btn" onclick="appendCalc('6')">6</button>
-            <button class="calc-btn op" onclick="appendCalc('-')">-</button>
+            <button type="button" class="calc-btn" onclick="appendCalc('4')">4</button>
+            <button type="button" class="calc-btn" onclick="appendCalc('5')">5</button>
+            <button type="button" class="calc-btn" onclick="appendCalc('6')">6</button>
+            <button type="button" class="calc-btn op" onclick="toggleCalcSign()">±</button>
+            <button type="button" class="calc-btn op" onclick="appendCalc('-')">-</button>
 
-            <button class="calc-btn" onclick="appendCalc('1')">1</button>
-            <button class="calc-btn" onclick="appendCalc('2')">2</button>
-            <button class="calc-btn" onclick="appendCalc('3')">3</button>
-            <button class="calc-btn op" onclick="appendCalc('+')">+</button>
+            <button type="button" class="calc-btn" onclick="appendCalc('1')">1</button>
+            <button type="button" class="calc-btn" onclick="appendCalc('2')">2</button>
+            <button type="button" class="calc-btn" onclick="appendCalc('3')">3</button>
+            <button type="button" class="calc-btn op" onclick="useLastAnswer()">Ans</button>
+            <button type="button" class="calc-btn op" onclick="appendCalc('+')">+</button>
 
-            <button class="calc-btn" onclick="appendCalc('0')">0</button>
-            <button class="calc-btn" onclick="appendCalc('.')">.</button>
-            <button class="calc-btn" onclick="backspaceCalc()">⌫</button>
-            <button class="calc-btn equals" onclick="calculateResult()">=</button>
+            <button type="button" class="calc-btn wide" onclick="appendCalc('0')">0</button>
+            <button type="button" class="calc-btn" onclick="appendCalc('.')">.</button>
+            <button type="button" class="calc-btn op" onclick="appendCalc('E')" title="Insert scientific notation">EE</button>
+            <button type="button" class="calc-btn equals" onclick="calculateResult()">=</button>
         </div>
     </div>
 

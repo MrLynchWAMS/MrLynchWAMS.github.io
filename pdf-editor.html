@@ -541,7 +541,14 @@
                 <label for="calculatorModsOnly" class="text-xs text-purple-300">Only for Modified Students
                   (Accommodated)</label>
               </div>
-              <p class="text-xs text-gray-400 mt-2">Adds a button for students to open a movable basic calculator.</p>
+              <p class="text-xs text-gray-400 mt-2">Adds a button for students to open a movable calculator with optional scientific mode.</p>
+              <div class="mt-4 ml-8">
+                <label for="calculatorScientificConstants" class="block text-sm text-gray-300 mb-2">Optional Scientific Constants</label>
+                <textarea id="calculatorScientificConstants" rows="3"
+                  class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-sm"
+                  placeholder="One per line, e.g. c = 3e8&#10;avogadro = 6.022e23"></textarea>
+                <p class="text-xs text-gray-500 mt-2">Students always get the regular scientific calculator. Add optional per-assignment constants as <code>name = value</code>.</p>
+              </div>
             </div>
 
             <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-700">
@@ -1021,6 +1028,7 @@
           calcEnabled.checked = assignmentData.toolsConfig?.calculatorEnabled || false;
           wbMode.value = assignmentData.toolsConfig?.wordBankMode || 'none';
           globalWBList.value = assignmentData.toolsConfig?.globalWordBankList || '';
+          document.getElementById('calculatorScientificConstants').value = assignmentData.toolsConfig?.calculatorScientificConstants || '';
 
           document.getElementById('calculatorModsOnly').checked = assignmentData.toolsConfig?.calculatorModsOnly || false;
           document.getElementById('wordBankModsOnly').checked = assignmentData.toolsConfig?.wordBankModsOnly || false;
@@ -1833,6 +1841,7 @@
           const toolsConfig = {
             calculatorEnabled: document.getElementById('calculatorEnabled').checked,
             calculatorModsOnly: document.getElementById('calculatorModsOnly').checked,
+            calculatorScientificConstants: document.getElementById('calculatorScientificConstants').value.trim(),
             wordBankMode: document.getElementById('wordBankMode').value,
             wordBankModsOnly: document.getElementById('wordBankModsOnly').checked,
             globalWordBankList: document.getElementById('globalWordBankList').value.trim()
