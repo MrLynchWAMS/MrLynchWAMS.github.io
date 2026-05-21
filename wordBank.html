@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic JavaScript Pop-up Generator</title>
+    <!-- Tailwind CSS for sleek interface -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom scrollbar for beautiful UI */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e1e2e;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #3f3f46;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #52525b;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen flex flex-col font-sans">
+
+    <!-- Top Navigation Bar -->
+    <header class="bg-gray-800 border-b border-gray-700 py-4 px-6 shadow-md">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="flex items-center space-x-3">
+                <div class="bg-blue-600 text-white p-2 rounded-lg shadow-inner">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold tracking-tight text-white">Interactive Pop-up Generator</h1>
+                    <p class="text-xs text-gray-400">Convert lists and text into portable, draggable JS micro-widgets</p>
+                </div>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="loadTemplate('wordbank')" class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-xs rounded transition font-medium">
+                    Word Bank Template
+                </button>
+                <button onclick="loadTemplate('instructions')" class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-xs rounded transition font-medium">
+                    Reference Instructions
+                </button>
+                <button onclick="loadTemplate('cheatsheet')" class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-xs rounded transition font-medium">
+                    Formula Cheat Sheet
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Grid -->
+    <main class="flex-grow max-w-7xl w-full mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        <!-- Left Panel: Configurations (5 Columns) -->
+        <section class="lg:col-span-5 bg-gray-800 rounded-xl border border-gray-700 p-5 shadow-lg flex flex-col space-y-4 max-h-[calc(100vh-140px)] overflow-y-auto">
+            <h2 class="text-lg font-semibold text-blue-400 border-b border-gray-700 pb-2 flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd" />
+                </svg>
+                Configure Pop-up Properties
+            </h2>
+
+            <!-- Basic settings -->
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1">Target Function Name</label>
+                    <input type="text" id="fnName" value="createWordBank" class="w-full bg-gray-900 border border-gray-700 rounded p-2 text-sm text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="e.g. showVocabulary">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1">Pop-up Header Title</label>
+                    <input type="text" id="popupTitle" value="Word Bank" class="w-full bg-gray-900 border border-gray-700 rounded p-2 text-sm text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="e.g. Vocabulary Helper">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1">Content Items (One per line)</label>
+                    <textarea id="itemsList" rows="6" class="w-full bg-gray-900 border border-gray-700 rounded p-2 text-sm text-gray-200 font-mono focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="Enter words or lines of text here..."></textarea>
+                </div>
+            </div>
+
+            <!-- Stylings -->
+            <div class="border-t border-gray-700 pt-3 space-y-3">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-blue-400">Design & Aesthetics</h3>
+                
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs text-gray-400 mb-1">Theme Color</label>
+                        <div class="flex gap-2">
+                            <input type="color" id="themeColor" value="#2196F3" class="bg-transparent border-0 h-8 w-10 cursor-pointer p-0">
+                            <input type="text" id="themeColorHex" value="#2196F3" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-gray-200 uppercase focus:outline-none">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-400 mb-1">Text/Font Family</label>
+                        <select id="fontFamily" class="w-full bg-gray-900 border border-gray-700 rounded p-1.5 text-xs text-gray-200 focus:outline-none">
+                            <option value="Arial, sans-serif">Arial / Sans-Serif</option>
+                            <option value="'Courier New', monospace">Courier New / Monospace</option>
+                            <option value="'Times New Roman', serif">Times New Roman / Serif</option>
+                            <option value="system-ui, sans-serif">System UI Default</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs text-gray-400 mb-1">Default Top Position (px)</label>
+                        <input type="number" id="posTop" value="100" class="w-full bg-gray-900 border border-gray-700 rounded p-1.5 text-xs text-gray-200 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-400 mb-1">Default Left Position (px)</label>
+                        <input type="number" id="posLeft" value="100" class="w-full bg-gray-900 border border-gray-700 rounded p-1.5 text-xs text-gray-200 focus:outline-none">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs text-gray-400 mb-1">Default Width (px)</label>
+                        <input type="number" id="width" value="250" class="w-full bg-gray-900 border border-gray-700 rounded p-1.5 text-xs text-gray-200 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-400 mb-1">Min Height (px)</label>
+                        <input type="number" id="minHeight" value="200" class="w-full bg-gray-900 border border-gray-700 rounded p-1.5 text-xs text-gray-200 focus:outline-none">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Custom Behaviors / Settings toggles -->
+            <div class="border-t border-gray-700 pt-3 space-y-2">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-blue-400">Interactivity & Logic</h3>
+                
+                <label class="flex items-center space-x-2 text-xs text-gray-300 cursor-pointer">
+                    <input type="checkbox" id="enableCrossout" checked class="rounded bg-gray-900 border-gray-700 text-blue-600 focus:ring-0">
+                    <span>Cross-out items on click (interactive)</span>
+                </label>
+
+                <label class="flex items-center space-x-2 text-xs text-gray-300 cursor-pointer">
+                    <input type="checkbox" id="enableDrag" checked class="rounded bg-gray-900 border-gray-700 text-blue-600 focus:ring-0">
+                    <span>Draggable window</span>
+                </label>
+
+                <label class="flex items-center space-x-2 text-xs text-gray-300 cursor-pointer">
+                    <input type="checkbox" id="closeOnEsc" checked class="rounded bg-gray-900 border-gray-700 text-blue-600 focus:ring-0">
+                    <span>Close pop-up when pressing Escape key</span>
+                </label>
+
+                <label class="flex items-center space-x-2 text-xs text-gray-300 cursor-pointer">
+                    <input type="checkbox" id="roundedCorners" checked class="rounded bg-gray-900 border-gray-700 text-blue-600 focus:ring-0">
+                    <span>Modern rounded corners UI</span>
+                </label>
+            </div>
+            
+            <div class="pt-2 flex flex-col gap-2">
+                <button onclick="launchPreview()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm py-2.5 px-4 rounded transition shadow flex items-center justify-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" />
+                    </svg>
+                    Simulate & Test Popup on this Page
+                </button>
+                <p class="text-[10px] text-gray-400 text-center">Launching the simulation will spawn the exact pop-up locally so you can click/drag it before embedding.</p>
+            </div>
+        </section>
+
+        <!-- Right Panel: Code Generator Output & Preview (7 Columns) -->
+        <section class="lg:col-span-7 bg-gray-800 rounded-xl border border-gray-700 shadow-lg overflow-hidden flex flex-col max-h-[calc(100vh-140px)]">
+            
+            <!-- Tab headers -->
+            <div class="bg-gray-850 px-4 pt-3 flex border-b border-gray-700 justify-between items-center">
+                <div class="flex space-x-2">
+                    <button id="tabBtnCode" onclick="switchTab('code')" class="px-4 py-2 text-sm font-semibold text-blue-400 border-b-2 border-blue-400 transition">
+                        Generated JavaScript Code
+                    </button>
+                    <button id="tabBtnHowTo" onclick="switchTab('howto')" class="px-4 py-2 text-sm font-medium text-gray-400 hover:text-gray-200 transition">
+                        How to Implement
+                    </button>
+                </div>
+                <div class="pb-2">
+                    <button onclick="copyGeneratedCode()" class="flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-xs font-semibold text-white rounded transition shadow">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" />
+                            <path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z" />
+                        </svg>
+                        Copy Code
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tab: Generated Code -->
+            <div id="tabContentCode" class="p-4 flex-grow flex flex-col overflow-hidden">
+                <p class="text-xs text-gray-400 mb-2">This clean, isolated JavaScript code automatically constructs, styles, drags, and destroys itself. No external libraries needed!</p>
+                <div class="relative flex-grow overflow-auto bg-gray-950 rounded-lg border border-gray-850">
+                    <pre class="p-4 text-xs font-mono text-emerald-400 selection:bg-gray-800 whitespace-pre overflow-x-auto" id="codeBlock">Loading generation...</pre>
+                </div>
+            </div>
+
+            <!-- Tab: How to Implement -->
+            <div id="tabContentHowTo" class="p-5 flex-grow overflow-y-auto hidden space-y-4 text-sm text-gray-300">
+                <h3 class="text-base font-semibold text-white">How do I drop this code into my project?</h3>
+                
+                <div class="space-y-3">
+                    <div class="bg-gray-900 p-3 rounded-lg border border-gray-700">
+                        <p class="font-semibold text-blue-400 text-xs mb-1">Step 1: Paste the generated helper function</p>
+                        <p class="text-xs text-gray-400">Copy the entire generated code and paste it inside your JS project. You can nest it inside your main grading function (just like the sample), or put it globally in your script.</p>
+                    </div>
+
+                    <div class="bg-gray-900 p-3 rounded-lg border border-gray-700">
+                        <p class="font-semibold text-blue-400 text-xs mb-1">Step 2: Trigger the pop-up function</p>
+                        <p class="text-xs text-gray-400 mb-2">Call your function from anywhere! For instance, inside your existing checker if a student inputs "?" or clicks a "hint" button:</p>
+                        <pre class="bg-gray-950 p-2 rounded text-[11px] font-mono text-yellow-300">
+if (studentAnswer.trim() === "?") {
+    // This calls the generated code block below
+    createWordBank(); 
+    return 0;
+}</pre>
+                    </div>
+
+                    <div class="bg-gray-900 p-3 rounded-lg border border-gray-700">
+                        <p class="font-semibold text-blue-400 text-xs mb-1">Step 3: What happens on close?</p>
+                        <p class="text-xs text-gray-400">When the user clicks the close (<span class="font-bold">&times;</span>) button, the scripts clean up after themselves. They automatically delete the generated &lt;style&gt; block from the document head and remove the pop-up &lt;div&gt; from the body, leaving no residual traces behind.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Feedback / Toast Alert Container inside layout -->
+            <div class="bg-gray-850 p-3 border-t border-gray-700 text-center">
+                <span id="feedbackMsg" class="text-xs font-semibold text-gray-400 transition-all duration-300">Modify any field on the left; the code dynamically regenerates instantly.</span>
+            </div>
+        </section>
+    </main>
+
+    <!-- Custom Toast UI instead of Window.alert -->
+    <div id="customToast" class="fixed top-5 left-1/2 -translate-x-1/2 transform bg-slate-800 text-white text-xs px-4 py-2.5 rounded-lg border border-slate-700 shadow-xl opacity-0 translate-y-[-20px] pointer-events-none transition-all duration-300 z-[10000] flex items-center gap-2">
+        <span id="toastIcon">💡</span>
+        <span id="toastText">Copied code to clipboard!</span>
+    </div>
+
+    <script>
+        // Preset templates
+        const templates = {
+            wordbank: {
+                fnName: "createWordBank",
+                title: "Word Bank Help",
+                color: "#2196F3",
+                items: "conviction\nchiding\ngaunt\nputrid\nwrithes\nremnant\nsponsor\ntangible\nrecoils\nendures\nwafts\ncontorted\nwhim\nwavers\neternal",
+                width: 250,
+                crossout: true,
+                drag: true
+            },
+            instructions: {
+                fnName: "showKeyInstructions",
+                title: "Grading Checklist",
+                color: "#10b981",
+                items: "1. Must include at least 3 vocabulary words\n2. Capitalization does not matter\n3. Correct spelling is required to score points\n4. Type '?' anytime to summon this panel",
+                width: 320,
+                crossout: false,
+                drag: true
+            },
+            cheatsheet: {
+                fnName: "showFormulaHelp",
+                title: "Physics Cheat Sheet",
+                color: "#f59e0b",
+                items: "Force: F = m * a\nVelocity: v = d / t\nKinetic Energy: KE = 0.5 * m * v²\nPotential Energy: PE = m * g * h\nWork Done: W = F * d * cos(θ)",
+                width: 300,
+                crossout: false,
+                drag: true
+            }
+        };
+
+        // Theme hex tracker sync
+        const themeColorInput = document.getElementById('themeColor');
+        const themeColorHexInput = document.getElementById('themeColorHex');
+
+        themeColorInput.addEventListener('input', (e) => {
+            themeColorHexInput.value = e.target.value.toUpperCase();
+            generateAllCode();
+        });
+
+        themeColorHexInput.addEventListener('input', (e) => {
+            let val = e.target.value;
+            if (!val.startsWith('#')) val = '#' + val;
+            if (/^#[0-9A-F]{6}$/i.test(val)) {
+                themeColorInput.value = val;
+                generateAllCode();
+            }
+        });
+
+        // Event listeners to regenerate code automatically
+        const interactiveInputs = [
+            'fnName', 'popupTitle', 'itemsList', 'fontFamily', 
+            'posTop', 'posLeft', 'width', 'minHeight',
+            'enableCrossout', 'enableDrag', 'closeOnEsc', 'roundedCorners'
+        ];
+
+        interactiveInputs.forEach(id => {
+            document.getElementById(id).addEventListener('input', generateAllCode);
+            document.getElementById(id).addEventListener('change', generateAllCode);
+        });
+
+        // Initialize with default template
+        window.onload = function() {
+            loadTemplate('wordbank');
+        };
+
+        function loadTemplate(key) {
+            const data = templates[key];
+            if (!data) return;
+
+            document.getElementById('fnName').value = data.fnName;
+            document.getElementById('popupTitle').value = data.title;
+            document.getElementById('themeColor').value = data.color;
+            document.getElementById('themeColorHex').value = data.color.toUpperCase();
+            document.getElementById('itemsList').value = data.items;
+            document.getElementById('width').value = data.width;
+            document.getElementById('enableCrossout').checked = data.crossout;
+            document.getElementById('enableDrag').checked = data.drag;
+
+            generateAllCode();
+            showCustomToast("📋 Loaded " + data.title + " configuration!", "⚙️");
+        }
+
+        function switchTab(tab) {
+            const codeTab = document.getElementById('tabContentCode');
+            const howToTab = document.getElementById('tabContentHowTo');
+            const codeBtn = document.getElementById('tabBtnCode');
+            const howToBtn = document.getElementById('tabBtnHowTo');
+
+            if (tab === 'code') {
+                codeTab.classList.remove('hidden');
+                howToTab.classList.add('hidden');
+                codeBtn.className = "px-4 py-2 text-sm font-semibold text-blue-400 border-b-2 border-blue-400 transition";
+                howToBtn.className = "px-4 py-2 text-sm font-medium text-gray-400 hover:text-gray-200 transition";
+            } else {
+                codeTab.classList.add('hidden');
+                howToTab.classList.remove('hidden');
+                codeBtn.className = "px-4 py-2 text-sm font-medium text-gray-400 hover:text-gray-200 transition";
+                howToBtn.className = "px-4 py-2 text-sm font-semibold text-blue-400 border-b-2 border-blue-400 transition";
+            }
+        }
+
+        // Logic to construct CSS/JS dynamically and render safely as escape-formatted output
+        let rawGeneratedJS = "";
+
+        function generateAllCode() {
+            const fnName = document.getElementById('fnName').value.trim() || 'createWordBank';
+            const popupTitle = document.getElementById('popupTitle').value.replace(/"/g, '\\"') || 'Word Bank';
+            const font = document.getElementById('fontFamily').value;
+            const themeColor = document.getElementById('themeColor').value;
+            const top = parseInt(document.getElementById('posTop').value) || 100;
+            const left = parseInt(document.getElementById('posLeft').value) || 100;
+            const width = parseInt(document.getElementById('width').value) || 250;
+            const minHeight = parseInt(document.getElementById('minHeight').value) || 200;
+            
+            // Boolean values
+            const crossout = document.getElementById('enableCrossout').checked;
+            const drag = document.getElementById('enableDrag').checked;
+            const closeEsc = document.getElementById('closeOnEsc').checked;
+            const rounded = document.getElementById('roundedCorners').checked;
+
+            // Process text block into array strings
+            const itemsText = document.getElementById('itemsList').value;
+            const itemsArray = itemsText.split('\n')
+                .map(item => item.trim())
+                .filter(item => item.length > 0);
+            
+            const arrayString = JSON.stringify(itemsArray);
+
+            // Construct style declarations based on config
+            const borderRadiusStyle = rounded ? 'border-radius: 8px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.2), 0 8px 10px -6px rgba(0,0,0,0.2);' : '';
+            const headerRadiusStyle = rounded ? 'border-top-left-radius: 7px; border-top-right-radius: 7px;' : '';
+            const listInteractionStyles = crossout ? `
+            #${fnName}PopupList li { padding: 6px 8px; cursor: pointer; user-select: none; color: #2d3748; transition: background 0.15s; border-radius: 4px; }
+            #${fnName}PopupList li:hover { background-color: #e2e8f0; }
+            #${fnName}PopupList li.crossed-out { text-decoration: line-through; color: #a0aec0; opacity: 0.65; }` : `
+            #${fnName}PopupList li { padding: 6px 8px; color: #2d3748; }`;
+
+            const cursorStyle = drag ? 'cursor: move;' : 'cursor: default;';
+
+            // JS Template injection
+            rawGeneratedJS = `/*
+ * ======================================================================
+ * PORTABLE COMPONENT FUNCTION: ${fnName}
+ *
+ * This function injects a dynamic, self-contained pop-up window
+ * into your page. It manages its own styles, lifecycle, and teardown.
+ * ======================================================================
+ */
+function ${fnName}() {
+    // 1. Prevent duplicate popups from spawning
+    if (document.getElementById("${fnName}Popup")) {
+        return;
+    }
+    
+    // 2. Data source array
+    const dataList = ${arrayString};
+    
+    // 3. Define local CSS injection
+    const css = \`
+        #${fnName}Popup { 
+            position: absolute; 
+            top: ${top}px; 
+            left: ${left}px; 
+            width: ${width}px; 
+            min-height: ${minHeight}px; 
+            background-color: #f7fafc; 
+            border: 1px solid #cbd5e0; 
+            text-align: left; 
+            z-index: 99999; 
+            resize: both; 
+            overflow: auto; 
+            font-family: ${font};
+            ${borderRadiusStyle}
+        }
+        #${fnName}PopupHeader { 
+            padding: 10px 12px; 
+            ${cursorStyle} 
+            z-index: 100000; 
+            background-color: ${themeColor}; 
+            color: white; 
+            font-weight: bold; 
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            ${headerRadiusStyle}
+        }
+        #${fnName}PopupContainer { padding: 10px; }
+        #${fnName}PopupList { list-style-type: none; padding: 0; margin: 0; }${listInteractionStyles}
+        .${fnName}CloseBtn { 
+            font-size: 1.3em; 
+            font-weight: bold; 
+            cursor: pointer; 
+            line-height: 1; 
+            opacity: 0.8; 
+            transition: opacity 0.15s; 
+            user-select: none;
+        }
+        .${fnName}CloseBtn:hover { opacity: 1; }
+    \`;
+    
+    // 4. Inject styles into document head
+    const style = document.createElement('style');
+    style.type = 'text/css';
+    style.id = '${fnName}Styles';
+    if (style.styleSheet) {
+        style.styleSheet.cssText = css;
+    } else {
+        style.appendChild(document.createTextNode(css));
+    }
+    document.head.appendChild(style);
+    
+    // 5. Build and inject pop-up HTML markup
+    const popup = document.createElement('div');
+    popup.id = '${fnName}Popup';
+    popup.innerHTML = \`<div id="${fnName}PopupHeader">
+        <span>${popupTitle}</span>
+        <span class="${fnName}CloseBtn" title="Close">&times;</span>
+    </div>
+    <div id="${fnName}PopupContainer"></div>\`;
+    document.body.appendChild(popup);
+    
+    // 6. Access dynamic DOM references
+    const header = document.getElementById("${fnName}PopupHeader");
+    const container = document.getElementById("${fnName}PopupContainer");
+    const closeBtn = popup.querySelector(".${fnName}CloseBtn");
+    
+    // 7. Render dynamic list data
+    const ul = document.createElement("ul");
+    ul.id = "${fnName}PopupList";
+    
+    dataList.forEach(item => {
+        const li = document.createElement("li");
+        li.textContent = item;
+        ${crossout ? `
+        li.addEventListener("click", () => {
+            li.classList.toggle("crossed-out");
+        });` : ''}
+        ul.appendChild(li);
+    });
+    container.appendChild(ul);
+    
+    // 8. Define teardown handler
+    function removePopup() {
+        if (document.getElementById("${fnName}Styles")) document.head.removeChild(style);
+        if (document.getElementById("${fnName}Popup")) document.body.removeChild(popup);
+        ${closeEsc ? `document.removeEventListener("keydown", handleEscapeKey);` : ''}
+    }
+    
+    closeBtn.addEventListener("click", removePopup);
+    ${closeEsc ? `
+    // 9. Close popup using physical Escape Key
+    function handleEscapeKey(e) {
+        if (e.key === "Escape") {
+            removePopup();
+        }
+    }
+    document.addEventListener("keydown", handleEscapeKey);` : ''}
+    ${drag ? `
+    // 10. Implement native mouse Drag & Drop positioning
+    let isDragging = false, startX, startY;
+    
+    header.addEventListener("mousedown", (e) => {
+        // Stop dragging if close button was clicked
+        if (e.target === closeBtn) return;
+        
+        isDragging = true;
+        startX = e.clientX - popup.offsetLeft;
+        startY = e.clientY - popup.offsetTop;
+        header.style.cursor = 'grabbing';
+        document.body.style.userSelect = 'none';
+    });
+    
+    document.addEventListener("mousemove", (e) => {
+        if (!isDragging) return;
+        let newX = e.clientX - startX;
+        let newY = e.clientY - startY;
+        
+        // Prevent window boundaries clipping
+        newX = Math.max(0, Math.min(newX, window.innerWidth - popup.offsetWidth));
+        newY = Math.max(0, Math.min(newY, window.innerHeight - popup.offsetHeight));
+        
+        popup.style.left = newX + "px";
+        popup.style.top = newY + "px";
+    });
+    
+    document.addEventListener("mouseup", () => {
+        isDragging = false;
+        header.style.cursor = 'move';
+        document.body.style.userSelect = 'auto';
+    });` : ''}
+}`;
+
+            document.getElementById('codeBlock').innerText = rawGeneratedJS;
+            document.getElementById('feedbackMsg').innerText = `Generated function ${fnName}() updated successfully.`;
+            document.getElementById('feedbackMsg').className = "text-xs font-semibold text-emerald-400";
+            
+            // Revert message color after typing stops
+            setTimeout(() => {
+                document.getElementById('feedbackMsg').className = "text-xs font-semibold text-gray-400";
+            }, 1000);
+        }
+
+        // Safe Clipboard copy pattern
+        function copyGeneratedCode() {
+            // Write code structure to an auxiliary field to handle system permissions reliably
+            const textarea = document.createElement('textarea');
+            textarea.value = rawGeneratedJS;
+            textarea.style.position = 'fixed'; // Avoid scrolling to bottom
+            document.body.appendChild(textarea);
+            textarea.select();
+            
+            try {
+                document.execCommand('copy');
+                showCustomToast("Custom component copied!", "📋");
+            } catch (err) {
+                showCustomToast("Failed to copy code.", "❌");
+            }
+            
+            document.body.removeChild(textarea);
+        }
+
+        // Simulates/evals generated Javascript inside this sandbox DOM space
+        function launchPreview() {
+            // Find and destroy old simulated preview containers if they exist
+            const fnName = document.getElementById('fnName').value.trim() || 'createWordBank';
+            const oldStyle = document.getElementById(`${fnName}Styles`);
+            const oldPopup = document.getElementById(`${fnName}Popup`);
+            
+            if (oldStyle) oldStyle.remove();
+            if (oldPopup) oldPopup.remove();
+
+            try {
+                // Execute generated block context
+                const runFunction = new Function(rawGeneratedJS + `\n ${fnName}();`);
+                runFunction();
+                showCustomToast("Pop-up preview launched! Look around your page.", "🚀");
+            } catch (error) {
+                showCustomToast("Compilation error: " + error.message, "❌");
+            }
+        }
+
+        // Toast controller
+        function showCustomToast(text, icon = "💡") {
+            const toast = document.getElementById('customToast');
+            const toastText = document.getElementById('toastText');
+            const toastIcon = document.getElementById('toastIcon');
+
+            toastText.innerText = text;
+            toastIcon.innerText = icon;
+
+            toast.style.opacity = '1';
+            toast.style.transform = 'translate(-50%, 0px)';
+            toast.style.pointerEvents = 'auto';
+
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translate(-50%, -20px)';
+                toast.style.pointerEvents = 'none';
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
