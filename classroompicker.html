@@ -4283,6 +4283,7 @@
         }
 
         function formatCalculatorNumber(value) {
+            // Normalize JavaScript's -0 so the display matches what students expect from a calculator.
             if (Object.is(value, -0)) return '0';
 
             const abs = Math.abs(value);
@@ -5497,8 +5498,8 @@
             </div>
             <textarea id="calc-input" class="calc-input" rows="2" spellcheck="false" autocapitalize="off"
                 autocomplete="off" autocorrect="off" inputmode="decimal"
-                aria-label="Calculator expression input" placeholder="0"></textarea>
-            <div class="calc-status">Enter evaluates • Paste works • Scientific mode adds functions and constants</div>
+                aria-label="Calculator expression input" aria-describedby="calc-status" placeholder="0"></textarea>
+            <div id="calc-status" class="calc-status">Enter evaluates • Paste works • EE enters scientific notation • Scientific mode adds functions and constants</div>
         </div>
         <div id="calc-scientific-panel" class="calc-scientific-panel hidden">
             <div class="calc-buttons">
@@ -5552,7 +5553,7 @@
 
             <button type="button" class="calc-btn wide" onclick="appendCalc('0')">0</button>
             <button type="button" class="calc-btn" onclick="appendCalc('.')">.</button>
-            <button type="button" class="calc-btn op" onclick="appendCalc('E')">EXP</button>
+            <button type="button" class="calc-btn op" onclick="appendCalc('E')" title="Insert scientific notation">EE</button>
             <button type="button" class="calc-btn equals" onclick="calculateResult()">=</button>
         </div>
     </div>
