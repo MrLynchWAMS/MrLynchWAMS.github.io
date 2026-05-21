@@ -56,6 +56,19 @@
         .animate-fade-out-right {
             animation: fade-out-right 0.5s ease-in forwards;
         }
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translate(-50%, 50px);
+            }
+            to {
+                opacity: 1;
+                transform: translate(-50%, 0);
+            }
+        }
+        .animate-fade-in-up {
+            animation: fadeInUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
     </style>
 </head>
 
@@ -108,7 +121,7 @@
             </div>
         </div>
 
-        <div class="flex flex-col md:flex-row gap-4 mb-6">
+        <div class="flex flex-col md:flex-row gap-4 mb-4">
             <div class="flex-1">
                 <input type="search" id="searchInput" placeholder="Search assignments by name..."
                     class="w-full p-3 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500 text-white">
@@ -128,7 +141,50 @@
                         <option value="alpha-asc">Name (A-Z)</option>
                         <option value="alpha-desc">Name (Z-A)</option>
                         <option value="type">Type</option>
+                        <option value="last-accessed">Last Accessed</option>
                     </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex justify-between items-center mb-6 flex-wrap gap-4 bg-gray-800/40 p-3 rounded-lg border border-gray-700/50">
+            <!-- View Mode Switcher -->
+            <div class="flex items-center gap-2">
+                <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">View Mode:</span>
+                <div class="inline-flex rounded-lg border border-gray-600 bg-gray-700 p-0.5" role="group">
+                    <button type="button" onclick="setViewMode('grid')" id="viewModeGrid" class="px-3 py-1 text-xs font-bold rounded-md bg-blue-600 text-white transition-all">Grid</button>
+                    <button type="button" onclick="setViewMode('list')" id="viewModeList" class="px-3 py-1 text-xs font-bold rounded-md text-gray-400 hover:text-white transition-all">List</button>
+                </div>
+            </div>
+            
+            <!-- Page Zoom & Columns Controls -->
+            <div class="flex items-center gap-4 flex-wrap">
+                <!-- Page Scale -->
+                <div class="flex items-center gap-2">
+                    <label for="pageScaleSelect" class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Page Size:</label>
+                    <select id="pageScaleSelect" onchange="applyPageScale()" class="p-1.5 bg-gray-700 rounded border border-gray-600 text-xs text-white focus:outline-none focus:ring-1 focus:ring-yellow-500">
+                        <option value="1">100% (Default)</option>
+                        <option value="0.9">90%</option>
+                        <option value="0.8">80%</option>
+                        <option value="0.7">70%</option>
+                        <option value="0.6">60%</option>
+                    </select>
+                </div>
+
+                <!-- Grid Density (only visible in Grid view) -->
+                <div id="gridDensityContainer" class="flex items-center gap-2">
+                    <label for="gridColsSelect" class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Grid Columns:</label>
+                    <select id="gridColsSelect" onchange="applyGridColumns()" class="p-1.5 bg-gray-700 rounded border border-gray-600 text-xs text-white focus:outline-none focus:ring-1 focus:ring-yellow-500">
+                        <option value="3">3 Columns</option>
+                        <option value="4" selected>4 Columns</option>
+                        <option value="5">5 Columns</option>
+                    </select>
+                </div>
+
+                <!-- Select All Checkbox for Bulk Actions -->
+                <div class="flex items-center gap-2 bg-gray-700/50 px-3 py-1.5 rounded border border-gray-600/30">
+                    <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this.checked)" class="w-3.5 h-3.5 text-blue-600 rounded focus:ring-blue-500">
+                    <label for="selectAllCheckbox" class="text-xs font-semibold text-gray-300 cursor-pointer">Select All Visible</label>
                 </div>
             </div>
         </div>
@@ -368,6 +424,33 @@
         </div>
     </div>
 
+    <!-- Floating Bulk Actions Panel -->
+    <div id="bulkActionsPanel" class="hidden fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-gray-800 border-2 border-yellow-500/80 rounded-xl px-6 py-4 shadow-2xl flex flex-wrap items-center justify-center gap-4 z-[300] animate-fade-in-up max-w-[95vw] md:max-w-4xl">
+        <span class="text-sm font-bold text-yellow-400 shrink-0"><span id="selectedCount">0</span> selected</span>
+        <div class="h-6 w-px bg-gray-700 hidden md:block"></div>
+        
+        <!-- Folder Category update -->
+        <div class="flex items-center gap-2 flex-wrap justify-center">
+            <select id="bulkFolderSelect" class="p-2 bg-gray-700 rounded border border-gray-600 text-xs text-white focus:outline-none w-40">
+                <option value="">Choose Existing Folder...</option>
+            </select>
+            <input type="text" id="bulkFolderInput" placeholder="Or type new folder..." class="p-2 bg-gray-700 rounded border border-gray-600 text-xs text-white placeholder-gray-400 focus:outline-none w-36">
+            <button onclick="applyBulkFolder()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-3 rounded text-xs transition-colors btn-action">Apply Folder</button>
+        </div>
+
+        <div class="h-6 w-px bg-gray-700 hidden md:block"></div>
+
+        <!-- Toggle Archive / Delete -->
+        <div class="flex items-center gap-2 flex-wrap justify-center">
+            <button onclick="applyBulkArchive(true)" class="bg-yellow-700/80 hover:bg-yellow-700 text-white font-bold py-2 px-3 rounded text-xs transition-colors btn-action">Archive</button>
+            <button onclick="applyBulkArchive(false)" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-3 rounded text-xs transition-colors btn-action">Unarchive</button>
+            <button onclick="applyBulkDelete()" class="bg-red-700 hover:bg-red-800 text-white font-bold py-2 px-3 rounded text-xs transition-colors btn-action">Delete</button>
+        </div>
+
+        <!-- Cancel selection -->
+        <button onclick="clearSelection()" class="text-gray-400 hover:text-white font-bold text-lg leading-none ml-2">&times;</button>
+    </div>
+
     <div id="toast-wrapper" class="fixed top-4 right-4 z-[100] space-y-3 w-full max-w-sm"></div>
 
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
@@ -394,6 +477,8 @@
         let currentUserEmail = null;
         let currentUserIsAdmin = false;
         let currentUserDefaultCoTeachers = [];
+        let currentViewMode = 'grid';
+        let selectedAssignmentIds = new Set();
 
         const createModal = document.getElementById('createModal');
         const statusModal = document.getElementById('statusModal');
@@ -445,6 +530,17 @@
                         currentUserDefaultCoTeachers = data.defaultCoTeachers || [];
                         document.getElementById('pageLoader').classList.add('hidden');
                         document.getElementById('assignmentContent').classList.remove('hidden');
+
+                        // Load custom settings
+                        let currentPageScale = localStorage.getItem('assignmentsPageScale') || '1';
+                        let currentGridCols = localStorage.getItem('assignmentsGridCols') || '4';
+                        currentViewMode = localStorage.getItem('assignmentsViewMode') || 'grid';
+
+                        document.getElementById('pageScaleSelect').value = currentPageScale;
+                        document.getElementById('assignmentContent').style.zoom = currentPageScale;
+                        document.getElementById('gridColsSelect').value = currentGridCols;
+                        setViewMode(currentViewMode);
+
                         await runMigration();
                         loadInitialData();
                     } else {
@@ -558,9 +654,27 @@
                     return (b.name || '').localeCompare(a.name || '');
                 } else if (sortBy === 'type') {
                     return (a.type || '').localeCompare(b.type || '');
+                } else if (sortBy === 'last-accessed') {
+                    const ta = a.lastAccessed ? (a.lastAccessed.seconds || 0) : (a.createdAt ? (a.createdAt.seconds || 0) : 0);
+                    const tb = b.lastAccessed ? (b.lastAccessed.seconds || 0) : (b.createdAt ? (b.createdAt.seconds || 0) : 0);
+                    return tb - ta;
                 }
                 return 0;
             });
+
+            // Adjust grid/list layout configurations dynamically
+            if (currentViewMode === 'list') {
+                listContainer.className = "flex flex-col gap-3 w-full";
+            } else {
+                const cols = document.getElementById('gridColsSelect')?.value || '4';
+                if (cols === '3') {
+                    listContainer.className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4";
+                } else if (cols === '5') {
+                    listContainer.className = "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4";
+                } else {
+                    listContainer.className = "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4";
+                }
+            }
 
             listContainer.innerHTML = '';
             if (filteredAssignments.length === 0) {
@@ -574,10 +688,10 @@
 
             filteredAssignments.forEach(assignment => {
                 const card = document.createElement('div');
-                card.className = "bg-gray-800 rounded-lg p-6 shadow-lg flex flex-col justify-between";
+                const isSelected = selectedAssignmentIds.has(assignment.id);
                 const date = assignment.createdAt ? new Date(assignment.createdAt.seconds * 1000).toLocaleDateString() : 'No date';
 
-                let statusHTML = '<div class="space-y-2 text-xs">';
+                let statusHTML = '<div class="space-y-1 text-xs">';
                 const assignedClasses = assignment.assignedClasses || [];
                 if (assignedClasses.length > 0) {
                     assignedClasses.sort().forEach(className => {
@@ -589,12 +703,12 @@
                         ).length;
 
                         statusHTML += `
-                        <div class="flex justify-between items-center">
-                            <div><span class="font-semibold">${className}:</span> <span class="${color}">${status}</span></div>
-                            <div class="text-gray-400">${submissionCount} / ${studentsInClass.length} Submitted</div>
+                        <div class="flex justify-between items-center gap-2">
+                            <div><span class="font-semibold text-gray-400">${className}:</span> <span class="${color}">${status}</span></div>
+                            <div class="text-gray-500">${submissionCount} / ${studentsInClass.length} Sub</div>
                         </div>`;
                     });
-                } else { statusHTML += '<span class="text-gray-400">Not yet assigned.</span>'; }
+                } else { statusHTML += '<span class="text-gray-500">Not assigned</span>'; }
                 statusHTML += '</div>';
 
                 const escapedName = escapeHtml(assignment.name);
@@ -607,40 +721,98 @@
 
                 const typeLabel = typeLabels[assignment.type] || typeLabels['slides'];
 
-                card.innerHTML = `
-                <div>
-                    <div class="flex justify-between items-start mb-2">
-                        <h3 class="text-2xl font-bold text-yellow-400 flex items-center gap-2">
-                            <span class="truncate max-w-[200px]" title="${escapedName}">${escapedName}</span>
-                            <button onclick="openEditMetadataModal('${assignment.id}')" title="Edit name & folder" class="text-gray-500 hover:text-yellow-400 text-base transition-colors shrink-0">✏️</button>
-                        </h3>
-                        <span class="ml-2 shrink-0 text-xs uppercase px-2 py-1 bg-gray-700 text-gray-300 rounded border border-gray-600 font-semibold tracking-wider">${typeLabel}</span>
+                if (currentViewMode === 'list') {
+                    // Sleek horizontal list row
+                    card.className = `bg-gray-800 rounded-lg p-3 shadow-md flex flex-col lg:flex-row lg:items-center justify-between gap-4 border ${isSelected ? 'border-yellow-500/80 bg-gray-800/80' : 'border-gray-700/40'} hover:border-gray-600 transition-all`;
+                    card.innerHTML = `
+                    <div class="flex items-center gap-3 min-w-0 flex-1">
+                        <input type="checkbox" value="${assignment.id}" ${isSelected ? 'checked' : ''} onchange="handleSelectionChange()" class="assignment-selector w-4 h-4 text-blue-600 rounded border-gray-600 bg-gray-700 focus:ring-blue-500 shrink-0">
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <h3 class="text-lg font-bold text-yellow-400 truncate max-w-[280px]" title="${escapedName}">${escapedName}</h3>
+                                <span class="text-[10px] uppercase px-1.5 py-0.5 bg-gray-700 text-gray-300 rounded border border-gray-600 font-semibold tracking-wider">${typeLabel}</span>
+                                ${assignment.folder ? `
+                                    <span class="inline-block text-xs px-2.5 py-0.5 rounded-full bg-blue-900/50 text-blue-300 border border-blue-700/30">
+                                        📁 ${escapeHtml(assignment.folder)} 
+                                        <button onclick="openEditMetadataModal('${assignment.id}')" title="Edit folder" class="ml-1 hover:text-yellow-400 font-bold">✏️</button>
+                                    </span>
+                                ` : `
+                                    <span onclick="openEditMetadataModal('${assignment.id}')" class="inline-block text-xs px-2.5 py-0.5 rounded-full bg-gray-700/50 text-gray-400 border border-gray-600/30 cursor-pointer hover:text-white">
+                                        📁 Add Folder ✏️
+                                    </span>
+                                `}
+                            </div>
+                            <p class="text-gray-500 text-[11px] mt-1">Created: ${date}${assignment.lastAccessed ? ` | Accessed: ${new Date(assignment.lastAccessed.seconds * 1000).toLocaleDateString()}` : ''}</p>
+                        </div>
                     </div>
-                    ${assignment.folder ? `<div class="mt-1 mb-2"><span class="inline-block text-xs px-2.5 py-0.5 rounded-full bg-blue-900/50 text-blue-300 border border-blue-700/30">📁 ${escapeHtml(assignment.folder)}</span></div>` : ''}
-                    <div class="mb-2">${statusHTML}</div>
-                    <p class="text-gray-500 text-xs mt-2">Created: ${date}</p>
-                    <div class="flex gap-2 flex-wrap">
-                        ${assignment.isPublic ? '<span class="text-purple-400 text-xs font-semibold">🌐 Public</span>' : ''}
-                        ${assignment.isArchived ? '<span class="text-yellow-500 text-xs font-semibold">📁 Archived</span>' : ''}
+                    <div class="flex items-center gap-4 shrink-0 justify-between lg:justify-end">
+                        <div class="min-w-[150px] max-w-[200px] border-l border-gray-700 pl-3 hidden md:block">${statusHTML}</div>
+                        <div class="flex items-center gap-1">
+                            <a href="./dashboard.html?assignmentId=${assignment.id}" onclick="updateLastAccessed('${assignment.id}')" class="text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold py-1.5 px-2.5 rounded btn-action">Data</a>
+                            <a href="./${editUrl}" onclick="updateLastAccessed('${assignment.id}')" class="text-xs bg-gray-600 hover:bg-gray-700 text-white font-bold py-1.5 px-2.5 rounded btn-action">Edit</a>
+                            <a href="./classroompicker.html?assignmentId=${assignment.id}" onclick="updateLastAccessed('${assignment.id}')" target="_blank" class="text-xs bg-green-700 hover:bg-green-800 text-white font-bold py-1.5 px-2.5 rounded btn-action">Preview</a>
+                            <button onclick="openStatusModal('${assignment.id}')" class="text-xs bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-1.5 px-2.5 rounded btn-action">Assign</button>
+                            <button onclick="toggleArchive('${assignment.id}', ${assignment.isArchived || false})" class="text-xs bg-gray-700 hover:bg-gray-600 text-white font-bold py-1.5 px-2.5 rounded btn-action">${assignment.isArchived ? 'Unarchive' : 'Archive'}</button>
+                            <button onclick="deleteAssignment('${assignment.id}', '${escapedName}')" class="text-xs bg-red-700 hover:bg-red-800 text-white font-bold py-1.5 px-2.5 rounded btn-action">Delete</button>
+                        </div>
+                    </div>`;
+                } else {
+                    // Grid card view (Highly polished, compact size)
+                    card.className = `bg-gray-800 rounded-lg p-5 shadow-md flex flex-col justify-between border ${isSelected ? 'border-yellow-500/80 bg-gray-800/80' : 'border-gray-700/30'} hover:border-gray-600 transition-all`;
+                    card.innerHTML = `
+                    <div>
+                        <div class="flex justify-between items-start mb-2">
+                            <div class="flex items-center gap-2 min-w-0 flex-1">
+                                <input type="checkbox" value="${assignment.id}" ${isSelected ? 'checked' : ''} onchange="handleSelectionChange()" class="assignment-selector w-4 h-4 text-blue-600 rounded border-gray-600 bg-gray-700 focus:ring-blue-500 shrink-0">
+                                <h3 class="text-lg font-bold text-yellow-400 truncate flex-1" title="${escapedName}">${escapedName}</h3>
+                            </div>
+                            <span class="ml-2 shrink-0 text-[10px] uppercase px-1.5 py-0.5 bg-gray-700 text-gray-300 rounded border border-gray-600 font-semibold tracking-wider">${typeLabel}</span>
+                        </div>
+                        <div class="mb-2">
+                            ${assignment.folder ? `
+                                <div class="mt-1 mb-2">
+                                    <span class="inline-block text-[11px] px-2.5 py-0.5 rounded-full bg-blue-900/50 text-blue-300 border border-blue-700/30">
+                                        📁 ${escapeHtml(assignment.folder)} 
+                                        <button onclick="openEditMetadataModal('${assignment.id}')" title="Edit name & folder" class="ml-1 hover:text-yellow-400 font-bold shrink-0">✏️</button>
+                                    </span>
+                                </div>
+                            ` : `
+                                <div class="mt-1 mb-2">
+                                    <span onclick="openEditMetadataModal('${assignment.id}')" class="inline-block text-[11px] px-2.5 py-0.5 rounded-full bg-gray-700/50 text-gray-400 border border-gray-600/30 cursor-pointer hover:text-white">
+                                        📁 Add Folder ✏️
+                                    </span>
+                                </div>
+                            `}
+                        </div>
+                        <div class="mb-2">${statusHTML}</div>
+                        <p class="text-gray-500 text-[10px] mt-2">Created: ${date}${assignment.lastAccessed ? ` | Accessed: ${new Date(assignment.lastAccessed.seconds * 1000).toLocaleDateString()}` : ''}</p>
+                        <div class="flex gap-2 flex-wrap mt-1">
+                            ${assignment.isPublic ? '<span class="text-purple-400 text-[10px] font-semibold">🌐 Public</span>' : ''}
+                            ${assignment.isArchived ? '<span class="text-yellow-500 text-[10px] font-semibold">📁 Archived</span>' : ''}
+                        </div>
                     </div>
-                </div>
-                <div class="mt-4 pt-4 border-t border-gray-700 flex flex-col gap-2">
-                    <div class="flex justify-between gap-2">
-                        <a href="./dashboard.html?assignmentId=${assignment.id}" class="flex-1 text-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-2 rounded-lg btn-action text-sm">Data</a>
-                        <a href="./${editUrl}" class="flex-1 text-center bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-2 rounded-lg btn-action text-sm">Edit</a>
-                        <a href="./classroompicker.html?assignmentId=${assignment.id}" target="_blank" class="flex-1 text-center bg-green-700 hover:bg-green-800 text-white font-bold py-2 px-2 rounded-lg btn-action text-sm">Preview</a>
-                    </div>
-                    <div class="flex justify-between gap-2">
-                         <button onclick="openStatusModal('${assignment.id}')" class="flex-1 text-center bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-3 rounded-lg btn-action">Assign / Close</button>
-                         <button onclick="deleteAssignment('${assignment.id}', '${escapedName}')" class="flex-1 text-center bg-red-700 hover:bg-red-800 text-white font-bold py-2 px-3 rounded-lg btn-action">Delete</button>
-                    </div>
-                    <div class="flex justify-between gap-2">
-                        <button onclick="openCoTeacherModal('${assignment.id}')" class="flex-1 text-center bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2 px-1.5 rounded-lg btn-action truncate">Co-Teachers</button>
-                        <button onclick="openShareModal('${assignment.id}')" class="flex-1 text-center bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-2 px-1.5 rounded-lg btn-action truncate">Share</button>
-                        <button onclick="togglePublic('${assignment.id}', ${assignment.isPublic || false})" class="flex-1 text-center bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold py-2 px-1.5 rounded-lg btn-action truncate">Public</button>
-                        <button onclick="toggleArchive('${assignment.id}', ${assignment.isArchived || false})" class="flex-1 text-center ${assignment.isArchived ? 'bg-gray-600 hover:bg-gray-500' : 'bg-yellow-700/80 hover:bg-yellow-700'} text-white text-xs font-bold py-2 px-1.5 rounded-lg btn-action truncate">${assignment.isArchived ? 'Unarchive' : 'Archive'}</button>
-                    </div>
-                </div>`;
+                    <div class="mt-4 pt-3 border-t border-gray-700 flex flex-col gap-2">
+                        <div class="flex justify-between gap-1.5">
+                            <a href="./dashboard.html?assignmentId=${assignment.id}" onclick="updateLastAccessed('${assignment.id}')" class="flex-1 text-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-1.5 px-1.5 rounded text-xs btn-action">Data</a>
+                            <a href="./${editUrl}" onclick="updateLastAccessed('${assignment.id}')" class="flex-1 text-center bg-gray-600 hover:bg-gray-700 text-white font-bold py-1.5 px-1.5 rounded text-xs btn-action">Edit</a>
+                            <a href="./classroompicker.html?assignmentId=${assignment.id}" onclick="updateLastAccessed('${assignment.id}')" target="_blank" class="flex-1 text-center bg-green-700 hover:bg-green-800 text-white font-bold py-1.5 px-1.5 rounded text-xs btn-action">Preview</a>
+                        </div>
+                        <div class="flex justify-between gap-1.5">
+                             <button onclick="openStatusModal('${assignment.id}')" class="flex-1 text-center bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-1.5 px-2 rounded text-xs btn-action">Assign</button>
+                             <button onclick="deleteAssignment('${assignment.id}', '${escapedName}')" class="flex-1 text-center bg-red-700 hover:bg-red-800 text-white font-bold py-1.5 px-2 rounded text-xs btn-action">Delete</button>
+                        </div>
+                        <div class="flex justify-between gap-1.5">
+                            <button onclick="openCoTeacherModal('${assignment.id}')" class="flex-1 text-center bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold py-1.5 px-1 rounded btn-action truncate">Co-Teachers</button>
+                            <button onclick="openShareModal('${assignment.id}')" class="flex-1 text-center bg-green-600 hover:bg-green-700 text-white text-[10px] font-bold py-1.5 px-1 rounded btn-action truncate">Share</button>
+                            <button onclick="togglePublic('${assignment.id}', ${assignment.isPublic || false})" class="flex-1 text-center bg-purple-600 hover:bg-purple-700 text-white text-[10px] font-bold py-1.5 px-1 rounded btn-action truncate">Public</button>
+                            <button onclick="toggleArchive('${assignment.id}', ${assignment.isArchived || false})" class="flex-1 text-center ${assignment.isArchived ? 'bg-gray-600 hover:bg-gray-500' : 'bg-yellow-700/80 hover:bg-yellow-700'} text-white text-[10px] font-bold py-1.5 px-1 rounded btn-action truncate">${assignment.isArchived ? 'Unarchive' : 'Archive'}</button>
+                        </div>
+                    </div>`;
+                }
+                listContainer.appendChild(card);
+            });
+            updateBulkPanel();
+        }
                 listContainer.appendChild(card);
             });
         }
@@ -1105,6 +1277,183 @@
             if (folders.includes(selectedValue)) {
                 select.value = selectedValue;
             }
+        }
+
+        function setViewMode(mode) {
+            currentViewMode = mode;
+            localStorage.setItem('assignmentsViewMode', mode);
+            
+            const gridBtn = document.getElementById('viewModeGrid');
+            const listBtn = document.getElementById('viewModeList');
+            const densityContainer = document.getElementById('gridDensityContainer');
+            
+            if (gridBtn && listBtn) {
+                if (mode === 'list') {
+                    gridBtn.className = "px-3 py-1 text-xs font-bold rounded-md text-gray-400 hover:text-white transition-all";
+                    listBtn.className = "px-3 py-1 text-xs font-bold rounded-md bg-blue-600 text-white transition-all";
+                    if (densityContainer) densityContainer.classList.add('hidden');
+                } else {
+                    gridBtn.className = "px-3 py-1 text-xs font-bold rounded-md bg-blue-600 text-white transition-all";
+                    listBtn.className = "px-3 py-1 text-xs font-bold rounded-md text-gray-400 hover:text-white transition-all";
+                    if (densityContainer) densityContainer.classList.remove('hidden');
+                }
+            }
+            displayFilteredAssignments();
+        }
+
+        function applyPageScale() {
+            const scale = document.getElementById('pageScaleSelect').value;
+            localStorage.setItem('assignmentsPageScale', scale);
+            document.getElementById('assignmentContent').style.zoom = scale;
+        }
+
+        function applyGridColumns() {
+            const cols = document.getElementById('gridColsSelect').value;
+            localStorage.setItem('assignmentsGridCols', cols);
+            displayFilteredAssignments();
+        }
+
+        function handleSelectionChange() {
+            const checkboxes = document.querySelectorAll('.assignment-selector');
+            selectedAssignmentIds.clear();
+            checkboxes.forEach(cb => {
+                if (cb.checked) selectedAssignmentIds.add(cb.value);
+            });
+            updateBulkPanel();
+        }
+        
+        function toggleSelectAll(checked) {
+            const checkboxes = document.querySelectorAll('.assignment-selector');
+            checkboxes.forEach(cb => {
+                cb.checked = checked;
+                if (checked) {
+                    selectedAssignmentIds.add(cb.value);
+                } else {
+                    selectedAssignmentIds.delete(cb.value);
+                }
+            });
+            updateBulkPanel();
+        }
+        
+        function clearSelection() {
+            selectedAssignmentIds.clear();
+            const selectAllCb = document.getElementById('selectAllCheckbox');
+            if (selectAllCb) selectAllCb.checked = false;
+            const checkboxes = document.querySelectorAll('.assignment-selector');
+            checkboxes.forEach(cb => cb.checked = false);
+            updateBulkPanel();
+        }
+        
+        function updateBulkPanel() {
+            const panel = document.getElementById('bulkActionsPanel');
+            const countSpan = document.getElementById('selectedCount');
+            const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+            
+            const visibleCheckboxes = document.querySelectorAll('.assignment-selector');
+            const totalVisible = visibleCheckboxes.length;
+            const totalChecked = Array.from(visibleCheckboxes).filter(cb => cb.checked).length;
+            
+            if (selectAllCheckbox) {
+                selectAllCheckbox.checked = totalVisible > 0 && totalChecked === totalVisible;
+            }
+            
+            if (selectedAssignmentIds.size > 0) {
+                countSpan.innerText = selectedAssignmentIds.size;
+                panel.classList.remove('hidden');
+                
+                const bulkFolderSelect = document.getElementById('bulkFolderSelect');
+                if (bulkFolderSelect) {
+                    const currentVal = bulkFolderSelect.value;
+                    bulkFolderSelect.innerHTML = '<option value="">Choose Existing Folder...</option>';
+                    const folders = [...new Set(allAssignments.map(a => a.folder).filter(Boolean))].sort();
+                    folders.forEach(f => {
+                        const opt = document.createElement('option');
+                        opt.value = f;
+                        opt.textContent = f;
+                        bulkFolderSelect.appendChild(opt);
+                    });
+                    if (folders.includes(currentVal)) bulkFolderSelect.value = currentVal;
+                }
+            } else {
+                panel.classList.add('hidden');
+            }
+        }
+
+        async function applyBulkFolder() {
+            if (selectedAssignmentIds.size === 0) return;
+            const existingFolder = document.getElementById('bulkFolderSelect').value;
+            const typedFolder = document.getElementById('bulkFolderInput').value.trim();
+            const folderToApply = typedFolder || existingFolder;
+            
+            if (!folderToApply && !confirm("Do you want to clear the Folder / Category for all selected assignments?")) {
+                return;
+            }
+            
+            const batch = db.batch();
+            selectedAssignmentIds.forEach(id => {
+                const ref = db.collection("assignments").doc(id);
+                batch.update(ref, { folder: folderToApply });
+            });
+            
+            try {
+                await batch.commit();
+                showToast(`Successfully updated ${selectedAssignmentIds.size} assignments!`, { color: 'green' });
+                document.getElementById('bulkFolderInput').value = '';
+                clearSelection();
+            } catch (e) {
+                console.error("Bulk tag error:", e);
+                showToast("Failed to bulk tag assignments.", { color: 'red' });
+            }
+        }
+
+        async function applyBulkArchive(shouldArchive) {
+            if (selectedAssignmentIds.size === 0) return;
+            
+            const batch = db.batch();
+            selectedAssignmentIds.forEach(id => {
+                const ref = db.collection("assignments").doc(id);
+                batch.update(ref, { isArchived: shouldArchive });
+            });
+            
+            try {
+                await batch.commit();
+                showToast(`Successfully ${shouldArchive ? 'archived' : 'unarchived'} ${selectedAssignmentIds.size} assignments!`, { color: 'green' });
+                clearSelection();
+            } catch (e) {
+                console.error("Bulk archive error:", e);
+                showToast("Failed to bulk update archive status.", { color: 'red' });
+            }
+        }
+
+        async function applyBulkDelete() {
+            if (selectedAssignmentIds.size === 0) return;
+            
+            if (!confirm(`Are you absolutely sure you want to delete all ${selectedAssignmentIds.size} selected assignments?\n\nThis action cannot be undone!`)) {
+                return;
+            }
+            
+            const batch = db.batch();
+            selectedAssignmentIds.forEach(id => {
+                const ref = db.collection("assignments").doc(id);
+                batch.delete(ref);
+            });
+            
+            try {
+                await batch.commit();
+                showToast(`Successfully deleted ${selectedAssignmentIds.size} assignments!`, { color: 'green' });
+                clearSelection();
+            } catch (e) {
+                console.error("Bulk delete error:", e);
+                showToast("Failed to bulk delete assignments.", { color: 'red' });
+            }
+        }
+
+        async function updateLastAccessed(id) {
+            try {
+                await db.collection("assignments").doc(id).update({
+                    lastAccessed: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            } catch (e) { console.error("Error updating last accessed:", e); }
         }
 
         function showToast(message, options = {}) {
