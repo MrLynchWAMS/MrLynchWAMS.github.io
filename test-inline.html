@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<body>
+<script src="shared/blank-canvas-parser.js"></script>
+<script src="shared/checker-runner.js"></script>
+<script>
+    const str = 'contains "game" AND contains "time"';
+    const ic = window.parseMultiCondition ? window.parseMultiCondition(str, 100, []) : (function(){
+        // simulate parseMultiCondition manually if not exported
+        function parseSingleCondition(condStr, points) {
+            const s = (condStr || '').trim();
+            const isMatch = s.match(/^is\s+"([^"]+)"$/i);
+            if (isMatch) return { op: 'equals_str', value: isMatch[1], value2: null, tolerance: 0, points };
+            const containsMatch = s.match(/^contains\s+"([^"]+)"$/i);
+            if (containsMatch) return { op: 'contains', value: containsMatch[1], value2: null, tolerance: 0, points };
+            const notContainsMatch = s.match(/^not_contains\s+"([^"]+)"$/i);
+            if (notContainsMatch) return { op: 'not_contains', value: notContainsMatch[1], value2: null, tolerance: 0, points };
+            return null;
+        }
+        if (/\bAND\b/.test(str)) {
+            const parts = str.split(/\bAND\b/).map(p => p.trim());
+            const conditions = parts.map(p => parseSingleCondition(p, 100)).filter(Boolean);
+            if (conditions.length === parts.length && conditions.length > 0) {
+                return { type: 'multi', logic: 'AND', conditions, points: 100 };
+            }
+        }
+    })();
+
+    const result = window.evaluateInlineChecker(ic, "a game about time", {});
+    console.log("Parsed IC:", ic);
+    console.log("Evaluation Result:", result);
+    document.body.innerHTML = "<pre>" + JSON.stringify({ic, result}, null, 2) + "</pre>";
+</script>
+</body>
+</html>

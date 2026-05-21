@@ -1,0 +1,1744 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Video Assignment Editor</title>
+  <link rel="icon"
+    href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎬</text></svg>">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
+  <style>
+    .hidden {
+      display: none;
+    }
+
+    textarea {
+      font-family: monospace;
+      resize: vertical;
+    }
+
+    @keyframes fade-in-right {
+      from {
+        opacity: 0;
+        transform: translateX(100%);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    @keyframes fade-out-right {
+      from {
+        opacity: 1;
+        transform: translateX(0);
+      }
+
+      to {
+        opacity: 0;
+        transform: translateX(100%);
+      }
+    }
+
+    .animate-fade-in-right {
+      animation: fade-in-right 0.5s ease-out forwards;
+    }
+
+    .animate-fade-out-right {
+      animation: fade-out-right 0.5s ease-in forwards;
+    }
+
+    .collapsible-content {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease-out;
+    }
+
+    .sticky-header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(17, 24, 39, 0.95);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid #374151;
+      padding: 1rem 0;
+    }
+
+    #toast-wrapper {
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      z-index: 50;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .dialog-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(31, 41, 55, 0.85);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .dialog-box {
+      background: #1f2937;
+      color: #fff;
+      border-radius: 0.75rem;
+      box-shadow: 0 6px 32px rgba(0, 0, 0, 0.22);
+      padding: 2rem;
+      min-width: 320px;
+      max-width: 96vw;
+      z-index: 1001;
+      text-align: center;
+      animation: fade-in-right 0.35s;
+    }
+
+    .dialog-box h3 {
+      color: #fde68a;
+    }
+
+    .dialog-box button {
+      margin: 0 0.5rem;
+    }
+
+    .question-card {
+      background: #1f2937;
+      border: 1px solid #374151;
+      border-radius: 0.75rem;
+      padding: 1.25rem;
+      transition: border-color 0.2s;
+    }
+
+    .question-card:hover {
+      border-color: #fbbf24;
+    }
+
+    .question-card.active {
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+    }
+
+    .choice-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .choice-row.correct {
+      background: rgba(34, 197, 94, 0.1);
+      border-radius: 0.5rem;
+      padding: 0.25rem 0.5rem;
+    }
+
+    .simple-disabled-notice {
+      background: #fee2e2;
+      color: #991b1b;
+      padding: 0.5rem;
+      border-radius: 0.375rem;
+      margin-top: 0.5rem;
+    }
+  </style>
+</head>
+
+<body class="bg-gray-900 text-white font-sans">
+
+  <div id="page-loader" class="flex flex-col items-center justify-center h-screen">
+    <h1 class="text-4xl font-bold text-yellow-400 mb-4">Video Assignment Editor</h1>
+    <p id="loading-text" class="text-lg text-gray-300">Initializing...</p>
+    <div id="signInButtonContainer" class="hidden mt-8 text-center">
+      <div id="googleSignInButton" class="flex justify-center"></div>
+      <button id="retrySignInButton" aria-label="Retry Google sign in"
+        class="hidden mt-4 bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 text-white font-bold py-2 px-4 rounded-lg">Retry
+        Sign In</button>
+    </div>
+    <p id="auth-error" class="text-red-500 mt-4"></p>
+  </div>
+
+  <div id="editorContent" class="hidden container mx-auto p-4 md:p-8">
+    <div class="sticky-header mb-6">
+      <div class="flex justify-between items-center flex-wrap gap-4">
+        <div class="flex items-center gap-3">
+          <div id="titleDisplay" class="flex items-center gap-2">
+            <h1 id="assignmentTitle" class="text-3xl font-bold text-yellow-400"></h1>
+            <button onclick="startEditingTitle()" class="text-gray-400 hover:text-white transition-colors"
+              title="Rename Assignment">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+              </svg>
+            </button>
+          </div>
+          <div id="titleEditor" class="hidden flex items-center gap-2">
+            <input type="text" id="titleInput"
+              class="bg-gray-700 text-white text-xl p-1 rounded border border-gray-600 focus:outline-none focus:border-yellow-400">
+            <button onclick="saveTitle()" class="text-green-400 hover:text-green-300" title="Save">✓</button>
+            <button onclick="cancelEditingTitle()" class="text-red-400 hover:text-red-300" title="Cancel">✕</button>
+          </div>
+        </div>
+        <div>
+          <a href="./assignments.html"
+            class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg">&larr; Back to
+            Assignments</a>
+          <button onclick="saveAssignment()" id="saveBtn"
+            class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg">Save Assignment</button>
+          <button id="signOutButton" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Sign
+            Out</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Student Link -->
+    <div class="bg-gray-800 p-4 rounded-lg mb-6">
+      <h2 class="text-xl font-semibold mb-2">Student Link</h2>
+      <div class="flex gap-2">
+        <input id="shareLink" type="text" readonly class="w-full p-2 bg-gray-700 border border-gray-600 rounded">
+        <button onclick="copyShareLink()"
+          class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-3 rounded-lg">Copy</button>
+      </div>
+    </div>
+
+    <!-- Video URL -->
+    <div class="bg-gray-800 p-6 rounded-lg mb-8">
+      <label class="block text-2xl font-bold text-yellow-400 mb-2">Video Source</label>
+      <p class="text-gray-400 mb-4">Paste a YouTube or Google Drive share link.</p>
+      <div class="flex gap-3 items-end">
+        <div class="flex-1">
+          <input type="text" id="videoUrlInput"
+            placeholder="https://www.youtube.com/watch?v=... or Google Drive share link"
+            class="w-full p-3 bg-gray-700 rounded border border-gray-600 focus:border-yellow-400 focus:outline-none">
+          <p id="videoSourceType" class="text-xs text-gray-500 mt-1"></p>
+        </div>
+        <button onclick="loadVideoPreview()"
+          class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg">Load Preview</button>
+      </div>
+      <div id="videoPreviewContainer" class="mt-4 hidden">
+        <div class="bg-black rounded-lg overflow-hidden" style="max-width:640px; margin:0 auto;">
+          <div id="videoPreview"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scoring Mode -->
+    <div class="bg-gray-800 p-6 rounded-lg mb-8">
+      <label for="scoringMode" class="block text-2xl font-bold text-yellow-400 mb-2">Scoring Mode</label>
+      <p class="text-gray-400 mb-4">Choose when students see their scores.</p>
+      <select id="scoringMode"
+        class="w-full md:w-1/2 p-2 bg-gray-700 rounded border border-gray-600 focus:border-yellow-400 focus:outline-none">
+        <option value="instant">Instant (scores shown immediately after checking)</option>
+        <option value="afterSubmission">After Submission (scores hidden until student submits)</option>
+      </select>
+    </div>
+
+    <!-- Post Submission Policy -->
+    <div class="bg-gray-800 p-6 rounded-lg mb-8">
+      <label for="postSubmissionRule" class="block text-2xl font-bold text-yellow-400 mb-2">Post-Submission
+        Policy</label>
+      <p class="text-gray-400 mb-4">Choose what happens after a student officially submits this assignment.</p>
+      <select id="postSubmissionRule"
+        class="w-full md:w-1/2 p-2 bg-gray-700 rounded border border-gray-600 focus:border-yellow-400 focus:outline-none">
+        <option value="open">Remain Open (Students can review and resubmit)</option>
+        <option value="lock">Lock (Students can review but not edit)</option>
+        <option value="hide">Lock & Hide (Students cannot see answers or scores)</option>
+      </select>
+    </div>
+    <div id="deadline-widget-container"></div>
+    <div id="modifications-section" class="bg-gray-800 rounded-lg mb-8 overflow-hidden border border-purple-900/30">
+      <div id="modifications-header" class="p-6 cursor-pointer" onclick="toggleModificationsSection()">
+        <div class="flex justify-between items-center">
+          <h2 class="text-2xl font-bold text-yellow-400">🧩 Special Ed. Modifications</h2>
+          <span id="modifications-chevron" class="text-2xl transform transition-transform">▶</span>
+        </div>
+        <p class="text-gray-400 mt-2">Configure accommodations like extra time and attempts for specific students.</p>
+      </div>
+      <div id="modifications-content" class="collapsible-content">
+        <div class="px-6 pb-6">
+          <div class="mb-6 bg-gray-700/30 p-4 rounded-lg border border-gray-700">
+            <label class="flex items-center cursor-pointer mb-4">
+              <input type="checkbox" id="modificationsEnabled" onchange="toggleModificationsEnabled()"
+                class="w-5 h-5 text-purple-500 rounded focus:ring-purple-500 bg-gray-800 border-gray-600">
+              <span class="ml-3 font-semibold text-white text-lg">Enable Modifications for this Assignment</span>
+            </label>
+            <div id="modificationsSettings" class="hidden space-y-4">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-medium text-gray-300 mb-1">Time Limit Multiplier</label>
+                  <input type="number" id="modTimeMultiplier" value="1.5" min="1.0" step="0.1"
+                    class="w-full p-2 bg-gray-800 border border-gray-600 rounded">
+                  <p class="text-xs text-gray-500 mt-1">Ex: 1.5x gives 15 mins for a 10 min deadline.</p>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-300 mb-1">Attempt Penalty Multiplier</label>
+                  <input type="number" id="modPenaltyMultiplier" value="0.5" min="0" max="1.0" step="0.1"
+                    class="w-full p-2 bg-gray-800 border border-gray-600 rounded">
+                  <p class="text-xs text-gray-500 mt-1">Ex: 0.5x cuts the point deduction in half.</p>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-300 mb-1">Max Attempts Bonus</label>
+                  <input type="number" id="modAttemptsBonus" value="2" min="0" step="1"
+                    class="w-full p-2 bg-gray-800 border border-gray-600 rounded">
+                  <p class="text-xs text-gray-500 mt-1">Ex: +2 adds 2 extra tries before locking.</p>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-300 mb-1">Help Threshold Override (Attempts)</label>
+                  <input type="number" id="modHelpThreshold" value="1" min="1" step="1"
+                    class="w-full p-2 bg-gray-800 border border-gray-600 rounded">
+                  <p class="text-xs text-gray-500 mt-1">Show "Help" notifications after this many attempts.</p>
+                </div>
+                <div>
+                  <label class="flex items-center cursor-pointer mt-6">
+                    <input type="checkbox" id="modIgnoreDeduction"
+                      class="w-5 h-5 text-purple-500 rounded bg-gray-800 border-gray-600">
+                    <span class="ml-3 font-semibold text-white text-sm">Ignore Attempt Penalty</span>
+                  </label>
+                  <p class="text-xs text-gray-500 mt-1">If enabled, point deductions for extra attempts are ignored for modified students.</p>
+                </div>
+              </div>
+              <div class="flex items-center gap-3 mt-2">
+                <input type="checkbox" id="modFuzzyMatch" class="w-4 h-4 rounded bg-gray-700 border-gray-600">
+                <div>
+                  <label for="modFuzzyMatch" class="text-sm font-medium text-gray-300">Allow Fuzzy Spelling</label>
+                  <p class="text-xs text-gray-500">If enabled, "is exactly" text checks will tolerate minor spelling errors for modified students.</p>
+                </div>
+              </div>
+              <div class="mt-4 pt-4 border-t border-gray-700">
+                <h3 class="font-semibold text-white mb-2">Apply to Students:</h3>
+                <p class="text-xs text-gray-400 mb-3">Students flagged in the Roster with "Has Modifications" are auto-selected.</p>
+                <div id="modStudentList"
+                  class="max-h-48 overflow-y-auto bg-gray-900 p-2 rounded border border-gray-700 grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <p class="text-gray-500 italic p-2">Loading students...</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Playback Restrictions -->
+    <div class="bg-gray-800 p-6 rounded-lg mb-8">
+      <h2 class="text-2xl font-bold text-yellow-400 mb-4">Playback Restrictions</h2>
+      <div class="space-y-4">
+        <label class="flex items-center gap-3 cursor-pointer">
+          <input type="checkbox" id="preventSkipping"
+            class="w-5 h-5 bg-gray-700 border-gray-600 rounded text-yellow-500 focus:ring-yellow-500">
+          <span class="text-lg text-gray-200">Prevent students from skipping & seeking ahead</span>
+        </label>
+        <label class="flex items-center gap-3 cursor-pointer">
+          <input type="checkbox" id="lockPlaybackSpeed"
+            class="w-5 h-5 bg-gray-700 border-gray-600 rounded text-yellow-500 focus:ring-yellow-500">
+          <span class="text-lg text-gray-200">Lock playback speed (No speeding up/slowing down)</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Aura Rewards Section -->
+    <div id="aura-section" class="bg-gray-800 rounded-lg mb-8 overflow-hidden border border-yellow-900/30">
+      <div id="aura-header" class="p-6 cursor-pointer" onclick="toggleAuraSection()">
+        <div class="flex justify-between items-center">
+          <h2 class="text-2xl font-bold text-yellow-400">✧ Aura Rewards</h2>
+          <span id="aura-chevron" class="text-2xl transform transition-transform">▶</span>
+        </div>
+        <p class="text-gray-400 mt-2">Set up automatic behaviors to reward student performance with extra Aura points
+          upon submission.</p>
+      </div>
+      <div id="aura-content" class="collapsible-content border-t border-gray-700">
+        <div class="px-6 pb-6">
+          <p class="text-gray-400 mb-4 mt-4 text-sm">Aura is awarded once per assignment at submit time, based on the
+            overall assignment average. If multiple rules match, the highest matching reward is given (non-cumulative).
+          </p>
+          <div id="aura-rules-container" class="space-y-4"></div>
+          <div class="mt-6 flex justify-between items-center">
+            <button onclick="addAuraRule()"
+              class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm">+ Add Aura
+              Condition</button>
+            <div class="flex items-center">
+              <input type="checkbox" id="auraOnTime"
+                class="w-4 h-4 text-yellow-500 rounded focus:ring-yellow-500 bg-gray-700 border-gray-500">
+              <label for="auraOnTime" class="ml-2 text-sm text-gray-300">"Must be on time" applies to ALL rules</label>
+            </div>
+          </div>
+          <div id="aura-global-deadline"
+            class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6 p-4 bg-gray-700/30 rounded-lg border border-gray-700 hidden">
+            <div>
+              <label class="block text-sm text-gray-400 mb-1">Global Aura Deadline Date</label>
+              <input type="date" id="auraDueDate"
+                class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none">
+            </div>
+            <div>
+              <label class="block text-sm text-gray-400 mb-1">Global Aura Deadline Time</label>
+              <input type="time" id="auraDueTime"
+                class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Questions Timeline -->
+    <div class="bg-gray-800 p-6 rounded-lg mb-8">
+      <div class="flex justify-between items-center mb-4">
+        <div>
+          <h2 class="text-2xl font-bold text-yellow-400">Questions & Notes</h2>
+          <p class="text-gray-400 mt-1">Questions appear at specific timestamps during the video.</p>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="openImportModal()"
+            class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg text-sm">📥 Import
+            EdPuzzle</button>
+          <button onclick="addQuestion('multiple-choice')"
+            class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm">+ MC
+            Question</button>
+          <button onclick="addQuestion('open-ended')"
+            class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg text-sm">+
+            Open-Ended</button>
+          <button onclick="addNote()"
+            class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg text-sm">+ Note</button>
+        </div>
+      </div>
+      <div id="question-settings-bar-container" class="mb-6"></div>
+      <div id="questionsContainer" class="space-y-4"></div>
+      <p id="noQuestionsMsg" class="text-gray-500 italic text-center py-8">No questions yet. Add questions using the
+        buttons above, or import from EdPuzzle.</p>
+    </div>
+  </div>
+
+  <!-- EdPuzzle Import Modal -->
+  <div id="importModal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
+    <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-2xl">
+      <div class="flex justify-between items-center p-4 border-b border-gray-700">
+        <h2 class="text-2xl font-bold text-yellow-400">Import from EdPuzzle</h2>
+        <button onclick="closeImportModal()" class="text-gray-400 hover:text-white text-3xl">&times;</button>
+      </div>
+      <div class="p-6">
+        <p class="text-gray-400 mb-4">Export your EdPuzzle assignment as JSON and paste the contents below. Questions
+          and notes will be imported with their timestamps.</p>
+        <textarea id="edpuzzleJson" rows="12" placeholder="Paste EdPuzzle JSON here..."
+          class="w-full p-3 bg-gray-700 rounded border border-gray-600 focus:border-yellow-400 focus:outline-none text-sm"></textarea>
+        <p id="import-error" class="text-red-500 mt-2"></p>
+        <div class="flex justify-end mt-4 gap-2">
+          <button onclick="closeImportModal()"
+            class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg">Cancel</button>
+          <button onclick="handleImport()"
+            class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-6 rounded-lg">Import</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <template id="checkerTemplate">
+    <div class="checker-widget">
+      <div class="flex items-center justify-between mb-2">
+        <label class="block font-semibold">Checker Function</label>
+        <div class="flex items-center space-x-1 p-1 bg-gray-700 rounded-lg">
+          <button
+            class="mode-toggle-btn simple-mode-btn bg-indigo-600 text-white rounded-md px-3 py-1 text-sm font-semibold">Simple</button>
+          <button
+            class="mode-toggle-btn advanced-mode-btn bg-transparent text-gray-300 rounded-md px-3 py-1 text-sm font-semibold">Advanced</button>
+        </div>
+      </div>
+      <div class="simple-mode-ui mt-2 p-3 bg-gray-700/50 border border-gray-600 rounded-lg space-y-4">
+        <div class="grid grid-cols-2 gap-4 text-sm border-b border-gray-700 pb-4">
+          <div>
+            <label class="flex items-center space-x-2 cursor-pointer">
+              <input type="checkbox"
+                class="exclusive-scoring-toggle bg-gray-700 border-gray-600 rounded text-indigo-500 focus:ring-indigo-600">
+              <span>Exclusive scoring (stop at first match)</span>
+            </label>
+          </div>
+          <div class="flex items-center space-x-2">
+            <label class="whitespace-nowrap">Numeric equality tolerance (±)</label>
+            <input type="number"
+              class="numeric-tolerance-input w-20 bg-gray-700 border border-gray-600 rounded-md p-1 text-center"
+              value="0" min="0" step="any">
+          </div>
+        </div>
+        <div class="rule-groups-container space-y-4"></div>
+        <button
+          class="add-rule-group-btn mt-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm">+
+          Add Rule Group</button>
+        <div class="preview-section mt-2">
+          <button type="button" class="preview-toggle-btn text-xs text-gray-500 hover:text-gray-300">▶ View generated code</button>
+          <pre class="live-code-preview hidden text-xs bg-gray-900 p-2 rounded mt-1 overflow-x-auto max-h-40"></pre>
+        </div>
+      </div>
+      <div class="advanced-mode-ui hidden">
+        <textarea class="checker-textarea w-full h-64 p-2 bg-gray-700 rounded"
+          placeholder="// Write your checker function here"></textarea>
+        <div class="flex justify-between mt-2">
+          <button
+            class="convert-to-simple-btn bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded-md text-sm">Convert
+            back to Simple</button>
+          <button
+            class="delete-advanced-btn bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-3 rounded-md text-sm">Delete
+            Advanced Code</button>
+        </div>
+      </div>
+      <div class="universal-quick-test mt-2 pt-2 border-t border-gray-700 space-y-2">
+        <label class="block text-xs font-medium text-gray-400">Quick Test</label>
+        <div class="flex items-center space-x-2">
+          <input type="text" class="quick-test-input w-full bg-gray-700 border border-gray-600 rounded-md p-1 text-sm"
+            placeholder="Enter a sample answer...">
+          <button
+            class="quick-test-btn bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1 px-3 rounded-md text-sm">Run</button>
+          <span class="quick-test-result text-sm font-semibold text-gray-300"></span>
+        </div>
+      </div>
+    </div>
+  </template>
+  <div id="toast-wrapper"></div>
+
+  <script src="./shared/deadline-widget.js"></script>
+  <script src="./shared/checker-widget.js"></script>
+  <script src="./shared/checker-runner.js"></script>
+  <script src="./shared/question-settings-bar.js"></script>
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
+      authDomain: "mrlynch-slides-app.firebaseapp.com",
+      projectId: "mrlynch-slides-app",
+      storageBucket: "mrlynch-slides-app.appspot.com",
+      messagingSenderId: "223179627035",
+      appId: "1:223179627035:web:ff0f538f3029d829c3f6be"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    const auth = firebase.auth();
+
+    let assignmentId = null;
+    let assignmentData = null;
+    let currentUserEmail = null;
+    let teacherDefaults = {};
+    let allClassNames = [];
+    let lastKnownUserEmail = null;
+    let gisInitialized = false;
+    let signInWatchdog = null;
+    let signInFallbackTimer = null;
+    const SIGN_IN_TIMEOUT_MS = 8000;
+    const FALLBACK_SIGN_IN_DELAY_MS = 2500;
+    const GIS_POLL_INTERVAL_MS = 100;
+    const REVOKE_TIMEOUT_MS = 3000;
+
+    // Video state
+    let videoQuestions = [];  // { id, type, time, body, choices?, checkerCode? }
+    let videoNotes = [];      // { id, time, body }
+    let videoSource = null;   // { type: 'youtube'|'gdrive', id: '...' }
+    let videoPlayer = null;
+    let nextQId = 1;
+    let nextNId = 1;
+
+    // --- Auth ---
+    function checkImpersonation() {
+      const impersonatedEmail = localStorage.getItem('impersonatedUserEmail');
+      if (impersonatedEmail) {
+        const banner = document.createElement('div');
+        banner.className = 'bg-red-600 text-white text-center p-2 font-bold fixed top-0 w-full z-[200] flex justify-center items-center gap-4';
+        banner.innerHTML = `<span>⚠️ IMPERSONATING: ${impersonatedEmail}</span><button onclick="stopImpersonating()" class="bg-white text-red-600 px-3 py-1 rounded text-xs hover:bg-gray-200">Stop</button>`;
+        document.body.prepend(banner);
+        document.body.style.paddingTop = '40px';
+        return impersonatedEmail;
+      }
+      return null;
+    }
+    function stopImpersonating() { localStorage.removeItem('impersonatedUserEmail'); window.location.reload(); }
+
+    function clearSignInWatchdog() {
+      if (signInWatchdog) {
+        clearTimeout(signInWatchdog);
+        signInWatchdog = null;
+      }
+    }
+
+    function clearSignInFallbackTimer() {
+      if (signInFallbackTimer) {
+        clearTimeout(signInFallbackTimer);
+        signInFallbackTimer = null;
+      }
+    }
+
+    function showAuthError(message, showRetry = false) {
+      document.getElementById('auth-error').innerText = message || "";
+      document.getElementById('retrySignInButton').classList.toggle('hidden', !showRetry);
+    }
+
+    function renderGoogleSignInButton() {
+      if (!window.google?.accounts?.id) return;
+      const buttonRoot = document.getElementById('googleSignInButton');
+      buttonRoot.innerHTML = '';
+      google.accounts.id.renderButton(buttonRoot, {
+        type: "standard",
+        size: "large",
+        theme: "filled_black",
+        text: "signin_with",
+        shape: "rectangular",
+        logo_alignment: "left"
+      });
+    }
+
+    function waitForGIS(timeoutMs = SIGN_IN_TIMEOUT_MS) {
+      return new Promise(resolve => {
+        const started = Date.now();
+        const poll = setInterval(() => {
+          if (window.google?.accounts?.id) {
+            clearInterval(poll);
+            resolve(true);
+            return;
+          }
+          if (Date.now() - started >= timeoutMs) {
+            clearInterval(poll);
+            resolve(false);
+          }
+        }, GIS_POLL_INTERVAL_MS);
+      });
+    }
+
+    function revokeGoogleCredential(email, timeoutMs = REVOKE_TIMEOUT_MS) {
+      return new Promise(resolve => {
+        if (!email || !window.google?.accounts?.id?.revoke) {
+          resolve();
+          return;
+        }
+        let settled = false;
+        const done = () => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          resolve();
+        };
+        const timer = setTimeout(done, timeoutMs);
+        try {
+          google.accounts.id.revoke(email, done);
+        } catch (error) {
+          console.warn("Google credential revoke failed:", error);
+          done();
+        }
+      });
+    }
+
+    async function initializeGoogleSignIn(force = false) {
+      if (gisInitialized && !force) {
+        renderGoogleSignInButton();
+        return true;
+      }
+
+      const gisReady = await waitForGIS();
+      if (!gisReady) {
+        document.getElementById('loading-text').textContent = "Google Sign-In script did not load.";
+        showAuthError("Google Sign-In failed to load. Please check your connection and refresh.", true);
+        document.getElementById('signInButtonContainer').classList.remove('hidden');
+        return false;
+      }
+
+      try {
+        google.accounts.id.initialize({
+          client_id: "1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com",
+          callback: handleCredentialResponse,
+          auto_select: true,
+          itp_support: true
+        });
+        gisInitialized = true;
+        renderGoogleSignInButton();
+        return true;
+      } catch (e) {
+        console.error("GIS initialization error:", e);
+        return false;
+      }
+    }
+
+    async function retrySignIn() {
+      showAuthError("");
+      document.getElementById('loading-text').textContent = "Retrying sign-in...";
+      document.getElementById('signInButtonContainer').classList.remove('hidden');
+      document.getElementById('editorContent').classList.add('hidden');
+      document.getElementById('page-loader').classList.remove('hidden');
+
+      await revokeGoogleCredential(lastKnownUserEmail);
+
+      await auth.signOut().catch(error => console.warn("Sign-out during retry failed:", error));
+      gisInitialized = false;
+      const initialized = await initializeGoogleSignIn(true);
+      if (initialized) {
+        google.accounts.id.prompt();
+      }
+      startSignInWatchdog();
+    }
+
+    function startSignInWatchdog() {
+      clearSignInWatchdog();
+      signInWatchdog = setTimeout(() => {
+        if (document.getElementById('editorContent').classList.contains('hidden')) {
+          document.getElementById('loading-text').textContent = "Sign-in is taking longer than expected.";
+          showAuthError("If sign-in did not appear, try again.", true);
+          document.getElementById('signInButtonContainer').classList.remove('hidden');
+          if (window.google?.accounts?.id) {
+            renderGoogleSignInButton();
+            google.accounts.id.prompt();
+          }
+        }
+      }, SIGN_IN_TIMEOUT_MS);
+    }
+
+    async function handleCredentialResponse(response) {
+      showAuthError("");
+      if (!response?.credential) {
+        showAuthError("Google sign-in did not return a credential. Please try again.", true);
+        document.getElementById('signInButtonContainer').classList.remove('hidden');
+        return;
+      }
+
+      try {
+        document.getElementById('loading-text').textContent = "Signing you in...";
+        const credential = firebase.auth.GoogleAuthProvider.credential(response.credential);
+        await auth.signInWithCredential(credential);
+      } catch (error) {
+        console.error("Firebase sign-in error", error);
+        document.getElementById('loading-text').textContent = "Please sign in to continue.";
+        showAuthError(`Firebase sign-in failed: ${error.message}`, true);
+        document.getElementById('signInButtonContainer').classList.remove('hidden');
+        if (window.google?.accounts?.id) {
+          renderGoogleSignInButton();
+        }
+      }
+    }
+
+    auth.onAuthStateChanged(async user => {
+      if (user) {
+        try {
+          await user.getIdToken(true);
+          lastKnownUserEmail = user.email ? user.email.toLowerCase() : null;
+          let emailToCheck = user.email.toLowerCase();
+          const impersonated = checkImpersonation();
+          if (impersonated) emailToCheck = impersonated;
+          currentUserEmail = emailToCheck;
+          showAuthError("");
+
+          const teacherDoc = await db.collection("teachers").doc(emailToCheck).get();
+          if (teacherDoc.exists) {
+            clearSignInWatchdog();
+            clearSignInFallbackTimer();
+            loadAssignment();
+          } else {
+            clearSignInWatchdog();
+            clearSignInFallbackTimer();
+            document.getElementById('loading-text').textContent = "Access denied: You are not registered as a teacher.";
+            document.getElementById('signInButtonContainer').classList.add('hidden');
+          }
+        } catch (error) {
+          console.error("Error checking teacher status/session:", error);
+          document.getElementById('loading-text').textContent = "Session expired. Please sign in again.";
+          showAuthError("Your previous sign-in session expired. Please retry sign-in.", true);
+          await auth.signOut().catch(error => console.warn("Sign-out after stale session failed:", error));
+          document.getElementById('signInButtonContainer').classList.remove('hidden');
+          initializeGoogleSignIn(true);
+        }
+      } else {
+        document.getElementById('loading-text').textContent = "Please sign in to continue.";
+        document.getElementById('page-loader').classList.remove('hidden');
+        document.getElementById('editorContent').classList.add('hidden');
+        document.getElementById('signInButtonContainer').classList.remove('hidden');
+        initializeGoogleSignIn();
+        startSignInWatchdog();
+      }
+    });
+
+    window.onload = function () {
+      const urlParams = new URLSearchParams(window.location.search);
+      assignmentId = urlParams.get('id');
+      if (!assignmentId) {
+        document.getElementById('loading-text').textContent = "Error: No assignment ID provided in the URL.";
+        document.getElementById('signInButtonContainer').classList.add('hidden');
+        clearSignInWatchdog();
+        clearSignInFallbackTimer();
+        return;
+      }
+      initializeGoogleSignIn();
+      startSignInWatchdog();
+      clearSignInFallbackTimer();
+      signInFallbackTimer = setTimeout(() => {
+        const editorVisible = !document.getElementById('editorContent').classList.contains('hidden');
+        const signInVisible = !document.getElementById('signInButtonContainer').classList.contains('hidden');
+        if (!editorVisible && !signInVisible) {
+          document.getElementById('loading-text').textContent = "Please sign in to continue.";
+          document.getElementById('signInButtonContainer').classList.remove('hidden');
+          initializeGoogleSignIn(true);
+        }
+        signInFallbackTimer = null;
+      }, FALLBACK_SIGN_IN_DELAY_MS);
+    };
+
+    async function loadAssignment() {
+      if (!assignmentId) return;
+      const loadingText = document.getElementById('loading-text');
+      try {
+        loadingText.textContent = "Loading assignment data...";
+        const teacherDoc = await db.collection("teachers").doc(currentUserEmail).get();
+        const teacherData = teacherDoc.exists ? teacherDoc.data() : {};
+        const isAdmin = teacherData.isAdmin || false;
+
+        const assignmentDoc = await db.collection("assignments").doc(assignmentId).get();
+        if (!assignmentDoc.exists) { loadingText.textContent = "Error: Assignment not found."; return; }
+        assignmentData = { id: assignmentDoc.id, ...assignmentDoc.data() };
+
+        // Auto-repair and redirect if this assignment is actually a Slides or PDF assignment
+        if (assignmentData.type === 'slides' || (!assignmentData.type && assignmentData.presentationId && !assignmentData.videoUrl)) {
+          window.location.href = `./editor.html?id=${assignmentId}`;
+          return;
+        } else if (assignmentData.type === 'pdf') {
+          window.location.href = `./pdf-editor.html?id=${assignmentId}`;
+          return;
+        }
+
+        // Access control
+        const isOwner = assignmentData.teacherEmail === currentUserEmail;
+        const isCoTeacher = (assignmentData.coTeachers || []).includes(currentUserEmail);
+        let hasAccess = isOwner || isCoTeacher || isAdmin;
+
+        if (!hasAccess && assignmentData.teacherEmail) {
+          try {
+            const ownerDoc = await db.collection("teachers").doc(assignmentData.teacherEmail).get();
+            if (ownerDoc.exists) {
+              const ownerData = ownerDoc.data();
+              if (ownerData.coTeachingFor && Array.isArray(ownerData.coTeachingFor)) {
+                if (ownerData.coTeachingFor.map(e => e.toLowerCase()).includes(currentUserEmail)) {
+                  hasAccess = true;
+                }
+              }
+            }
+          } catch (e) { console.error("Error checking implicit access:", e); }
+        }
+
+        if (!hasAccess) {
+          loadingText.textContent = "Access Denied: You do not have permission to edit this assignment.";
+          return;
+        }
+
+        // Populate UI
+        clearSignInWatchdog();
+        clearSignInFallbackTimer();
+        document.getElementById('page-loader').classList.add('hidden');
+        document.getElementById('signInButtonContainer').classList.add('hidden');
+        document.getElementById('editorContent').classList.remove('hidden');
+        document.getElementById('assignmentTitle').textContent = `Editing: ${assignmentData.name}`;
+        document.getElementById('shareLink').value = `https://custom.scienceclass.rocks/classroompicker.html?assignmentId=${assignmentId}`;
+        document.getElementById('postSubmissionRule').value = assignmentData.postSubmissionRule || 'open';
+        document.getElementById('scoringMode').value = assignmentData.scoringMode || 'instant';
+
+        // Video URL
+        if (assignmentData.videoUrl) {
+          document.getElementById('videoUrlInput').value = assignmentData.videoUrl;
+          videoSource = detectVideoSource(assignmentData.videoUrl);
+          if (videoSource) showVideoPreview(videoSource);
+        }
+
+        // Load questions & notes
+        videoQuestions = (assignmentData.videoQuestions || []).map((q, i) => ({ ...q, id: q.id || `vq${i + 1}` }));
+        videoNotes = (assignmentData.videoNotes || []).map((n, i) => ({ ...n, id: n.id || `vn${i + 1}` }));
+        nextQId = videoQuestions.length + 1;
+        nextNId = videoNotes.length + 1;
+
+        // Load aura rules
+        auraRules = assignmentData.auraRules || [];
+        renderAuraRules();
+
+        // Load playback settings
+        if (assignmentData.playbackSettings) {
+          const skipEl = document.getElementById('preventSkipping');
+          const speedEl = document.getElementById('lockPlaybackSpeed');
+          if (skipEl) skipEl.checked = !!assignmentData.playbackSettings.skipPrevention;
+          if (speedEl) speedEl.checked = !!assignmentData.playbackSettings.speedLock;
+        }
+
+        // Load checker functions & meta
+        const getCheckerValue = (map, idKey, legacyKey) => map ? ((idKey ? map[idKey] : undefined) || map[legacyKey]) : null;
+        videoQuestions.forEach((q, i) => {
+          if (q.type === 'open-ended') {
+            const idKey = q.id;
+            const legacyKey = `calc${i + 1}`;
+            q.checkerCode = getCheckerValue(assignmentData.checkerFunctions, idKey, legacyKey) || q.checkerCode || '';
+            q.checkerMeta = getCheckerValue(assignmentData.checkerMeta, idKey, legacyKey) || q.checkerMeta || null;
+          }
+        });
+
+        // Filter students by current teacher to ensure Class Times logic only shows THEIR classes
+        const studentSnapshot = await db.collection("students").get();
+        const allStudentsFetched = studentSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const teacherStudents = allStudentsFetched.filter(s => {
+          const studentTeacher = s.teacherEmail ? s.teacherEmail.toLowerCase() : 'klynch@mtps.us';
+          return studentTeacher === currentUserEmail;
+        });
+        window.allTeacherStudents = teacherStudents;
+
+        allClassNames = [...new Set(teacherStudents.map(s => String(s.class)))].sort();
+
+        // Load teacher data for defaults (using assignment owner's email)
+        const ownerDoc = await db.collection("teachers").doc(assignmentData.teacherEmail).get();
+        const ownerData = ownerDoc.exists ? ownerDoc.data() : {};
+
+        // Initialize deadline widget
+        DeadlineWidget.render(allClassNames);
+        DeadlineWidget.populate(assignmentData, ownerData, allClassNames);
+
+        // Initialize Modifications
+        const mods = assignmentData.modifications || {};
+        document.getElementById('modificationsEnabled').checked = mods.enabled || false;
+        document.getElementById('modTimeMultiplier').value = mods.timeMultiplier || 1.5;
+        document.getElementById('modPenaltyMultiplier').value = mods.penaltyMultiplier || 0.5;
+        document.getElementById('modAttemptsBonus').value = mods.maxAttemptsBonus || 2;
+        document.getElementById('modHelpThreshold').value = mods.helpThreshold || 1;
+        document.getElementById('modIgnoreDeduction').checked = mods.ignoreDeduction || false;
+        document.getElementById('modFuzzyMatch').checked = mods.fuzzy || false;
+        toggleModificationsEnabled();
+
+        renderQuestions();
+      } catch (error) {
+        console.error("Error loading assignment:", error);
+        loadingText.textContent = "Error loading assignment: " + error.message;
+      }
+    }
+
+    // --- Video Source Detection ---
+    function detectVideoSource(url) {
+      if (!url) return null;
+      // YouTube patterns
+      let match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/);
+      if (match) {
+        document.getElementById('videoSourceType').textContent = '🎥 YouTube Video detected';
+        return { type: 'youtube', id: match[1] };
+      }
+      // Google Drive patterns
+      match = url.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+      if (!match) match = url.match(/drive\.google\.com\/open\?id=([a-zA-Z0-9_-]+)/);
+      if (match) {
+        document.getElementById('videoSourceType').textContent = '📁 Google Drive Video detected';
+        return { type: 'gdrive', id: match[1] };
+      }
+      document.getElementById('videoSourceType').textContent = '⚠️ Unrecognized URL format';
+      return null;
+    }
+
+    function loadVideoPreview() {
+      const url = document.getElementById('videoUrlInput').value.trim();
+      videoSource = detectVideoSource(url);
+      if (!videoSource) {
+        showToast("Could not detect video source. Please use a YouTube or Google Drive link.", { color: 'red' });
+        return;
+      }
+      showVideoPreview(videoSource);
+    }
+
+    function showVideoPreview(source) {
+      const container = document.getElementById('videoPreview');
+      document.getElementById('videoPreviewContainer').classList.remove('hidden');
+      if (source.type === 'youtube') {
+        container.innerHTML = `<iframe width="640" height="360" src="https://www.youtube.com/embed/${source.id}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="width:100%;aspect-ratio:16/9;"></iframe>`;
+      } else if (source.type === 'gdrive') {
+        container.innerHTML = `<iframe src="https://drive.google.com/file/d/${source.id}/preview" width="640" height="360" allow="autoplay" frameborder="0" style="width:100%;aspect-ratio:16/9;"></iframe>`;
+      }
+    }
+
+    // --- Title Editing ---
+    function startEditingTitle() {
+      document.getElementById('titleDisplay').classList.add('hidden');
+      document.getElementById('titleEditor').classList.remove('hidden');
+      document.getElementById('titleInput').value = assignmentData.name;
+      document.getElementById('titleInput').focus();
+    }
+    function cancelEditingTitle() {
+      document.getElementById('titleDisplay').classList.remove('hidden');
+      document.getElementById('titleEditor').classList.add('hidden');
+    }
+    // --- Modifications ---
+    function toggleModificationsSection(forceOpen = false) {
+      const content = document.getElementById('modifications-content');
+      const chevron = document.getElementById('modifications-chevron');
+      const isOpen = content.style.maxHeight && content.style.maxHeight !== '0px';
+      if (isOpen && !forceOpen) {
+        content.style.maxHeight = '0';
+        chevron.style.transform = 'rotate(0deg)';
+      } else {
+        content.style.maxHeight = '2000px';
+        chevron.style.transform = 'rotate(90deg)';
+        const list = document.getElementById('modStudentList');
+        if (list.children.length <= 1 && list.innerText.includes('Loading')) {
+          loadModificationsStudentList();
+        }
+      }
+    }
+
+    function toggleModificationsEnabled() {
+      const enabled = document.getElementById('modificationsEnabled').checked;
+      const settings = document.getElementById('modificationsSettings');
+      if (enabled) {
+        settings.classList.remove('hidden');
+        const content = document.getElementById('modifications-content');
+        content.style.maxHeight = '2000px';
+        loadModificationsStudentList();
+      } else {
+        settings.classList.add('hidden');
+      }
+    }
+
+    async function loadModificationsStudentList() {
+      const list = document.getElementById('modStudentList');
+      if (allClassNames.length === 0) {
+        list.innerHTML = '<p class="text-gray-500 italic p-2">No classes assigned yet. Add classes to the assignment first.</p>';
+        return;
+      }
+      try {
+        let students = window.allTeacherStudents || [];
+        students.sort((a, b) => a.name.localeCompare(b.name));
+        if (students.length === 0) {
+          list.innerHTML = '<p class="text-gray-500 italic p-2">No students found in assigned classes.</p>';
+          return;
+        }
+        list.innerHTML = '';
+        const savedModIds = (assignmentData.modifications && assignmentData.modifications.studentIds) || [];
+        const useRosterFlags = savedModIds.length === 0 && (!assignmentData.modifications || !assignmentData.modifications.studentIds);
+        students.forEach(student => {
+          const isSelected = savedModIds.includes(student.id) || (useRosterFlags && student.hasModifications);
+          const hasFlag = student.hasModifications;
+          const div = document.createElement('div');
+          div.className = "flex items-center space-x-2 p-1 hover:bg-gray-800 rounded";
+          div.innerHTML = `
+            <label class="flex items-center space-x-2 cursor-pointer w-full">
+              <input type="checkbox" value="${student.id}" class="mod-student-checkbox w-4 h-4 text-purple-500 rounded bg-gray-800 border-gray-600 focus:ring-purple-500" ${isSelected ? 'checked' : ''}>
+              <span class="text-sm text-gray-300">${student.name}</span>
+              ${hasFlag ? '<span title="Has IEP/504 Flag" class="text-xs">🧩</span>' : ''}
+            </label>`;
+          list.appendChild(div);
+        });
+      } catch (error) {
+        console.error("Error loading mod students:", error);
+        list.innerHTML = '<p class="text-red-400 p-2">Error loading students.</p>';
+      }
+    }
+
+    // --- Aura Management ---
+    let auraRules = [];
+    function toggleAuraSection(forceOpen = false) {
+      const content = document.getElementById('aura-content');
+      const chevron = document.getElementById('aura-chevron');
+      const isOpen = content.style.maxHeight && content.style.maxHeight !== '0px';
+      if (isOpen && !forceOpen) {
+        content.style.maxHeight = '0';
+        chevron.style.transform = 'rotate(0deg)';
+      } else {
+        content.style.maxHeight = '2000px';
+        chevron.style.transform = 'rotate(90deg)';
+      }
+    }
+
+    function addAuraRule(ruleData = { amount: 1, minScore: 0, trigger: 'assignment_submitted' }) {
+      const id = Date.now() + Math.random().toString(36).substr(2, 9);
+      const rule = { id, ...ruleData };
+      auraRules.push(rule);
+      renderAuraRules();
+    }
+
+    function removeAuraRule(id) {
+      auraRules = auraRules.filter(r => r.id !== id);
+      renderAuraRules();
+    }
+
+    function renderAuraRules() {
+      const container = document.getElementById('aura-rules-container');
+      container.innerHTML = '';
+      if (auraRules.length === 0) {
+        container.innerHTML = '<p class="text-gray-500 italic text-sm">No aura rewards configured. Click "Add Aura Condition" to start.</p>';
+        return;
+      }
+      auraRules.forEach((rule, index) => {
+        const div = document.createElement('div');
+        div.className = "flex flex-col gap-4 p-4 bg-gray-700/50 rounded-lg border border-gray-600 relative animate-fade-in-right";
+
+        const isWatchTime = rule.trigger === 'watch_time_reached';
+        const isQuestionCorrect = rule.trigger === 'question_correct';
+
+        div.innerHTML = `
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">Aura Points</label>
+              <input type="number" value="${rule.amount}" step="0.1" onchange="updateRule(${index}, 'amount', this.value)" class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none text-sm">
+            </div>
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">Trigger Condition</label>
+              <select onchange="updateRule(${index}, 'trigger', this.value); renderAuraRules();" class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none text-sm">
+                <option value="assignment_submitted" ${rule.trigger === 'assignment_submitted' ? 'selected' : ''}>Assignment Submitted</option>
+                <option value="question_correct" ${rule.trigger === 'question_correct' ? 'selected' : ''}>Question Corrected</option>
+                <option value="watch_time_reached" ${rule.trigger === 'watch_time_reached' ? 'selected' : ''}>Watch Time Reached</option>
+              </select>
+            </div>
+            
+            ${isWatchTime ? `
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">Minutes Required</label>
+              <input type="number" value="${rule.minutesRequired || 1}" min="1" onchange="updateRule(${index}, 'minutesRequired', this.value)" class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none text-sm">
+            </div>
+            ` : `
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">Min Score %</label>
+              <input type="number" value="${rule.minScore}" min="0" max="100" onchange="updateRule(${index}, 'minScore', this.value)" class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none text-sm">
+            </div>
+            `}
+
+            ${isQuestionCorrect ? `
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">Target</label>
+              <select onchange="updateRule(${index}, 'target', this.value)" class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-yellow-500 focus:outline-none text-sm">
+                <option value="all" ${rule.target === 'all' ? 'selected' : ''}>Any Question</option>
+                ${videoQuestions.map((q, i) => `<option value="q${i + 1}" ${rule.target === `q${i + 1}` ? 'selected' : ''}>Question ${i + 1}</option>`).join('')}
+              </select>
+            </div>
+            ` : ''}
+
+            <div class="flex justify-end lg:col-start-4">
+              <button onclick="removeAuraRule('${rule.id}')" class="text-red-400 hover:text-red-300 text-sm font-bold">Remove</button>
+            </div>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function updateRule(index, field, value) {
+      if (!auraRules[index]) return;
+      if (field === 'amount' || field === 'minScore' || field === 'minutesRequired') {
+        auraRules[index][field] = parseFloat(value) || 0;
+      } else {
+        auraRules[index][field] = value;
+      }
+    }
+
+    // --- Simple Mode Port Logic ---
+    function showDialog(title, message, onConfirm) {
+      const wrapper = document.getElementById('toast-wrapper');
+      const backdrop = document.createElement('div');
+      backdrop.className = 'dialog-backdrop';
+      const dialog = document.createElement('div');
+      dialog.className = 'dialog-box';
+      dialog.innerHTML = `<h3 class="text-xl font-bold mb-2">${title}</h3><p class="mb-4 text-gray-300">${message}</p><div class="flex justify-end gap-2"><button class="dialog-confirm bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-4 rounded">Confirm</button><button class="dialog-cancel bg-gray-600 hover:bg-gray-700 text-white font-bold py-1 px-4 rounded">Cancel</button></div>`;
+      backdrop.appendChild(dialog);
+      wrapper.appendChild(backdrop);
+      dialog.querySelector('.dialog-confirm').onclick = () => { backdrop.remove(); onConfirm(); };
+      dialog.querySelector('.dialog-cancel').onclick = () => { backdrop.remove(); };
+    }
+    // --- Title Editing ---
+    function startEditingTitle() {
+      document.getElementById('titleDisplay').classList.add('hidden');
+      document.getElementById('titleEditor').classList.remove('hidden');
+      document.getElementById('titleInput').value = assignmentData.name;
+      document.getElementById('titleInput').focus();
+    }
+    function cancelEditingTitle() {
+      document.getElementById('titleDisplay').classList.remove('hidden');
+      document.getElementById('titleEditor').classList.add('hidden');
+    }
+    async function saveTitle() {
+      const newName = document.getElementById('titleInput').value.trim();
+      if (!newName) { showToast("Name cannot be empty.", { color: 'red' }); return; }
+      try {
+        await db.collection("assignments").doc(assignmentId).update({ name: newName });
+        assignmentData.name = newName;
+        document.getElementById('assignmentTitle').textContent = `Editing: ${newName}`;
+        cancelEditingTitle();
+        showToast("Title updated!", { color: 'green' });
+      } catch (e) {
+        console.error(e);
+        showToast("Failed to update title.", { color: 'red' });
+      }
+    }
+
+    // --- Question & Note Management ---
+    function addQuestion(type) {
+      // Use current video time if player is ready, else 0
+      let startTime = 0;
+      if (videoPlayer && typeof videoPlayer.getCurrentTime === 'function') {
+        startTime = Math.floor(videoPlayer.getCurrentTime());
+      }
+
+      const q = {
+        id: `vq${nextQId++}`,
+        type: type,
+        time: startTime,
+        body: '',
+        choices: type === 'multiple-choice' ? [
+          { text: '', isCorrect: true },
+          { text: '', isCorrect: false }
+        ] : undefined,
+        checkerCode: type === 'open-ended' ? '' : undefined,
+        checkerMeta: type === 'open-ended' ? null : undefined,
+        selectionType: type === 'multiple-choice' ? 'single' : undefined
+      };
+      videoQuestions.push(q);
+      renderQuestions();
+      // Scroll to new question
+      setTimeout(() => {
+        const el = document.getElementById(`qcard-${q.id}`);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 100);
+    }
+
+    function addNote() {
+      const n = { id: `vn${nextNId++}`, time: 0, body: '' };
+      videoNotes.push(n);
+      renderQuestions();
+    }
+
+    function deleteQuestion(id) {
+      videoQuestions = videoQuestions.filter(q => q.id !== id);
+      renderQuestions();
+    }
+
+    function deleteNote(id) {
+      videoNotes = videoNotes.filter(n => n.id !== id);
+      renderQuestions();
+    }
+
+    function addChoice(qId) {
+      const q = videoQuestions.find(q => q.id === qId);
+      if (!q) return;
+      q.choices.push({ text: '', isCorrect: false });
+      renderQuestions();
+    }
+
+    function removeChoice(qId, choiceIndex) {
+      const q = videoQuestions.find(q => q.id === qId);
+      if (!q || q.choices.length <= 2) return;
+      q.choices.splice(choiceIndex, 1);
+      renderQuestions();
+    }
+
+    function formatTime(seconds) {
+      const m = Math.floor(seconds / 60);
+      const s = Math.floor(seconds % 60);
+      return `${m}:${String(s).padStart(2, '0')}`;
+    }
+
+    function parseTime(str) {
+      const parts = str.split(':');
+      if (parts.length === 2) return parseInt(parts[0]) * 60 + parseInt(parts[1]);
+      if (parts.length === 3) return parseInt(parts[0]) * 3600 + parseInt(parts[1]) * 60 + parseInt(parts[2]);
+      return parseFloat(str) || 0;
+    }
+
+    function renderQuestions() {
+      const container = document.getElementById('questionsContainer');
+      const noMsg = document.getElementById('noQuestionsMsg');
+
+      // Sort source arrays by timestamp to ensure chronological order in memory and storage
+      videoQuestions.sort((a, b) => a.time - b.time);
+      videoNotes.sort((a, b) => a.time - b.time);
+
+      // Combine questions and notes
+      // We'll use a secondary sort key (array position) to keep order stable for items at same time
+      const allItems = [
+        ...videoQuestions.map((q, idx) => ({ ...q, _kind: 'question', _srcIdx: idx })),
+        ...videoNotes.map((n, idx) => ({ ...n, _kind: 'note', _srcIdx: idx }))
+      ].sort((a, b) => {
+        if (a.time !== b.time) return a.time - b.time;
+        return a._srcIdx - b._srcIdx;
+      });
+
+      if (allItems.length === 0) {
+        container.innerHTML = '';
+        noMsg.classList.remove('hidden');
+        return;
+      }
+      noMsg.classList.add('hidden');
+
+      // Track question number (notes don't count)
+      let qNum = 0;
+      container.innerHTML = allItems.map((item, sortedIdx) => {
+        if (item._kind === 'note') {
+          return renderNoteCard(item, sortedIdx, allItems.length);
+        } else {
+          qNum++;
+          return renderQuestionCard(item, qNum, sortedIdx, allItems.length);
+        }
+      }).join('');
+
+      // Bind events after render
+      bindQuestionEvents();
+      QuestionSettingsBar.init({
+        container: document.getElementById('question-settings-bar-container'),
+        getQuestionCount: () => videoQuestions.length,
+        getAssignmentData: () => assignmentData,
+        onUpdate: () => {},
+        editorType: 'video',
+      });
+    }
+
+    function renderQuestionCard(q, qNum, sortedIdx, total) {
+      const timeStr = formatTime(q.time);
+      const isMC = q.type === 'multiple-choice';
+      const typeLabel = isMC ? '🔘 Multiple Choice' : '✏️ Open-Ended';
+      const typeBadge = isMC ? 'bg-blue-600' : 'bg-green-600';
+
+      let choicesHTML = '';
+      if (isMC && q.choices) {
+        const selType = q.selectionType || 'single';
+        choicesHTML = `
+          <div class="mt-3 space-y-2">
+            <div class="flex items-center gap-2 mb-2">
+              <label class="text-xs text-gray-400">Selection:</label>
+              <select data-qid="${q.id}" class="selection-type-select bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs">
+                <option value="single" ${selType === 'single' ? 'selected' : ''}>Single answer</option>
+                <option value="multiple" ${selType === 'multiple' ? 'selected' : ''}>Select all that apply</option>
+              </select>
+            </div>
+            ${q.choices.map((c, ci) => `
+              <div class="choice-row ${c.isCorrect ? 'correct' : ''} flex items-center gap-2">
+                <input type="checkbox" ${c.isCorrect ? 'checked' : ''} data-qid="${q.id}" data-ci="${ci}" class="choice-correct-toggle w-4 h-4 rounded bg-gray-700 border-gray-600 text-green-500 focus:ring-green-500">
+                <input type="text" value="${escapeAttr(c.text)}" data-qid="${q.id}" data-ci="${ci}" class="choice-text-input flex-1 p-2 bg-gray-700 border border-gray-600 rounded text-sm" placeholder="Choice text...">
+                <button onclick="removeChoice('${q.id}', ${ci})" class="text-red-400 hover:text-red-300 text-sm font-bold" title="Remove choice">&times;</button>
+              </div>
+            `).join('')}
+            <button onclick="addChoice('${q.id}')" class="text-blue-400 hover:text-blue-300 text-sm mt-1">+ Add Choice</button>
+          </div>
+        `;
+      }
+
+      let checkerHTML = '';
+      if (!isMC) {
+        checkerHTML = `
+          <div class="mt-3 overflow-hidden">
+            <div id="checker-container-${q.id}" class="checker-widget-container bg-gray-800/80 rounded-lg p-3 border border-gray-600/50">
+              <!-- CheckerWidget will be injected here -->
+            </div>
+          </div>
+        `;
+      }
+
+      return `
+        <div class="question-card" id="qcard-${q.id}">
+          <div class="flex justify-between items-start mb-3">
+            <div class="flex items-center gap-3">
+              <span class="text-lg font-bold text-yellow-400">Q${qNum}</span>
+              <span class="${typeBadge} text-white text-xs px-2 py-1 rounded-full font-semibold">${typeLabel}</span>
+              <div class="flex items-center gap-1">
+                <span class="text-gray-400 text-sm">⏱</span>
+                <input type="text" value="${timeStr}" data-qid="${q.id}" class="time-input w-16 bg-gray-700 border border-gray-600 rounded text-center text-sm p-1" placeholder="0:00">
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <div class="flex flex-col">
+                <button onclick="moveItem('${q._kind}', ${q._srcIdx}, -1, ${sortedIdx})" class="text-gray-400 hover:text-white leading-none ${sortedIdx === 0 ? 'opacity-20 cursor-not-allowed' : ''}" ${sortedIdx === 0 ? 'disabled' : ''} title="Move Up">▲</button>
+                <button onclick="moveItem('${q._kind}', ${q._srcIdx}, 1, ${sortedIdx})" class="text-gray-400 hover:text-white leading-none ${sortedIdx === total - 1 ? 'opacity-20 cursor-not-allowed' : ''}" ${sortedIdx === total - 1 ? 'disabled' : ''} title="Move Down">▼</button>
+              </div>
+              <button onclick="deleteQuestion('${q.id}')" class="text-red-400 hover:text-red-300 font-bold text-lg leading-none" title="Delete question">&times;</button>
+            </div>
+          </div>
+          <textarea data-qid="${q.id}" class="body-input w-full p-2 bg-gray-700 border border-gray-600 rounded text-sm" rows="2" placeholder="Question text...">${escapeHtml(q.body)}</textarea>
+          ${choicesHTML}
+          ${checkerHTML}
+        </div>
+      `;
+    }
+
+    function renderNoteCard(n, sortedIdx, total) {
+      const timeStr = formatTime(n.time);
+      return `
+        <div class="question-card border-purple-800/50" id="ncard-${n.id}">
+          <div class="flex justify-between items-start mb-3">
+            <div class="flex items-center gap-3">
+              <span class="text-lg font-bold text-purple-400">📌 Note</span>
+              <div class="flex items-center gap-1">
+                <span class="text-gray-400 text-sm">⏱</span>
+                <input type="text" value="${timeStr}" data-nid="${n.id}" class="note-time-input w-16 bg-gray-700 border border-gray-600 rounded text-center text-sm p-1" placeholder="0:00">
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <div class="flex flex-col">
+                <button onclick="moveItem('${n._kind}', ${n._srcIdx}, -1, ${sortedIdx})" class="text-gray-400 hover:text-white leading-none ${sortedIdx === 0 ? 'opacity-20 cursor-not-allowed' : ''}" ${sortedIdx === 0 ? 'disabled' : ''} title="Move Up">▲</button>
+                <button onclick="moveItem('${n._kind}', ${n._srcIdx}, 1, ${sortedIdx})" class="text-gray-400 hover:text-white leading-none ${sortedIdx === total - 1 ? 'opacity-20 cursor-not-allowed' : ''}" ${sortedIdx === total - 1 ? 'disabled' : ''} title="Move Down">▼</button>
+              </div>
+              <button onclick="deleteNote('${n.id}')" class="text-red-400 hover:text-red-300 font-bold text-lg leading-none" title="Delete note">&times;</button>
+            </div>
+          </div>
+          <textarea data-nid="${n.id}" class="note-body-input w-full p-2 bg-gray-700 border border-gray-600 rounded text-sm" rows="3" placeholder="Note text (shown to students as information, not graded)...">${escapeHtml(n.body)}</textarea>
+        </div>
+      `;
+    }
+
+    function moveItem(kind, srcIdx, direction, sortedIdx) {
+      // Find the items in common sorted view
+      const allItemsSorted = [
+        ...videoQuestions.map((q, idx) => ({ ...q, _kind: 'question', _srcIdx: idx })),
+        ...videoNotes.map((n, idx) => ({ ...n, _kind: 'note', _srcIdx: idx }))
+      ].sort((a, b) => {
+        if (a.time !== b.time) return a.time - b.time;
+        return a._srcIdx - b._srcIdx;
+      });
+
+      const targetSortedIdx = sortedIdx + direction;
+      if (targetSortedIdx < 0 || targetSortedIdx >= allItemsSorted.length) return;
+
+      const itemA = allItemsSorted[sortedIdx];
+      const itemB = allItemsSorted[targetSortedIdx];
+
+      // Strategy: 
+      // If times are different, we swap their times.
+      // If times are same, we swap their positions in the source array(s)
+      if (itemA.time === itemB.time) {
+        if (itemA._kind === itemB._kind) {
+          const arr = itemA._kind === 'question' ? videoQuestions : videoNotes;
+          const temp = arr[itemA._srcIdx];
+          arr[itemA._srcIdx] = arr[itemB._srcIdx];
+          arr[itemB._srcIdx] = temp;
+        } else {
+          // Different arrays but same time. Swapping array positions is not meaningful across arrays
+          // but we can swap their times slightly to force a sort change, or just accept that sort by time/index 
+          // makes them "stuck" unless they have different times.
+          // Better: swap their times by 1 ms if we have to, or just swap times.
+          const t = itemA.time;
+          const targetA = itemA._kind === 'question' ? videoQuestions[itemA._srcIdx] : videoNotes[itemA._srcIdx];
+          const targetB = itemB._kind === 'question' ? videoQuestions[itemB._srcIdx] : videoNotes[itemB._srcIdx];
+          targetA.time = itemB.time; // still same
+          // No-op for same time different kind unless we have a global order.
+        }
+      } else {
+        // Different times. Swap times to swap positions.
+        const t = itemA.time;
+        const targetA = itemA._kind === 'question' ? videoQuestions[itemA._srcIdx] : videoNotes[itemA._srcIdx];
+        const targetB = itemB._kind === 'question' ? videoQuestions[itemB._srcIdx] : videoNotes[itemB._srcIdx];
+        targetA.time = itemB.time;
+        targetB.time = t;
+      }
+
+      renderQuestions();
+    }
+
+    function bindQuestionEvents() {
+      // Time inputs for questions
+      document.querySelectorAll('.time-input').forEach(input => {
+        input.addEventListener('change', e => {
+          const q = videoQuestions.find(q => q.id === e.target.dataset.qid);
+          if (q) q.time = parseTime(e.target.value);
+        });
+      });
+      // Time inputs for notes
+      document.querySelectorAll('.note-time-input').forEach(input => {
+        input.addEventListener('change', e => {
+          const n = videoNotes.find(n => n.id === e.target.dataset.nid);
+          if (n) n.time = parseTime(e.target.value);
+        });
+      });
+      // Body inputs for questions
+      document.querySelectorAll('.body-input').forEach(ta => {
+        ta.addEventListener('input', e => {
+          const q = videoQuestions.find(q => q.id === e.target.dataset.qid);
+          if (q) q.body = e.target.value;
+        });
+      });
+      // Body inputs for notes
+      document.querySelectorAll('.note-body-input').forEach(ta => {
+        ta.addEventListener('input', e => {
+          const n = videoNotes.find(n => n.id === e.target.dataset.nid);
+          if (n) n.body = e.target.value;
+        });
+      });
+      // Choice text inputs
+      document.querySelectorAll('.choice-text-input').forEach(input => {
+        input.addEventListener('input', e => {
+          const q = videoQuestions.find(q => q.id === e.target.dataset.qid);
+          if (q && q.choices) q.choices[parseInt(e.target.dataset.ci)].text = e.target.value;
+        });
+      });
+      // Choice correct toggles
+      document.querySelectorAll('.choice-correct-toggle').forEach(input => {
+        input.addEventListener('change', e => {
+          const q = videoQuestions.find(q => q.id === e.target.dataset.qid);
+          if (q && q.choices) q.choices[parseInt(e.target.dataset.ci)].isCorrect = e.target.checked;
+        });
+      });
+      // Selection type selects
+      document.querySelectorAll('.selection-type-select').forEach(sel => {
+        sel.addEventListener('change', e => {
+          const q = videoQuestions.find(q => q.id === e.target.dataset.qid);
+          if (q) q.selectionType = e.target.value;
+        });
+      });
+      // Checker widgets for open-ended questions
+      const template = document.getElementById('checkerTemplate');
+      document.querySelectorAll('.checker-widget-container').forEach(container => {
+        const qId = container.id.replace('checker-container-', '');
+        const q = videoQuestions.find(it => it.id === qId);
+        if (q && template) {
+          container.innerHTML = '';
+          container.appendChild(template.content.cloneNode(true));
+          CheckerWidget(container, q.checkerCode || "", q.checkerMeta || null);
+        }
+      });
+    }
+
+    // --- EdPuzzle Import ---
+    function openImportModal() { document.getElementById('importModal').classList.remove('hidden'); }
+    function closeImportModal() {
+      document.getElementById('importModal').classList.add('hidden');
+      document.getElementById('edpuzzleJson').value = '';
+      document.getElementById('import-error').textContent = '';
+    }
+
+    function stripHtml(html) {
+      const div = document.createElement('div');
+      div.innerHTML = html;
+      return div.textContent || div.innerText || '';
+    }
+
+    function handleImport() {
+      const errorP = document.getElementById('import-error');
+      errorP.textContent = '';
+      try {
+        let raw = document.getElementById('edpuzzleJson').value.trim();
+        let data = JSON.parse(raw);
+
+        // Handle array format (as in sample)
+        if (Array.isArray(data)) data = data[0];
+        if (!data) { errorP.textContent = "Invalid JSON structure."; return; }
+
+        // Import title if current is empty
+        if (data.title && (!assignmentData.name || assignmentData.name === 'New Assignment')) {
+          assignmentData.name = data.title;
+          document.getElementById('assignmentTitle').textContent = `Editing: ${data.title}`;
+        }
+
+        // Import questions (without IDs initially, so we can sort first)
+        const importedQuestions = (data.questions || []).map(q => {
+          const bodyHtml = q.body?.[0]?.html || q.body?.[0]?.text || '';
+          const bodyText = stripHtml(bodyHtml);
+          const choices = (q.choices || []).map(c => ({
+            text: stripHtml(c.body?.[0]?.html || c.body?.[0]?.text || ''),
+            isCorrect: c.isCorrect || false
+          }));
+          const hasMultipleCorrect = choices.filter(c => c.isCorrect).length > 1;
+
+          return {
+            type: 'multiple-choice',
+            time: q.time || 0,
+            body: bodyText,
+            choices: choices,
+            selectionType: hasMultipleCorrect ? 'multiple' : 'single'
+          };
+        });
+
+        // Import notes (without IDs initially, so we can sort first)
+        const importedNotes = (data.notes || []).map(n => {
+          const bodyHtml = n.body?.[0]?.html || n.body?.[0]?.text || '';
+          return {
+            time: n.time || 0,
+            body: stripHtml(bodyHtml)
+          };
+        });
+
+        // Sort by time before assigning IDs so IDs are in chronological order
+        importedQuestions.sort((a, b) => a.time - b.time);
+        importedNotes.sort((a, b) => a.time - b.time);
+
+        // Now assign IDs in sorted order
+        importedQuestions.forEach(q => q.id = `vq${nextQId++}`);
+        importedNotes.forEach(n => n.id = `vn${nextNId++}`);
+
+        videoQuestions.push(...importedQuestions);
+        videoNotes.push(...importedNotes);
+
+        renderQuestions();
+        closeImportModal();
+        showToast(`Imported ${importedQuestions.length} questions and ${importedNotes.length} notes!`, { color: 'green' });
+      } catch (e) {
+        console.error("Import error:", e);
+        errorP.textContent = "Failed to parse JSON: " + e.message;
+      }
+    }
+
+    // --- Save ---
+    async function saveAssignment() {
+      const saveBtn = document.getElementById('saveBtn');
+      saveBtn.textContent = "Saving...";
+      saveBtn.disabled = true;
+
+      try {
+        // Sync UI state
+        syncAllInputs();
+
+        const url = document.getElementById('videoUrlInput').value.trim();
+        const source = detectVideoSource(url);
+
+        // Read deadline data from the shared widget
+        const dwResult = DeadlineWidget.read(allClassNames);
+        const deadlinePolicy = dwResult.deadlinePolicy;
+
+        // Build checker functions and meta
+        const checkerFunctions = {};
+        const checkerMeta = {};
+        videoQuestions.forEach(q => {
+          if (q.type === 'open-ended') {
+            const key = q.id;
+            if (q.checkerCode) checkerFunctions[key] = q.checkerCode;
+            if (q.checkerMeta) checkerMeta[key] = q.checkerMeta;
+          }
+        });
+
+        // Clean questions for storage
+        const cleanQuestions = videoQuestions.map(q => {
+          const clean = { id: q.id, type: q.type, time: q.time, body: q.body };
+          if (q.type === 'multiple-choice') {
+            clean.choices = q.choices;
+            clean.selectionType = q.selectionType || 'single';
+          } else {
+            clean.checkerCode = q.checkerCode || '';
+            clean.checkerMeta = q.checkerMeta || null;
+          }
+          return clean;
+        });
+
+        const cleanNotes = videoNotes.map(n => ({ id: n.id, time: n.time, body: n.body }));
+
+        const playbackSettings = {
+          skipPrevention: document.getElementById('preventSkipping').checked,
+          speedLock: document.getElementById('lockPlaybackSpeed').checked
+        };
+
+        const updatePayload = {
+          videoUrl: url,
+          videoSourceType: source?.type || '',
+          videoSourceId: source?.id || '',
+          videoQuestions: cleanQuestions,
+          videoNotes: cleanNotes,
+          checkerFunctions: checkerFunctions,
+          checkerMeta: checkerMeta,
+          auraRules: auraRules,
+          playbackSettings: playbackSettings,
+          scoringMode: document.getElementById('scoringMode').value,
+          postSubmissionRule: document.getElementById('postSubmissionRule').value,
+          deadlinePolicy: deadlinePolicy
+        };
+
+        // Apply deadline widget data (perClass, globalDueAt, behavior, late policy)
+        DeadlineWidget.applyToSavePayload(updatePayload, allClassNames);
+
+        // Modifications
+        const modsEnabled = document.getElementById('modificationsEnabled').checked;
+        if (modsEnabled) {
+          const modStudentIds = Array.from(document.querySelectorAll('.mod-student-checkbox:checked')).map(cb => cb.value);
+          updatePayload.modifications = {
+            enabled: true,
+            timeMultiplier: parseFloat(document.getElementById('modTimeMultiplier').value) || 1.0,
+            penaltyMultiplier: parseFloat(document.getElementById('modPenaltyMultiplier').value) || 1.0,
+            maxAttemptsBonus: parseInt(document.getElementById('modAttemptsBonus').value) || 0,
+            helpThreshold: parseInt(document.getElementById('modHelpThreshold').value) || 1,
+            ignoreDeduction: document.getElementById('modIgnoreDeduction').checked,
+            fuzzy: document.getElementById('modFuzzyMatch').checked,
+            studentIds: modStudentIds
+          };
+        } else {
+          updatePayload.modifications = firebase.firestore.FieldValue.delete();
+        }
+
+        await db.collection("assignments").doc(assignmentId).update(updatePayload);
+        showToast("Assignment saved!", { color: 'green' });
+      } catch (error) {
+        console.error("Error saving assignment:", error);
+        showToast("Save failed: " + error.message, { color: 'red' });
+      } finally {
+        saveBtn.textContent = "Save Assignment";
+        saveBtn.disabled = false;
+      }
+    }
+
+    function syncAllInputs() {
+      // Sync time inputs
+      document.querySelectorAll('.time-input').forEach(input => {
+        const q = videoQuestions.find(q => q.id === input.dataset.qid);
+        if (q) q.time = parseTime(input.value);
+      });
+      document.querySelectorAll('.note-time-input').forEach(input => {
+        const n = videoNotes.find(n => n.id === input.dataset.nid);
+        if (n) n.time = parseTime(input.value);
+      });
+      // Sync body inputs
+      document.querySelectorAll('.body-input').forEach(ta => {
+        const q = videoQuestions.find(q => q.id === ta.dataset.qid);
+        if (q) q.body = ta.value;
+      });
+      document.querySelectorAll('.note-body-input').forEach(ta => {
+        const n = videoNotes.find(n => n.id === ta.dataset.nid);
+        if (n) n.body = ta.value;
+      });
+      // Sync choices
+      document.querySelectorAll('.choice-text-input').forEach(input => {
+        const q = videoQuestions.find(q => q.id === input.dataset.qid);
+        if (q && q.choices) q.choices[parseInt(input.dataset.ci)].text = input.value;
+      });
+      document.querySelectorAll('.choice-correct-toggle').forEach(input => {
+        const q = videoQuestions.find(q => q.id === input.dataset.qid);
+        if (q && q.choices) q.choices[parseInt(input.dataset.ci)].isCorrect = input.checked;
+      });
+      document.querySelectorAll('.selection-type-select').forEach(sel => {
+        const q = videoQuestions.find(q => q.id === sel.dataset.qid);
+        if (q) q.selectionType = sel.value;
+      });
+      // Checker widgets
+      document.querySelectorAll('.checker-widget-container').forEach(container => {
+        const qId = container.id.replace('checker-container-', '');
+        const q = videoQuestions.find(it => it.id === qId);
+        if (q && typeof container.getCode === 'function') {
+          q.checkerCode = container.getCode();
+          q.checkerMeta = {
+            mode: container.getMode(),
+            simpleConfig: serializeSimpleConfig(container)
+          };
+        }
+      });
+    }
+
+    // --- Utilities ---
+    function copyShareLink() {
+      const link = document.getElementById('shareLink');
+      link.select();
+      document.execCommand('copy');
+      showToast("Copied!", { color: 'blue' });
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text || '';
+      return div.innerHTML;
+    }
+    function escapeAttr(text) {
+      return (text || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function showToast(message, options = {}) {
+      const { color = 'default', duration = 3000 } = options;
+      const wrapper = document.getElementById('toast-wrapper');
+      const toast = document.createElement('div');
+      toast.className = 'flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm bg-gray-700';
+      if (color === 'green') toast.classList.add('bg-green-600');
+      if (color === 'red') toast.classList.add('bg-red-600');
+      if (color === 'blue') toast.classList.add('bg-blue-600');
+      toast.innerHTML = `<span>${message}</span><button onclick="this.parentElement.remove()" class="ml-4 font-bold text-xl leading-none">&times;</button>`;
+      wrapper.appendChild(toast);
+      setTimeout(() => { if (toast.parentElement) toast.remove(); }, duration);
+    }
+
+    document.getElementById('retrySignInButton').onclick = retrySignIn;
+    document.getElementById('signOutButton').onclick = () => {
+        if (window.google?.accounts?.id) google.accounts.id.disableAutoSelect();
+        auth.signOut().then(() => window.location.href = './assignments.html');
+    };
+  </script>
+</body>
+
+</html>

@@ -423,7 +423,7 @@
                     <div class="px-6 pb-6 space-y-6">
                         <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-700">
                             <label class="flex items-center cursor-pointer">
-                                <input type="checkbox" id="calculatorEnabled"
+                                <input type="checkbox" id="calculatorEnabled" onchange="document.getElementById('calculatorConstantsContainer').classList.toggle('hidden', !this.checked)"
                                     class="w-5 h-5 text-blue-500 rounded focus:ring-blue-500 bg-gray-800 border-gray-600">
                                 <span class="ml-3 font-semibold text-white">Enable Floating Calculator (+-x÷)</span>
                             </label>
@@ -432,7 +432,14 @@
                                     class="w-4 h-4 text-purple-600 rounded bg-gray-800 border-gray-600">
                                 <label for="calculatorModsOnly" class="text-xs text-purple-300">Only for Modified Students (Accommodated)</label>
                             </div>
-                            <p class="text-xs text-gray-400 mt-2">Adds a button for students to open a movable basic calculator.</p>
+                            <p class="text-xs text-gray-400 mt-2 ml-8">Adds a button for students to open a movable basic calculator.</p>
+                            <div class="ml-8 mt-4 hidden" id="calculatorConstantsContainer">
+                                <label class="block text-sm text-gray-400 mb-2">Custom Scientific Constants (Optional)</label>
+                                <textarea id="calculatorConstants" rows="2"
+                                    class="w-full md:w-3/4 p-2 bg-gray-800 border border-gray-600 rounded text-sm text-white focus:outline-none focus:border-blue-500"
+                                    placeholder="e.g. c=299792458&#10;Na=6.022e23"></textarea>
+                                <p class="text-xs text-gray-500 mt-1">One per line (name=value). These will appear as buttons in the student's scientific calculator.</p>
+                            </div>
                         </div>
                         <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-700">
                             <label class="block font-semibold text-white mb-2">Word Bank Mode</label>
@@ -925,7 +932,10 @@ Reading level: [GRADE LEVEL]</p>
 
                 // Tools & Features
                 const toolsConfig = assignmentData.toolsConfig || {};
-                document.getElementById('calculatorEnabled').checked = toolsConfig.calculatorEnabled || false;
+                const calcEnabled = document.getElementById('calculatorEnabled');
+                calcEnabled.checked = toolsConfig.calculatorEnabled || false;
+                if (calcEnabled.checked) document.getElementById('calculatorConstantsContainer').classList.remove('hidden');
+                document.getElementById('calculatorConstants').value = toolsConfig.calculatorConstants || '';
                 document.getElementById('calculatorModsOnly').checked = toolsConfig.calculatorModsOnly || false;
                 document.getElementById('wordBankMode').value = toolsConfig.wordBankMode || 'none';
                 document.getElementById('wordBankModsOnly').checked = toolsConfig.wordBankModsOnly || false;
@@ -1818,6 +1828,7 @@ Reading level: [GRADE LEVEL]</p>
                 const toolsConfig = {
                     calculatorEnabled: document.getElementById('calculatorEnabled').checked,
                     calculatorModsOnly: document.getElementById('calculatorModsOnly').checked,
+                    calculatorConstants: document.getElementById('calculatorConstants').value.trim(),
                     wordBankMode: document.getElementById('wordBankMode').value,
                     wordBankModsOnly: document.getElementById('wordBankModsOnly').checked,
                     globalWordBankList: document.getElementById('globalWordBankList').value.trim()
