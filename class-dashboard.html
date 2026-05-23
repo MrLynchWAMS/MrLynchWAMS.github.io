@@ -10,7 +10,6 @@
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
-    <script src="shared/dashboard_shared.js"></script>
     <style>
         .hidden {
             display: none;
@@ -78,7 +77,9 @@
         <div id="signInButtonContainer" class="hidden mt-8">
             <div id="g_id_onload"
                 data-client_id="1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com"
-                data-callback="handleCredentialResponse"></div>
+                data-callback="handleCredentialResponse"
+                data-auto_select="true"
+                data-auto_prompt="false"></div>
             <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_black"
                 data-text="signin_with" data-shape="rectangular" data-logo_alignment="left"></div>
         </div>
@@ -109,20 +110,15 @@
                 </div>
             </div>
             <div class="flex gap-3">
-                <button id="classSettingsBtn" onclick="openClassSettings()"
-                    class="hidden bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg text-sm transition">Class Settings</button>
                 <a href="./assignments.html"
                     class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg text-sm">Assignments</a>
-                <a href="./aura-purchases.html"
-                    class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg text-sm font-bold font-bold">Aura
-                    Purchases</a>
                 <a href="./roster.html"
-                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg text-sm font-bold">Roster</a>
+                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg text-sm">Roster</a>
                 <button id="exportCsv"
-                    class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg text-sm font-bold">Export
+                    class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg text-sm">Export
                     CSV</button>
                 <button id="signOutButton"
-                    class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg text-sm font-bold">Sign
+                    class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg text-sm">Sign
                     Out</button>
             </div>
         </div>
@@ -182,10 +178,6 @@
                     <div>
                         <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Spendable Aura</p>
                         <p id="perf-spendable-aura" class="text-2xl font-bold text-yellow-400">0</p>
-                    </div>
-                    <div>
-                        <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Aura Tier</p>
-                        <p id="perf-aura-tier" class="text-2xl font-bold text-amber-600">Bronze</p>
                     </div>
                     <div>
                         <p id="perf-avg-label" class="text-xs text-gray-500 uppercase tracking-wider mb-1">Avg Score
@@ -330,17 +322,6 @@
 
         async function handleClassChange() {
             currentClass = document.getElementById('classSelector').value;
-            const settingsBtn = document.getElementById('classSettingsBtn');
-            if (settingsBtn) {
-                if (currentClass) {
-                    settingsBtn.classList.remove('hidden');
-                } else {
-                    settingsBtn.classList.add('hidden');
-                }
-            }
-            if (currentClass) {
-                await loadClassSettings(currentClass);
-            }
             const dateRange = document.getElementById('dateRangeSelector').value;
             if (!currentClass) {
                 document.getElementById('noDataState').classList.remove('hidden');
@@ -594,22 +575,6 @@
                 document.getElementById('perf-spendable-aura').textContent = doc.data().auraBalance || 0;
             }
 
-            // Display Aura Tier
-            if (window.getStudentTier) {
-                const activeTier = window.getStudentTier(auraLifetime || 0, currentClassSettings);
-                const tierEl = document.getElementById('perf-aura-tier');
-                if (tierEl) {
-                    tierEl.textContent = activeTier.name;
-                    const colors = {
-                        bronze: 'text-amber-600',
-                        silver: 'text-gray-400',
-                        gold: 'text-yellow-400',
-                        platinum: 'text-purple-400'
-                    };
-                    tierEl.className = `text-2xl font-bold ${colors[activeTier.id] || 'text-yellow-400'}`;
-                }
-            }
-
             // 2. Load Work
             refreshPerfData(email);
         }
@@ -738,13 +703,16 @@
         }
 
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') { closeDrilldown(); closePerfModal(); closeClassSettings(); }
+            if (e.key === 'Escape') { closeDrilldown(); closePerfModal(); }
         });
 
         function handleCredentialResponse(response) {
             auth.signInWithCredential(firebase.auth.GoogleAuthProvider.credential(response.credential));
         }
-        document.getElementById('signOutButton').onclick = () => auth.signOut();
+        document.getElementById('signOutButton').onclick = () => {
+            if (window.google?.accounts?.id) google.accounts.id.disableAutoSelect();
+            auth.signOut();
+        };
         document.getElementById('exportCsv').onclick = () => {
             if (!currentClass) return;
             const dateRange = document.getElementById('dateRangeSelector').value;
@@ -821,173 +789,7 @@
             link.download = `Overview_${currentClass.replace(/\s+/g, '_')}_${dateRange}.csv`;
             link.click();
         };
-
-        // --- Classroom settings functions ---
-        let currentClassSettings = { auraTiers: { silver: 50, gold: 100, platinum: 200 } };
-
-        async function saveClassSetting(classId, key, value) {
-            return db.collection("classrooms").doc(classId).collection("settings").doc(key).set(value);
-        }
-        window.saveClassSetting = saveClassSetting;
-
-        async function loadClassSettings(classId) {
-            if (!classId) return;
-            try {
-                const doc = await db.collection("classrooms").doc(classId).collection("settings").doc("auraTiers").get();
-                if (doc.exists) {
-                    currentClassSettings = { auraTiers: doc.data() };
-                } else {
-                    currentClassSettings = {
-                        auraTiers: {
-                            silver: 50,
-                            gold: 100,
-                            platinum: 200
-                        }
-                    };
-                }
-            } catch (err) {
-                console.error("Error loading class settings:", err);
-                currentClassSettings = {
-                    auraTiers: {
-                        silver: 50,
-                        gold: 100,
-                        platinum: 200
-                    }
-                };
-            }
-        }
-
-        window.openClassSettings = async function() {
-            if (!currentClass) return;
-            document.getElementById('settings-class-name').textContent = currentClass;
-            
-            // Set inputs
-            const tiers = currentClassSettings.auraTiers || {};
-            document.getElementById('threshold-silver').value = tiers.silver !== undefined ? tiers.silver : 50;
-            document.getElementById('threshold-gold').value = tiers.gold !== undefined ? tiers.gold : 100;
-            document.getElementById('threshold-platinum').value = tiers.platinum !== undefined ? tiers.platinum : 200;
-            
-            document.getElementById('class-settings-modal').classList.remove('hidden');
-        };
-
-        window.closeClassSettings = function() {
-            document.getElementById('class-settings-modal').classList.add('hidden');
-        };
-
-        window.saveClassSettings = async function() {
-            if (!currentClass) return;
-            const silver = parseInt(document.getElementById('threshold-silver').value, 10);
-            const gold = parseInt(document.getElementById('threshold-gold').value, 10);
-            const platinum = parseInt(document.getElementById('threshold-platinum').value, 10);
-            
-            if (isNaN(silver) || isNaN(gold) || isNaN(platinum)) {
-                showToast("Please enter valid numbers for thresholds.", "red");
-                return;
-            }
-            if (silver < 0 || gold < 0 || platinum < 0) {
-                showToast("Thresholds cannot be negative.", "red");
-                return;
-            }
-            if (silver >= gold || gold >= platinum) {
-                showToast("Thresholds must be progressive: Silver < Gold < Platinum.", "red");
-                return;
-            }
-
-            const btn = document.getElementById('saveClassSettingsBtn');
-            btn.disabled = true;
-            btn.textContent = "Saving...";
-            
-            try {
-                const settingsObj = { silver, gold, platinum };
-                await saveClassSetting(currentClass, 'auraTiers', settingsObj);
-                currentClassSettings.auraTiers = settingsObj;
-                showToast("Class settings saved successfully!", "green");
-                closeClassSettings();
-            } catch (err) {
-                console.error("Error saving class settings:", err);
-                showToast("Failed to save settings.", "red");
-            } finally {
-                btn.disabled = false;
-                btn.textContent = "Save Settings";
-            }
-        };
-        
-        function showToast(message, color) {
-            const wrapper = document.getElementById('toast-wrapper');
-            if (!wrapper) return;
-            const toast = document.createElement('div');
-            toast.className = `flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm w-full transition-all pointer-events-auto`;
-            const colors = { green: 'bg-green-600', red: 'bg-red-600', blue: 'bg-blue-600', yellow: 'bg-yellow-500' };
-            toast.classList.add(colors[color] || 'bg-gray-700');
-            toast.innerHTML = `<span>${message}</span><button class="ml-4 text-2xl font-bold leading-none">&times;</button>`;
-
-            toast.querySelector('button').onclick = () => toast.remove();
-            wrapper.appendChild(toast);
-            setTimeout(() => toast.remove(), 4000);
-        }
     </script>
-
-    <!-- Classroom Settings Modal -->
-    <div id="class-settings-modal"
-        class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-[60]">
-        <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh] border border-gray-700">
-            <div class="flex justify-between items-center p-4 border-b border-gray-700 bg-gray-900">
-                <div>
-                    <h2 class="text-2xl font-bold text-yellow-400">Class Settings</h2>
-                    <p id="settings-class-name" class="text-sm text-gray-400">Class Name</p>
-                </div>
-                <button onclick="closeClassSettings()"
-                    class="text-gray-400 hover:text-white text-3xl transition hover:rotate-90">&times;</button>
-            </div>
-            
-            <div class="p-6 space-y-6 overflow-y-auto">
-                <div>
-                    <h3 class="text-lg font-semibold text-purple-400 mb-3 border-b border-gray-700 pb-2">Aura Tier Thresholds</h3>
-                    <div class="space-y-4">
-                        <div class="flex items-center justify-between">
-                            <span class="text-sm font-medium text-gray-300">Bronze Tier</span>
-                            <div class="flex items-center gap-2">
-                                <input type="number" value="0" disabled
-                                    class="bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-sm text-gray-500 w-24 text-center">
-                                <span class="text-xs text-gray-500">✧ Lifetime</span>
-                            </div>
-                        </div>
-                        <div class="flex items-center justify-between">
-                            <span class="text-sm font-medium text-yellow-500 font-bold">Silver Tier</span>
-                            <div class="flex items-center gap-2">
-                                <input type="number" id="threshold-silver" min="1"
-                                    class="bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-sm text-white focus:ring-yellow-400 w-24 text-center">
-                                <span class="text-xs text-gray-400">✧ Lifetime</span>
-                            </div>
-                        </div>
-                        <div class="flex items-center justify-between">
-                            <span class="text-sm font-medium text-yellow-600 font-bold">Gold Tier</span>
-                            <div class="flex items-center gap-2">
-                                <input type="number" id="threshold-gold" min="1"
-                                    class="bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-sm text-white focus:ring-yellow-400 w-24 text-center">
-                                <span class="text-xs text-gray-400">✧ Lifetime</span>
-                            </div>
-                        </div>
-                        <div class="flex items-center justify-between">
-                            <span class="text-sm font-medium text-purple-400 font-bold">Platinum Tier</span>
-                            <div class="flex items-center gap-2">
-                                <input type="number" id="threshold-platinum" min="1"
-                                    class="bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-sm text-white focus:ring-yellow-400 w-24 text-center">
-                                <span class="text-xs text-gray-400">✧ Lifetime</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="p-4 bg-gray-900 border-t border-gray-700 flex justify-end gap-3">
-                <button onclick="closeClassSettings()"
-                    class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded font-medium transition text-sm">Cancel</button>
-                <button onclick="saveClassSettings()" id="saveClassSettingsBtn"
-                    class="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white font-bold rounded transition text-sm">Save Settings</button>
-            </div>
-        </div>
-    </div>
 </body>
 
 </html>
