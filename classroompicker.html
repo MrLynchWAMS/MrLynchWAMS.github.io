@@ -551,8 +551,9 @@
 </head>
 
 <body class="bg-gray-900 text-white font-sans flex items-center justify-center min-h-screen">
+    <div id="tier-bg-accent" class="fixed inset-0 pointer-events-none z-0 opacity-0 transition-opacity duration-1000"></div>
 
-    <div class="container mx-auto p-4">
+    <div class="container mx-auto p-4 relative z-10">
         <div id="pageLoader" class="flex flex-col items-center justify-center min-h-[50vh] transition-opacity duration-300">
             <div class="relative w-20 h-20 mb-6">
                 <div class="absolute inset-0 rounded-full border-4 border-gray-700"></div>
@@ -566,6 +567,7 @@
         <div id="loginContainer" class="hidden">
             <div class="bg-gray-800 p-8 rounded-lg shadow-xl max-w-md mx-auto">
                 <h1 id="assignmentNameLogin" class="text-3xl font-bold text-yellow-400 mb-6 text-center"></h1>
+                <p id="assignmentSubtitleLogin" class="text-gray-400 mb-4 text-center hidden"></p>
                 <div id="passcodeForm">
                     <p class="text-gray-300 mb-4">Enter your school email and the passcode provided by your teacher.</p>
                     <input type="email" id="emailInput" placeholder="School Email"
@@ -586,6 +588,16 @@
                         data-text="signin_with" data-shape="rectangular" data-logo_alignment="left"></div>
                 </div>
             </div>
+        </div>
+        <div id="store-only-container" class="hidden max-w-md mx-auto pt-12 text-center">
+            <div id="store-only-user-info" class="mb-5 flex justify-center"></div>
+            <h1 class="text-3xl font-bold text-yellow-400">✧ Aura Store</h1>
+            <p id="store-only-subtitle" class="text-gray-300 mt-2"></p>
+            <button onclick="openAuraStore()"
+                class="mt-6 w-full bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-3 px-4 rounded-lg transition">Open
+                Store</button>
+            <button onclick="handleSignOut()"
+                class="mt-4 text-sm text-gray-400 hover:text-white underline">Sign Out</button>
         </div>
         <div id="mainContainer" class="hidden">
             <div class="flex justify-between items-center mb-4">
@@ -890,6 +902,15 @@
         // Aura display state - session-only, no persistence needed
         // Tracks whether user has opened the aura popup at least once this session
         let hasOpenedAuraPopup = false;
+        let storeOnlyMode = false;
+        window._auraTierConfig = null;
+
+        const DEFAULT_AURA_TIERS = [
+            { id: 'rising', name: 'Rising', threshold: 0, emoji: '⚡', color: 'gray', discounts: [] },
+            { id: 'focused', name: 'Focused', threshold: 50, emoji: '🔵', color: 'blue', discounts: [{ itemName: 'Fill Water Bottle', newCost: 0 }] },
+            { id: 'scholar', name: 'Scholar', threshold: 150, emoji: '⭐', color: 'yellow', discounts: [{ itemName: 'Fill Water Bottle', newCost: 0 }, { itemName: 'Restroom Break', newCost: 0 }] },
+            { id: 'elite', name: 'Elite', threshold: 300, emoji: '👑', color: 'purple', discounts: [{ itemName: 'Fill Water Bottle', newCost: 0 }, { itemName: 'Restroom Break', newCost: 0 }, { itemName: 'Eat During Class', newCost: 0 }] }
+        ];
 
         // Focus Mode state
         let focusModeActive = false;
@@ -907,6 +928,49 @@
         function normalizeClassName(cls) {
             if (!cls) return 'unassigned';
             return String(cls).toLowerCase().trim();
+        }
+
+        function getDefaultAuraTiers() {
+            return DEFAULT_AURA_TIERS.map(t => ({
+                ...t,
+                discounts: Array.isArray(t.discounts) ? t.discounts.map(d => ({ ...d })) : []
+            }));
+        }
+
+        async function loadTierConfig(teacherEmail) {
+            if (Array.isArray(window._auraTierConfig) && window._auraTierConfig.length > 0) {
+                return window._auraTierConfig;
+            }
+            const normalizedTeacher = normalizeTeacherEmail(teacherEmail);
+            try {
+                const tierDoc = await db.collection('auraTiers').doc(normalizedTeacher).get();
+                const tiers = tierDoc.exists && Array.isArray(tierDoc.data().tiers) && tierDoc.data().tiers.length > 0
+                    ? tierDoc.data().tiers
+                    : getDefaultAuraTiers();
+                window._auraTierConfig = tiers;
+                return tiers;
+            } catch (error) {
+                console.error("Error loading aura tiers:", error);
+                const fallback = getDefaultAuraTiers();
+                window._auraTierConfig = fallback;
+                return fallback;
+            }
+        }
+
+        function computeAuraTier(lifetime, tiers) {
+            const safeLifetime = Number(lifetime) || 0;
+            const sorted = (tiers || getDefaultAuraTiers()).slice().sort((a, b) => (a.threshold || 0) - (b.threshold || 0));
+            let matched = sorted[0] || { id: 'rising', name: 'Rising', threshold: 0, emoji: '⚡', color: 'gray', discounts: [] };
+            sorted.forEach(tier => {
+                if (safeLifetime >= (tier.threshold || 0)) matched = tier;
+            });
+            return matched;
+        }
+
+        function getNextAuraTier(lifetime, tiers) {
+            const safeLifetime = Number(lifetime) || 0;
+            return (tiers || []).slice().sort((a, b) => (a.threshold || 0) - (b.threshold || 0))
+                .find(tier => safeLifetime < (tier.threshold || 0)) || null;
         }
 
         // --- Impersonation Logic ---
@@ -946,7 +1010,24 @@
             const loader = document.getElementById('pageLoader');
             const errorP = document.getElementById('loadingError');
             if (!assignmentId) {
-                errorP.textContent = "Error: No assignment ID provided in the URL.";
+                storeOnlyMode = true;
+                document.title = "Aura Store – IterātED";
+                loader.classList.add('hidden');
+                document.getElementById('assignmentNameLogin').textContent = "✧ Aura Store";
+                const subtitle = document.getElementById('assignmentSubtitleLogin');
+                if (subtitle) {
+                    subtitle.textContent = "Sign in to view your balance and spend Aura.";
+                    subtitle.classList.remove('hidden');
+                }
+                document.getElementById('loginContainer').classList.remove('hidden');
+                auth.onAuthStateChanged(async user => {
+                    if (user) {
+                        await initStoreOnlyMode(user);
+                    } else {
+                        document.getElementById('store-only-container').classList.add('hidden');
+                        document.getElementById('loginContainer').classList.remove('hidden');
+                    }
+                });
                 return;
             }
             try {
@@ -1036,6 +1117,8 @@
                     } else {
                         loader.classList.add('hidden');
                         document.getElementById('assignmentNameLogin').textContent = assignmentData.name;
+                        const subtitle = document.getElementById('assignmentSubtitleLogin');
+                        if (subtitle) subtitle.classList.add('hidden');
                         document.getElementById('loginContainer').classList.remove('hidden');
                     }
                 });
@@ -1412,22 +1495,96 @@
             }
         }
 
-        function getAuraColor(points) {
-            // Color thresholds based on aura points
-            if (points >= 100) return 'border-purple-500 shadow-purple-500/50';
-            if (points >= 50) return 'border-yellow-400 shadow-yellow-400/50';
-            if (points >= 20) return 'border-blue-400';
+        async function loadStudentProfileByEmail(email, fallbackName = '') {
+            const normalizedEmail = String(email || '').toLowerCase().trim();
+            if (!normalizedEmail) throw new Error("Missing email");
+            const studentQuery = await db.collection("students").where("email", "==", normalizedEmail).limit(1).get();
+            if (studentQuery.empty) throw new Error("Student profile not found");
+            const studentDoc = studentQuery.docs[0];
+            const studentData = studentDoc.data();
+            return {
+                name: studentData.name || fallbackName || normalizedEmail,
+                email: normalizedEmail,
+                class: String(studentData.class || 'Unassigned'),
+                auraLifetime: studentData.auraLifetime || 0,
+                auraBalance: studentData.auraBalance || 0,
+                studentDocId: studentDoc.id,
+                teacherEmail: normalizeTeacherEmail(studentData.teacherEmail || (assignmentData ? assignmentData.teacherEmail : 'klynch@mtps.us'))
+            };
+        }
+
+        async function initStoreOnlyMode(user) {
+            try {
+                document.getElementById('loginContainer').classList.add('hidden');
+                document.getElementById('mainContainer').classList.add('hidden');
+                document.getElementById('pageLoader').classList.add('hidden');
+
+                const email = (user?.email || '').toLowerCase().trim();
+                const name = user?.displayName || user?.name || '';
+                userProfile = await loadStudentProfileByEmail(email, name);
+
+                const storeOnlyContainer = document.getElementById('store-only-container');
+                const subtitle = document.getElementById('store-only-subtitle');
+                if (subtitle) {
+                    subtitle.textContent = `${userProfile.name} • Lifetime Aura: ${userProfile.auraLifetime || 0} ✧`;
+                }
+                storeOnlyContainer.classList.remove('hidden');
+
+                await updateUserHeader();
+                openAuraStore();
+            } catch (error) {
+                console.error("Store-only mode init error:", error);
+                document.getElementById('store-only-container').classList.add('hidden');
+                document.getElementById('loginContainer').classList.remove('hidden');
+                document.getElementById('loginError').textContent = "Could not load your store profile. Please contact your teacher.";
+            }
+        }
+
+        function getAuraColor(lifetime) {
+            if (lifetime >= 300) return 'border-purple-500 shadow-[0_0_12px_rgba(168,85,247,0.55)]';
+            if (lifetime >= 150) return 'border-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.45)]';
+            if (lifetime >= 50) return 'border-blue-400 shadow-[0_0_6px_rgba(96,165,250,0.4)]';
             return 'border-gray-500';
         }
 
-        function updateUserHeader() {
+        async function updateUserHeader() {
+            if (!userProfile) return;
             const lifetime = userProfile.auraLifetime || 0;
             const balance = userProfile.auraBalance || 0;
             const user = auth.currentUser;
             const photo = (user && user.photoURL) ? user.photoURL : 'https://via.placeholder.com/40';
+            const teacherEmail = normalizeTeacherEmail(userProfile.class === 'Teacher'
+                ? userProfile.email
+                : (userProfile.teacherEmail || (assignmentData ? assignmentData.teacherEmail : 'klynch@mtps.us')));
+            const tiers = await loadTierConfig(teacherEmail);
+            const tier = computeAuraTier(lifetime, tiers);
+            const nextTier = getNextAuraTier(lifetime, tiers);
 
             // Border color is always based on lifetime aura
             const borderColor = getAuraColor(lifetime);
+            const tierBadgeMap = {
+                focused: 'bg-blue-900/60 border-blue-500/50 text-blue-300',
+                scholar: 'bg-yellow-900/60 border-yellow-500/50 text-yellow-300',
+                elite: 'bg-purple-900/60 border-purple-500/50 text-purple-300'
+            };
+            const tierBadgeClass = tierBadgeMap[tier.id];
+            const tierBadgeHTML = tierBadgeClass
+                ? `<span class="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-bold mt-1 ${tierBadgeClass}">${tier.emoji || '✦'} ${tier.name}</span>`
+                : '';
+            const crownHTML = tier.id === 'elite'
+                ? `<span class="absolute -top-2 -right-1 text-sm drop-shadow">👑</span>`
+                : '';
+
+            const previousTierId = userProfile._lastDisplayedTierId;
+            if (previousTierId && previousTierId !== tier.id) {
+                const previousTier = (tiers || []).find(t => t.id === previousTierId);
+                const oldThreshold = previousTier ? (previousTier.threshold || 0) : 0;
+                const newThreshold = tier.threshold || 0;
+                if (newThreshold > oldThreshold) {
+                    showToast(`🎉 Tier Up! You're now ${tier.emoji || '✦'} ${tier.name}! New perks unlocked in the store.`, { color: 'yellow', duration: 6000 });
+                }
+            }
+            userProfile._lastDisplayedTierId = tier.id;
 
             // Header shows both balance and lifetime info
             // Visual emphasis changes based on whether popup has been opened
@@ -1438,6 +1595,7 @@
                 <div class="flex items-center cursor-pointer hover:opacity-90 transition" onclick="openAuraStore()">
                     <div class="text-right mr-3 hidden sm:block">
                         <div class="font-bold text-white text-sm">${userProfile.name}</div>
+                        ${tierBadgeHTML}
                         <div class="text-xs font-mono text-purple-400">
                             Lifetime: ${lifetime} ✧
                         </div>
@@ -1445,8 +1603,11 @@
                             Balance: ${balance} ✧
                         </div>
                     </div>
-                    <img src="${photo}" 
-                         class="w-10 h-10 rounded-full border-2 ${borderColor} shadow-lg object-cover">
+                    <div class="relative">
+                        <img src="${photo}"
+                             class="w-10 h-10 rounded-full border-2 ${borderColor} shadow-lg object-cover">
+                        ${crownHTML}
+                    </div>
                 </div>
             `;
             } else {
@@ -1455,6 +1616,7 @@
                 <div class="flex items-center cursor-pointer hover:opacity-90 transition" onclick="openAuraStore()">
                     <div class="text-right mr-3 hidden sm:block">
                         <div class="font-bold text-white text-sm">${userProfile.name}</div>
+                        ${tierBadgeHTML}
                         <div class="text-xs font-mono text-yellow-400">
                             ${balance} ✧ <span class="text-gray-400">(Spendable)</span>
                         </div>
@@ -1462,13 +1624,35 @@
                             Lifetime: ${lifetime} ✧
                         </div>
                     </div>
-                    <img src="${photo}" 
-                         class="w-10 h-10 rounded-full border-2 ${borderColor} shadow-lg object-cover">
+                    <div class="relative">
+                        <img src="${photo}"
+                             class="w-10 h-10 rounded-full border-2 ${borderColor} shadow-lg object-cover">
+                        ${crownHTML}
+                    </div>
                 </div>
             `;
             }
-            const container = document.getElementById('user-info-container');
+            const container = storeOnlyMode
+                ? (document.getElementById('store-only-user-info') || document.getElementById('user-info-container'))
+                : (document.getElementById('user-info-container') || document.getElementById('store-only-user-info'));
             if (container) container.innerHTML = headerHTML;
+
+            const bgAccent = document.getElementById('tier-bg-accent');
+            if (bgAccent) {
+                if (tier.id === 'elite') {
+                    bgAccent.style.background = 'radial-gradient(ellipse at bottom, rgba(168,85,247,0.09) 0%, transparent 65%)';
+                    bgAccent.style.opacity = '1';
+                } else if (tier.id === 'scholar') {
+                    bgAccent.style.background = 'radial-gradient(ellipse at bottom, rgba(250,204,21,0.07) 0%, transparent 65%)';
+                    bgAccent.style.opacity = '1';
+                } else if (tier.id === 'focused') {
+                    bgAccent.style.background = 'radial-gradient(ellipse at bottom, rgba(96,165,250,0.06) 0%, transparent 65%)';
+                    bgAccent.style.opacity = '1';
+                } else {
+                    bgAccent.style.background = '';
+                    bgAccent.style.opacity = '0';
+                }
+            }
         }
 
         async function initializeStudentSession() {
@@ -1958,7 +2142,11 @@
 
                 if (matchFound && studentData) {
                     const profile = { name: studentData.name, email: studentData.email };
-                    authorizeAndStart(profile);
+                    if (storeOnlyMode || !assignmentId) {
+                        await initStoreOnlyMode(profile);
+                    } else {
+                        authorizeAndStart(profile);
+                    }
                 } else {
                     errorP.textContent = "Invalid email or passcode. Please try again.";
                 }
@@ -3246,12 +3434,13 @@
             const existing = document.getElementById('aura-modal');
             if (existing) existing.remove();
 
+            const showLeaderboardTab = !storeOnlyMode;
             const modalHTML = `
             <div class="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50" id="aura-modal">
                 <div class="bg-gray-800 rounded-xl max-w-lg w-full text-white border border-gray-600 shadow-2xl flex flex-col max-h-[90vh]">
                     <div class="flex border-b border-gray-600">
-                        <button onclick="switchAuraTab('store')" id="tab-btn-store" class="flex-1 py-3 font-bold text-yellow-400 border-b-2 border-yellow-400 bg-gray-700">Store</button>
-                        <button onclick="switchAuraTab('leaderboard')" id="tab-btn-leaderboard" class="flex-1 py-3 font-bold text-gray-400 hover:bg-gray-700">Leaderboard</button>
+                        <button onclick="switchAuraTab('store')" id="tab-btn-store" class="${showLeaderboardTab ? 'flex-1' : 'w-full'} py-3 font-bold text-yellow-400 border-b-2 border-yellow-400 bg-gray-700">Store</button>
+                        ${showLeaderboardTab ? '<button onclick="switchAuraTab(\'leaderboard\')" id="tab-btn-leaderboard" class="flex-1 py-3 font-bold text-gray-400 hover:bg-gray-700">Leaderboard</button>' : ''}
                     </div>
                     <div id="aura-content" class="p-6 overflow-y-auto flex-1"></div>
                     <div class="p-4 bg-gray-900 border-t border-gray-700">
@@ -3265,22 +3454,23 @@
         };
 
         window.switchAuraTab = function (tab) {
+            if (storeOnlyMode && tab !== 'store') return;
             currentAuraTab = tab;
             const storeBtn = document.getElementById('tab-btn-store');
             const leadBtn = document.getElementById('tab-btn-leaderboard');
 
             if (tab === 'store') {
                 storeBtn.className = "flex-1 py-3 font-bold text-yellow-400 border-b-2 border-yellow-400 bg-gray-700 transition";
-                leadBtn.className = "flex-1 py-3 font-bold text-gray-400 hover:bg-gray-700 transition";
+                if (leadBtn) leadBtn.className = "flex-1 py-3 font-bold text-gray-400 hover:bg-gray-700 transition";
                 renderStoreTab();
             } else {
                 storeBtn.className = "flex-1 py-3 font-bold text-gray-400 hover:bg-gray-700 transition";
-                leadBtn.className = "flex-1 py-3 font-bold text-purple-400 border-b-2 border-purple-400 bg-gray-700 transition";
+                if (leadBtn) leadBtn.className = "flex-1 py-3 font-bold text-purple-400 border-b-2 border-purple-400 bg-gray-700 transition";
                 renderLeaderboardTab();
             }
         };
 
-        function renderStoreTab() {
+        async function renderStoreTab() {
             // Show spendable balance prominently, with lifetime context below
             const balance = userProfile.auraBalance || 0;
             const lifetime = userProfile.auraLifetime || 0;
@@ -3288,8 +3478,21 @@
             const teacherEmail = normalizeTeacherEmail(userProfile.class === 'Teacher'
                 ? userProfile.email
                 : (userProfile.teacherEmail || (assignmentData ? assignmentData.teacherEmail : 'klynch@mtps.us')));
+            const tiers = await loadTierConfig(teacherEmail);
+            const currentTier = computeAuraTier(lifetime, tiers);
+            const nextTier = getNextAuraTier(lifetime, tiers);
+            const neededForNext = nextTier ? Math.max(0, (nextTier.threshold || 0) - lifetime) : 0;
+            const discountMap = {};
+            (currentTier.discounts || []).forEach(discount => {
+                if (discount && discount.itemName) discountMap[discount.itemName] = Math.max(0, parseInt(discount.newCost, 10) || 0);
+            });
 
             document.getElementById('aura-content').innerHTML = `
+            <div class="mb-4 rounded-lg border border-purple-500/30 bg-gray-900/60 p-3 text-left">
+                <div class="text-sm font-bold text-white">${currentTier.emoji || '✦'} ${currentTier.name} Tier</div>
+                <div class="text-xs text-purple-300 mt-1">Lifetime Aura: ${lifetime} ✧</div>
+                <div class="text-xs text-gray-400 mt-1">${nextTier ? `${neededForNext} more ✧ to ${nextTier.name}` : 'Top tier reached — all perks unlocked!'}</div>
+            </div>
             <div class="text-center mb-4">
                 <div class="text-sm text-gray-400">Spendable Balance</div>
                 <div class="text-3xl font-bold text-yellow-400">${balance} ✧</div>
@@ -3317,15 +3520,24 @@
                 if (!listContainer) return;
 
                 listContainer.innerHTML = items.map(item => {
-                    const canAfford = balance >= item.cost;
+                    const itemCost = parseInt(item.cost, 10) || 0;
+                    const effectiveCost = Object.prototype.hasOwnProperty.call(discountMap, item.name) ? discountMap[item.name] : itemCost;
+                    const isFreePerk = effectiveCost === 0 && itemCost > 0;
+                    const canAfford = effectiveCost === 0 || balance >= effectiveCost;
+                    let costBadgeHtml = `<span class="bg-gray-900 px-2 py-1 rounded text-yellow-400 font-mono text-sm">${effectiveCost} ✧</span>`;
+                    if (isFreePerk) {
+                        costBadgeHtml = `<span class="bg-green-900/60 border border-green-500/60 px-2 py-1 rounded text-green-300 font-semibold text-xs">FREE ✦ Tier Perk</span>`;
+                    } else if (effectiveCost < itemCost && effectiveCost > 0) {
+                        costBadgeHtml = `<span class="bg-gray-900 px-2 py-1 rounded font-mono text-sm text-yellow-400"><span class="line-through text-gray-500 mr-1">${itemCost} ✧</span>${effectiveCost} ✧</span>`;
+                    }
                     return `
-                        <div onclick="${canAfford ? `purchaseItem('${item.name.replace(/'/g, "\\'")}', ${item.cost})` : `showToast('Need more Aura!', {color: 'red'})`}" 
+                        <div onclick="${canAfford ? `purchaseItem('${item.name.replace(/'/g, "\\'")}', ${effectiveCost}, ${itemCost})` : `showToast('Need more Aura!', {color: 'red'})`}"
                              class="flex justify-between p-3 rounded border transition active:scale-95 cursor-pointer ${canAfford ? 'bg-gray-700 hover:bg-gray-600 border-gray-600' : 'bg-gray-800 border-gray-700 opacity-60'} items-center group">
                             <span class="flex items-center gap-2">
                                 <span class="text-xl">${item.icon || '✨'}</span>
                                 <span class="group-hover:text-yellow-400 transition font-medium">${item.name}</span>
                             </span>
-                            <span class="bg-gray-900 px-2 py-1 rounded text-yellow-400 font-mono text-sm">${item.cost} ✧</span>
+                            ${costBadgeHtml}
                         </div>
                     `;
                 }).join('');
@@ -3337,25 +3549,31 @@
             });
         }
 
-        window.purchaseItem = async function (itemName, cost) {
-            if (userProfile.auraBalance < cost) {
+        window.purchaseItem = async function (itemName, cost, originalCost = cost) {
+            if (cost > 0 && userProfile.auraBalance < cost) {
                 showToast("Not enough Aura balance.", { color: 'red' });
                 return;
             }
+            const isTierPerk = cost === 0 && originalCost > 0;
+            const confirmationMessage = cost === 0
+                ? `Redeem your <span class="text-green-400 font-bold">FREE Tier Perk</span> for <br><span class="text-xl font-bold">"${itemName}"</span>?`
+                : `Spend <span class="text-yellow-400 font-bold">${cost} ✧</span> for <br><span class="text-xl font-bold">"${itemName}"</span>?`;
 
-            showConfirmationModal(`Spend <span class="text-yellow-400 font-bold">${cost} ✧</span> for <br><span class="text-xl font-bold">"${itemName}"</span>?`, async () => {
+            showConfirmationModal(confirmationMessage, async () => {
                 try {
                     const teacherEmail = normalizeTeacherEmail(userProfile.class === 'Teacher'
                         ? userProfile.email
                         : (userProfile.teacherEmail || (assignmentData ? assignmentData.teacherEmail : 'klynch@mtps.us')));
 
-                    // 1. Deduct from students collection
+                    // 1. Deduct from students collection (if needed)
                     const studentId = userProfile.studentDocId;
                     if (!studentId) throw new Error("Student document ID not found");
 
-                    await db.collection('students').doc(studentId).update({
-                        auraBalance: firebase.firestore.FieldValue.increment(-cost)
-                    });
+                    if (cost > 0) {
+                        await db.collection('students').doc(studentId).update({
+                            auraBalance: firebase.firestore.FieldValue.increment(-cost)
+                        });
+                    }
 
                     // 2. Log purchase
                     await db.collection('auraPurchases').add({
@@ -3364,6 +3582,7 @@
                         studentClass: userProfile.class || 'Unassigned',
                         itemName: itemName,
                         cost: cost,
+                        tierPerk: isTierPerk,
                         timestamp: firebase.firestore.FieldValue.serverTimestamp(),
                         teacherEmail: teacherEmail,
                         status: 'pending',
@@ -3371,9 +3590,16 @@
                     });
 
                     // 3. Update local state
-                    userProfile.auraBalance -= cost;
-                    updateUserHeader();
-                    renderStoreTab();
+                    if (cost > 0) {
+                        userProfile.auraBalance -= cost;
+                    }
+                    await updateUserHeader();
+                    await renderStoreTab();
+
+                    if (cost === 0) {
+                        showToast("✦ Tier Perk redeemed! Teacher will approve.", { color: 'yellow' });
+                        return;
+                    }
 
                     // 4. Success feedback with permission warning
                     showConfirmationModal(`
@@ -3403,7 +3629,7 @@
             // We then filter client-side to handle whitespace and casing inconsistencies
             const targetTeacherEmail = normalizeTeacherEmail(userProfile.class === 'Teacher'
                 ? userProfile.teacherEmail
-                : (userProfile.teacherEmail || assignmentData.teacherEmail));
+                : (userProfile.teacherEmail || (assignmentData ? assignmentData.teacherEmail : 'klynch@mtps.us')));
 
             const targetClass = normalizeClassName(userProfile.class);
 

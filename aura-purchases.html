@@ -99,6 +99,10 @@
                     class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg text-sm transition">Assignments</a>
                 <a href="./roster.html"
                     class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg text-sm transition font-bold">Roster</a>
+                <button id="notif-enable-btn" onclick="requestNotifPermission()"
+                    class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg text-sm transition hidden">
+                    🔔 Enable Notifications
+                </button>
                 <button onclick="handleSignOut()"
                     class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg text-sm transition">Sign
                     Out</button>
@@ -188,6 +192,20 @@
         let allPurchases = [];
         let currentTab = 'pending';
         let purchaseListener = null;
+        let initialLoadDone = false;
+
+        async function requestNotifPermission() {
+            if ('Notification' in window && Notification.permission === 'default') {
+                await Notification.requestPermission();
+            }
+            const notifBtn = document.getElementById('notif-enable-btn');
+            if (!notifBtn) return;
+            if ('Notification' in window && Notification.permission === 'default') {
+                notifBtn.classList.remove('hidden');
+            } else {
+                notifBtn.classList.add('hidden');
+            }
+        }
 
         function normalizeTeacherEmail(email) {
             if (!email) return 'klynch@mtps.us';
@@ -233,9 +251,14 @@
                 // Load data
                 initializeClasses(emailVariants);
                 listenToPurchases(emailVariants);
+                requestNotifPermission();
 
                 document.getElementById('pageLoader').classList.add('hidden');
                 document.getElementById('dashboardContent').classList.remove('hidden');
+                const notifBtn = document.getElementById('notif-enable-btn');
+                if (notifBtn && 'Notification' in window && Notification.permission === 'default') {
+                    notifBtn.classList.remove('hidden');
+                }
             } else {
                 document.getElementById('signInButtonContainer').classList.remove('hidden');
                 document.getElementById('loading-text').textContent = "Please sign in as a teacher.";
@@ -276,6 +299,8 @@
 
         function listenToPurchases(emailVariants) {
             if (purchaseListener) purchaseListener();
+            let isFirstSnapshot = true;
+            initialLoadDone = false;
 
             console.log("Setting up purchase listener for variants:", emailVariants);
 
@@ -283,6 +308,18 @@
             purchaseListener = db.collection('auraPurchases')
                 .where('teacherEmail', 'in', emailVariants)
                 .onSnapshot(snapshot => {
+                    if (!isFirstSnapshot) {
+                        snapshot.docChanges().forEach(change => {
+                            if (change.type === 'added') {
+                                const p = change.doc.data();
+                                if (p.status === 'pending' || (!p.status && !p.used)) {
+                                    firePurchaseNotification(p, change.doc.id);
+                                }
+                            }
+                        });
+                    }
+                    isFirstSnapshot = false;
+                    initialLoadDone = true;
                     console.log(`Fetched ${snapshot.size} purchases total.`);
                     allPurchases = snapshot.docs.map(doc => {
                         const data = doc.data();
@@ -312,6 +349,29 @@
                         showToast("Error syncing purchases. Check permissions.", "red");
                     }
                 });
+        }
+
+        function firePurchaseNotification(p, docId) {
+            if ('Notification' in window && Notification.permission === 'granted') {
+                const n = new Notification('🛒 New Aura Purchase!', {
+                    body: `${p.studentName} wants: ${p.itemName} (${p.cost} ✧)`,
+                    tag: docId,
+                    icon: 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✧</text></svg>'
+                });
+                n.onclick = () => { window.focus(); switchTab('pending'); };
+            }
+
+            let flashCount = 0;
+            const originalTitle = document.title;
+            const flashInterval = setInterval(() => {
+                document.title = document.title === originalTitle ? '🔔 New Purchase!' : originalTitle;
+                if (++flashCount >= 10) {
+                    clearInterval(flashInterval);
+                    document.title = originalTitle;
+                }
+            }, 800);
+
+            showToast(`🛒 New purchase: ${p.studentName} — ${p.itemName}`, 'yellow');
         }
 
         function updateCounts() {

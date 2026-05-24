@@ -85,6 +85,8 @@
                 <button onclick="openStoreConfig()"
                     class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg btn-action">🏪
                     Store</button>
+                <button onclick="openTierConfig()"
+                    class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg btn-action">🏆 Tiers</button>
                 <button onclick="openAddClassModal()"
                     class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg btn-action">+ Add
                     Class</button>
@@ -376,6 +378,28 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
                 <button id="saveStoreBtn" onclick="saveStoreConfig()"
                     class="px-6 py-2 bg-yellow-600 hover:bg-yellow-700 text-white font-bold rounded-lg transition">Save
                     Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Aura Tier Config Modal -->
+    <div id="auraTierModal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
+        <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="flex justify-between items-center p-4 border-b border-gray-700">
+                <h2 class="text-2xl font-bold text-yellow-400">🏆 Configure Aura Tiers</h2>
+                <button onclick="closeTierConfig()" class="text-gray-400 hover:text-white text-3xl transition hover:rotate-90">&times;</button>
+            </div>
+            <div class="p-6 overflow-y-auto bg-gray-800 flex-1">
+                <p class="text-sm text-gray-400 mb-2">Define lifetime Aura thresholds that unlock perks for students. Discounts automatically apply costs in the store.</p>
+                <p class="text-xs text-gray-500 mb-6">The first tier (threshold 0) is the base tier — no perks needed. Add tiers above it.</p>
+                <div id="tier-config-list" class="space-y-4"></div>
+                <button onclick="addTierRow()" class="mt-6 w-full py-3 bg-gray-700/50 hover:bg-gray-700 text-purple-400 border-2 border-dashed border-gray-600 rounded-xl font-bold transition flex items-center justify-center gap-2">
+                    <span class="text-xl">+</span> Add Tier
+                </button>
+            </div>
+            <div class="p-4 bg-gray-900 border-t border-gray-700 flex justify-end gap-3">
+                <button onclick="closeTierConfig()" class="px-6 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg font-bold">Cancel</button>
+                <button id="saveTierBtn" onclick="saveTierConfig()" class="px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg transition">Save Tiers</button>
             </div>
         </div>
     </div>
@@ -1282,12 +1306,161 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
             document.getElementById('auraStoreModal').classList.add('hidden');
         }
 
+        let currentTierItems = [];
+
+        function escapeTierInput(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/"/g, '&quot;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+        }
+
+        window.openTierConfig = async function() {
+            const container = document.getElementById('tier-config-list');
+            container.innerHTML = '<div class="text-center py-10 text-gray-500">Loading tier config...</div>';
+            document.getElementById('auraTierModal').classList.remove('hidden');
+
+            try {
+                const doc = await db.collection('auraTiers').doc(currentUserEmail).get();
+                currentTierItems = doc.exists ? (doc.data().tiers || []) : [
+                    { id: 'rising',  name: 'Rising',  threshold: 0,   emoji: '⚡', color: 'gray',   discounts: [] },
+                    { id: 'focused', name: 'Focused', threshold: 50,  emoji: '🔵', color: 'blue',   discounts: [] },
+                    { id: 'scholar', name: 'Scholar', threshold: 150, emoji: '⭐', color: 'yellow', discounts: [] },
+                    { id: 'elite',   name: 'Elite',   threshold: 300, emoji: '👑', color: 'purple', discounts: [] }
+                ];
+                renderTierConfigList();
+            } catch(e) {
+                console.error(e);
+                container.innerHTML = '<div class="text-red-400">Error loading tiers.</div>';
+            }
+        };
+
+        function renderTierConfigList() {
+            const container = document.getElementById('tier-config-list');
+            container.innerHTML = '';
+            currentTierItems.forEach((tier, idx) => {
+                const div = document.createElement('div');
+                div.className = 'bg-gray-700/50 rounded-xl p-4 border border-gray-600 space-y-3';
+                div.innerHTML = `
+                    <div class="flex items-center gap-3 flex-wrap">
+                        <input type="text" value="${escapeTierInput(tier.emoji || '')}" placeholder="Emoji" maxlength="4"
+                            class="w-16 p-2 bg-gray-700 rounded border border-gray-600 text-center text-lg"
+                            onchange="currentTierItems[${idx}].emoji = this.value">
+                        <input type="text" value="${escapeTierInput(tier.name || '')}" placeholder="Tier Name"
+                            class="flex-1 p-2 bg-gray-700 rounded border border-gray-600"
+                            onchange="currentTierItems[${idx}].name = this.value">
+                        <div class="flex items-center gap-2">
+                            <label class="text-sm text-gray-400">Min Lifetime ✧:</label>
+                            <input type="number" value="${parseInt(tier.threshold, 10) || 0}" min="0" step="1"
+                                class="w-24 p-2 bg-gray-700 rounded border border-gray-600"
+                                onchange="currentTierItems[${idx}].threshold = parseInt(this.value) || 0"
+                                ${idx === 0 ? 'disabled' : ''}>
+                        </div>
+                        ${idx > 0 ? `<button onclick="removeTierRow(${idx})" class="text-red-400 hover:text-red-300 text-sm px-2">✕ Remove</button>` : ''}
+                    </div>
+                    <div>
+                        <p class="text-xs text-gray-400 mb-2 font-semibold uppercase tracking-wide">Store Item Discounts (for this tier & above)</p>
+                        <div id="tier-discounts-${idx}" class="space-y-2"></div>
+                        <button onclick="addDiscount(${idx})" class="mt-2 text-xs text-yellow-400 hover:text-yellow-300 border border-dashed border-yellow-700 rounded px-3 py-1">+ Add Discount</button>
+                    </div>
+                `;
+                container.appendChild(div);
+                renderDiscounts(idx, tier.discounts || []);
+            });
+        }
+
+        function renderDiscounts(tierIdx, discounts) {
+            const container = document.getElementById(`tier-discounts-${tierIdx}`);
+            if (!container) return;
+            container.innerHTML = '';
+            discounts.forEach((d, dIdx) => {
+                const row = document.createElement('div');
+                row.className = 'flex items-center gap-2';
+                row.innerHTML = `
+                    <input type="text" value="${escapeTierInput(d.itemName || '')}" placeholder="Store item name (exact)"
+                        class="flex-1 p-1.5 bg-gray-800 rounded border border-gray-600 text-sm"
+                        onchange="currentTierItems[${tierIdx}].discounts[${dIdx}].itemName = this.value">
+                    <label class="text-xs text-gray-400">New Cost:</label>
+                    <input type="number" value="${parseInt(d.newCost, 10) || 0}" min="0" step="1"
+                        class="w-20 p-1.5 bg-gray-800 rounded border border-gray-600 text-sm"
+                        onchange="currentTierItems[${tierIdx}].discounts[${dIdx}].newCost = parseInt(this.value) || 0">
+                    <button onclick="removeDiscount(${tierIdx}, ${dIdx})" class="text-red-400 hover:text-red-300 text-sm">✕</button>
+                `;
+                container.appendChild(row);
+            });
+        }
+
+        function addDiscount(tierIdx) {
+            if (!currentTierItems[tierIdx].discounts) currentTierItems[tierIdx].discounts = [];
+            currentTierItems[tierIdx].discounts.push({ itemName: '', newCost: 0 });
+            renderTierConfigList();
+        }
+
+        function removeDiscount(tierIdx, dIdx) {
+            currentTierItems[tierIdx].discounts.splice(dIdx, 1);
+            renderTierConfigList();
+        }
+
+        function addTierRow() {
+            const lastThreshold = currentTierItems.length > 0 ? currentTierItems[currentTierItems.length - 1].threshold : 0;
+            currentTierItems.push({
+                id: 'tier_' + Date.now(),
+                name: 'New Tier',
+                threshold: lastThreshold + 50,
+                emoji: '✦',
+                color: 'gray',
+                discounts: []
+            });
+            renderTierConfigList();
+        }
+
+        function removeTierRow(idx) {
+            currentTierItems.splice(idx, 1);
+            renderTierConfigList();
+        }
+
+        async function saveTierConfig() {
+            const btn = document.getElementById('saveTierBtn');
+            btn.textContent = 'Saving...';
+            btn.disabled = true;
+            try {
+                currentTierItems = currentTierItems
+                    .filter(t => (t.name || '').trim() !== '')
+                    .map(t => ({
+                        ...t,
+                        threshold: parseInt(t.threshold, 10) || 0,
+                        discounts: (t.discounts || []).filter(d => (d.itemName || '').trim() !== '').map(d => ({
+                            itemName: d.itemName,
+                            newCost: parseInt(d.newCost, 10) || 0
+                        }))
+                    }));
+                currentTierItems.sort((a, b) => a.threshold - b.threshold);
+                await db.collection('auraTiers').doc(currentUserEmail).set({ tiers: currentTierItems });
+                showToast('Tier config saved!', { color: 'green' });
+                closeTierConfig();
+            } catch(e) {
+                console.error(e);
+                showToast('Error saving tiers.', { color: 'red' });
+            } finally {
+                btn.textContent = 'Save Tiers';
+                btn.disabled = false;
+            }
+        }
+
+        function closeTierConfig() {
+            document.getElementById('auraTierModal').classList.add('hidden');
+        }
+
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape' && !document.getElementById('student-performance-modal').classList.contains('hidden')) {
                 closeStudentPerformance();
             }
             if (e.key === 'Escape' && !document.getElementById('auraStoreModal').classList.contains('hidden')) {
                 closeStoreConfig();
+            }
+            if (e.key === 'Escape' && !document.getElementById('auraTierModal').classList.contains('hidden')) {
+                closeTierConfig();
             }
         });
 
@@ -1300,6 +1473,11 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
         document.getElementById('auraStoreModal').addEventListener('click', (e) => {
             if (e.target.id === 'auraStoreModal') {
                 closeStoreConfig();
+            }
+        });
+        document.getElementById('auraTierModal').addEventListener('click', (e) => {
+            if (e.target.id === 'auraTierModal') {
+                closeTierConfig();
             }
         });
 
