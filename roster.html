@@ -392,6 +392,7 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
             <div class="p-6 overflow-y-auto bg-gray-800 flex-1">
                 <p class="text-sm text-gray-400 mb-2">Define lifetime Aura thresholds that unlock perks for students. Discounts automatically apply costs in the store.</p>
                 <p class="text-xs text-gray-500 mb-6">The first tier (threshold 0) is the base tier — no perks needed. Add tiers above it.</p>
+                <div class="flex items-center gap-3 mb-6 p-3 bg-gray-700/40 rounded-lg border border-gray-600"><input type="checkbox" id="tier-cumulative-toggle" checked class="w-5 h-5 rounded bg-gray-700 border-gray-600 text-purple-500 focus:ring-purple-500 cursor-pointer"><div><label for="tier-cumulative-toggle" class="font-semibold text-sm text-white cursor-pointer">Cumulative Tier Rewards</label><p class="text-xs text-gray-400">When enabled, students keep all discounts from lower tiers when they reach a higher tier. Recommended: ON.</p></div></div>
                 <div id="tier-config-list" class="space-y-4"></div>
                 <button onclick="addTierRow()" class="mt-6 w-full py-3 bg-gray-700/50 hover:bg-gray-700 text-purple-400 border-2 border-dashed border-gray-600 rounded-xl font-bold transition flex items-center justify-center gap-2">
                     <span class="text-xl">+</span> Add Tier
@@ -1307,6 +1308,7 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
         }
 
         let currentTierItems = [];
+        window._tierStoreItemNames = [];
 
         function escapeTierInput(value) {
             return String(value ?? '')
@@ -1323,12 +1325,21 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
 
             try {
                 const doc = await db.collection('auraTiers').doc(currentUserEmail).get();
+                document.getElementById('tier-cumulative-toggle').checked = doc.exists ? (doc.data().cumulativeDiscounts !== false) : true;
                 currentTierItems = doc.exists ? (doc.data().tiers || []) : [
-                    { id: 'rising',  name: 'Rising',  threshold: 0,   emoji: '⚡', color: 'gray',   discounts: [] },
-                    { id: 'focused', name: 'Focused', threshold: 50,  emoji: '🔵', color: 'blue',   discounts: [] },
-                    { id: 'scholar', name: 'Scholar', threshold: 150, emoji: '⭐', color: 'yellow', discounts: [] },
-                    { id: 'elite',   name: 'Elite',   threshold: 300, emoji: '👑', color: 'purple', discounts: [] }
+                    { id: 'rising',  name: 'Rising',  threshold: 0,   emoji: '⚡', color: 'gray',   discounts: [], milestones: [] },
+                    { id: 'focused', name: 'Focused', threshold: 50,  emoji: '🔵', color: 'blue',   discounts: [], milestones: [] },
+                    { id: 'scholar', name: 'Scholar', threshold: 150, emoji: '⭐', color: 'yellow', discounts: [], milestones: [] },
+                    { id: 'elite',   name: 'Elite',   threshold: 300, emoji: '👑', color: 'purple', discounts: [], milestones: [] }
                 ];
+                let storeItemNames = [];
+                try {
+                    const storeDoc = await db.collection('auraStores').doc(currentUserEmail).get();
+                    if (storeDoc.exists) {
+                        storeItemNames = (storeDoc.data().items || []).map(i => i.name).filter(Boolean);
+                    }
+                } catch(e) {}
+                window._tierStoreItemNames = storeItemNames;
                 renderTierConfigList();
             } catch(e) {
                 console.error(e);
@@ -1364,9 +1375,17 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
                         <div id="tier-discounts-${idx}" class="space-y-2"></div>
                         <button onclick="addDiscount(${idx})" class="mt-2 text-xs text-yellow-400 hover:text-yellow-300 border border-dashed border-yellow-700 rounded px-3 py-1">+ Add Discount</button>
                     </div>
+                    ${idx > 0 ? `
+                    <div>
+                        <p class="text-xs text-gray-400 mb-2 font-semibold uppercase tracking-wide">🎖️ Milestone Rewards (shown to student on unlock, no aura cost)</p>
+                        <div id="tier-milestones-${idx}" class="space-y-2"></div>
+                        <button onclick="addMilestone(${idx})" class="mt-2 text-xs text-purple-400 hover:text-purple-300 border border-dashed border-purple-700 rounded px-3 py-1">+ Add Milestone Reward</button>
+                    </div>
+                    ` : ''}
                 `;
                 container.appendChild(div);
                 renderDiscounts(idx, tier.discounts || []);
+                if (idx > 0) renderMilestones(idx, tier.milestones || []);
             });
         }
 
@@ -1377,16 +1396,37 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
             discounts.forEach((d, dIdx) => {
                 const row = document.createElement('div');
                 row.className = 'flex items-center gap-2';
-                row.innerHTML = `
-                    <input type="text" value="${escapeTierInput(d.itemName || '')}" placeholder="Store item name (exact)"
-                        class="flex-1 p-1.5 bg-gray-800 rounded border border-gray-600 text-sm"
-                        onchange="currentTierItems[${tierIdx}].discounts[${dIdx}].itemName = this.value">
-                    <label class="text-xs text-gray-400">New Cost:</label>
-                    <input type="number" value="${parseInt(d.newCost, 10) || 0}" min="0" step="1"
-                        class="w-20 p-1.5 bg-gray-800 rounded border border-gray-600 text-sm"
-                        onchange="currentTierItems[${tierIdx}].discounts[${dIdx}].newCost = parseInt(this.value) || 0">
-                    <button onclick="removeDiscount(${tierIdx}, ${dIdx})" class="text-red-400 hover:text-red-300 text-sm">✕</button>
-                `;
+                const storeItemNames = Array.isArray(window._tierStoreItemNames) ? window._tierStoreItemNames : [];
+                const selectedName = d.itemName || '';
+                if (storeItemNames.length > 0) {
+                    let options = '<option value="">Select store item</option>';
+                    options += storeItemNames.map(name => `<option value="${escapeTierInput(name)}" ${name === selectedName ? 'selected' : ''}>${escapeTierInput(name)}</option>`).join('');
+                    if (selectedName && !storeItemNames.includes(selectedName)) {
+                        options += `<option value="${escapeTierInput(selectedName)}" selected>${escapeTierInput(selectedName)}</option>`;
+                    }
+                    row.innerHTML = `
+                        <select class="flex-1 p-1.5 bg-gray-800 rounded border border-gray-600 text-sm"
+                            onchange="currentTierItems[${tierIdx}].discounts[${dIdx}].itemName = this.value">
+                            ${options}
+                        </select>
+                        <label class="text-xs text-gray-400">New Cost:</label>
+                        <input type="number" value="${parseInt(d.newCost, 10) || 0}" min="0" step="1"
+                            class="w-20 p-1.5 bg-gray-800 rounded border border-gray-600 text-sm"
+                            onchange="currentTierItems[${tierIdx}].discounts[${dIdx}].newCost = parseInt(this.value) || 0">
+                        <button onclick="removeDiscount(${tierIdx}, ${dIdx})" class="text-red-400 hover:text-red-300 text-sm">✕</button>
+                    `;
+                } else {
+                    row.innerHTML = `
+                        <input type="text" value="${escapeTierInput(d.itemName || '')}" placeholder="Store item name (exact)"
+                            class="flex-1 p-1.5 bg-gray-800 rounded border border-gray-600 text-sm"
+                            onchange="currentTierItems[${tierIdx}].discounts[${dIdx}].itemName = this.value">
+                        <label class="text-xs text-gray-400">New Cost:</label>
+                        <input type="number" value="${parseInt(d.newCost, 10) || 0}" min="0" step="1"
+                            class="w-20 p-1.5 bg-gray-800 rounded border border-gray-600 text-sm"
+                            onchange="currentTierItems[${tierIdx}].discounts[${dIdx}].newCost = parseInt(this.value) || 0">
+                        <button onclick="removeDiscount(${tierIdx}, ${dIdx})" class="text-red-400 hover:text-red-300 text-sm">✕</button>
+                    `;
+                }
                 container.appendChild(row);
             });
         }
@@ -1394,6 +1434,35 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
         function addDiscount(tierIdx) {
             if (!currentTierItems[tierIdx].discounts) currentTierItems[tierIdx].discounts = [];
             currentTierItems[tierIdx].discounts.push({ itemName: '', newCost: 0 });
+            renderTierConfigList();
+        }
+
+        function renderMilestones(tierIdx, milestones) {
+            const container = document.getElementById('tier-milestones-' + tierIdx);
+            if (!container) return;
+            container.innerHTML = '';
+            (milestones || []).forEach((m, mIdx) => {
+                const row = document.createElement('div');
+                row.className = 'flex items-center gap-2';
+                row.innerHTML = `
+                    <span class="text-sm">🎖️</span>
+                    <input type="text" value="${escapeTierInput(m || '')}" placeholder="Milestone reward text"
+                        class="flex-1 p-1.5 bg-gray-800 rounded border border-gray-600 text-sm"
+                        onchange="currentTierItems[${tierIdx}].milestones[${mIdx}] = this.value">
+                    <button onclick="removeMilestone(${tierIdx}, ${mIdx})" class="text-red-400 hover:text-red-300 text-sm">✕</button>
+                `;
+                container.appendChild(row);
+            });
+        }
+
+        function addMilestone(tierIdx) {
+            if (!currentTierItems[tierIdx].milestones) currentTierItems[tierIdx].milestones = [];
+            currentTierItems[tierIdx].milestones.push('');
+            renderTierConfigList();
+        }
+
+        function removeMilestone(tierIdx, mIdx) {
+            currentTierItems[tierIdx].milestones.splice(mIdx, 1);
             renderTierConfigList();
         }
 
@@ -1410,7 +1479,8 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
                 threshold: lastThreshold + 50,
                 emoji: '✦',
                 color: 'gray',
-                discounts: []
+                discounts: [],
+                milestones: []
             });
             renderTierConfigList();
         }
@@ -1430,13 +1500,17 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
                     .map(t => ({
                         ...t,
                         threshold: parseInt(t.threshold, 10) || 0,
+                        milestones: (t.milestones || []).map(m => String(m || '').trim()).filter(Boolean),
                         discounts: (t.discounts || []).filter(d => (d.itemName || '').trim() !== '').map(d => ({
                             itemName: d.itemName,
                             newCost: parseInt(d.newCost, 10) || 0
                         }))
                     }));
                 currentTierItems.sort((a, b) => a.threshold - b.threshold);
-                await db.collection('auraTiers').doc(currentUserEmail).set({ tiers: currentTierItems });
+                await db.collection('auraTiers').doc(currentUserEmail).set({
+                    tiers: currentTierItems,
+                    cumulativeDiscounts: document.getElementById('tier-cumulative-toggle').checked
+                });
                 showToast('Tier config saved!', { color: 'green' });
                 closeTierConfig();
             } catch(e) {
