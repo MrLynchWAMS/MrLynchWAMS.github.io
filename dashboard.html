@@ -236,6 +236,10 @@
                                 onchange="toggleDisplayOptions()"
                                 class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"><span
                                 class="ml-2">Show Aura & Violations</span></label>
+                        <label class="flex items-center"><input type="checkbox" id="showTierIndicators"
+                                onchange="toggleDisplayOptions()"
+                                class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"><span
+                                class="ml-2">Show Tier Badges</span></label>
                         <label class="flex items-center"><input type="checkbox" id="showAttempts"
                                 onchange="toggleDisplayOptions()"
                                 class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"><span
@@ -353,6 +357,7 @@
         let sortMode = 'lastName';
         let staticRandomOrder = [];
         let showAllAttempts = localStorage.getItem('dashboardShowAllAttempts') === 'true';
+        let showTierIndicators = localStorage.getItem('dashboardShowTierIndicators') === 'true';
         let currentModalView = null;
         let fullWidthMode = localStorage.getItem('dashboardFullWidth') === 'true';
         let compactMode = localStorage.getItem('dashboardCompact') === 'true';
@@ -686,6 +691,7 @@
 
                     return {
                         ...student,
+                        auraLifetime: student.auraLifetime || 0,
                         submissions: submissionsByStudent.get(student.email) || [],
                         isSubmitted: submittedEmails.has(student.email),
                         violations: violationsByStudent.get(student.email) || [],
@@ -733,6 +739,11 @@
                     return;
                 }
                 assignmentData = { id: doc.id, ...doc.data() };
+                window.auraTierConfig = null;
+                try {
+                    const tierDoc = await db.collection('auraTiers').doc(assignmentData.teacherEmail || currentUserEmail).get();
+                    if (tierDoc.exists) window.auraTierConfig = tierDoc.data().tiers || [];
+                } catch (e) { }
                 // Load Linked Assignments for Lessons
                 window.linkedAssignmentsData = {};
                 if (assignmentData.type === 'lesson' && assignmentData.sections) {
@@ -794,6 +805,9 @@
                 if (compactMode) {
                     document.getElementById('compactMode').checked = true;
                     document.body.classList.add('compact-mode');
+                }
+                if (showTierIndicators) {
+                    document.getElementById('showTierIndicators').checked = true;
                 }
 
                 setupLiveStudentData(); // <-- Live updates!
@@ -1058,10 +1072,27 @@
             showScores = document.getElementById('showScores').checked;
             blackoutMode = document.getElementById('blackoutMode').checked;
             showBehavior = document.getElementById('showBehaviorToggle').checked;
+            showTierIndicators = document.getElementById('showTierIndicators').checked;
+            localStorage.setItem('dashboardShowTierIndicators', showTierIndicators);
             showAttempts = document.getElementById('showAttempts').checked;
             const avgEl = document.getElementById('activeClassAvg');
             if (avgEl) avgEl.classList.toggle('hidden', !showScores);
             displayStudentData();
+        }
+
+        function getDashboardTierBadge(lifetimeAura) {
+            const tiers = window.auraTierConfig;
+            if (!tiers || tiers.length === 0) {
+                if (lifetimeAura >= 300) return { emoji: '👑', label: 'Elite', color: 'text-purple-400' };
+                if (lifetimeAura >= 150) return { emoji: '⭐', label: 'Scholar', color: 'text-yellow-400' };
+                if (lifetimeAura >= 50) return { emoji: '🔵', label: 'Focused', color: 'text-blue-400' };
+                return null;
+            }
+            const sorted = [...tiers].sort((a, b) => (b.threshold || 0) - (a.threshold || 0));
+            const matched = sorted.find(t => lifetimeAura >= (t.threshold || 0));
+            if (!matched || (matched.threshold || 0) === 0) return null;
+            const colorMap = { purple: 'text-purple-400', yellow: 'text-yellow-400', blue: 'text-blue-400', gray: 'text-gray-400' };
+            return { emoji: matched.emoji || '✦', label: matched.name, color: colorMap[matched.color] || 'text-gray-400' };
         }
 
         function getCurrentlySortedStudents(applySort = true) {
@@ -1226,6 +1257,13 @@
                 }
 
                 const escapedEmail = escapeHtml(student.email);
+                let tierBadgeHtml = '';
+                if (showTierIndicators) {
+                    const tierBadge = getDashboardTierBadge(student.auraLifetime || 0);
+                    if (tierBadge) {
+                        tierBadgeHtml = `<span class="ml-1 ${tierBadge.color} text-xs" title="${escapeHtml(tierBadge.label)} Tier">${tierBadge.emoji}</span>`;
+                    }
+                }
                 
                 let watchTimeCell = '';
                 if (showWatchTime && assignmentData.type === 'video') {
@@ -1249,7 +1287,7 @@
                 tableHtml += `<tr class="hover:bg-gray-700 group">
                 <td class="px-3 py-4 whitespace-nowrap text-sm font-medium text-white sticky-col-1">
                     <div class="flex items-center justify-between gap-2">
-                        <span class="cursor-pointer hover:text-yellow-400 truncate flex-1" onclick="showStudentSubmissions('${escapedEmail}')">${displayName}${avgScoreDisplay}</span>
+                        <span class="cursor-pointer hover:text-yellow-400 truncate flex-1" onclick="showStudentSubmissions('${escapedEmail}')">${displayName}${tierBadgeHtml}${avgScoreDisplay}</span>
                         <button onclick="startImpersonating('${escapedEmail}', '${student.name.replace(/'/g, "\\'")}')" title="Impersonate ${student.name}" class="hidden group-hover:inline-block ml-2 text-yellow-400 hover:text-yellow-300 text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-800 border border-yellow-500/30 hover:border-yellow-400 transition-all shrink-0">🎭 Impersonate</button>
                     </div>
                 </td>
