@@ -4,73 +4,58 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Class Overview Dashboard</title>
+    <title>Class Overview Dashboard – IteratED</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
     <style>
-        .hidden {
-            display: none;
-        }
+        .hidden { display: none; }
 
         .sticky-col {
             position: sticky;
             left: 0;
             background-color: #1f2937;
             z-index: 10;
-            box-shadow: 2px 0 5px -2px rgba(0, 0, 0, 0.5);
+            box-shadow: 2px 0 6px -2px rgba(0, 0, 0, 0.6);
         }
 
         .sticky-row {
             position: sticky;
             top: 0;
-            background-color: #374151;
+            background-color: #1e2d3d;
             z-index: 20;
-            box-shadow: 0 2px 5px -2px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 2px 6px -2px rgba(0, 0, 0, 0.6);
         }
 
         .sticky-intersect {
             position: sticky;
             top: 0;
             left: 0;
-            background-color: #374151;
+            background-color: #1e2d3d;
             z-index: 30;
-            box-shadow: 2px 2px 5px -2px rgba(0, 0, 0, 0.5);
+            box-shadow: 2px 2px 6px -2px rgba(0, 0, 0, 0.6);
         }
 
         .grid-cell {
-            transition: all 0.2s;
-        }
-
-        .grid-cell:hover {
-            filter: brightness(1.2);
+            transition: filter 0.15s;
             cursor: pointer;
         }
+        .grid-cell:hover { filter: brightness(1.25); }
 
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
+        .type-chip { transition: all 0.15s; }
 
-        ::-webkit-scrollbar-track {
-            background: #1f2937;
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: #4b5563;
-            border-radius: 4px;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: #6b7280;
-        }
+        ::-webkit-scrollbar { width: 7px; height: 7px; }
+        ::-webkit-scrollbar-track { background: #1f2937; }
+        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
     </style>
 </head>
 
 <body class="bg-gray-900 text-white font-sans">
 
+    <!-- ==================== PAGE LOADER ==================== -->
     <div id="pageLoader" class="flex flex-col items-center justify-center h-screen">
         <h1 class="text-4xl font-bold text-yellow-400 mb-4">Class Dashboard</h1>
         <p id="loading-text" class="text-lg text-gray-300">Initializing...</p>
@@ -86,16 +71,19 @@
         <p id="auth-error" class="text-red-500 mt-4"></p>
     </div>
 
-    <div id="dashboardContent" class="hidden min-h-screen flex flex-col p-4 md:p-8">
-        <div class="flex justify-between items-center mb-6 flex-wrap gap-4">
-            <div class="flex items-center gap-4 flex-wrap">
-                <h1 class="text-3xl font-bold text-yellow-400">Class Overview</h1>
+    <!-- ==================== DASHBOARD CONTENT ==================== -->
+    <div id="dashboardContent" class="hidden min-h-screen flex flex-col p-4 md:p-6">
+
+        <!-- Top Bar -->
+        <div class="flex justify-between items-center mb-4 flex-wrap gap-3">
+            <div class="flex items-center gap-3 flex-wrap">
+                <h1 class="text-2xl font-bold text-yellow-400">Class Overview</h1>
                 <select id="classSelector" onchange="handleClassChange()"
-                    class="bg-gray-800 border border-gray-700 text-white rounded px-4 py-2 font-bold focus:ring-yellow-400">
+                    class="bg-gray-800 border border-gray-700 text-white rounded px-3 py-1.5 font-bold text-sm focus:outline-none focus:ring-1 focus:ring-yellow-400">
                     <option value="">Select a Class...</option>
                 </select>
                 <select id="dateRangeSelector" onchange="toggleCustomDates(); handleClassChange();"
-                    class="bg-gray-800 border border-gray-700 text-white rounded px-4 py-2 text-sm focus:ring-yellow-400">
+                    class="bg-gray-800 border border-gray-700 text-white rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-yellow-400">
                     <option value="all">All Assignments</option>
                     <option value="30">Last 30 Days</option>
                     <option value="90">Last 90 Days</option>
@@ -103,147 +91,188 @@
                 </select>
                 <div id="customDateRange" class="hidden flex items-center gap-2">
                     <input type="date" id="startDate" onchange="handleClassChange()"
-                        class="bg-gray-800 border border-gray-700 text-white rounded px-2 py-1 text-sm focus:ring-yellow-400">
+                        class="bg-gray-800 border border-gray-700 text-white rounded px-2 py-1 text-sm focus:outline-none">
                     <span class="text-gray-500">to</span>
                     <input type="date" id="endDate" onchange="handleClassChange()"
-                        class="bg-gray-800 border border-gray-700 text-white rounded px-2 py-1 text-sm focus:ring-yellow-400">
+                        class="bg-gray-800 border border-gray-700 text-white rounded px-2 py-1 text-sm focus:outline-none">
                 </div>
             </div>
-            <div class="flex gap-3">
+            <div class="flex gap-2 flex-wrap">
                 <a href="./assignments.html"
-                    class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg text-sm">Assignments</a>
+                    class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-1.5 px-3 rounded text-sm transition-colors">Assignments</a>
                 <a href="./roster.html"
-                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg text-sm">Roster</a>
+                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1.5 px-3 rounded text-sm transition-colors">Roster</a>
                 <button id="exportCsv"
-                    class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg text-sm">Export
-                    CSV</button>
+                    class="bg-green-600 hover:bg-green-700 text-white font-bold py-1.5 px-3 rounded text-sm transition-colors">Export CSV</button>
                 <button id="signOutButton"
-                    class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg text-sm">Sign
-                    Out</button>
+                    class="bg-red-600 hover:bg-red-700 text-white font-bold py-1.5 px-3 rounded text-sm transition-colors">Sign Out</button>
             </div>
         </div>
 
-        <div id="gridWrapper" class="border border-gray-700 rounded-lg bg-gray-800 relative mb-8">
-            <div id="noDataState" class="p-20 flex items-center justify-center text-gray-400 italic">
+        <!-- Filter Bar -->
+        <div class="flex items-center gap-4 mb-4 flex-wrap bg-gray-800/50 border border-gray-700/60 rounded-lg px-4 py-3">
+            <!-- Type Chips -->
+            <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Filter:</span>
+                <button id="chip-all"        data-type="all"        onclick="setTypeFilter('all')"
+                    class="type-chip text-xs px-3 py-1 rounded-full font-semibold border transition-all bg-yellow-500/20 text-yellow-300 border-yellow-500/50">All</button>
+                <button id="chip-slides"     data-type="slides"     onclick="setTypeFilter('slides')"
+                    class="type-chip text-xs px-3 py-1 rounded-full font-semibold border transition-all bg-gray-800 text-gray-500 border-gray-700 hover:border-indigo-500 hover:text-indigo-300">Slides</button>
+                <button id="chip-pdf"        data-type="pdf"        onclick="setTypeFilter('pdf')"
+                    class="type-chip text-xs px-3 py-1 rounded-full font-semibold border transition-all bg-gray-800 text-gray-500 border-gray-700 hover:border-amber-500 hover:text-amber-300">PDF</button>
+                <button id="chip-video"      data-type="video"      onclick="setTypeFilter('video')"
+                    class="type-chip text-xs px-3 py-1 rounded-full font-semibold border transition-all bg-gray-800 text-gray-500 border-gray-700 hover:border-purple-500 hover:text-purple-300">Video</button>
+                <button id="chip-simulation" data-type="simulation" onclick="setTypeFilter('simulation')"
+                    class="type-chip text-xs px-3 py-1 rounded-full font-semibold border transition-all bg-gray-800 text-gray-500 border-gray-700 hover:border-cyan-500 hover:text-cyan-300">Simulation</button>
+                <button id="chip-blank"      data-type="blank"      onclick="setTypeFilter('blank')"
+                    class="type-chip text-xs px-3 py-1 rounded-full font-semibold border transition-all bg-gray-800 text-gray-500 border-gray-700 hover:border-emerald-500 hover:text-emerald-300">Blank</button>
+                <button id="chip-lesson"     data-type="lesson"     onclick="setTypeFilter('lesson')"
+                    class="type-chip text-xs px-3 py-1 rounded-full font-semibold border transition-all bg-gray-800 text-gray-500 border-gray-700 hover:border-rose-500 hover:text-rose-300">Lesson</button>
+            </div>
+            <!-- Divider -->
+            <div class="h-5 w-px bg-gray-700 hidden sm:block"></div>
+            <!-- Hide Zero Submissions -->
+            <label class="flex items-center gap-2 cursor-pointer select-none">
+                <input type="checkbox" id="hideZeroSubs" onchange="applyFiltersAndRender()"
+                    class="w-4 h-4 rounded border-gray-600 bg-gray-700 text-yellow-500 focus:ring-yellow-500 focus:ring-offset-gray-900">
+                <span class="text-xs text-gray-300 font-medium">Hide assignments with no submissions</span>
+            </label>
+        </div>
+
+        <!-- Grid Wrapper -->
+        <div id="gridWrapper" class="border border-gray-700 rounded-xl bg-gray-800 relative mb-5 overflow-auto" style="max-height: 68vh;">
+            <div id="noDataState" class="p-20 flex items-center justify-center text-gray-400 italic text-center">
                 Select a class to view performance data.
             </div>
             <table id="performanceGrid" class="hidden min-w-full border-collapse">
-                <thead id="gridHeader">
-                    <!-- Dynamic -->
-                </thead>
-                <tbody id="gridBody">
-                    <!-- Dynamic -->
-                </tbody>
+                <thead id="gridHeader"></thead>
+                <tbody id="gridBody"></tbody>
             </table>
         </div>
 
-        <div class="mt-4 flex gap-6 text-xs text-gray-400">
-            <div class="flex items-center gap-2">
-                <div class="w-3 h-3 bg-green-500 rounded"></div> Mastered (90%+)
-            </div>
-            <div class="flex items-center gap-2">
-                <div class="w-3 h-3 bg-yellow-500 rounded"></div> Proficient (70%+)
-            </div>
-            <div class="flex items-center gap-2">
-                <div class="w-3 h-3 bg-red-500 rounded"></div> Needs Support (<70%)< /div>
-                    <div class="flex items-center gap-2">
-                        <div class="w-3 h-3 border border-gray-600 rounded"></div> Not Started
-                    </div>
-            </div>
+        <!-- Legend -->
+        <div class="flex gap-5 text-xs text-gray-500 flex-wrap items-center">
+            <div class="flex items-center gap-1.5"><div class="w-3 h-3 rounded bg-green-600/40 border border-green-600/50"></div><span>Mastered (90%+)</span></div>
+            <div class="flex items-center gap-1.5"><div class="w-3 h-3 rounded bg-yellow-600/40 border border-yellow-600/50"></div><span>Proficient (70%+)</span></div>
+            <div class="flex items-center gap-1.5"><div class="w-3 h-3 rounded bg-red-600/40 border border-red-600/50"></div><span>Needs Support (&lt;70%)</span></div>
+            <div class="flex items-center gap-1.5"><div class="w-3 h-3 rounded border border-gray-600"></div><span>Not Started</span></div>
+            <div class="ml-auto text-[10px] text-gray-700 hidden md:block">Click any cell for question details · Click any name to view student report · 🖨 to print</div>
         </div>
 
     </div>
+
+    <!-- ==================== DRILLDOWN MODAL ==================== -->
+    <div id="drilldownModal"
+        class="hidden fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-[70]">
+        <div class="bg-gray-800 rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden border border-gray-700">
+            <div class="flex justify-between items-start p-5 border-b border-gray-700 bg-gray-900/70 shrink-0">
+                <div>
+                    <p class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Question Breakdown</p>
+                    <h2 id="ddStudentName" class="text-xl font-bold text-yellow-400">Student</h2>
+                    <p id="ddAssignmentName" class="text-sm text-gray-400 mt-0.5">Assignment</p>
+                </div>
+                <button onclick="closeDrilldown()"
+                    class="text-gray-500 hover:text-white text-3xl leading-none transition-transform hover:rotate-90">×</button>
+            </div>
+            <div id="drilldownContent"
+                class="flex-1 overflow-y-auto p-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <p class="col-span-full text-center py-10 text-gray-500">Loading...</p>
+            </div>
+        </div>
     </div>
 
-    <!-- Student Performance Modal (from roster.html) -->
+    <!-- ==================== STUDENT PERFORMANCE MODAL ==================== -->
     <div id="student-performance-modal"
-        class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-[60]">
-        <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-5xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div class="flex justify-between items-center p-4 border-b border-gray-700 bg-gray-900">
+        class="hidden fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-[60]">
+        <div class="bg-gray-800 rounded-xl shadow-2xl w-full max-w-5xl overflow-hidden flex flex-col max-h-[90vh] border border-gray-700">
+
+            <div class="flex justify-between items-center p-4 border-b border-gray-700 bg-gray-900/70 shrink-0">
                 <div>
                     <h2 id="perf-student-name" class="text-2xl font-bold text-yellow-400">Student Name</h2>
                     <p id="perf-student-email" class="text-sm text-gray-400">student@example.com</p>
                 </div>
-                <button onclick="closePerfModal()"
-                    class="text-gray-400 hover:text-white text-3xl transition hover:rotate-90">&times;</button>
+                <div class="flex items-center gap-3">
+                    <button onclick="printStudentReport()"
+                        class="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2 px-4 rounded-lg transition-colors">
+                        <span>🖨️</span> Print Report
+                    </button>
+                    <button onclick="closePerfModal()"
+                        class="text-gray-500 hover:text-white text-3xl leading-none transition-transform hover:rotate-90">×</button>
+                </div>
             </div>
 
-            <div class="flex overflow-hidden flex-1">
+            <div class="flex overflow-hidden flex-1 min-h-0">
                 <!-- Sidebar Stats -->
-                <div class="w-64 bg-gray-900/50 p-6 border-r border-gray-700 space-y-6 overflow-y-auto hidden md:block">
+                <div class="w-52 bg-gray-900/50 p-5 border-r border-gray-700 space-y-5 overflow-y-auto shrink-0 hidden md:block">
                     <div>
-                        <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Lifetime Aura</p>
+                        <p class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Lifetime Aura</p>
                         <p id="perf-total-aura" class="text-2xl font-bold text-purple-400">0 ✧</p>
                     </div>
                     <div>
-                        <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Spendable Aura</p>
-                        <p id="perf-spendable-aura" class="text-2xl font-bold text-yellow-400">0</p>
+                        <p class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Spendable Aura</p>
+                        <p id="perf-spendable-aura" class="text-2xl font-bold text-yellow-400">--</p>
                     </div>
                     <div>
-                        <p id="perf-avg-label" class="text-xs text-gray-500 uppercase tracking-wider mb-1">Avg Score
-                            (Attempted)</p>
+                        <p class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Avg Score</p>
                         <p id="perf-average-score" class="text-2xl font-bold text-blue-400">--</p>
                     </div>
                     <div>
-                        <p id="perf-completion-label" class="text-xs text-gray-500 uppercase tracking-wider mb-1">Active
-                            Assignments</p>
+                        <p class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Assignments</p>
                         <p id="perf-assignments-completed" class="text-2xl font-bold text-green-400">0</p>
                     </div>
                 </div>
 
                 <!-- Content Area -->
-                <div class="flex-1 flex flex-col min-w-0">
+                <div class="flex-1 flex flex-col min-w-0 min-h-0">
                     <!-- Controls -->
-                    <div class="p-4 bg-gray-800 border-b border-gray-700 flex flex-wrap items-center gap-4">
+                    <div class="p-3 bg-gray-800 border-b border-gray-700 flex flex-wrap items-center gap-3 shrink-0">
                         <div class="flex items-center gap-2">
-                            <span class="text-xs text-gray-400">Range:</span>
+                            <span class="text-xs text-gray-500">Range:</span>
                             <input type="date" id="perf-date-start"
-                                class="bg-gray-900 border border-gray-700 rounded p-1 text-xs text-white"
+                                class="bg-gray-900 border border-gray-700 rounded p-1 text-xs text-white focus:outline-none"
                                 onchange="refreshPerfData()">
-                            <span class="text-gray-600">-</span>
+                            <span class="text-gray-600">–</span>
                             <input type="date" id="perf-date-end"
-                                class="bg-gray-900 border border-gray-700 rounded p-1 text-xs text-white"
+                                class="bg-gray-900 border border-gray-700 rounded p-1 text-xs text-white focus:outline-none"
                                 onchange="refreshPerfData()">
                         </div>
-                        <div class="flex items-center gap-4 border-l border-gray-700 pl-4">
+                        <div class="flex items-center gap-4 border-l border-gray-700 pl-3">
                             <label class="flex items-center gap-2 cursor-pointer">
                                 <input type="checkbox" id="perf-show-questions" onchange="refreshPerfData()"
-                                    class="rounded border-gray-700 bg-gray-900 text-blue-600">
+                                    class="rounded border-gray-700 bg-gray-900 text-blue-500">
                                 <span class="text-xs text-gray-300">Show Questions</span>
                             </label>
-                            <label id="aura-toggle-container" class="flex items-center gap-2 cursor-pointer">
+                            <label class="flex items-center gap-2 cursor-pointer">
                                 <input type="checkbox" id="perf-show-aura" checked onchange="refreshPerfData()"
-                                    class="rounded border-gray-700 bg-gray-900 text-yellow-600">
+                                    class="rounded border-gray-700 bg-gray-900 text-yellow-500">
                                 <span class="text-xs text-gray-300">Aura Details</span>
                             </label>
                             <select id="perf-grade-mode" onchange="refreshPerfData()"
-                                class="bg-gray-900 border border-gray-700 rounded p-1 text-xs text-white">
+                                class="bg-gray-900 border border-gray-700 rounded p-1 text-xs text-white focus:outline-none">
                                 <option value="attempted">Attempted Only</option>
                                 <option value="potential">Total Potential</option>
                             </select>
                         </div>
                     </div>
 
-                    <!-- Scrollable Table -->
-                    <div class="flex-1 overflow-auto p-4">
+                    <!-- Table -->
+                    <div class="flex-1 overflow-auto p-4 min-h-0">
                         <div id="perf-loading" class="text-center py-12 hidden">
                             <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-500 mx-auto"></div>
-                            <p class="mt-4 text-gray-400">Fetching history...</p>
+                            <p class="mt-4 text-gray-400 text-sm">Fetching history...</p>
                         </div>
-                        <p id="perf-no-data" class="text-center text-gray-400 py-8 hidden">No records found.</p>
+                        <p id="perf-no-data" class="text-center text-gray-500 py-8 hidden">No records found.</p>
                         <table id="perf-table" class="w-full text-left">
-                            <thead class="bg-gray-700/50 text-xs">
+                            <thead class="bg-gray-700/50 text-xs sticky top-0">
                                 <tr>
-                                    <th class="p-3 font-medium text-gray-300">Assignment</th>
-                                    <th id="perf-slide-header" class="p-3 font-medium text-gray-300 hidden">Slide</th>
-                                    <th class="p-3 font-medium text-gray-300">Date</th>
-                                    <th class="p-3 font-medium text-gray-300">Score</th>
-                                    <th id="perf-aura-header" class="p-3 font-medium text-gray-300">Aura</th>
+                                    <th class="p-3 font-semibold text-gray-400">Assignment</th>
+                                    <th id="perf-slide-header" class="p-3 font-semibold text-gray-400 hidden">Q#</th>
+                                    <th class="p-3 font-semibold text-gray-400">Date</th>
+                                    <th class="p-3 font-semibold text-gray-400">Score</th>
+                                    <th id="perf-aura-header" class="p-3 font-semibold text-gray-400">Aura</th>
                                 </tr>
                             </thead>
-                            <tbody id="perf-submissions-table" class="divide-y divide-gray-700 text-sm">
-                                <!-- Populated dynamically -->
-                            </tbody>
+                            <tbody id="perf-submissions-table" class="divide-y divide-gray-700/50 text-sm"></tbody>
                         </table>
                     </div>
                 </div>
@@ -251,9 +280,13 @@
         </div>
     </div>
 
-    <div id="toast-wrapper" class="fixed top-4 right-4 z-[100] space-y-3 w-full max-w-sm"></div>
+    <!-- Toast -->
+    <div id="toast-wrapper" class="fixed top-4 right-4 z-[100] space-y-3 w-full max-w-xs pointer-events-none"></div>
 
     <script>
+        // ─────────────────────────────────────────────────────────────────────
+        // Firebase Init
+        // ─────────────────────────────────────────────────────────────────────
         const firebaseConfig = {
             apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
             authDomain: "mrlynch-slides-app.firebaseapp.com",
@@ -266,13 +299,48 @@
         const db = firebase.firestore();
         const auth = firebase.auth();
 
+        // ─────────────────────────────────────────────────────────────────────
+        // State
+        // ─────────────────────────────────────────────────────────────────────
         let currentUserEmail = null;
         let students = [];
         let assignments = [];
-        let statuses = {};
+        let statuses = {};            // assignmentId → email → { score, rawSum, numQuestions, attempted }
         let currentClass = "";
-        let submissionsCache = {}; // assignmentId -> studentEmail -> { bestScore, slides: { idx: score } }
+        let submissionsCache = {};    // assignmentId → email → { slides: { idx: score } }
+        let currentPerfStudentId = null;
+        let currentPerfStudentClass = null;
+        let activeTypeFilter = 'all';
+        let lastLoadedAssignments = [];
+        let lastLoadedStudents = [];
 
+        // ─────────────────────────────────────────────────────────────────────
+        // Type metadata (label, colors)
+        // ─────────────────────────────────────────────────────────────────────
+        const TYPE_META = {
+            slides:     { label: 'Slides',     chipColor: 'text-indigo-300 bg-indigo-900/50 border-indigo-700/60' },
+            pdf:        { label: 'PDF',         chipColor: 'text-amber-300  bg-amber-900/50  border-amber-700/60'  },
+            video:      { label: 'Video',       chipColor: 'text-purple-300 bg-purple-900/50 border-purple-700/60' },
+            simulation: { label: 'Simulation',  chipColor: 'text-cyan-300   bg-cyan-900/50   border-cyan-700/60'   },
+            blank:      { label: 'Blank',       chipColor: 'text-emerald-300 bg-emerald-900/50 border-emerald-700/60' },
+            lesson:     { label: 'Lesson',      chipColor: 'text-rose-300   bg-rose-900/50   border-rose-700/60'   },
+        };
+
+        // ─────────────────────────────────────────────────────────────────────
+        // CRITICAL FIX: Correct question count per assignment type
+        // ─────────────────────────────────────────────────────────────────────
+        function getQuestionCount(a) {
+            if (a.type === 'pdf')        return Math.max(1, (a.questionZones  || []).length);
+            if (a.type === 'video')      return Math.max(1, (a.videoQuestions || []).length);
+            if (a.type === 'simulation') return Math.max(1, (a.simQuestions   || []).length);
+            if (a.type === 'blank')      return Math.max(1, (a.blocks || []).filter(b => b.type === 'question').length);
+            // 'slides', 'lesson', or unknown → use slideIds
+            return Math.max(1, (a.slideIds || []).length);
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Auth
+        // ─────────────────────────────────────────────────────────────────────
         auth.onAuthStateChanged(async user => {
             if (user) {
                 try {
@@ -283,7 +351,6 @@
 
                     document.getElementById('pageLoader').classList.add('hidden');
                     document.getElementById('dashboardContent').classList.remove('hidden');
-
                     loadData();
                 } catch (error) {
                     console.error("Auth error:", error);
@@ -293,153 +360,210 @@
             }
         });
 
+        // ─────────────────────────────────────────────────────────────────────
+        // Load students + assignments (runs once)
+        // ─────────────────────────────────────────────────────────────────────
         async function loadData() {
-            const studentSnap = await db.collection("students").where("teacherEmail", "==", currentUserEmail).get();
+            const studentSnap = await db.collection("students")
+                .where("teacherEmail", "==", currentUserEmail).get();
             students = studentSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-            const ownedSnap = await db.collection("assignments").where("teacherEmail", "==", currentUserEmail).get();
+            const ownedSnap    = await db.collection("assignments").where("teacherEmail", "==", currentUserEmail).get();
             const coTaughtSnap = await db.collection("assignments").where("coTeachers", "array-contains", currentUserEmail).get();
 
             const assignmentMap = new Map();
-            ownedSnap.forEach(doc => assignmentMap.set(doc.id, { id: doc.id, ...doc.data() }));
+            ownedSnap.forEach(doc    => assignmentMap.set(doc.id, { id: doc.id, ...doc.data() }));
             coTaughtSnap.forEach(doc => assignmentMap.set(doc.id, { id: doc.id, ...doc.data() }));
-            assignments = Array.from(assignmentMap.values()).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+            assignments = Array.from(assignmentMap.values())
+                .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
 
-            const classes = [...new Set(students.map(s => (s.class || "Unassigned").toString().trim()))].filter(Boolean).sort();
+            const classes = [...new Set(students.map(s => (s.class || "Unassigned").toString().trim()))]
+                .filter(Boolean).sort();
+
             const selector = document.getElementById('classSelector');
             selector.innerHTML = '<option value="">Select a Class...</option>';
             classes.forEach(c => {
                 const opt = document.createElement('option');
-                opt.value = c;
-                opt.textContent = c;
+                opt.value = c; opt.textContent = c;
                 selector.appendChild(opt);
             });
+
             if (classes.length === 1) {
                 selector.value = classes[0];
                 handleClassChange();
             }
         }
 
+        // ─────────────────────────────────────────────────────────────────────
+        // Date-range filter helper
+        // ─────────────────────────────────────────────────────────────────────
+        function assignmentMatchesDateFilter(a) {
+            const dateRange = document.getElementById('dateRangeSelector').value;
+            if (dateRange === 'all') return true;
+            const created = a.createdAt?.seconds ? new Date(a.createdAt.seconds * 1000) : null;
+            if (!created) return false;
+            const now = new Date();
+            if (dateRange === '30') return (now - created) < (30 * 24 * 60 * 60 * 1000);
+            if (dateRange === '90') return (now - created) < (90 * 24 * 60 * 60 * 1000);
+            if (dateRange === 'custom') {
+                const startStr = document.getElementById('startDate').value;
+                const endStr   = document.getElementById('endDate').value;
+                if (!startStr && !endStr) return true;
+                const start = startStr ? new Date(startStr).getTime()                       : 0;
+                const end   = endStr   ? new Date(endStr).getTime() + 24 * 60 * 60 * 1000  : Infinity;
+                return created.getTime() >= start && created.getTime() <= end;
+            }
+            return true;
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Main class-change handler — fetches submissions (cached), builds statuses
+        // NOTE: No global submissionStatus fetch — huge Firebase read savings
+        // ─────────────────────────────────────────────────────────────────────
         async function handleClassChange() {
             currentClass = document.getElementById('classSelector').value;
-            const dateRange = document.getElementById('dateRangeSelector').value;
             if (!currentClass) {
+                document.getElementById('noDataState').textContent = 'Select a class to view performance data.';
                 document.getElementById('noDataState').classList.remove('hidden');
                 document.getElementById('performanceGrid').classList.add('hidden');
                 return;
             }
-            document.getElementById('noDataState').innerHTML = `<div class="text-center">
-                    <p class="text-xl mb-2">Analyzing class data...</p>
-                    <div class="w-64 h-2 bg-gray-700 rounded-full mx-auto overflow-hidden">
-                        <div class="h-full bg-yellow-400 animate-pulse"></div>
+
+            // Loading indicator
+            document.getElementById('noDataState').innerHTML = `
+                <div class="text-center">
+                    <p class="text-lg text-gray-300 mb-3">Analyzing class data...</p>
+                    <div class="w-64 h-1.5 bg-gray-700 rounded-full mx-auto overflow-hidden">
+                        <div class="h-full bg-yellow-400 animate-pulse w-full rounded-full"></div>
                     </div>
                 </div>`;
             document.getElementById('noDataState').classList.remove('hidden');
             document.getElementById('performanceGrid').classList.add('hidden');
 
-            // Filter assignments by class AND date range
-            const now = new Date();
-            let classAssignments = assignments.filter(a => (a.assignedClasses || []).some(c => c.trim() === currentClass));
+            // Assignments assigned to this class that match the date filter
+            const classAssignments = assignments.filter(a =>
+                (a.assignedClasses || []).some(c => c.trim() === currentClass) &&
+                assignmentMatchesDateFilter(a)
+            );
 
-            if (dateRange !== 'all') {
-                classAssignments = classAssignments.filter(a => {
-                    const created = a.createdAt?.seconds ? new Date(a.createdAt.seconds * 1000) : null;
-                    if (!created) return false;
-
-                    if (dateRange === '30') return (now - created) < (30 * 24 * 60 * 60 * 1000);
-                    if (dateRange === '90') return (now - created) < (90 * 24 * 60 * 60 * 1000);
-
-                    if (dateRange === 'custom') {
-                        const startStr = document.getElementById('startDate').value;
-                        const endStr = document.getElementById('endDate').value;
-                        if (!startStr && !endStr) return true;
-                        const start = startStr ? new Date(startStr).getTime() : 0;
-                        const end = endStr ? new Date(endStr).getTime() + (24 * 60 * 60 * 1000) : Infinity;
-                        return created.getTime() >= start && created.getTime() <= end;
-                    }
-                    return true;
+            // Students in this class, sorted by last name
+            const classStudents = students
+                .filter(s => (s.class || "").toString().trim() === currentClass)
+                .sort((a, b) => {
+                    const nameParts = n => (n || "").trim().split(" ");
+                    const lastA = nameParts(a.name).pop().toLowerCase();
+                    const lastB = nameParts(b.name).pop().toLowerCase();
+                    if (lastA !== lastB) return lastA < lastB ? -1 : 1;
+                    return (nameParts(a.name)[0] || "").toLowerCase()
+                        .localeCompare((nameParts(b.name)[0] || "").toLowerCase());
                 });
-            }
-
-            const classStudents = students.filter(s => (s.class || "").toString().trim() === currentClass);
-
-            // Sort by Last Name (Last Token)
-            classStudents.sort((a, b) => {
-                const nameA = (a.name || "").trim().split(" ");
-                const nameB = (b.name || "").trim().split(" ");
-                const lastA = nameA[nameA.length - 1].toLowerCase();
-                const lastB = nameB[nameB.length - 1].toLowerCase();
-                if (lastA < lastB) return -1;
-                if (lastA > lastB) return 1;
-                return (nameA[0] || "").toLowerCase().localeCompare((nameB[0] || "").toLowerCase());
-            });
 
             const studentEmails = new Set(classStudents.map(s => s.email.toLowerCase()));
 
-            // 1. Fetch Submission Statuses
-            const statusSnap = await db.collection("submissionStatus")
-                .where("status", "==", "submitted")
-                .get();
-
-            const statusMap = {};
-            statusSnap.forEach(doc => {
-                const data = doc.data();
-                if (studentEmails.has(data.studentEmail.toLowerCase())) {
-                    if (!statusMap[data.assignmentId]) statusMap[data.assignmentId] = {};
-                    statusMap[data.assignmentId][data.studentEmail.toLowerCase()] = data;
-                }
-            });
-
-            // 2. Fetch/Load data
+            // Fetch submission scores per assignment (cached after first load)
             statuses = {};
-
             for (const assignment of classAssignments) {
                 if (!submissionsCache[assignment.id]) {
                     const subSnap = await db.collection("submissions")
                         .where("assignmentId", "==", assignment.id)
                         .get();
 
-                    const assignmentScores = {};
+                    const scores = {};
                     subSnap.forEach(doc => {
-                        const sub = doc.data();
+                        const sub   = doc.data();
                         const email = sub.studentEmail.toLowerCase();
-                        if (!assignmentScores[email]) assignmentScores[email] = { slides: {} };
+                        if (!scores[email]) scores[email] = { slides: {} };
                         const idx = sub.slideIndex;
-                        if (!assignmentScores[email].slides[idx] || sub.score > assignmentScores[email].slides[idx]) {
-                            assignmentScores[email].slides[idx] = sub.score;
+                        if (scores[email].slides[idx] === undefined || sub.score > scores[email].slides[idx]) {
+                            scores[email].slides[idx] = sub.score;
                         }
                     });
-                    submissionsCache[assignment.id] = assignmentScores;
+                    submissionsCache[assignment.id] = scores;
                 }
 
-                const cachedScores = submissionsCache[assignment.id];
-                const numQuestions = assignment.slideIds?.length || 1;
-                if (!statuses[assignment.id]) statuses[assignment.id] = {};
+                const cached      = submissionsCache[assignment.id];
+                const numQuestions = getQuestionCount(assignment); // ← THE FIX
 
+                statuses[assignment.id] = {};
                 studentEmails.forEach(email => {
-                    const studentScoreData = cachedScores[email];
-                    if (studentScoreData) {
-                        let sum = 0;
-                        Object.values(studentScoreData.slides).forEach(s => sum += s);
+                    const studentData = cached[email];
+                    if (studentData && Object.keys(studentData.slides).length > 0) {
+                        let rawSum   = 0;
+                        const attempted = Object.keys(studentData.slides).length;
+                        Object.values(studentData.slides).forEach(s => rawSum += s);
                         statuses[assignment.id][email] = {
-                            score: sum / numQuestions,
-                            isSubmitted: !!statusMap[assignment.id]?.[email]
+                            score:        rawSum / numQuestions,  // percentage 0–100
+                            rawSum,
+                            numQuestions,
+                            attempted,
                         };
                     } else {
-                        statuses[assignment.id][email] = { score: null, isSubmitted: false };
+                        statuses[assignment.id][email] = {
+                            score: null, rawSum: 0, numQuestions, attempted: 0
+                        };
                     }
                 });
             }
-            renderGrid(classAssignments, classStudents);
+
+            // Store for filter re-renders (no re-fetch needed)
+            lastLoadedAssignments = classAssignments;
+            lastLoadedStudents    = classStudents;
+
+            applyFiltersAndRender();
         }
 
+        // ─────────────────────────────────────────────────────────────────────
+        // Apply type filter + hide-zero toggle, then render
+        // ─────────────────────────────────────────────────────────────────────
+        function applyFiltersAndRender() {
+            if (!lastLoadedStudents.length) return;
+
+            const hideZero = document.getElementById('hideZeroSubs').checked;
+
+            const filtered = lastLoadedAssignments.filter(a => {
+                // Type filter
+                if (activeTypeFilter !== 'all' && (a.type || 'slides') !== activeTypeFilter) return false;
+                // Hide zero-submission columns
+                if (hideZero) {
+                    const assignmentStatus = statuses[a.id] || {};
+                    const anySubmission = Object.values(assignmentStatus).some(s => s.score !== null);
+                    if (!anySubmission) return false;
+                }
+                return true;
+            });
+
+            renderGrid(filtered, lastLoadedStudents);
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Type filter chip UI
+        // ─────────────────────────────────────────────────────────────────────
+        const CHIP_ACTIVE   = ['bg-yellow-500/20', 'text-yellow-300', 'border-yellow-500/50'];
+        const CHIP_INACTIVE = ['bg-gray-800', 'text-gray-500', 'border-gray-700'];
+
+        function setTypeFilter(type) {
+            activeTypeFilter = type;
+            document.querySelectorAll('.type-chip').forEach(btn => {
+                const isActive = btn.dataset.type === type;
+                CHIP_ACTIVE.forEach(c   => btn.classList.toggle(c, isActive));
+                CHIP_INACTIVE.forEach(c => btn.classList.toggle(c, !isActive));
+            });
+            applyFiltersAndRender();
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Render the performance grid
+        // ─────────────────────────────────────────────────────────────────────
         function renderGrid(classAssignments, classStudents) {
-            const grid = document.getElementById('performanceGrid');
+            const grid   = document.getElementById('performanceGrid');
             const header = document.getElementById('gridHeader');
-            const body = document.getElementById('gridBody');
+            const body   = document.getElementById('gridBody');
 
             if (classStudents.length === 0 || classAssignments.length === 0) {
-                document.getElementById('noDataState').innerHTML = "No students or assignments found for this selection.";
+                const msg = classAssignments.length === 0
+                    ? "No assignments match the current filters."
+                    : "No students found for this class.";
+                document.getElementById('noDataState').textContent = msg;
                 document.getElementById('noDataState').classList.remove('hidden');
                 grid.classList.add('hidden');
                 return;
@@ -448,335 +572,538 @@
             document.getElementById('noDataState').classList.add('hidden');
             grid.classList.remove('hidden');
 
-            header.innerHTML = `
-                <tr>
-                    <th class="sticky-intersect p-4 text-left border-b border-r border-gray-700 w-64">Student Name</th>
-                    <th class="sticky-row p-4 text-center border-b border-gray-700 bg-gray-900/50 w-20">Avg</th>
-                    ${classAssignments.map(a => `
-                        <th class="sticky-row p-4 text-center border-b border-gray-700 min-w-[120px]">
-                            <a href="./dashboard.html?assignmentId=${a.id}" class="text-xs hover:text-yellow-400 block truncate max-w-[150px]" title="${a.name}">${a.name}</a>
-                            <div class="text-[10px] text-gray-500 font-normal">Avg: <span id="col-avg-${a.id}">-</span></div>
-                        </th>
-                    `).join('')}
-                </tr>
-            `;
-
-            // Body
-            body.innerHTML = classStudents.map(s => {
-                let totalScore = 0;
-                let count = 0;
-                const email = s.email.toLowerCase();
-                const cells = classAssignments.map(a => {
-                    const status = statuses[a.id]?.[email];
-                    const score = status?.score !== undefined ? status.score : null;
-                    let colorClass = "text-gray-600";
-                    let display = "-";
-                    if (score !== null) {
-                        totalScore += score;
-                        count++;
-                        display = Math.round(score) + "%";
-                        colorClass = score >= 90 ? "bg-green-600/40 text-green-200" : (score >= 70 ? "bg-yellow-600/40 text-yellow-200" : "bg-red-600/40 text-red-200");
-                    }
-                    return `<td class="p-4 text-center border-b border-gray-700 grid-cell ${colorClass}" onclick="openDrilldown('${s.id}', '${a.id}')">${display}</td>`;
-                }).join('');
-                const avg = count > 0 ? Math.round(totalScore / count) + "%" : "-";
-
-                // Lifetime and Balance for student modal prep
-                const lifetime = s.auraLifetime || 0;
-
-                return `
-                    <tr class="hover:bg-gray-700/50">
-                        <td class="sticky-col p-4 border-b border-r border-gray-700 font-medium whitespace-nowrap overflow-hidden text-ellipsis w-64">
-                            <span class="text-blue-400 hover:underline cursor-pointer" onclick='openStudentPerformance("${s.id}", "${s.name.replace(/'/g, "\\'")}", "${s.email}", ${lifetime}, "${currentClass}")'>${s.name}</span>
-                        </td>
-                        <td class="p-4 text-center border-b border-gray-700 font-bold bg-gray-900/30 w-20">${avg}</td>
-                        ${cells}
-                    </tr>
-                `;
-            }).join('');
-
-            // Update Column Averages in Header
+            // Pre-compute column stats (avg, submission count) — only non-null scores
+            const colStats = {};
             classAssignments.forEach(a => {
-                let colTotal = 0;
-                let colCount = 0;
+                let colTotal = 0, colCount = 0;
                 classStudents.forEach(s => {
-                    const score = statuses[a.id]?.[s.email.toLowerCase()]?.score;
-                    if (score !== undefined) {
-                        colTotal += score;
+                    const st = statuses[a.id]?.[s.email.toLowerCase()];
+                    if (st && st.score !== null && st.score !== undefined) {
+                        colTotal += st.score;
                         colCount++;
                     }
                 });
-                const colAvg = colCount > 0 ? Math.round(colTotal / colCount) + "%" : "-";
-                const avgEl = document.getElementById(`col-avg-${a.id}`);
-                if (avgEl) avgEl.textContent = colAvg;
+                colStats[a.id] = {
+                    avg:       colCount > 0 ? Math.round(colTotal / colCount) : null,
+                    submitted: colCount,
+                    total:     classStudents.length,
+                };
             });
+
+            // Type badge helper
+            const typeBadge = a => {
+                const meta = TYPE_META[a.type] || TYPE_META['slides'];
+                return `<span class="inline-block text-[9px] font-bold uppercase tracking-wide px-1.5 py-px rounded border ${meta.chipColor}">${meta.label}</span>`;
+            };
+
+            // Score color helper (returns Tailwind class)
+            const scoreColor = pct =>
+                pct >= 90 ? 'text-green-300' : pct >= 70 ? 'text-yellow-300' : 'text-red-300';
+
+            // ── Header ──────────────────────────────────────────────────────
+            header.innerHTML = `<tr>
+                <th class="sticky-intersect p-3 text-left border-b border-r border-gray-700/60 w-56 min-w-[13rem]">
+                    <span class="text-xs font-bold text-gray-400">Student</span>
+                </th>
+                <th class="sticky-row p-3 text-center border-b border-r border-gray-700/60 w-20 min-w-[4.5rem]">
+                    <span class="text-xs font-bold text-gray-400">Avg</span>
+                </th>
+                ${classAssignments.map(a => {
+                    const numQ  = getQuestionCount(a);
+                    const stats = colStats[a.id];
+                    const avgPct = stats.avg;
+                    const avgDisplay = avgPct !== null ? `${avgPct}%` : '–';
+                    const avgCls    = avgPct !== null ? scoreColor(avgPct) : 'text-gray-600';
+                    return `<th class="sticky-row p-3 text-center border-b border-gray-700/60 min-w-[140px] max-w-[180px]">
+                        <a href="./dashboard.html?assignmentId=${a.id}"
+                            class="text-xs font-semibold hover:text-yellow-400 block truncate max-w-[160px] text-gray-200 mb-1 transition-colors"
+                            title="${a.name}">${a.name}</a>
+                        <div class="flex items-center justify-center gap-1.5 mb-1.5">
+                            ${typeBadge(a)}
+                            <span class="text-[10px] text-gray-600">${numQ} Q${numQ !== 1 ? 's' : ''}</span>
+                        </div>
+                        <div class="text-[10px] leading-tight">
+                            <span class="${avgCls} font-bold">${avgDisplay}</span>
+                            <span class="text-gray-700"> · </span>
+                            <span class="text-gray-600">${stats.submitted}/${stats.total} sub</span>
+                        </div>
+                    </th>`;
+                }).join('')}
+            </tr>`;
+
+            // ── Body ────────────────────────────────────────────────────────
+            body.innerHTML = classStudents.map(s => {
+                let totalScore = 0, scoreCount = 0;
+                const email    = s.email.toLowerCase();
+
+                const cells = classAssignments.map(a => {
+                    const st    = statuses[a.id]?.[email];
+                    const score = st?.score ?? null;
+
+                    if (score === null) {
+                        return `<td class="p-3 text-center border-b border-gray-700/30 text-gray-700 grid-cell"
+                            onclick="openDrilldown('${s.id}','${a.id}')"
+                            title="No attempt">
+                            <span class="text-lg">–</span>
+                        </td>`;
+                    }
+
+                    totalScore += score;
+                    scoreCount++;
+                    const pct      = Math.round(score);
+                    const numQ     = st.numQuestions;
+                    const cellBg   = pct >= 90
+                        ? 'bg-green-600/25 text-green-200  border-green-700/20'
+                        : pct >= 70
+                        ? 'bg-yellow-600/25 text-yellow-200 border-yellow-700/20'
+                        : 'bg-red-600/25 text-red-200 border-red-700/20';
+
+                    return `<td class="p-3 text-center border-b border-gray-700/30 grid-cell ${cellBg}"
+                        onclick="openDrilldown('${s.id}','${a.id}')"
+                        title="${st.attempted}/${numQ} questions answered">
+                        <span class="font-mono font-bold text-sm">${pct}%</span>
+                    </td>`;
+                }).join('');
+
+                const avg        = scoreCount > 0 ? Math.round(totalScore / scoreCount) : null;
+                const avgDisplay = avg !== null ? avg + '%' : '–';
+                const avgCls     = avg !== null ? scoreColor(avg) : 'text-gray-600';
+
+                // Escape name for attribute use
+                const safeName = (s.name || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+
+                return `<tr class="hover:bg-white/5 transition-colors">
+                    <td class="sticky-col p-3 border-b border-r border-gray-700/40 w-56">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-blue-400 hover:text-blue-300 hover:underline cursor-pointer font-medium text-sm truncate"
+                                onclick='openStudentPerformance("${s.id}","${safeName}","${s.email}",${s.auraLifetime || 0},"${currentClass}")'>${s.name}</span>
+                            <button onclick='printStudentReportById("${s.id}")'
+                                title="Print student report"
+                                class="text-gray-700 hover:text-gray-300 text-xs shrink-0 transition-colors">🖨</button>
+                        </div>
+                    </td>
+                    <td class="p-3 text-center border-b border-r border-gray-700/40 font-bold bg-gray-900/40 w-20">
+                        <span class="font-mono ${avgCls}">${avgDisplay}</span>
+                    </td>
+                    ${cells}
+                </tr>`;
+            }).join('');
         }
 
+        // ─────────────────────────────────────────────────────────────────────
+        // Drilldown Modal — per-question breakdown
+        // ─────────────────────────────────────────────────────────────────────
         async function openDrilldown(studentId, assignmentId) {
-            const student = students.find(s => s.id === studentId);
+            const student    = students.find(s => s.id === studentId);
             const assignment = assignments.find(a => a.id === assignmentId);
             if (!student || !assignment) return;
-            document.getElementById('ddStudentName').textContent = student.name;
+
+            document.getElementById('ddStudentName').textContent    = student.name;
             document.getElementById('ddAssignmentName').textContent = assignment.name;
-            document.getElementById('drilldownContent').innerHTML = '<p class="text-center py-10 text-gray-500">Loading question details...</p>';
+            document.getElementById('drilldownContent').innerHTML   =
+                '<p class="col-span-full text-center py-10 text-gray-500">Loading question details...</p>';
             document.getElementById('drilldownModal').classList.remove('hidden');
+
             try {
                 const subSnap = await db.collection("submissions")
                     .where("assignmentId", "==", assignmentId)
                     .where("studentEmail", "==", student.email.toLowerCase())
                     .get();
-                const subs = subSnap.docs.map(doc => doc.data());
+
                 const bestBySlide = {};
-                subs.forEach(sub => {
-                    const idx = sub.slideIndex;
-                    if (!bestBySlide[idx] || sub.score > bestBySlide[idx].score) {
-                        bestBySlide[idx] = sub;
+                subSnap.forEach(doc => {
+                    const sub = doc.data();
+                    if (!bestBySlide[sub.slideIndex] || sub.score > bestBySlide[sub.slideIndex].score) {
+                        bestBySlide[sub.slideIndex] = sub;
                     }
                 });
-                const numSlides = assignment.slideIds?.length || 1;
-                let html = "";
+
+                const numSlides = getQuestionCount(assignment);
+                let html = '';
                 for (let i = 0; i < numSlides; i++) {
-                    const sub = bestBySlide[i];
-                    const score = sub ? Math.round(sub.score) : 0;
-                    const color = sub ? (score >= 90 ? 'text-green-400' : (score >= 70 ? 'text-yellow-400' : 'text-red-400')) : 'text-gray-600';
-                    const answer = sub ? sub.answer : "[No attempt]";
-                    html += `
-                        <div class="bg-gray-700 rounded-lg p-4 border border-gray-600">
-                            <div class="flex justify-between items-center mb-2">
-                                <span class="font-bold text-gray-300">Question ${i + 1}</span>
-                                <span class="font-mono ${color}">${score}%</span>
-                            </div>
-                            <div class="bg-gray-900 rounded p-3 text-sm font-mono text-gray-400 italic">
-                                ${answer}
+                    const sub        = bestBySlide[i];
+                    const hasAttempt = !!sub;
+                    const score      = hasAttempt ? Math.round(sub.score) : 0;
+                    const barColor   = !hasAttempt ? 'bg-gray-700'
+                        : score >= 90 ? 'bg-green-500'
+                        : score >= 70 ? 'bg-yellow-500'
+                        : 'bg-red-500';
+                    const textColor  = !hasAttempt ? 'text-gray-600'
+                        : score >= 90 ? 'text-green-400'
+                        : score >= 70 ? 'text-yellow-400'
+                        : 'text-red-400';
+
+                    html += `<div class="bg-gray-700/50 rounded-lg p-4 border border-gray-600/40">
+                        <div class="flex justify-between items-center mb-3">
+                            <span class="font-semibold text-gray-300 text-sm">Question ${i + 1}</span>
+                            <div class="flex items-center gap-2">
+                                <div class="w-20 h-1.5 bg-gray-600 rounded-full overflow-hidden">
+                                    <div class="${barColor} h-full rounded-full" style="width:${hasAttempt ? score : 0}%"></div>
+                                </div>
+                                <span class="font-mono font-bold ${textColor} text-sm w-10 text-right">
+                                    ${hasAttempt ? score + '%' : '–'}
+                                </span>
                             </div>
                         </div>
-                    `;
+                        ${sub?.answer
+                            ? `<div class="bg-gray-900/60 rounded p-2.5 text-xs font-mono text-gray-400 italic border border-gray-700/40 max-h-20 overflow-y-auto leading-relaxed">${sub.answer}</div>`
+                            : '<p class="text-xs text-gray-700 italic">No attempt recorded</p>'}
+                    </div>`;
                 }
-                document.getElementById('drilldownContent').innerHTML = html;
-            } catch (error) {
-                console.error("Drilldown error:", error);
-                document.getElementById('drilldownContent').innerHTML = '<p class="text-center py-10 text-red-400">Error loading details.</p>';
+
+                document.getElementById('drilldownContent').innerHTML =
+                    html || '<p class="col-span-full text-center py-10 text-gray-500">No submissions found.</p>';
+            } catch (err) {
+                console.error("Drilldown error:", err);
+                document.getElementById('drilldownContent').innerHTML =
+                    '<p class="col-span-full text-center py-10 text-red-400">Error loading details.</p>';
             }
         }
 
+        function closeDrilldown() {
+            document.getElementById('drilldownModal').classList.add('hidden');
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Student Performance Modal
+        // ─────────────────────────────────────────────────────────────────────
         async function openStudentPerformance(studentId, name, email, auraLifetime, studentClass = null) {
-            currentPerfStudentId = studentId;
+            currentPerfStudentId    = studentId;
             currentPerfStudentClass = studentClass;
 
-            document.getElementById('perf-student-name').textContent = name;
-            document.getElementById('perf-student-email').textContent = email;
-            document.getElementById('perf-total-aura').textContent = (auraLifetime || 0) + ' ✧';
-            document.getElementById('perf-spendable-aura').textContent = '--';
+            document.getElementById('perf-student-name').textContent    = name;
+            document.getElementById('perf-student-email').textContent   = email;
+            document.getElementById('perf-total-aura').textContent      = (auraLifetime || 0) + ' ✧';
+            document.getElementById('perf-spendable-aura').textContent  = '--';
             document.getElementById('student-performance-modal').classList.remove('hidden');
 
-            // 1. Fetch official student doc for exact balance
+            // Fetch live balance
             const doc = await db.collection("students").doc(studentId).get();
             if (doc.exists) {
                 document.getElementById('perf-spendable-aura').textContent = doc.data().auraBalance || 0;
             }
 
-            // 2. Load Work
             refreshPerfData(email);
         }
 
         async function refreshPerfData(email) {
-            const studentId = currentPerfStudentId;
-            const targetEmail = email || document.getElementById('perf-student-email').textContent;
-
-            const startDate = document.getElementById('perf-date-start').value;
-            const endDate = document.getElementById('perf-date-end').value;
+            const targetEmail  = email || document.getElementById('perf-student-email').textContent;
+            const startDate    = document.getElementById('perf-date-start').value;
+            const endDate      = document.getElementById('perf-date-end').value;
             const showQuestions = document.getElementById('perf-show-questions').checked;
-            const showAura = document.getElementById('perf-show-aura').checked;
-            const gradeMode = document.getElementById('perf-grade-mode').value;
+            const showAura     = document.getElementById('perf-show-aura').checked;
+            const gradeMode    = document.getElementById('perf-grade-mode').value;
 
             document.getElementById('perf-loading').classList.remove('hidden');
             document.getElementById('perf-table').classList.add('hidden');
             document.getElementById('perf-no-data').classList.add('hidden');
 
             try {
-                // Reuse cache or fetch
-                const subSnap = await db.collection("submissions").where("studentEmail", "==", targetEmail.toLowerCase()).get();
-                const statusSnap = await db.collection("submissionStatus").where("studentEmail", "==", targetEmail.toLowerCase()).get();
+                const [subSnap, statusSnap] = await Promise.all([
+                    db.collection("submissions").where("studentEmail", "==", targetEmail.toLowerCase()).get(),
+                    db.collection("submissionStatus").where("studentEmail", "==", targetEmail.toLowerCase()).get(),
+                ]);
 
-                const subs = subSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                const statuses = statusSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                const subs      = subSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 const statusMap = {};
-                statuses.forEach(s => statusMap[s.assignmentId] = s);
+                statusSnap.docs.forEach(doc => {
+                    const d = doc.data();
+                    statusMap[d.assignmentId] = d;
+                });
 
-                // Filter & Sort
                 let work = subs.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
                 if (startDate || endDate) {
                     const sT = startDate ? new Date(startDate).getTime() / 1000 : 0;
-                    const eT = endDate ? new Date(endDate).getTime() / 1000 : Infinity;
+                    const eT = endDate   ? new Date(endDate).getTime()   / 1000 : Infinity;
                     work = work.filter(w => (w.timestamp?.seconds || 0) >= sT && (w.timestamp?.seconds || 0) <= eT);
                 }
-
-                // Render Summary Table
-                const tableBody = document.getElementById('perf-submissions-table');
-                tableBody.innerHTML = '';
 
                 document.getElementById('perf-slide-header').classList.toggle('hidden', !showQuestions);
                 document.getElementById('perf-aura-header').classList.toggle('hidden', showQuestions || !showAura);
 
-                // Group by Assignment
+                // Group by assignment
                 const groups = {};
                 work.forEach(s => {
                     if (!groups[s.assignmentId]) groups[s.assignmentId] = { id: s.assignmentId, subs: [] };
                     groups[s.assignmentId].subs.push(s);
                 });
 
-                let totalGradeSum = 0;
-                let activeCount = 0;
-
-                // Build Row Objects
+                let totalGradeSum = 0, activeCount = 0;
                 const rows = [];
+
                 Object.values(groups).forEach(g => {
-                    const assignment = assignments.find(a => a.id === g.id) || { name: "Unknown", slideIds: [1] };
+                    const assignment = assignments.find(a => a.id === g.id)
+                        || { name: "Unknown Assignment", type: 'slides', slideIds: [] };
+                    const numQ = getQuestionCount(assignment); // ← FIXED in perf modal too
+
                     const bestScores = {};
                     g.subs.forEach(s => {
-                        if (!bestScores[s.slideIndex] || s.score > bestScores[s.slideIndex]) bestScores[s.slideIndex] = s.score;
+                        if (!bestScores[s.slideIndex] || s.score > bestScores[s.slideIndex]) {
+                            bestScores[s.slideIndex] = s.score;
+                        }
                     });
 
                     let sum = 0;
                     Object.values(bestScores).forEach(v => sum += v);
-                    const avg = sum / (assignment.slideIds?.length || 1);
+                    const avg = sum / numQ;
                     totalGradeSum += avg;
                     activeCount++;
 
+                    const attempted = Object.keys(bestScores).length;
+
                     if (showQuestions) {
-                        for (let i = 0; i < (assignment.slideIds?.length || 1); i++) {
+                        for (let i = 0; i < numQ; i++) {
                             const slideSub = g.subs.find(s => s.slideIndex === i);
                             if (slideSub || gradeMode === 'potential') {
                                 rows.push({
-                                    name: assignment.name,
-                                    slide: i + 1,
-                                    date: slideSub?.timestamp ? new Date(slideSub.timestamp.seconds * 1000).toLocaleDateString() : '--',
-                                    score: slideSub ? Math.round(slideSub.score) + '%' : '0%',
-                                    aura: '--',
-                                    isNewGroup: i === 0
+                                    name:       assignment.name,
+                                    slide:      i + 1,
+                                    date:       slideSub?.timestamp
+                                        ? new Date(slideSub.timestamp.seconds * 1000).toLocaleDateString() : '--',
+                                    score:      slideSub ? Math.round(slideSub.score) : 0,
+                                    detail:     null,
+                                    aura:       '--',
+                                    isNewGroup: i === 0,
                                 });
                             }
                         }
                     } else {
                         const status = statusMap[g.id] || {};
                         rows.push({
-                            name: assignment.name,
-                            slide: '--',
-                            date: g.subs[0]?.timestamp ? new Date(g.subs[0].timestamp.seconds * 1000).toLocaleDateString() : '--',
-                            score: Math.round(avg) + '%',
-                            aura: status.auraAmount || 0,
-                            isNewGroup: true
+                            name:       assignment.name,
+                            slide:      '--',
+                            date:       g.subs[0]?.timestamp
+                                ? new Date(g.subs[0].timestamp.seconds * 1000).toLocaleDateString() : '--',
+                            score:      Math.round(avg),
+                            detail:     `${attempted}/${numQ} Qs`,
+                            aura:       status.auraAmount || 0,
+                            isNewGroup: true,
                         });
                     }
                 });
 
+                const tableBody = document.getElementById('perf-submissions-table');
                 if (rows.length === 0) {
                     document.getElementById('perf-no-data').classList.remove('hidden');
                 } else {
+                    const rowColor = pct => pct >= 90 ? 'text-green-400' : pct >= 70 ? 'text-yellow-400' : 'text-red-400';
                     tableBody.innerHTML = rows.map(r => `
                         <tr class="${r.isNewGroup ? 'bg-gray-700/20' : ''}">
-                            <td class="p-3 font-medium">${r.isNewGroup ? r.name : ''}</td>
-                            <td class="p-3 ${showQuestions ? '' : 'hidden'}">${r.slide}</td>
-                            <td class="p-3 text-gray-400">${r.date}</td>
-                            <td class="p-3 font-mono">${r.score}</td>
-                            <td class="p-3 ${!showQuestions && showAura ? '' : 'hidden'} text-yellow-500">${r.aura} ✧</td>
-                        </tr>
-                    `).join('');
+                            <td class="p-3 font-medium text-sm">${r.isNewGroup ? r.name : ''}</td>
+                            <td class="p-3 text-gray-500 text-xs ${showQuestions ? '' : 'hidden'}">${r.slide}</td>
+                            <td class="p-3 text-gray-500 text-xs">${r.date}</td>
+                            <td class="p-3 font-mono font-bold ${rowColor(r.score)}">
+                                ${r.score}%
+                                ${r.detail ? `<span class="ml-2 text-[10px] text-gray-600 font-normal">${r.detail}</span>` : ''}
+                            </td>
+                            <td class="p-3 text-yellow-500 ${!showQuestions && showAura ? '' : 'hidden'}">${r.aura} ✧</td>
+                        </tr>`).join('');
                     document.getElementById('perf-table').classList.remove('hidden');
                 }
 
-                document.getElementById('perf-average-score').textContent = activeCount > 0 ? Math.round(totalGradeSum / activeCount) + '%' : '--';
+                document.getElementById('perf-average-score').textContent =
+                    activeCount > 0 ? Math.round(totalGradeSum / activeCount) + '%' : '--';
                 document.getElementById('perf-assignments-completed').textContent = activeCount;
 
-            } catch (error) {
-                console.error("Perf refresh error:", error);
+            } catch (err) {
+                console.error("Perf refresh error:", err);
             } finally {
                 document.getElementById('perf-loading').classList.add('hidden');
             }
         }
 
-        function closePerfModal() { document.getElementById('student-performance-modal').classList.add('hidden'); }
-        function closeDrilldown() { document.getElementById('drilldownModal').classList.add('hidden'); }
-        function toggleCustomDates() {
-            const range = document.getElementById('dateRangeSelector').value;
-            document.getElementById('customDateRange').classList.toggle('hidden', range !== 'custom');
+        function closePerfModal() {
+            document.getElementById('student-performance-modal').classList.add('hidden');
         }
 
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') { closeDrilldown(); closePerfModal(); }
-        });
-
-        function handleCredentialResponse(response) {
-            auth.signInWithCredential(firebase.auth.GoogleAuthProvider.credential(response.credential));
+        // ─────────────────────────────────────────────────────────────────────
+        // Print Student Report — opens a clean printable window
+        // ─────────────────────────────────────────────────────────────────────
+        function printStudentReport() {
+            const student = students.find(s => s.id === currentPerfStudentId);
+            if (student) generatePrintReport(student);
         }
-        document.getElementById('signOutButton').onclick = () => {
-            if (window.google?.accounts?.id) google.accounts.id.disableAutoSelect();
-            auth.signOut();
-        };
+
+        function printStudentReportById(studentId) {
+            const student = students.find(s => s.id === studentId);
+            if (student) generatePrintReport(student);
+        }
+
+        function generatePrintReport(student) {
+            const email = student.email.toLowerCase();
+
+            // Collect assignments where this student has a score
+            const reportRows = lastLoadedAssignments
+                .map(a => ({ a, st: statuses[a.id]?.[email] }))
+                .filter(({ st }) => st && st.score !== null);
+
+            let totalScore = 0;
+            reportRows.forEach(({ st }) => totalScore += st.score);
+            const overallAvg  = reportRows.length > 0 ? Math.round(totalScore / reportRows.length) : null;
+            const overallColor = overallAvg === null ? '#6b7280'
+                : overallAvg >= 90 ? '#22c55e'
+                : overallAvg >= 70 ? '#f59e0b'
+                : '#ef4444';
+
+            const tableRows = reportRows.map(({ a, st }) => {
+                const meta      = TYPE_META[a.type] || TYPE_META['slides'];
+                const pct       = Math.round(st.score);
+                const barColor  = pct >= 90 ? '#22c55e' : pct >= 70 ? '#f59e0b' : '#ef4444';
+                const bandLabel = pct >= 90 ? 'Mastered' : pct >= 70 ? 'Proficient' : 'Needs Support';
+                return `<tr>
+                    <td style="padding:9px 10px;border-bottom:1px solid #e5e7eb;font-weight:600;font-size:13px">${a.name}</td>
+                    <td style="padding:9px 10px;border-bottom:1px solid #e5e7eb">
+                        <span style="font-size:10px;background:#e5e7eb;padding:2px 7px;border-radius:4px;font-weight:700;color:#444">${meta.label}</span>
+                    </td>
+                    <td style="padding:9px 10px;border-bottom:1px solid #e5e7eb;font-size:12px;color:#666">
+                        ${st.attempted} of ${st.numQuestions} answered
+                    </td>
+                    <td style="padding:9px 10px;border-bottom:1px solid #e5e7eb">
+                        <span style="display:inline-block;background:${barColor};color:#fff;font-weight:700;font-size:14px;padding:3px 10px;border-radius:12px">${pct}%</span>
+                    </td>
+                    <td style="padding:9px 10px;border-bottom:1px solid #e5e7eb">
+                        <div style="font-size:11px;color:#888;margin-bottom:4px">${bandLabel}</div>
+                        <div style="height:5px;background:#e5e7eb;border-radius:3px;max-width:120px">
+                            <div style="height:100%;width:${Math.min(pct,100)}%;background:${barColor};border-radius:3px"></div>
+                        </div>
+                    </td>
+                </tr>`;
+            }).join('');
+
+            const noData = reportRows.length === 0
+                ? `<tr><td colspan="5" style="text-align:center;padding:24px;color:#9ca3af;font-style:italic">
+                    No submissions recorded for this student.
+                   </td></tr>`
+                : '';
+
+            const win = window.open('', '_blank', 'width=860,height=720');
+            win.document.write(`<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Student Report – ${student.name}</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #fff; color: #111827; padding: 36px; font-size: 13px; line-height: 1.5; }
+        .no-print { margin-bottom: 20px; }
+        @media print { .no-print { display: none !important; } body { padding: 20px; } }
+        .print-btn {
+            background: #1e40af; color: #fff; border: none; padding: 9px 20px;
+            border-radius: 7px; font-size: 13px; font-weight: 700; cursor: pointer; letter-spacing: 0.02em;
+        }
+        .print-btn:hover { background: #1d4ed8; }
+        .report-header {
+            display: flex; justify-content: space-between; align-items: flex-start;
+            border-bottom: 3px solid #1e3a5f; padding-bottom: 20px; margin-bottom: 28px;
+        }
+        .report-header h1 { font-size: 24px; font-weight: 800; color: #1e3a5f; letter-spacing: -0.02em; }
+        .meta-line { font-size: 12px; color: #6b7280; margin-top: 4px; }
+        .meta-line strong { color: #374151; }
+        .overall-box {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            background: #f0f7ff; border: 2px solid #1e3a5f; border-radius: 12px;
+            padding: 14px 24px; min-width: 130px; text-align: center;
+        }
+        .overall-pct { font-size: 40px; font-weight: 900; color: ${overallColor}; line-height: 1; }
+        .overall-label { font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.08em; margin-top: 5px; font-weight: 700; }
+        .overall-count { font-size: 11px; color: #9ca3af; margin-top: 3px; }
+        table { width: 100%; border-collapse: collapse; }
+        th {
+            background: #1e3a5f; color: #fff; padding: 9px 10px;
+            text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700;
+        }
+        tr:nth-child(even) td { background: #f8fafc; }
+        .footer {
+            margin-top: 36px; border-top: 1px solid #e5e7eb; padding-top: 14px;
+            font-size: 10px; color: #9ca3af; display: flex; justify-content: space-between;
+        }
+        .section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #6b7280; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <div class="no-print">
+        <button class="print-btn" onclick="window.print()">🖨️ &nbsp;Print This Report</button>
+    </div>
+
+    <div class="report-header">
+        <div>
+            <h1>${student.name}</h1>
+            <div class="meta-line">Class: <strong>${currentClass}</strong></div>
+            <div class="meta-line">Email: <strong>${student.email}</strong></div>
+            <div class="meta-line" style="margin-top:8px">
+                Report Date: <strong>${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</strong>
+            </div>
+            <div class="meta-line">Assignments included: <strong>${reportRows.length}</strong></div>
+        </div>
+        <div class="overall-box">
+            <div class="overall-pct">${overallAvg !== null ? overallAvg + '%' : '–'}</div>
+            <div class="overall-label">Overall Average</div>
+            <div class="overall-count">${reportRows.length} assignment${reportRows.length !== 1 ? 's' : ''}</div>
+        </div>
+    </div>
+
+    <div class="section-title">Assignment Performance</div>
+    <table>
+        <thead>
+            <tr>
+                <th style="width:38%">Assignment</th>
+                <th style="width:11%">Type</th>
+                <th style="width:17%">Questions</th>
+                <th style="width:13%">Score</th>
+                <th style="width:21%">Performance</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${tableRows || noData}
+        </tbody>
+    </table>
+
+    <div class="footer">
+        <span>Generated by IteratED · ${new Date().toLocaleString()}</span>
+        <span>Confidential — For Parent/Teacher Use</span>
+    </div>
+</body>
+</html>`);
+            win.document.close();
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Export CSV (uses corrected scores from statuses)
+        // ─────────────────────────────────────────────────────────────────────
         document.getElementById('exportCsv').onclick = () => {
-            if (!currentClass) return;
-            const dateRange = document.getElementById('dateRangeSelector').value;
-            const classStudents = students.filter(s => (s.class || "").toString().trim() === currentClass);
+            if (!currentClass || !lastLoadedAssignments.length) return;
 
-            // Sort by Last Name (Last Token)
-            classStudents.sort((a, b) => {
-                const nameA = (a.name || "").trim().split(" ");
-                const nameB = (b.name || "").trim().split(" ");
-                const lastA = nameA[nameA.length - 1].toLowerCase();
-                const lastB = nameB[nameB.length - 1].toLowerCase();
-                if (lastA < lastB) return -1;
-                if (lastA > lastB) return 1;
-                return (nameA[0] || "").toLowerCase().localeCompare((nameB[0] || "").toLowerCase());
-            });
+            const classStudents    = lastLoadedStudents;
+            const classAssignments = lastLoadedAssignments;
 
-            const now = new Date();
-            let classAssignments = assignments.filter(a => (a.assignedClasses || []).some(c => c.trim() === currentClass));
-            if (dateRange !== 'all') {
-                classAssignments = classAssignments.filter(a => {
-                    const created = a.createdAt?.seconds ? new Date(a.createdAt.seconds * 1000) : null;
-                    if (!created) return false;
-                    if (dateRange === '30') return (now - created) < (30 * 24 * 60 * 60 * 1000);
-                    if (dateRange === '90') return (now - created) < (90 * 24 * 60 * 60 * 1000);
+            let csv = "Student Name,Overall Average," +
+                classAssignments.map(a => `"${a.name} (${getQuestionCount(a)} Qs)"`).join(",") + "\n";
 
-                    if (dateRange === 'custom') {
-                        const startStr = document.getElementById('startDate').value;
-                        const endStr = document.getElementById('endDate').value;
-                        if (!startStr && !endStr) return true;
-                        const start = startStr ? new Date(startStr).getTime() : 0;
-                        const end = endStr ? new Date(endStr).getTime() + (24 * 60 * 60 * 1000) : Infinity;
-                        return created.getTime() >= start && created.getTime() <= end;
-                    }
-                    return true;
-                });
-            }
-
-            let csv = "Student Name,Average," + classAssignments.map(a => `"${a.name}"`).join(",") + "\n";
             classStudents.forEach(s => {
                 let total = 0, count = 0;
-                let studentCells = "";
+                let cells = "";
                 classAssignments.forEach(a => {
-                    const score = statuses[a.id]?.[s.email.toLowerCase()]?.score;
-                    if (score !== undefined && score !== null) {
-                        studentCells += `${Math.round(score)}%,`;
-                        total += score;
+                    const st = statuses[a.id]?.[s.email.toLowerCase()];
+                    if (st && st.score !== null && st.score !== undefined) {
+                        cells += Math.round(st.score) + "%,";
+                        total += st.score;
                         count++;
                     } else {
-                        studentCells += "-,";
+                        cells += "-,";
                     }
                 });
                 const avg = count > 0 ? Math.round(total / count) + "%" : "-";
-                csv += `"${s.name}",${avg},${studentCells.slice(0, -1)}\n`;
+                csv += `"${s.name}",${avg},${cells.slice(0, -1)}\n`;
             });
 
-            // Add Class Average Row
+            // Class Average row
             let avgRow = "Class Average,-,";
             classAssignments.forEach(a => {
                 let colTotal = 0, colCount = 0;
                 classStudents.forEach(s => {
-                    const score = statuses[a.id]?.[s.email.toLowerCase()]?.score;
-                    if (score !== undefined && score !== null) {
-                        colTotal += score;
-                        colCount++;
+                    const st = statuses[a.id]?.[s.email.toLowerCase()];
+                    if (st && st.score !== null && st.score !== undefined) {
+                        colTotal += st.score; colCount++;
                     }
                 });
                 avgRow += (colCount > 0 ? Math.round(colTotal / colCount) + "%," : "-,");
@@ -786,9 +1113,42 @@
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement("a");
             link.href = URL.createObjectURL(blob);
-            link.download = `Overview_${currentClass.replace(/\s+/g, '_')}_${dateRange}.csv`;
+            link.download = `IteratED_${currentClass.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.csv`;
             link.click();
         };
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Utilities
+        // ─────────────────────────────────────────────────────────────────────
+        function toggleCustomDates() {
+            const range = document.getElementById('dateRangeSelector').value;
+            document.getElementById('customDateRange').classList.toggle('hidden', range !== 'custom');
+        }
+
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape') { closeDrilldown(); closePerfModal(); }
+        });
+
+        function handleCredentialResponse(response) {
+            auth.signInWithCredential(
+                firebase.auth.GoogleAuthProvider.credential(response.credential)
+            );
+        }
+
+        document.getElementById('signOutButton').onclick = () => {
+            if (window.google?.accounts?.id) google.accounts.id.disableAutoSelect();
+            auth.signOut().then(() => window.location.reload());
+        };
+
+        function showToast(msg, opts = {}) {
+            const wrapper = document.getElementById('toast-wrapper');
+            const colors  = { green: 'bg-green-700', red: 'bg-red-700', blue: 'bg-blue-700' };
+            const div     = document.createElement('div');
+            div.className = `${colors[opts.color] || 'bg-gray-700'} text-white px-4 py-3 rounded-lg shadow-lg text-sm pointer-events-auto`;
+            div.textContent = msg;
+            wrapper.appendChild(div);
+            setTimeout(() => div.remove(), 3000);
+        }
     </script>
 </body>
 
