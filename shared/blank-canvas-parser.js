@@ -295,7 +295,7 @@
                 const promptRaw = qTagInlineMatch[1].trim();
                 const qTagRaw = qTagInlineMatch[2];
                 const parsed = parseQuestionLine(promptRaw, qTagRaw);
-                const qBlock = buildQuestionBlock(promptRaw, parsed, fingerprintMap, existingCheckerIds, usedIds, warnings);
+                const qBlock = buildQuestionBlock(promptRaw, parsed, fingerprintMap, existingCheckerIds, usedIds, warnings, existingBlocks);
                 blocks.push(qBlock);
                 continue;
             }
@@ -320,7 +320,7 @@
                 flushText();
                 const qTagRaw = qTagSeparateMatch[1];
                 const parsed = parseQuestionLine(promptRaw, qTagRaw);
-                const qBlock = buildQuestionBlock(promptRaw, parsed, fingerprintMap, existingCheckerIds, usedIds, warnings);
+                const qBlock = buildQuestionBlock(promptRaw, parsed, fingerprintMap, existingCheckerIds, usedIds, warnings, existingBlocks);
                 blocks.push(qBlock);
                 continue;
             }
@@ -342,13 +342,14 @@
         return { blocks, warnings };
     }
 
-    function buildQuestionBlock(promptRaw, parsed, fingerprintMap, existingCheckerIds, usedIds, warnings) {
+    function buildQuestionBlock(promptRaw, parsed, fingerprintMap, existingCheckerIds, usedIds, warnings, existingBlocks) {
         const { questionType, inlineChecker, choices, correctChoiceIndex, points } = parsed;
         const fp = (promptRaw.toLowerCase().trim()) + '|' + questionType;
         const candidate = fingerprintMap[fp];
         // Only reuse the existing ID if it hasn't been claimed already in this parse pass
         const id = (candidate && !usedIds.has(candidate)) ? candidate : genId('q');
         usedIds.add(id);
+        const existingQuestion = (existingBlocks || []).find(b => b && b.id === id && b.type === 'question');
 
         const block = {
             id,
@@ -363,7 +364,23 @@
             block.choices = choices;
             block.correctChoiceIndex = correctChoiceIndex !== null ? correctChoiceIndex : 0;
         }
+        if (existingQuestion && typeof existingQuestion.questionWordBank === 'string') {
+            block.questionWordBank = existingQuestion.questionWordBank;
+        }
         return block;
+    }
+
+    function formatConditionForCanvas(c) {
+        if (!c) return '';
+        if (c.op === 'equals_str') return `is "${c.value}"`;
+        if (c.op === 'contains') return `contains "${c.value}"`;
+        if (c.op === 'not_contains') return `not_contains "${c.value}"`;
+        if (c.op === '==') return `answer==${c.value}${c.tolerance ? ` ±${c.tolerance}` : ''}`;
+        if (c.op === '!=') return `answer!=${c.value}`;
+        if (c.op === '>') return `answer>${c.value}`;
+        if (c.op === '<') return `answer<${c.value}`;
+        if (c.op === 'between') return `answer between ${c.value} and ${c.value2}`;
+        return '';
     }
 
     // ---------------------------------------------------------------- serializer
@@ -420,19 +437,9 @@
             const ic = block.inlineChecker;
             let configStr = '';
             if (ic.type === 'multi') {
-                configStr = ic.conditions.map(c => {
-                    if (c.op === 'equals_str') return `is "${c.value}"`;
-                    return `${c.op} "${c.value}"`;
-                }).join(` ${ic.logic} `);
+                configStr = ic.conditions.map(formatConditionForCanvas).join(` ${ic.logic} `);
             } else {
-                if (ic.op === '==') configStr = `answer==${ic.value}${ic.tolerance ? ` ±${ic.tolerance}` : ''}`;
-                else if (ic.op === '!=') configStr = `answer!=${ic.value}`;
-                else if (ic.op === '>') configStr = `answer>${ic.value}`;
-                else if (ic.op === '<') configStr = `answer<${ic.value}`;
-                else if (ic.op === 'between') configStr = `answer between ${ic.value} and ${ic.value2}`;
-                else if (ic.op === 'contains') configStr = `contains "${ic.value}"`;
-                else if (ic.op === 'not_contains') configStr = `not_contains "${ic.value}"`;
-                else if (ic.op === 'equals_str') configStr = `is "${ic.value}"`;
+                configStr = formatConditionForCanvas(ic);
             }
             qTag = `[q: ${block.questionType} | ${configStr}`;
         } else {

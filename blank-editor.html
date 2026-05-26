@@ -456,6 +456,7 @@
                                 class="w-full md:w-1/2 p-2 bg-gray-800 rounded border border-gray-600 focus:border-yellow-400 focus:outline-none mb-4">
                                 <option value="none">None (Disabled)</option>
                                 <option value="assignment">Assignment-Wide (Same list for all questions)</option>
+                                <option value="question">Per-Question (Special Ed modification)</option>
                             </select>
                             <div id="wordBankModsOnlyContainer" class="ml-2 mt-2 flex items-center gap-2 hidden">
                                 <input type="checkbox" id="wordBankModsOnly"
@@ -474,17 +475,15 @@
             </div>
 
             <div id="structured-mode">
-                <div class="flex gap-3 mb-6 flex-wrap">
+                <div id="blocks-container" class="space-y-4"></div>
+                <p id="no-blocks-msg" class="text-gray-500 italic text-center py-8">No blocks yet. Use the buttons below to add content.</p>
+                <div id="add-block-bar" class="flex gap-3 mt-6 flex-wrap">
                     <button onclick="addBlock('text')" class="bg-blue-700 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg text-sm">+ Add Text</button>
                     <button onclick="addBlock('image')" class="bg-purple-700 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded-lg text-sm">+ Add Image</button>
                     <button onclick="addBlock('youtube')" class="bg-red-700 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg text-sm">+ Add YouTube</button>
                     <button onclick="addBlock('iframe')" class="bg-indigo-700 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg text-sm">+ Add Embed</button>
                     <button onclick="addBlock('question')" class="bg-green-700 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg text-sm">+ Add Question</button>
                 </div>
-                <div id="blocks-container" class="space-y-4"></div>
-                <p id="no-blocks-msg" class="text-gray-500 italic text-center py-8">No blocks yet. Click a button above to add content.</p>
-
-
             </div>
 
             <div id="canvas-mode" class="hidden">
@@ -1089,9 +1088,16 @@ Reading level: [GRADE LEVEL]</p>
             }
             blocks.push(block);
             renderBlocks();
+            renumberQuestionBlocks();
             setTimeout(() => {
                 const el = document.querySelector(`[data-block-id="${block.id}"] textarea, [data-block-id="${block.id}"] input`);
-                if (el) { el.focus(); el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+                if (el) el.focus();
+                const card = document.querySelector(`[data-block-id="${block.id}"]`);
+                if (card) {
+                    card.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                } else {
+                    document.getElementById('add-block-bar')?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                }
             }, 50);
         }
 
@@ -1101,6 +1107,7 @@ Reading level: [GRADE LEVEL]</p>
             delete checkerWidgets[id];
             delete checkerWidgetContainers[id];
             renderBlocks();
+            renumberQuestionBlocks();
         }
 
         function moveBlock(id, direction) {
@@ -1110,6 +1117,7 @@ Reading level: [GRADE LEVEL]</p>
             if (newIdx < 0 || newIdx >= blocks.length) return;
             [blocks[idx], blocks[newIdx]] = [blocks[newIdx], blocks[idx]];
             renderBlocks();
+            renumberQuestionBlocks();
         }
 
         function updateBlockField(id, field, value) {
@@ -1223,6 +1231,7 @@ Reading level: [GRADE LEVEL]</p>
 
             if (!blocks.length) {
                 noMsg.classList.remove('hidden');
+                updateQuestionWordBankVisibility();
                 return;
             }
             noMsg.classList.add('hidden');
@@ -1357,8 +1366,41 @@ Reading level: [GRADE LEVEL]</p>
                 }
             });
 
+            renumberQuestionBlocks();
+            updateQuestionWordBankVisibility();
             updateAllCheckerIndicators();
             updateAllUngradedHighlights();
+        }
+
+        function renumberQuestionBlocks() {
+            const cards = document.querySelectorAll('#blocks-container .block-card');
+            let qNumber = 0;
+            cards.forEach(card => {
+                const blockId = card.dataset.blockId;
+                const block = blocks.find(b => b.id === blockId);
+                const badge = card.querySelector('.question-number-badge');
+                if (!block || block.type !== 'question') {
+                    if (badge) badge.remove();
+                    return;
+                }
+                qNumber += 1;
+                const headerLabel = card.querySelector('.block-card-header > span');
+                if (!headerLabel) return;
+                let questionBadge = badge;
+                if (!questionBadge) {
+                    questionBadge = document.createElement('span');
+                    questionBadge.className = 'question-number-badge inline-block bg-yellow-500 text-gray-900 text-xs font-bold px-2 py-0.5 rounded mr-2';
+                    headerLabel.prepend(questionBadge);
+                }
+                questionBadge.textContent = `Q${qNumber}`;
+            });
+        }
+
+        function updateQuestionWordBankVisibility() {
+            const isQuestionMode = document.getElementById('wordBankMode')?.value === 'question';
+            document.querySelectorAll('.question-wordbank-field').forEach(el => {
+                el.style.display = isQuestionMode ? '' : 'none';
+            });
         }
 
         function renderImagePreview(blockId, url) {
@@ -1661,6 +1703,16 @@ Reading level: [GRADE LEVEL]</p>
 </div>`;
 
             html += `
+<div class="question-wordbank-field mt-2 pt-2 border-t border-gray-700/30">
+    <label class="text-xs text-purple-300 block mb-1">Word Bank for this Question (Special Ed)</label>
+    <textarea class="question-wordbank-input w-full p-2 bg-gray-700 border border-gray-600 rounded text-sm"
+        rows="2"
+        placeholder="Enter words separated by commas..."
+        oninput="updateBlockField('${block.id}', 'questionWordBank', this.value)">${escapeHtml(block.questionWordBank || '')}</textarea>
+    <p class="text-[10px] text-gray-500 mt-1">Only active when Word Bank Mode is set to Per-Question.</p>
+</div>`;
+
+            html += `
 <div id="checker-panel-${block.id}" class="mt-3 pt-3 border-t border-gray-700" style="display:none">
     <div class="mb-2">
         <a href="#" onclick="event.preventDefault(); document.getElementById('q-block-${block.id}').scrollIntoView({behavior:'smooth',block:'nearest'})" class="text-xs text-gray-500 hover:text-gray-300">↑ Back to question</a>
@@ -1696,43 +1748,85 @@ Reading level: [GRADE LEVEL]</p>
         function serializeInlineChecker(ic) {
             if (!ic) return '';
             if (ic.type === 'multi') {
-                const parts = ic.conditions.map(c => {
-                    if (c.op === 'equals_str') return `is "${c.value}"`;
-                    return `${c.op} "${c.value}"`;
-                });
+                const parts = ic.conditions.map(formatInlineCheckerCondition);
                 return parts.join(` ${ic.logic} `);
             }
-            if (ic.op === '==') return `answer==${ic.value}${ic.tolerance ? ` ±${ic.tolerance}` : ''}`;
-            if (ic.op === '!=') return `answer!=${ic.value}`;
-            if (ic.op === '>') return `answer>${ic.value}`;
-            if (ic.op === '<') return `answer<${ic.value}`;
-            if (ic.op === 'between') return `between ${ic.value} and ${ic.value2}`;
-            if (ic.op === 'contains') return `contains "${ic.value}"`;
-            if (ic.op === 'not_contains') return `not_contains "${ic.value}"`;
-            if (ic.op === 'equals_str') return `is "${ic.value}"`;
-            return '';
+            return formatInlineCheckerCondition(ic);
         }
 
         function parseInlineCheckerString(str) {
             str = (str || '').trim();
             if (!str) return null;
             const pts = 100;
-            const containsMatch = str.match(/^contains\s+"([^"]+)"$/i);
-            const notContainsMatch = str.match(/^not_contains\s+"([^"]+)"$/i);
-            const eqMatch = str.match(/^answer\s*==\s*([\d.]+)(?:\s*±\s*([\d.]+))?$/i);
-            const neqMatch = str.match(/^answer\s*!=\s*([\d.]+)$/i);
-            const gtMatch = str.match(/^answer\s*>\s*([\d.]+)$/i);
-            const ltMatch = str.match(/^answer\s*<\s*([\d.]+)$/i);
-            const betweenMatch = str.match(/^(?:answer\s+)?between\s+([\d.]+)\s+and\s+([\d.]+)$/i);
 
-            if (containsMatch) return { op: 'contains', value: containsMatch[1], value2: null, tolerance: 0, points: pts };
-            if (notContainsMatch) return { op: 'not_contains', value: notContainsMatch[1], value2: null, tolerance: 0, points: pts };
-            if (eqMatch) return { op: '==', value: parseFloat(eqMatch[1]), value2: null, tolerance: eqMatch[2] ? parseFloat(eqMatch[2]) : 0, points: pts };
-            if (neqMatch) return { op: '!=', value: parseFloat(neqMatch[1]), value2: null, tolerance: 0, points: pts };
-            if (gtMatch) return { op: '>', value: parseFloat(gtMatch[1]), value2: null, tolerance: 0, points: pts };
-            if (ltMatch) return { op: '<', value: parseFloat(ltMatch[1]), value2: null, tolerance: 0, points: pts };
-            if (betweenMatch) return { op: 'between', value: parseFloat(betweenMatch[1]), value2: parseFloat(betweenMatch[2]), tolerance: 0, points: pts };
-            return null;
+            function parseSingleCondition(condStr) {
+                const s = (condStr || '').trim();
+                const isMatch = s.match(/^is\s+"([^"]+)"$/i);
+                if (isMatch) return { op: 'equals_str', value: isMatch[1], value2: null, tolerance: 0, points: pts };
+                const containsMatch = s.match(/^contains\s+"([^"]+)"$/i);
+                if (containsMatch) return { op: 'contains', value: containsMatch[1], value2: null, tolerance: 0, points: pts };
+                const notContainsMatch = s.match(/^not_contains\s+"([^"]+)"$/i);
+                if (notContainsMatch) return { op: 'not_contains', value: notContainsMatch[1], value2: null, tolerance: 0, points: pts };
+                const eqMatch = s.match(/^answer\s*==\s*([\d.]+)(?:\s*±\s*([\d.]+))?$/i);
+                if (eqMatch) return { op: '==', value: parseFloat(eqMatch[1]), value2: null, tolerance: eqMatch[2] ? parseFloat(eqMatch[2]) : 0, points: pts };
+                const neqMatch = s.match(/^answer\s*!=\s*([\d.]+)$/i);
+                if (neqMatch) return { op: '!=', value: parseFloat(neqMatch[1]), value2: null, tolerance: 0, points: pts };
+                const gtMatch = s.match(/^answer\s*>\s*([\d.]+)$/i);
+                if (gtMatch) return { op: '>', value: parseFloat(gtMatch[1]), value2: null, tolerance: 0, points: pts };
+                const ltMatch = s.match(/^answer\s*<\s*([\d.]+)$/i);
+                if (ltMatch) return { op: '<', value: parseFloat(ltMatch[1]), value2: null, tolerance: 0, points: pts };
+                const betweenMatch = s.match(/^(?:answer\s+)?between\s+([\d.]+)\s+and\s+([\d.]+)$/i);
+                if (betweenMatch) return { op: 'between', value: parseFloat(betweenMatch[1]), value2: parseFloat(betweenMatch[2]), tolerance: 0, points: pts };
+                return null;
+            }
+
+            if (/\bAND\b/i.test(str)) {
+                const parts = str.split(/\bAND\b/i).map(p => p.trim());
+                const conditions = parts.map(parseSingleCondition).filter(Boolean);
+                if (conditions.length === parts.length && conditions.length > 0) {
+                    return { type: 'multi', logic: 'AND', conditions, points: pts };
+                }
+                return null;
+            }
+
+            if (/\bOR\b/i.test(str)) {
+                const parts = str.split(/\bOR\b/i).map(p => p.trim());
+                const conditions = parts.map(parseSingleCondition).filter(Boolean);
+                if (conditions.length === parts.length && conditions.length > 0) {
+                    return { type: 'multi', logic: 'OR', conditions, points: pts };
+                }
+                return null;
+            }
+
+            if (/^contains\s+"([^"]+)"(?:\s*,\s*"([^"]+)")+$/i.test(str)) {
+                const values = [];
+                const re = /"([^"]+)"/g;
+                let m;
+                while ((m = re.exec(str)) !== null) values.push(m[1]);
+                if (values.length > 1) {
+                    return {
+                        type: 'multi',
+                        logic: 'AND',
+                        conditions: values.map(v => ({ op: 'contains', value: v, value2: null, tolerance: 0, points: pts })),
+                        points: pts
+                    };
+                }
+            }
+
+            return parseSingleCondition(str);
+        }
+
+        function formatInlineCheckerCondition(ic) {
+            if (!ic) return '';
+            if (ic.op === '==') return `answer==${ic.value}${ic.tolerance ? ` ±${ic.tolerance}` : ''}`;
+            if (ic.op === '!=') return `answer!=${ic.value}`;
+            if (ic.op === '>') return `answer>${ic.value}`;
+            if (ic.op === '<') return `answer<${ic.value}`;
+            if (ic.op === 'between') return `answer between ${ic.value} and ${ic.value2}`;
+            if (ic.op === 'contains') return `contains "${ic.value}"`;
+            if (ic.op === 'not_contains') return `not_contains "${ic.value}"`;
+            if (ic.op === 'equals_str') return `is "${ic.value}"`;
+            return '';
         }
 
         function applyInlineChecker(blockId) {
@@ -1771,6 +1865,7 @@ Reading level: [GRADE LEVEL]</p>
             saveBtn.disabled = true;
             saveBtn.textContent = 'Saving...';
             try {
+                syncQuestionWordBanksFromUI();
                 let blocksToSave = blocks;
                 if (currentMode === 'canvas') {
                     const markup = document.getElementById('canvas-textarea').value;
@@ -2056,6 +2151,20 @@ Reading level: [GRADE LEVEL]</p>
             const globalContainer = document.getElementById('global-wordbank-container');
             globalContainer.classList.toggle('hidden', mode !== 'assignment');
             document.getElementById('wordBankModsOnlyContainer').classList.toggle('hidden', mode === 'none');
+            updateQuestionWordBankVisibility();
+            if (currentMode === 'structured') {
+                renderBlocks();
+            }
+        }
+
+        function syncQuestionWordBanksFromUI() {
+            document.querySelectorAll('#blocks-container .block-card[data-block-id]').forEach(card => {
+                const blockId = card.dataset.blockId;
+                const block = blocks.find(b => b.id === blockId);
+                if (!block || block.type !== 'question') return;
+                const wbInput = card.querySelector('.question-wordbank-input');
+                if (wbInput) block.questionWordBank = wbInput.value || '';
+            });
         }
 
         function toggleDeadlineSection() {
@@ -2280,21 +2389,10 @@ Reading level: [GRADE LEVEL]</p>
         function serializeInlineChecker(ic) {
             if (!ic) return '';
             if (ic.type === 'multi') {
-                const parts = ic.conditions.map(c => {
-                    if (c.op === 'equals_str') return `is "${c.value}"`;
-                    return `${c.op} "${c.value}"`;
-                });
+                const parts = ic.conditions.map(formatInlineCheckerCondition);
                 return parts.join(` ${ic.logic} `);
             }
-            if (ic.op === '==') return `answer==${ic.value}${ic.tolerance ? ` ±${ic.tolerance}` : ''}`;
-            if (ic.op === '!=') return `answer!=${ic.value}`;
-            if (ic.op === '>') return `answer>${ic.value}`;
-            if (ic.op === '<') return `answer<${ic.value}`;
-            if (ic.op === 'between') return `between ${ic.value} and ${ic.value2}`;
-            if (ic.op === 'contains') return `contains "${ic.value}"`;
-            if (ic.op === 'not_contains') return `not_contains "${ic.value}"`;
-            if (ic.op === 'equals_str') return `is "${ic.value}"`;
-            return '';
+            return formatInlineCheckerCondition(ic);
         }
 
         function generateInlineCheckerCode(ic) {
