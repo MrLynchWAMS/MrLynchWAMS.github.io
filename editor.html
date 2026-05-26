@@ -213,6 +213,15 @@
         <option value="hide">Lock & Hide (Students cannot see answers or scores)</option>
       </select>
     </div>
+    <div class="bg-gray-800 p-6 rounded-lg mb-8">
+      <label for="scoringMode" class="block text-2xl font-bold text-yellow-400 mb-2">Scoring Mode</label>
+      <p class="text-gray-400 mb-4">Choose when students see their score and correctness feedback.</p>
+      <select id="scoringMode"
+        class="w-full md:w-1/2 p-2 bg-gray-700 rounded border border-gray-600 focus:border-yellow-400 focus:outline-none">
+        <option value="instant">Instant (Show score immediately after each answer)</option>
+        <option value="afterSubmission">After Submission (Hide score until student submits)</option>
+      </select>
+    </div>
 
     <div id="deadline-widget-container"></div>
 
@@ -711,6 +720,7 @@
           document.getElementById('assignmentTitle').textContent = `Editing: ${assignmentData.name}`;
           document.getElementById('shareLink').value = `https://custom.scienceclass.rocks/classroompicker.html?assignmentId=${assignmentId}`;
           document.getElementById('postSubmissionRule').value = assignmentData.postSubmissionRule || 'open';
+          document.getElementById('scoringMode').value = assignmentData.scoringMode || 'instant';
 
           // Aura Rewards Initialization
           const auraOnTime = document.getElementById('auraOnTime');
@@ -985,6 +995,7 @@
 
           // Read form values
           const postSubmissionRule = document.getElementById('postSubmissionRule').value;
+          const scoringMode = document.getElementById('scoringMode').value;
           const focusModeEnabled = document.getElementById('focusModeEnabled').checked;
           const focusModeAction = document.getElementById('focusModeAction').value;
 
@@ -1082,6 +1093,7 @@
             checkerMeta: checkerMeta,
             deadlinePolicy: deadlinePolicy,
             postSubmissionRule: postSubmissionRule,
+            scoringMode: scoringMode,
             auraOnTime: auraOnTime,
             auraRules: auraRules.map(({ id, ...rest }) => rest), // Remove internal IDs
             focusModeEnabled: focusModeEnabled,
