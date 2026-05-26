@@ -506,6 +506,11 @@
             opacity: 0.6;
         }
 
+        .pdf-student-zone.zone-saved {
+            border-color: #3b82f6;
+            background: rgba(219, 234, 254, 0.92);
+        }
+
         #pdf-check-panel {
             width: 220px;
         }
@@ -895,6 +900,14 @@
         let assignmentAuraEarned = 0; // Aura from THIS assignment only for the current student
         let simulationMessageListener = null;
         let simulationCompleted = false;
+
+        function isHiddenScoring() {
+            return (assignmentData?.scoringMode || 'instant') === 'afterSubmission';
+        }
+
+        function hasSavedAnswer(state) {
+            return !!(state && state.answer !== undefined && state.answer !== null && String(state.answer).trim() !== '');
+        }
 
         // Question progress tracking - per-question attempt data
         let questionProgressData = {}; // Key: slideIndex, Value: {attemptCount, bestScore, locked, etc.}
@@ -2253,14 +2266,20 @@
             if (currentState) {
                 inputBox.value = currentState.answer;
                 if (currentState.score !== undefined) {
-                    resultElement.innerHTML = "Your Score: " + currentState.score;
-                    resultElement.style.color = currentState.score >= 90 ? "lightgreen" : "orange";
+                    resultElement.classList.remove('text-blue-400', 'text-green-400', 'text-yellow-400', 'text-orange-400');
+                    if (isHiddenScoring() && !isSubmitted && hasSavedAnswer(currentState)) {
+                        resultElement.textContent = '✓ Saved';
+                        resultElement.classList.add('text-blue-400');
+                    } else {
+                        resultElement.textContent = "Your Score: " + currentState.score;
+                        resultElement.classList.add(currentState.score >= 90 ? 'text-green-400' : 'text-orange-400');
+                    }
                 } else {
-                    resultElement.innerHTML = "";
+                    resultElement.textContent = "";
                 }
             } else {
                 inputBox.value = "";
-                resultElement.innerHTML = "";
+                resultElement.textContent = "";
             }
 
             const nextButton = document.getElementById('nextButton');
@@ -2394,8 +2413,7 @@
 
             let totalScore = 0;
             let perQuestionHTML = '';
-            const scoringMode = assignmentData.scoringMode || 'instant';
-            const hideScores = !isSubmitted && scoringMode === 'afterSubmission';
+            const hideScores = !isSubmitted && isHiddenScoring();
 
             //disables question links when hidden
             const postRule = assignmentData.postSubmissionRule || 'open';
@@ -2420,15 +2438,20 @@
                 const state = slideStates[index];
                 let score = (state && state.score !== undefined) ? state.score : 0;
                 totalScore += score;
-                let displayScore = 'N/A';
-                let color = 'text-gray-500';
-                if (state) {
+                const attempted = hasSavedAnswer(state);
+                let displayScore = 'Unattempted ⚠️';
+                let color = 'text-orange-400 font-bold';
+
+                if (attempted) {
                     if (hideScores) {
-                        displayScore = (state.answer) ? 'Saved' : 'N/A';
-                        color = (state.answer) ? 'text-blue-400' : 'text-gray-500';
-                    } else if (state.score !== undefined) {
+                        displayScore = 'Saved ✓';
+                        color = 'text-blue-400 font-bold';
+                    } else if (state && state.score !== undefined) {
                         displayScore = state.score;
                         color = displayScore >= 90 ? 'text-green-400' : 'text-yellow-400';
+                    } else {
+                        displayScore = 'Saved ✓';
+                        color = 'text-blue-400 font-bold';
                     }
                 }
 
@@ -2460,7 +2483,7 @@
             const overallColor = overallAverage >= 90 ? 'text-green-400' : overallAverage >= 60 ? 'text-yellow-400' : 'text-red-400';
 
             if (hideScores) {
-                document.getElementById('overallScore').innerHTML = `<span class="text-gray-400 text-2xl italic">Hidden until submission</span>`;
+                document.getElementById('overallScore').innerHTML = `<span class="text-gray-400">—</span>`;
             } else {
                 document.getElementById('overallScore').innerHTML = `<span class="${overallColor}">${overallAverage}%</span>`;
             }
@@ -2818,9 +2841,6 @@
                 showToast(helpMsg, { color: 'blue', duration: 8000 });
             }
 
-            // ... (Update UI and Save) ...
-            resultElement.innerHTML = "Your Score: " + scoreToPersist;
-            resultElement.style.color = scoreToPersist >= 90 ? "lightgreen" : "orange";
             slideStates[currentSlideIndex] = { answer: studentAnswer, score: scoreToPersist };
 
             try {
@@ -2885,6 +2905,14 @@
                     saveMsg += ` (Attempt ${attemptCount}${attemptsConfig.maxAttempts ? `/${attemptsConfig.maxAttempts}` : ''})`;
                 }
                 showToast(saveMsg, { color: 'blue', position: 'bottom-right', duration: 2000 });
+                resultElement.classList.remove('text-blue-400', 'text-green-400', 'text-yellow-400', 'text-orange-400');
+                if (isHiddenScoring() && !isSubmitted) {
+                    resultElement.textContent = '✓ Answer Saved!';
+                    resultElement.classList.add('text-blue-400');
+                } else {
+                    resultElement.textContent = "Your Score: " + scoreToPersist;
+                    resultElement.classList.add(scoreToPersist >= 90 ? 'text-green-400' : 'text-orange-400');
+                }
             } catch (error) {
                 console.error("Error saving to Firestore:", error);
                 showToast("Could not save answer. See console for details.", { color: 'red' });
@@ -3044,7 +3072,11 @@
                 if (savedState && savedState.answer) {
                     ta.value = savedState.answer;
                     if (savedState.score !== undefined) {
-                        zoneDiv.classList.add(savedState.score >= 90 ? 'zone-correct' : 'zone-partial');
+                        if (isHiddenScoring() && !isSubmitted) {
+                            zoneDiv.classList.add('zone-saved');
+                        } else {
+                            zoneDiv.classList.add(savedState.score >= 90 ? 'zone-correct' : 'zone-partial');
+                        }
                     }
                 }
 
@@ -3062,8 +3094,14 @@
                     const state = slideStates[index];
                     const resultEl = document.getElementById('pdf-result-display');
                     if (state && state.score !== undefined) {
-                        resultEl.textContent = `Score: ${state.score}%`;
-                        resultEl.style.color = state.score >= 90 ? '#4ade80' : '#fb923c';
+                        resultEl.classList.remove('text-blue-400', 'text-green-400', 'text-orange-400');
+                        if (isHiddenScoring() && !isSubmitted && hasSavedAnswer(state)) {
+                            resultEl.textContent = '✓ Saved';
+                            resultEl.classList.add('text-blue-400');
+                        } else {
+                            resultEl.textContent = `Score: ${state.score}%`;
+                            resultEl.classList.add(state.score >= 90 ? 'text-green-400' : 'text-orange-400');
+                        }
                     } else {
                         resultEl.textContent = '';
                     }
@@ -3145,11 +3183,21 @@
             const state = slideStates[activePdfZoneIndex];
             const zoneDiv = document.getElementById(`student-zone-${activePdfZoneIndex}`);
             if (state && state.score !== undefined && zoneDiv) {
-                zoneDiv.classList.remove('zone-correct', 'zone-partial', 'active');
-                zoneDiv.classList.add(state.score >= 90 ? 'zone-correct' : 'zone-partial');
+                zoneDiv.classList.remove('zone-correct', 'zone-partial', 'zone-saved', 'active');
+                if (isHiddenScoring() && !isSubmitted) {
+                    zoneDiv.classList.add('zone-saved');
+                } else {
+                    zoneDiv.classList.add(state.score >= 90 ? 'zone-correct' : 'zone-partial');
+                }
                 const resultEl = document.getElementById('pdf-result-display');
-                resultEl.textContent = `Score: ${state.score}%`;
-                resultEl.style.color = state.score >= 90 ? '#4ade80' : '#fb923c';
+                resultEl.classList.remove('text-blue-400', 'text-green-400', 'text-orange-400');
+                if (isHiddenScoring() && !isSubmitted) {
+                    resultEl.textContent = '✓ Answer Saved!';
+                    resultEl.classList.add('text-blue-400');
+                } else {
+                    resultEl.textContent = `Score: ${state.score}%`;
+                    resultEl.classList.add(state.score >= 90 ? 'text-green-400' : 'text-orange-400');
+                }
             }
         }
 
@@ -3864,8 +3912,11 @@
                     const attemptLabel = prog && prog.attemptCount > 0 && (prog.attemptCount > 1 || maxAttempts > 0)
                         ? ` • Attempt ${prog.attemptCount}${maxAttempts > 0 ? '/' + maxAttempts : ''}`
                         : '';
+                    const hideScores = isHiddenScoring() && !isSubmitted;
                     const scoreDisplay = savedScore !== undefined
-                        ? `<span class="font-bold ${savedScore >= 90 ? 'text-green-400' : savedScore > 0 ? 'text-yellow-400' : 'text-red-400'}">Score: ${savedScore}</span><span class="text-xs text-gray-500 ml-1">${attemptLabel}</span>`
+                        ? hideScores
+                            ? `<span class="font-bold text-blue-400">✓ Saved</span><span class="text-xs text-gray-500 ml-1">${attemptLabel}</span>`
+                            : `<span class="font-bold ${savedScore >= 90 ? 'text-green-400' : savedScore > 0 ? 'text-yellow-400' : 'text-red-400'}">Score: ${savedScore}</span><span class="text-xs text-gray-500 ml-1">${attemptLabel}</span>`
                         : '';
 
                     const inputDisabled = isLocked || !qOpen;
@@ -4126,7 +4177,11 @@
             if (resultEl) {
                 const attemptLabel = attemptCount > 1 || maxAttempts > 0
                     ? ` • Attempt ${attemptCount}${maxAttempts > 0 ? '/' + maxAttempts : ''}` : '';
-                resultEl.innerHTML = `<span class="font-bold ${score >= 90 ? 'text-green-400' : score > 0 ? 'text-yellow-400' : 'text-red-400'}">Score: ${score}</span><span class="text-xs text-gray-500 ml-1">${attemptLabel}</span>`;
+                if (isHiddenScoring() && !isSubmitted) {
+                    resultEl.innerHTML = `<span class="font-bold text-blue-400">✓ Answer Saved!</span><span class="text-xs text-gray-500 ml-1">${attemptLabel}</span>`;
+                } else {
+                    resultEl.innerHTML = `<span class="font-bold ${score >= 90 ? 'text-green-400' : score > 0 ? 'text-yellow-400' : 'text-red-400'}">Score: ${score}</span><span class="text-xs text-gray-500 ml-1">${attemptLabel}</span>`;
+                }
             }
 
             // Save to Firestore
@@ -4774,9 +4829,15 @@
             const lockedQuestionCount = simQuestions.filter(q => !q.showBeforeSim).length;
             const hasPreSimQuestions = simQuestions.some(q => q.showBeforeSim);
             indicator.classList.remove('text-red-400', 'text-blue-300', 'text-green-400', 'text-gray-300');
+            const hideScores = isHiddenScoring() && !isSubmitted;
 
             simQuestions.forEach((q, index) => {
                 const state = slideStates[index] || {};
+                const saved = hasSavedAnswer(state);
+                const savedResultText = saved ? '✓ Saved' : '';
+                const scoreResultText = state.score !== undefined ? `Score: ${state.score}` : '';
+                const resultText = hideScores ? savedResultText : scoreResultText;
+                const resultColorClass = hideScores ? (saved ? 'text-blue-400' : 'text-gray-400') : (state.score !== undefined ? 'text-yellow-300' : 'text-gray-400');
                 const questionDiv = document.createElement('div');
                 questionDiv.className = 'bg-gray-700/60 border border-gray-600 rounded-lg p-4';
                 const isLockedUntilComplete = !q.showBeforeSim;
@@ -4790,7 +4851,7 @@
                         <p class="font-semibold mb-2">Question ${index + 1} <span class="text-xs text-blue-400 font-normal">(auto-scored from simulation)</span></p>
                         <p class="text-gray-200 mb-3">${escapeHtml(q.body || '')}</p>
                         <div id="sim-auto-status-${index}" class="text-sm text-gray-400 italic">Waiting for simulation to complete…</div>
-                        <span id="sim-result-${index}" class="text-sm font-semibold ${state.score !== undefined ? 'text-yellow-300' : 'text-gray-400'}">${state.score !== undefined ? `Score: ${state.score}` : ''}</span>
+                        <span id="sim-result-${index}" class="text-sm font-semibold ${resultColorClass}">${resultText}</span>
                     `;
                     if (state.answer != null && state.answer !== '') {
                         const statusEl = questionDiv.querySelector(`#sim-auto-status-${index}`);
@@ -4803,7 +4864,7 @@
                         <textarea id="sim-answer-${index}" rows="4" class="w-full p-3 bg-gray-800 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500" placeholder="Your answer here...">${escapeHtml(state.answer || '')}</textarea>
                         <div class="mt-3 flex items-center gap-3">
                             <button onclick="simulationCheckAndSave(${index})" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">Check & Save</button>
-                            <span id="sim-result-${index}" class="text-sm font-semibold ${state.score !== undefined ? 'text-yellow-300' : 'text-gray-400'}">${state.score !== undefined ? `Score: ${state.score}` : ''}</span>
+                            <span id="sim-result-${index}" class="text-sm font-semibold ${resultColorClass}">${resultText}</span>
                         </div>
                     `;
                 }
@@ -4917,8 +4978,13 @@
 
             const state = slideStates[index];
             if (state && resultEl) {
-                resultEl.textContent = `Score: ${state.score ?? 0}`;
-                resultEl.className = 'text-sm font-semibold text-yellow-300';
+                if (isHiddenScoring() && !isSubmitted) {
+                    resultEl.textContent = '✓ Answer Saved!';
+                    resultEl.className = 'text-sm font-semibold text-blue-400';
+                } else {
+                    resultEl.textContent = `Score: ${state.score ?? 0}`;
+                    resultEl.className = 'text-sm font-semibold text-yellow-300';
+                }
             }
         }
 
@@ -4993,8 +5059,13 @@
                     statusEl.className = answer ? 'text-sm text-blue-300' : 'text-sm text-orange-400 italic';
                 }
                 if (resultEl) {
-                    resultEl.textContent = `Score: ${score}`;
-                    resultEl.className = 'text-sm font-semibold text-yellow-300';
+                    if (isHiddenScoring() && !isSubmitted) {
+                        resultEl.textContent = '✓ Answer Saved!';
+                        resultEl.className = 'text-sm font-semibold text-blue-400';
+                    } else {
+                        resultEl.textContent = `Score: ${score}`;
+                        resultEl.className = 'text-sm font-semibold text-yellow-300';
+                    }
                 }
             }
             currentSlideIndex = previousIndex;

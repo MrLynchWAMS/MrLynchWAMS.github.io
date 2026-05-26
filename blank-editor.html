@@ -176,6 +176,15 @@
                     <option value="hide">Lock &amp; Hide (Students cannot see answers or scores)</option>
                 </select>
             </div>
+            <div class="bg-gray-800 p-6 rounded-lg mb-8">
+                <label for="scoringMode" class="block text-2xl font-bold text-yellow-400 mb-2">Scoring Mode</label>
+                <p class="text-gray-400 mb-4">Choose when students see their score and correctness feedback.</p>
+                <select id="scoringMode"
+                    class="w-full md:w-1/2 p-2 bg-gray-700 rounded border border-gray-600 focus:border-yellow-400 focus:outline-none">
+                    <option value="instant">Instant (Show score immediately after each answer)</option>
+                    <option value="afterSubmission">After Submission (Hide score until student submits)</option>
+                </select>
+            </div>
 
             <!-- Attempt Tracking -->
             <div class="bg-gray-800 p-6 rounded-lg mb-6 border border-orange-900/30">
@@ -852,6 +861,7 @@ Reading level: [GRADE LEVEL]</p>
 
                 // Post-Submission Policy
                 document.getElementById('postSubmissionRule').value = assignmentData.postSubmissionRule || 'open';
+                document.getElementById('scoringMode').value = assignmentData.scoringMode || 'instant';
 
                 // Load teacher defaults and student list for Deadlines and Modifications
                 try {
@@ -1838,6 +1848,7 @@ Reading level: [GRADE LEVEL]</p>
                     checkerFunctions: newCheckerFunctions,
                     lastEditorMode: currentMode,
                     postSubmissionRule: document.getElementById('postSubmissionRule').value || 'open',
+                    scoringMode: document.getElementById('scoringMode').value || 'instant',
                     focusModeEnabled: document.getElementById('focusModeEnabled').checked,
                     focusModeAction: document.getElementById('focusModeAction').value || 'log',
                     toolsConfig,
