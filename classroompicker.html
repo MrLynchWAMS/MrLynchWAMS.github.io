@@ -3953,9 +3953,15 @@
                     }
 
                     const pts = block.points || 100;
+                    const wbTools = assignmentData.toolsConfig || {};
+                    const wbEnabled = wbTools.wordBankMode && wbTools.wordBankMode !== 'none' && (!wbTools.wordBankModsOnly || userProfile.hasModifications);
+                    const showPerQWbBtn = wbEnabled && wbTools.wordBankMode === 'question' && (block.wordBankList || '').trim();
                     html += `<div class="bg-gray-800 p-5 rounded-lg border border-gray-700" id="blank-q-card-${block.id}">
                         <div class="flex justify-between items-start mb-1">
-                            <p class="font-semibold text-base text-white">${renderer.escapeHtml(block.prompt || '')}</p>
+                            <div>
+                                <span class="text-xs font-bold text-blue-400 uppercase tracking-wide">Question ${idx + 1}</span>
+                                <p class="font-semibold text-base text-white">${renderer.escapeHtml(block.prompt || '')}</p>
+                            </div>
                             <div class="flex items-center gap-2 ml-2 shrink-0">
                                 ${qTimerHTML}
                                 <span class="text-xs text-gray-400 whitespace-nowrap">${pts} pts</span>
@@ -3972,6 +3978,7 @@
                                     : 'Check &amp; Save';
                                 return `<button onclick="blankCheckAndSave('${block.id}', ${idx})" class="blank-check-btn bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-colors">${btnLabel}</button>`;
                             })() : (!isLocked && !qOpen ? `<span class="text-xs text-orange-400">🔒 ${renderer.escapeHtml(qDeadlineMsg)}</span>` : '')}
+                            ${showPerQWbBtn ? `<button onclick="openBlankPerQuestionWordBank('${block.id}', ${idx + 1})" class="bg-blue-700 hover:bg-blue-600 text-white font-bold py-2 px-3 rounded transition-colors text-sm">📖 Word Bank</button>` : ''}
                             <span id="blank-q-result-${block.id}" class="text-sm font-semibold">${scoreDisplay}</span>
                         </div>
                     </div>`;
@@ -4252,11 +4259,16 @@
             const wbBtn = document.getElementById('wordbank-toggle-btn');
             const wbPopup = document.getElementById('wordbank-popup');
             const wbEnabled = tools.wordBankMode && tools.wordBankMode !== 'none' && (!tools.wordBankModsOnly || userProfile.hasModifications);
+            const isBlankPerQuestion = assignmentData.type === 'blank' && tools.wordBankMode === 'question';
 
             if (wbEnabled) {
-                wbBtn.classList.remove('hidden');
                 makeDraggable(wbPopup, document.getElementById('wordbank-header'));
-                updateWordBank();
+                if (isBlankPerQuestion) {
+                    wbBtn.classList.add('hidden');
+                } else {
+                    wbBtn.classList.remove('hidden');
+                    updateWordBank();
+                }
             } else {
                 wbBtn.classList.add('hidden');
                 if (wbPopup) wbPopup.style.display = 'none';
@@ -4775,8 +4787,10 @@
             const tools = assignmentData.toolsConfig || {};
             let words = [];
 
+            const titleEl = document.querySelector('#wordbank-header span:first-child');
             if (tools.wordBankMode === 'assignment') {
                 words = (tools.globalWordBankList || '').split(',').map(w => w.trim()).filter(Boolean);
+                if (titleEl) titleEl.textContent = 'WORD BANK — WHOLE ASSIGNMENT';
             } else if (tools.wordBankMode === 'question') {
                 const qNum = currentSlideIndex + 1;
                 const slidePolicy = assignmentData.deadlinePolicy?.[`q${qNum}`] || {};
@@ -4799,6 +4813,36 @@
                 div.onclick = () => div.classList.toggle('crossed-off');
                 container.appendChild(div);
             });
+        }
+
+        function openBlankPerQuestionWordBank(blockId, qNum) {
+            const block = (assignmentData.blocks || []).find(b => b.id === blockId);
+            const words = (block?.wordBankList || '').split(',').map(w => w.trim()).filter(Boolean);
+
+            const titleEl = document.querySelector('#wordbank-header span:first-child');
+            if (titleEl) titleEl.textContent = `WORD BANK — QUESTION ${qNum}`;
+
+            const container = document.getElementById('wordbank-list');
+            container.innerHTML = '';
+            if (words.length === 0) {
+                container.innerHTML = '<p class="text-gray-500 italic text-xs p-2">No words for this question.</p>';
+            } else {
+                words.forEach(word => {
+                    const div = document.createElement('div');
+                    div.className = 'word-item';
+                    div.textContent = word;
+                    div.onclick = () => div.classList.toggle('crossed-off');
+                    container.appendChild(div);
+                });
+            }
+
+            const wb = document.getElementById('wordbank-popup');
+            wb.style.display = 'flex';
+            if (!wb.style.top) {
+                wb.style.top = '100px';
+                wb.style.right = '100px';
+                wb.style.left = 'auto';
+            }
         }
 
         async function initializeSimulationStudentView() {
