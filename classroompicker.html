@@ -2375,6 +2375,28 @@
 
         function showSummary() {
             saveCurrentState();
+
+            // Sync blank assignment DOM inputs → slideStates before rendering summary
+            if (assignmentData?.type === 'blank') {
+                const allBlocks = assignmentData.blocks || [];
+                const qBlocks = allBlocks.filter(b => b.type === 'question');
+                qBlocks.forEach((block, qi) => {
+                    // Only fill gaps — don't overwrite a properly saved state
+                    if (hasSavedAnswer(slideStates[qi])) return;
+                    if (block.questionType === 'choice') {
+                        const checked = document.querySelector(`input[name="blank-choice-${block.id}"]:checked`);
+                        if (checked) {
+                            slideStates[qi] = { ...(slideStates[qi] || {}), answer: checked.value };
+                        }
+                    } else {
+                        const el = document.getElementById(`blank-q-input-${block.id}`);
+                        if (el && String(el.value).trim()) {
+                            slideStates[qi] = { ...(slideStates[qi] || {}), answer: el.value };
+                        }
+                    }
+                });
+            }
+
             document.getElementById('mainContainer').classList.add('hidden');
             document.getElementById('summaryContainer').classList.remove('hidden');
 
@@ -3955,12 +3977,14 @@
                     const pts = block.points || 100;
                     const wbTools = assignmentData.toolsConfig || {};
                     const wbEnabled = wbTools.wordBankMode && wbTools.wordBankMode !== 'none' && (!wbTools.wordBankModsOnly || userProfile.hasModifications);
-                    const showPerQWbBtn = wbEnabled && wbTools.wordBankMode === 'question' && (block.wordBankList || '').trim();
+                    const showPerQWbBtn = wbEnabled && wbTools.wordBankMode === 'question' && (block.questionWordBank || '').trim();
+                    const perQWbWordCount = showPerQWbBtn ? (block.questionWordBank || '').split(',').map(w => w.trim()).filter(Boolean).length : 0;
                     html += `<div class="bg-gray-800 p-5 rounded-lg border border-gray-700" id="blank-q-card-${block.id}">
                         <div class="flex justify-between items-start mb-1">
                             <div>
                                 <span class="text-xs font-bold text-blue-400 uppercase tracking-wide">Question ${idx + 1}</span>
                                 <p class="font-semibold text-base text-white">${renderer.escapeHtml(block.prompt || '')}</p>
+                                ${showPerQWbBtn ? `<span class="inline-block mt-1 text-xs text-blue-300 bg-blue-900 border border-blue-700 rounded px-2 py-0.5">📖 Word Bank (${perQWbWordCount} word${perQWbWordCount !== 1 ? 's' : ''})</span>` : ''}
                             </div>
                             <div class="flex items-center gap-2 ml-2 shrink-0">
                                 ${qTimerHTML}
@@ -4817,7 +4841,7 @@
 
         function openBlankPerQuestionWordBank(blockId, qNum) {
             const block = (assignmentData.blocks || []).find(b => b.id === blockId);
-            const words = (block?.wordBankList || '').split(',').map(w => w.trim()).filter(Boolean);
+            const words = (block?.questionWordBank || '').split(',').map(w => w.trim()).filter(Boolean);
 
             const titleEl = document.querySelector('#wordbank-header span:first-child');
             if (titleEl) titleEl.textContent = `WORD BANK — QUESTION ${qNum}`;
