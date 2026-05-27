@@ -4188,8 +4188,6 @@
             }
             const shouldFlagHelp = attemptCount >= helpThreshold && helpThreshold > 0;
 
-            slideStates[qIndex] = { answer: studentAnswer, score };
-
             // Update Check & Save button
             const checkBtn = document.querySelector(`#blank-q-card-${block.id} .blank-check-btn`);
             if (checkBtn) {
@@ -4214,6 +4212,8 @@
                     resultEl.innerHTML = `<span class="font-bold ${score >= 90 ? 'text-green-400' : score > 0 ? 'text-yellow-400' : 'text-red-400'}">Score: ${score}</span><span class="text-xs text-gray-500 ml-1">${attemptLabel}</span>`;
                 }
             }
+
+            slideStates[qIndex] = { answer: String(studentAnswer), score: score };
 
             // Save to Firestore
             try {
