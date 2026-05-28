@@ -896,6 +896,7 @@
         let parentLessonId = null; // Tracks if we are viewing a child section of a lesson
         let lessonSectionsSubmissions = {}; // Cache of submission statuses for other sections in the same lesson
         let isSubmitted = false;
+        let sessionInitialized = false; // Tracks whether initializeStudentSession() has run
         let confirmCallback = null;
         let assignmentAuraEarned = 0; // Aura from THIS assignment only for the current student
         let simulationMessageListener = null;
@@ -1273,13 +1274,21 @@
                 errorP.innerHTML = '';
                 document.getElementById('pageLoader').classList.add('hidden');
 
-                // Show main or summary
-                const postRule = assignmentData.postSubmissionRule || 'open';
-                if (isSubmitted && postRule === 'hide') {
-                    showSummary();
+                if (!sessionInitialized) {
+                    // Session was never initialized because the assignment was closed on page load.
+                    // We must call initializeStudentSession() now so that submissions are loaded
+                    // (populating slideStates) before any content is shown. Without this,
+                    // Question 1 (and all others) would appear as "Unattempted" in the summary.
+                    initializeStudentSession();
                 } else {
-                    document.getElementById('mainContainer').classList.remove('hidden');
-                    updateSlideDisplay();
+                    // Session already initialized — just restore the correct view.
+                    const postRule = assignmentData.postSubmissionRule || 'open';
+                    if (isSubmitted && postRule === 'hide') {
+                        showSummary();
+                    } else {
+                        document.getElementById('mainContainer').classList.remove('hidden');
+                        updateSlideDisplay();
+                    }
                 }
             }
         }
@@ -1483,10 +1492,23 @@
 
                         // If status changed to submitted, react
                         if (isSubmitted && !wasSubmitted) {
-                            showToast("Assignment submitted (handled by teacher)!", { color: 'green' });
-                            const postRule = assignmentData.postSubmissionRule || 'open';
-                            if (postRule === 'hide') {
-                                showSummary();
+                            // Security: only react if the assignment is currently accessible.
+                            // If the assignment is closed/unassigned, showing the summary would
+                            // expose question prompts to students who could share them with peers.
+                            const studentCls = userProfile?.class;
+                            const assignedCls = assignmentData?.assignedClasses || [];
+                            const classStatus = studentCls
+                                ? (assignmentData?.classStatus?.[studentCls] || 'closed')
+                                : 'closed';
+                            const isCurrentlyAccessible =
+                                assignedCls.includes(studentCls) && classStatus !== 'closed';
+
+                            if (isCurrentlyAccessible) {
+                                showToast("Assignment submitted (handled by teacher)!", { color: 'green' });
+                                const postRule = assignmentData.postSubmissionRule || 'open';
+                                if (postRule === 'hide') {
+                                    showSummary();
+                                }
                             }
                         } else if (!isSubmitted && wasSubmitted) {
                             showToast("Assignment un-submitted by teacher.", { color: 'blue' });
@@ -1669,6 +1691,7 @@
         }
 
         async function initializeStudentSession() {
+            sessionInitialized = true; // Mark session as started so evaluateAccess restore-view knows submissions will be loaded
             document.getElementById('loginContainer').classList.add('hidden');
             const loader = document.getElementById('pageLoader');
             loader.classList.remove('hidden');
@@ -2518,6 +2541,12 @@
             if (isSubmitted) {
                 summaryAuraLabel.textContent = "Aura Earned";
                 auraContainer.innerHTML = `${assignmentAuraEarned || 0} ✧`;
+            } else if (hideScores) {
+                // In afterSubmission mode, hide potential aura entirely so students
+                // cannot infer whether they answered correctly by watching the aura
+                // threshold match their current score.
+                summaryAuraLabel.textContent = "Aura";
+                auraContainer.innerHTML = `<span class="text-gray-500">—</span>`;
             } else {
                 // Potential Aura Calculation (Pre-submission)
                 const assignmentAuraRules = assignmentData.auraRules || [];
