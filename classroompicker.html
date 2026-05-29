@@ -1690,6 +1690,93 @@
             }
         }
 
+        /**
+         * Securely awards aura to a student for a specific trigger, preventing double-awarding
+         * by tracking all awarded aura permanently in the 'earnedAura' collection.
+         * 
+         * @param {string} triggerType - 'submission' | 'watch_time' | 'question_correct'
+         * @param {number} amount - The amount of aura to award
+         * @param {string} uniqueKey - A unique identifier for the award (e.g. 'overall', ruleId, or questionIndex)
+         * @returns {Promise<boolean>} - True if aura was newly awarded, false if already awarded or ineligible
+         */
+        async function awardAuraSecurely(triggerType, amount, uniqueKey) {
+            if (!userProfile || !userProfile.studentDocId || !assignmentData || amount <= 0) {
+                return false;
+            }
+
+            try {
+                const earnedAuraRef = db.collection("earnedAura").doc(`${assignmentData.id}_${userProfile.email}`);
+                
+                // Get the existing awards document
+                const earnedAuraDoc = await earnedAuraRef.get();
+                const earnedData = earnedAuraDoc.exists ? earnedAuraDoc.data() : {
+                    studentEmail: userProfile.email,
+                    studentName: userProfile.name,
+                    assignmentId: assignmentData.id,
+                    teacherEmail: normalizeTeacherEmail(assignmentData.teacherEmail || 'klynch@mtps.us'),
+                    submittedAuraAwarded: false,
+                    submittedAuraAmount: 0,
+                    awardedRuleIds: [],
+                    awardedQuestions: [],
+                    lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+                };
+
+                // Initialize fields if they don't exist
+                if (!earnedData.awardedRuleIds) earnedData.awardedRuleIds = [];
+                if (!earnedData.awardedQuestions) earnedData.awardedQuestions = [];
+
+                // Check if already awarded
+                if (triggerType === 'submission') {
+                    if (earnedData.submittedAuraAwarded) {
+                        console.log(`[Aura Secure] Submission aura already awarded for ${assignmentData.id} to ${userProfile.email}`);
+                        return false;
+                    }
+                    earnedData.submittedAuraAwarded = true;
+                    earnedData.submittedAuraAmount = amount;
+                } else if (triggerType === 'watch_time') {
+                    if (earnedData.awardedRuleIds.includes(uniqueKey)) {
+                        console.log(`[Aura Secure] Watch time rule ${uniqueKey} already awarded for ${assignmentData.id} to ${userProfile.email}`);
+                        return false;
+                    }
+                    earnedData.awardedRuleIds.push(uniqueKey);
+                } else if (triggerType === 'question_correct') {
+                    if (earnedData.awardedQuestions.includes(uniqueKey)) {
+                        console.log(`[Aura Secure] Question correct aura ${uniqueKey} already awarded for ${assignmentData.id} to ${userProfile.email}`);
+                        return false;
+                    }
+                    earnedData.awardedQuestions.push(uniqueKey);
+                } else {
+                    return false;
+                }
+
+                // Update last updated timestamp
+                earnedData.lastUpdated = firebase.firestore.FieldValue.serverTimestamp();
+
+                // Write the record to prevent race conditions or double-spend
+                await earnedAuraRef.set(earnedData, { merge: true });
+
+                // Atomically update student aura lifetime and balance
+                await db.collection('students').doc(userProfile.studentDocId).update({
+                    auraLifetime: firebase.firestore.FieldValue.increment(amount),
+                    auraBalance: firebase.firestore.FieldValue.increment(amount)
+                });
+
+                // Update local memory profile
+                userProfile.auraLifetime = (userProfile.auraLifetime || 0) + amount;
+                userProfile.auraBalance = (userProfile.auraBalance || 0) + amount;
+                
+                // Trigger visual updates
+                await updateUserHeader();
+
+                console.log(`[Aura Secure] Successfully awarded ${amount} Aura for ${triggerType} (${uniqueKey}) to ${userProfile.email}`);
+                return true;
+
+            } catch (e) {
+                console.error("[Aura Secure] Error in secure aura award:", e);
+                return false;
+            }
+        }
+
         async function initializeStudentSession() {
             sessionInitialized = true; // Mark session as started so evaluateAccess restore-view knows submissions will be loaded
             document.getElementById('loginContainer').classList.add('hidden');
@@ -2094,10 +2181,15 @@
                                 auraAmount = rule.amount;
                             }
                         }
-                        if (auraAmount > 0) auraAwarded = true;
                     }
                 } catch (auraError) {
                     console.error("Error calculating aura eligibility:", auraError);
+                }
+
+                // Award aura if eligible (securely via unified protection layer)
+                let wasAwarded = false;
+                if (auraAmount > 0) {
+                    wasAwarded = await awardAuraSecurely('submission', auraAmount, 'overall');
                 }
 
                 // Create submissionStatus document
@@ -2110,26 +2202,13 @@
                     timestamp: firebase.firestore.FieldValue.serverTimestamp(),
                     submittedByFocusViolation: true,
                     violationCount: violationCount,
-                    auraAwarded: auraAwarded,
-                    auraAmount: auraAwarded ? auraAmount : 0
+                    auraAwarded: wasAwarded,
+                    auraAmount: wasAwarded ? auraAmount : 0
                 });
 
-                // Award aura if eligible
-                if (auraAwarded && userProfile.studentDocId) {
-                    try {
-                        await db.collection('students').doc(userProfile.studentDocId).update({
-                            auraLifetime: firebase.firestore.FieldValue.increment(auraAmount),
-                            auraBalance: firebase.firestore.FieldValue.increment(auraAmount)
-                        });
-                        userProfile.auraLifetime = (userProfile.auraLifetime || 0) + auraAmount;
-                        userProfile.auraBalance = (userProfile.auraBalance || 0) + auraAmount;
-                        updateUserHeader();
-
-                        // Update local assignment-level Aura display
-                        assignmentAuraEarned = auraAmount;
-                    } catch (e) {
-                        console.error("Error awarding aura:", e);
-                    }
+                if (wasAwarded) {
+                    // Update local assignment-level Aura display for the active view
+                    assignmentAuraEarned = auraAmount;
                 }
 
                 isSubmitted = true;
@@ -3428,20 +3507,11 @@
                             isOnTimeAssignment = now <= dueAt;
                         }
 
-                        // Check for existing submissions to prevent double-award
-                        // Query for any prior submissionStatus docs with auraAwarded=true for this assignment/student
-                        const priorAwardQuery = await db.collection("submissionStatus")
-                            .where("studentEmail", "==", userProfile.email)
-                            .where("assignmentId", "==", assignmentData.id)
-                            .where("auraAwarded", "==", true)
-                            .get();
-                        const alreadyAwarded = !priorAwardQuery.empty;
-
                         let auraAlgorithmAmount = 0;
                         let shouldAward = false;
 
                         // Award Aura if all conditions are met
-                        if ((!auraOnTime || isOnTimeAssignment) && !alreadyAwarded && userProfile.studentDocId) {
+                        if ((!auraOnTime || isOnTimeAssignment) && userProfile.studentDocId) {
                             // Find highest matching rule
                             for (const rule of assignmentAuraRules) {
                                 let matches = false;
@@ -3458,37 +3528,30 @@
 
                             if (auraAlgorithmAmount > 0) {
                                 shouldAward = true;
-                                // Override the const 'auraAmount' used in subsequent logic
-                                // We need to define it as a let in the outer scope or reuse it?
-                                // The original code defined 'auraAmount' as a const at line 1687.
-                                // I am replacing that block.
                             }
                         }
 
                         if (shouldAward) {
                             const auraAmount = auraAlgorithmAmount; // Re-declare for scope
-                            // Update student document with atomic increment
-                            await db.collection('students').doc(userProfile.studentDocId).update({
-                                auraLifetime: firebase.firestore.FieldValue.increment(auraAmount),
-                                auraBalance: firebase.firestore.FieldValue.increment(auraAmount)
-                            });
+                            
+                            // Securely award the aura using our unified protection layer
+                            const newlyAwarded = await awardAuraSecurely('submission', auraAmount, 'overall');
+                            
+                            if (newlyAwarded) {
+                                // Mark Aura as awarded in submissionStatus
+                                await statusRef.update({
+                                    auraAwarded: true,
+                                    auraAmount: auraAmount
+                                });
 
-                            // Mark Aura as awarded in submissionStatus
-                            await statusRef.update({
-                                auraAwarded: true,
-                                auraAmount: auraAmount
-                            });
+                                // Update local assignment-level Aura display
+                                assignmentAuraEarned = auraAmount;
 
-                            // Update local userProfile
-                            userProfile.auraLifetime = (userProfile.auraLifetime || 0) + auraAmount;
-                            userProfile.auraBalance = (userProfile.auraBalance || 0) + auraAmount;
-                            updateUserHeader();
-
-                            // Update local assignment-level Aura display
-                            assignmentAuraEarned = auraAmount;
-
-                            // Show Aura toast
-                            showToast(`+${auraAmount} Aura for scoring ${overallAverage.toFixed(1)}%!`, { color: 'yellow', duration: 4000 });
+                                // Show Aura toast
+                                showToast(`+${auraAmount} Aura for scoring ${overallAverage.toFixed(1)}%!`, { color: 'yellow', duration: 4000 });
+                            } else {
+                                console.log("[Aura Secure] Submission aura already earned previously; did not award.");
+                            }
                         }
                     } catch (auraError) {
                         // Aura awarding failed but submission still succeeded
@@ -5416,30 +5479,30 @@
 
                 // Check for watch time Aura rules
                 if (Array.isArray(assignmentData.auraRules)) {
-                    const statusDoc = await db.collection("submissionStatus").doc(statusId).get();
-                    const statusData = statusDoc.data() || {};
-                    const awardedRules = statusData.awardedAuraRuleIds || [];
-
                     for (const rule of assignmentData.auraRules) {
-                        if (rule.trigger === 'watch_time_reached' && !awardedRules.includes(rule.id)) {
+                        if (rule.trigger === 'watch_time_reached') {
                             const minutesWatched = watchTimeSeconds / 60;
                             if (minutesWatched >= (rule.minutesRequired || 0)) {
-                                // Award Aura!
-                                if (userProfile.studentDocId) {
-                                    await db.collection('students').doc(userProfile.studentDocId).update({
-                                        auraLifetime: firebase.firestore.FieldValue.increment(rule.amount),
-                                        auraBalance: firebase.firestore.FieldValue.increment(rule.amount)
-                                    });
-                                    userProfile.auraLifetime = (userProfile.auraLifetime || 0) + rule.amount;
-                                    userProfile.auraBalance = (userProfile.auraBalance || 0) + rule.amount;
-                                    updateUserHeader();
+                                // Securely award the aura using our unified protection layer
+                                const newlyAwarded = await awardAuraSecurely('watch_time', rule.amount, rule.id);
+                                
+                                if (newlyAwarded) {
                                     showToast(`✨ +${rule.amount} Aura for Watch Time! ✨`, { color: 'yellow', duration: 4000 });
                                     
-                                    // Mark as awarded
-                                    awardedRules.push(rule.id);
-                                    await db.collection("submissionStatus").doc(statusId).update({
-                                        awardedAuraRuleIds: awardedRules
-                                    });
+                                    // Also sync to submissionStatus for local/teacher dashboard display convenience
+                                    try {
+                                        const statusDoc = await db.collection("submissionStatus").doc(statusId).get();
+                                        const statusData = statusDoc.data() || {};
+                                        const awardedRules = statusData.awardedAuraRuleIds || [];
+                                        if (!awardedRules.includes(rule.id)) {
+                                            awardedRules.push(rule.id);
+                                            await db.collection("submissionStatus").doc(statusId).update({
+                                                awardedAuraRuleIds: awardedRules
+                                            });
+                                        }
+                                    } catch (err) {
+                                        console.warn("[Aura Secure] Non-critical error syncing watch time to submissionStatus:", err);
+                                    }
                                 }
                             }
                         }
@@ -5624,14 +5687,14 @@
                         if (Array.isArray(assignmentData.auraRules)) {
                             const rule = assignmentData.auraRules.find(r => r.trigger === 'question_correct' && (r.target === 'all' || r.target === `q${item._index + 1}`));
                             if (rule && rule.amount > 0 && userProfile.studentDocId) {
-                                await db.collection('students').doc(userProfile.studentDocId).update({
-                                    auraLifetime: firebase.firestore.FieldValue.increment(rule.amount),
-                                    auraBalance: firebase.firestore.FieldValue.increment(rule.amount)
-                                });
-                                userProfile.auraLifetime = (userProfile.auraLifetime || 0) + rule.amount;
-                                userProfile.auraBalance = (userProfile.auraBalance || 0) + rule.amount;
-                                updateUserHeader();
-                                showToast(`✨ +${rule.amount} Aura ✨`, { color: 'yellow', duration: 4000 });
+                                const questionKey = `q${item._index + 1}`;
+                                const newlyAwarded = await awardAuraSecurely('question_correct', rule.amount, questionKey);
+                                
+                                if (newlyAwarded) {
+                                    showToast(`✨ +${rule.amount} Aura ✨`, { color: 'yellow', duration: 4000 });
+                                } else {
+                                    console.log(`[Aura Secure] Question correct aura for ${questionKey} already earned; did not award.`);
+                                }
                             }
                         }
                         continueVideoFromItem(isManual);
