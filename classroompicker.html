@@ -2153,7 +2153,7 @@
 
                     // Read assignment-level Aura config
                     // Calculate Aura Eligibility (New Rule-Based System)
-                    const assignmentAuraRules = assignmentData.auraRules || [];
+                    let assignmentAuraRules = assignmentData.auraRules || [];
                     // Backward compatibility
                     if (assignmentAuraRules.length === 0 && assignmentData.auraAmount) {
                         assignmentAuraRules.push({
@@ -3469,7 +3469,7 @@
                     let wasAuraAwarded = false;
                     let auraAmountAwarded = 0;
                     try {
-                        const assignmentAuraRules = assignmentData.auraRules || [];
+                        let assignmentAuraRules = assignmentData.auraRules || [];
                         // Backward compatibility
                         if (assignmentAuraRules.length === 0 && assignmentData.auraAmount) {
                             assignmentAuraRules.push({
