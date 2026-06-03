@@ -2245,6 +2245,7 @@
 
                 let matchFound = false;
                 let studentData = null;
+                let studentDocId = null;
 
                 querySnapshot.forEach(doc => {
                     const data = doc.data();
@@ -2252,11 +2253,12 @@
                     if (data.passcode == passcodeString) {
                         matchFound = true;
                         studentData = data;
+                        studentDocId = doc.id;
                     }
                 });
 
                 if (matchFound && studentData) {
-                    const profile = { name: studentData.name, email: studentData.email };
+                    const profile = { name: studentData.name, email: studentData.email, studentDocId: studentDocId };
                     if (storeOnlyMode || !assignmentId) {
                         await initStoreOnlyMode(profile);
                     } else {
