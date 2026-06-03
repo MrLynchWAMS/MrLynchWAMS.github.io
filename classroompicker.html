@@ -2153,7 +2153,7 @@
 
                     // Read assignment-level Aura config
                     // Calculate Aura Eligibility (New Rule-Based System)
-                    let assignmentAuraRules = assignmentData.auraRules || [];
+                    const assignmentAuraRules = assignmentData.auraRules || [];
                     // Backward compatibility
                     if (assignmentAuraRules.length === 0 && assignmentData.auraAmount) {
                         assignmentAuraRules.push({
@@ -2454,6 +2454,11 @@
                     if (!el) return;
                     slideStates[index] = { ...slideStates[index], answer: el.value };
                 });
+                return;
+            }
+            if (assignmentData?.type === 'video' || assignmentData?.type === 'pdf' || assignmentData?.type === 'blank' || assignmentData?.type === 'lesson') {
+                // These types save their answers directly or have custom sync logic.
+                // Do not overwrite slideStates with the hidden/empty #inputbox value.
                 return;
             }
             const currentAnswer = document.getElementById('inputbox').value;
@@ -3463,13 +3468,29 @@
                                     : (assignmentData.slideIds || [])).length;
                     const overallAverage = qCountSubmit > 0 ? totalScore / qCountSubmit : 0;
 
+                    // Create submissionStatus document and keep the reference
+                    const statusRef = db.collection("submissionStatus").doc(`${assignmentData.id}_${userProfile.email}`);
+                    await statusRef.set({
+                        studentEmail: userProfile.email,
+                        studentName: userProfile.name,
+                        assignmentId: assignmentData.id,
+                        status: 'submitted',
+                        score: overallAverage,
+                        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                        auraAwarded: false
+                    });
+
+                    isSubmitted = true;
+                    showToast("Assignment submitted successfully!", { color: 'green', duration: 5000 });
+
                     // --- AURA AWARDING AT SUBMIT TIME ---
-                    // Calculate aura BEFORE writing submissionStatus so we can write the correct value in one shot.
-                    // This prevents the document from ever being stuck with auraAwarded: false.
-                    let wasAuraAwarded = false;
-                    let auraAmountAwarded = 0;
+                    // Aura is awarded once per assignment, based on overall average, at submit time
                     try {
-                        let assignmentAuraRules = assignmentData.auraRules || [];
+                        // overallAverage is already calculated above for the status document
+
+                        // Read assignment-level Aura config
+                        // Calculate Aura Eligibility (New Rule-Based System)
+                        const assignmentAuraRules = assignmentData.auraRules || [];
                         // Backward compatibility
                         if (assignmentAuraRules.length === 0 && assignmentData.auraAmount) {
                             assignmentAuraRules.push({
@@ -3485,14 +3506,18 @@
                         let isOnTimeAssignment = true;
                         if (auraOnTime && auraDueAt) {
                             const now = new Date();
-                            const dueAt = auraDueAt.toDate ? auraDueAt.toDate() : new Date(auraDueAt);
+                            const dueAt = auraDueAt.toDate
+                                ? auraDueAt.toDate()
+                                : new Date(auraDueAt);
                             isOnTimeAssignment = now <= dueAt;
                         }
 
                         let auraAlgorithmAmount = 0;
                         let shouldAward = false;
 
+                        // Award Aura if all conditions are met
                         if ((!auraOnTime || isOnTimeAssignment) && userProfile.studentDocId) {
+                            // Find highest matching rule
                             for (const rule of assignmentAuraRules) {
                                 let matches = false;
                                 if (rule.trigger === 'watch_time_reached') {
@@ -3512,37 +3537,32 @@
                         }
 
                         if (shouldAward) {
-                            wasAuraAwarded = await awardAuraSecurely('submission', auraAlgorithmAmount, 'overall');
-                            if (wasAuraAwarded) {
-                                auraAmountAwarded = auraAlgorithmAmount;
+                            const auraAmount = auraAlgorithmAmount; // Re-declare for scope
+                            
+                            // Securely award the aura using our unified protection layer
+                            const newlyAwarded = await awardAuraSecurely('submission', auraAmount, 'overall');
+                            
+                            if (newlyAwarded) {
+                                // Mark Aura as awarded in submissionStatus
+                                await statusRef.update({
+                                    auraAwarded: true,
+                                    auraAmount: auraAmount
+                                });
+
+                                // Update local assignment-level Aura display
+                                assignmentAuraEarned = auraAmount;
+
+                                // Show Aura toast
+                                showToast(`+${auraAmount} Aura for scoring ${overallAverage.toFixed(1)}%!`, { color: 'yellow', duration: 4000 });
                             } else {
                                 console.log("[Aura Secure] Submission aura already earned previously; did not award.");
                             }
                         }
                     } catch (auraError) {
-                        console.error("Error calculating/awarding Aura:", auraError);
+                        // Aura awarding failed but submission still succeeded
+                        console.error("Error awarding Aura:", auraError);
                     }
                     // --- END AURA AWARDING ---
-
-                    // Create submissionStatus document with correct aura values in a single write
-                    const statusRef = db.collection("submissionStatus").doc(`${assignmentData.id}_${userProfile.email}`);
-                    await statusRef.set({
-                        studentEmail: userProfile.email,
-                        studentName: userProfile.name,
-                        assignmentId: assignmentData.id,
-                        status: 'submitted',
-                        score: overallAverage,
-                        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-                        auraAwarded: wasAuraAwarded,
-                        auraAmount: wasAuraAwarded ? auraAmountAwarded : 0
-                    });
-
-                    isSubmitted = true;
-                    assignmentAuraEarned = auraAmountAwarded;
-                    showToast("Assignment submitted successfully!", { color: 'green', duration: 5000 });
-                    if (wasAuraAwarded) {
-                        showToast(`+${auraAmountAwarded} Aura for scoring ${overallAverage.toFixed(1)}%!`, { color: 'yellow', duration: 4000 });
-                    }
 
                     const postRule = assignmentData.postSubmissionRule || 'open';
 
