@@ -1703,6 +1703,11 @@
             if (!userProfile || !userProfile.studentDocId || !assignmentData || amount <= 0) {
                 return false;
             }
+            const key = String(uniqueKey || '').trim();
+            if (!key) {
+                console.warn(`[Aura Secure] Rejecting empty uniqueKey for trigger ${triggerType}`);
+                return false;
+            }
 
             try {
                 const earnedAuraRef = db.collection("earnedAura").doc(`${assignmentData.id}_${userProfile.email}`);
@@ -1734,17 +1739,17 @@
                     earnedData.submittedAuraAwarded = true;
                     earnedData.submittedAuraAmount = amount;
                 } else if (triggerType === 'watch_time') {
-                    if (earnedData.awardedRuleIds.includes(uniqueKey)) {
-                        console.log(`[Aura Secure] Watch time rule ${uniqueKey} already awarded for ${assignmentData.id} to ${userProfile.email}`);
+                    if (earnedData.awardedRuleIds.includes(key)) {
+                        console.log(`[Aura Secure] Watch time rule ${key} already awarded for ${assignmentData.id} to ${userProfile.email}`);
                         return false;
                     }
-                    earnedData.awardedRuleIds.push(uniqueKey);
+                    earnedData.awardedRuleIds.push(key);
                 } else if (triggerType === 'question_correct') {
-                    if (earnedData.awardedQuestions.includes(uniqueKey)) {
-                        console.log(`[Aura Secure] Question correct aura ${uniqueKey} already awarded for ${assignmentData.id} to ${userProfile.email}`);
+                    if (earnedData.awardedQuestions.includes(key)) {
+                        console.log(`[Aura Secure] Question correct aura ${key} already awarded for ${assignmentData.id} to ${userProfile.email}`);
                         return false;
                     }
-                    earnedData.awardedQuestions.push(uniqueKey);
+                    earnedData.awardedQuestions.push(key);
                 } else {
                     return false;
                 }
@@ -5489,7 +5494,8 @@
                             const minutesWatched = watchTimeSeconds / 60;
                             if (minutesWatched >= (rule.minutesRequired || 0)) {
                                 // Securely award the aura using our unified protection layer
-                                const newlyAwarded = await awardAuraSecurely('watch_time', rule.amount, rule.id);
+                                const ruleKey = rule.id || `watch_time_${rule.minutesRequired || 0}`;
+                                const newlyAwarded = await awardAuraSecurely('watch_time', rule.amount, ruleKey);
                                 
                                 if (newlyAwarded) {
                                     showToast(`✨ +${rule.amount} Aura for Watch Time! ✨`, { color: 'yellow', duration: 4000 });
@@ -5499,8 +5505,8 @@
                                         const statusDoc = await db.collection("submissionStatus").doc(statusId).get();
                                         const statusData = statusDoc.data() || {};
                                         const awardedRules = statusData.awardedAuraRuleIds || [];
-                                        if (!awardedRules.includes(rule.id)) {
-                                            awardedRules.push(rule.id);
+                                        if (!awardedRules.includes(ruleKey)) {
+                                            awardedRules.push(ruleKey);
                                             await db.collection("submissionStatus").doc(statusId).update({
                                                 awardedAuraRuleIds: awardedRules
                                             });
