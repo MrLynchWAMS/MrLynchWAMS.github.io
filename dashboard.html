@@ -1411,6 +1411,27 @@
             const funcString = funcEntry ? (typeof funcEntry === 'object' ? funcEntry.code : funcEntry) : null;
 
             if (!funcString) {
+                if (dataToUse.type === 'video') {
+                    const videoQuestion = dataToUse.videoQuestions?.[slideIndex];
+                    if (videoQuestion?.type === 'multiple-choice' && Array.isArray(videoQuestion.choices)) {
+                        const selectedAnswers = String(submission.answer || '')
+                            .split('||')
+                            .map(a => a.trim())
+                            .filter(Boolean);
+                        const correctAnswers = videoQuestion.choices
+                            .filter(choice => choice?.isCorrect)
+                            .map(choice => String(choice.text || '').trim())
+                            .filter(Boolean);
+
+                        const selectedSet = new Set(selectedAnswers);
+                        const correctSet = new Set(correctAnswers);
+                        if (selectedSet.size !== correctSet.size) return 0;
+                        for (const answer of selectedSet) {
+                            if (!correctSet.has(answer)) return 0;
+                        }
+                        return 100;
+                    }
+                }
                 if (dataToUse.type === 'blank' && questionBlock?.inlineChecker) {
                     try {
                         const matched = evaluateInlineChecker(questionBlock.inlineChecker, submission.answer);
