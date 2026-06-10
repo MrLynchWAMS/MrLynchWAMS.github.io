@@ -409,7 +409,8 @@
                 if (user) {
                     try {
                         let emailToCheck = user.email.toLowerCase();
-                        checkImpersonation();
+                        const impersonated = checkImpersonation();
+                        if (impersonated) emailToCheck = impersonated;
                         currentUserEmail = emailToCheck;
 
                         // 1. Check if user is an explicit teacher

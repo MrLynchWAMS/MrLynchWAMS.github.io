@@ -452,7 +452,8 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
             if (user) {
                 try {
                     let emailToCheck = user.email.toLowerCase();
-                    checkImpersonation();
+                    const impersonated = checkImpersonation();
+                    if (impersonated) emailToCheck = impersonated;
 
                     // Check teachers collection first, then fallback to hardcoded list
                     const teacherDoc = await db.collection("teachers").doc(emailToCheck).get();
