@@ -233,7 +233,8 @@
         auth.onAuthStateChanged(async user => {
             if (user) {
                 let email = user.email;
-                checkImpersonation();
+                const impersonated = checkImpersonation();
+                if (impersonated) email = impersonated;
                 
                 currentUserEmail = normalizeTeacherEmail(email);
                 
