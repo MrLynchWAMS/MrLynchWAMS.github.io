@@ -128,12 +128,22 @@
 
         // Multi-condition support (from canvas AND/OR syntax)
         if (checker.type === 'multi') {
-            const ctx = {};
             const results = checker.conditions.map(c => {
                 const s = String(studentAnswer || '').toLowerCase().trim();
-                if (c.op === 'contains') return s.includes(String(c.value || '').toLowerCase());
-                if (c.op === 'not_contains') return !s.includes(String(c.value || '').toLowerCase());
-                if (c.op === 'equals_str') return s === String(c.value || '').toLowerCase();
+                const cNum = parseFloat(studentAnswer);
+                const cVal = parseFloat(c.value);
+                const cVal2 = parseFloat(c.value2);
+                const cTol = parseFloat(c.tolerance || 0);
+                const cStr = String(c.value || '').toLowerCase();
+
+                if (c.op === 'contains') return s.includes(cStr);
+                if (c.op === 'not_contains') return !s.includes(cStr);
+                if (c.op === 'equals_str') return s === cStr;
+                if (c.op === '==') return Math.abs(cNum - cVal) <= cTol;
+                if (c.op === '!=') return Math.abs(cNum - cVal) > cTol;
+                if (c.op === '>') return cNum > cVal;
+                if (c.op === '<') return cNum < cVal;
+                if (c.op === 'between') return cNum >= cVal && cNum <= cVal2;
                 return false;
             });
             const pass = checker.logic === 'AND' ? results.every(Boolean) : results.some(Boolean);
@@ -153,6 +163,7 @@
         switch (op) {
             case 'contains': pass = s.includes(v); break;
             case 'not_contains': pass = !s.includes(v); break;
+            case 'equals_str': pass = s === v; break;
             case '==': pass = Math.abs(studentNum - checkNum) <= tol; break;
             case '!=': pass = Math.abs(studentNum - checkNum) > tol; break;
             case '>': pass = studentNum > checkNum; break;

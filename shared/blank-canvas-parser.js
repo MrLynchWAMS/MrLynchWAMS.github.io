@@ -215,7 +215,7 @@
                 questionType = 'choice';
                 if (configParts.length > 0) {
                     const choicePart = configParts[0];
-                    const rawChoices = choicePart.split(',').map(c => c.trim());
+                    const rawChoices = choicePart.split(/,\s*(?=[A-Za-z0-9]+\.\s)/).map(c => c.trim());
                     choices = [];
                     correctChoiceIndex = null;
                     rawChoices.forEach((raw, ci) => {
