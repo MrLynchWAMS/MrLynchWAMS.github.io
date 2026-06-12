@@ -181,11 +181,14 @@
                 } else if (block.type === 'question') {
                     let inputHTML = '';
                     if (block.questionType === 'choice' && block.choices && block.choices.length > 0) {
+                        const LABELS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
                         inputHTML = `<div class="space-y-2 mt-2" id="q-input-${block.id}">`;
                         block.choices.forEach((choice, ci) => {
+                            const label = LABELS[ci] !== undefined ? LABELS[ci] : String(ci);
                             inputHTML += `<label class="flex items-center gap-3 cursor-pointer p-2 rounded hover:bg-gray-800/50">
                                 <input type="radio" name="choice-${block.id}" value="${ci}" class="w-4 h-4 text-yellow-400">
-                                <span>${renderer.escapeHtml(choice)}</span>
+                                <span class="text-gray-400 font-mono text-sm w-6 shrink-0">${label}.</span>
+                                <span>${renderer.formatInline(choice)}</span>
                             </label>`;
                         });
                         inputHTML += `</div>`;
@@ -197,7 +200,7 @@
 
                     html += `<div class="bg-gray-800 p-5 rounded-lg border border-gray-700 shadow-lg" id="card-${block.id}">
                         <div class="flex justify-between items-start mb-1">
-                            <p class="font-semibold text-base text-white">${renderer.escapeHtml(block.prompt || '')}</p>
+                            <p class="font-semibold text-base text-white">${renderer.formatInline(block.prompt || '')}</p>
                             <span class="text-[10px] uppercase tracking-wider text-gray-500 bg-gray-900 px-2 py-0.5 rounded">${block.points || 100} pts</span>
                         </div>
                         ${inputHTML}
