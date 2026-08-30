@@ -366,7 +366,7 @@
         async function loadData() {
             const studentSnap = await db.collection("students")
                 .where("teacherEmail", "==", currentUserEmail).get();
-            students = studentSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            students = studentSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(s => !s.isArchived);
 
             const ownedSnap    = await db.collection("assignments").where("teacherEmail", "==", currentUserEmail).get();
             const coTaughtSnap = await db.collection("assignments").where("coTeachers", "array-contains", currentUserEmail).get();

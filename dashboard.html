@@ -478,7 +478,7 @@
                         const studentEmail = studentData.email ? studentData.email.toLowerCase() : '';
 
                         if (change.type === "added" || change.type === "modified") {
-                            if (studentTeacher === assignmentTeacher && studentEmail) {
+                            if (studentTeacher === assignmentTeacher && studentEmail && !studentData.isArchived) {
                                 studentsMap.set(studentEmail, { ...studentData, email: studentEmail });
                             } else if (studentEmail) {
                                 studentsMap.delete(studentEmail);

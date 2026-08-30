@@ -99,6 +99,18 @@
             </div>
         </div>
 
+        <!-- Archive mode toggle -->
+        <div class="flex items-center gap-3 mb-6 p-3 bg-gray-800 rounded-lg border border-gray-700">
+            <span class="text-sm font-semibold text-gray-400 uppercase tracking-wider">View:</span>
+            <div class="inline-flex rounded-lg border border-gray-600 bg-gray-700 p-0.5" role="group">
+                <button id="toggleActiveBtn" type="button" onclick="switchRosterMode('active')"
+                    class="px-4 py-1.5 text-sm font-bold rounded-md bg-green-600 text-white transition-all">✅ Active</button>
+                <button id="toggleArchivedBtn" type="button" onclick="switchRosterMode('archived')"
+                    class="px-4 py-1.5 text-sm font-bold rounded-md text-gray-400 hover:text-white transition-all">🗂️ Archived</button>
+            </div>
+            <span id="rosterModeLabel" class="text-sm text-green-400 font-semibold">Showing active students</span>
+        </div>
+
         <div id="loadingState" class="text-center py-10">
             <p class="text-xl">Loading rosters...</p>
         </div>
@@ -429,6 +441,12 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
         let currentPerfStudentClass = null;
         let currentUserEmail = null;
 
+        // Archive state
+        let rosterMode = 'active'; // 'active' | 'archived'
+        let unsubscribeRoster = null;
+        let rosterStudentsByClass = {}; // active: keyed by className
+        let rosterArchivedGroups = {};  // archived: keyed by batchId
+
         // --- Impersonation Logic ---
         function checkImpersonation() {
             const impersonatedEmail = localStorage.getItem('impersonatedUserEmail');
@@ -545,46 +563,96 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
             }
         }
 
+        function switchRosterMode(mode) {
+            rosterMode = mode;
+            const activeBtn = document.getElementById('toggleActiveBtn');
+            const archivedBtn = document.getElementById('toggleArchivedBtn');
+            const label = document.getElementById('rosterModeLabel');
+            if (mode === 'active') {
+                activeBtn.className = 'px-4 py-1.5 text-sm font-bold rounded-md bg-green-600 text-white transition-all';
+                archivedBtn.className = 'px-4 py-1.5 text-sm font-bold rounded-md text-gray-400 hover:text-white transition-all';
+                label.textContent = 'Showing active students';
+                label.className = 'text-sm text-green-400 font-semibold';
+            } else {
+                activeBtn.className = 'px-4 py-1.5 text-sm font-bold rounded-md text-gray-400 hover:text-white transition-all';
+                archivedBtn.className = 'px-4 py-1.5 text-sm font-bold rounded-md bg-amber-600 text-white transition-all';
+                label.textContent = 'Showing archived classes';
+                label.className = 'text-sm text-amber-400 font-semibold';
+            }
+            loadRoster();
+        }
+
         function loadRoster() {
             const rosterContainer = document.getElementById('rosterContainer');
             const loadingState = document.getElementById('loadingState');
 
-            db.collection("students")
+            if (unsubscribeRoster) {
+                unsubscribeRoster();
+                unsubscribeRoster = null;
+            }
+
+            rosterContainer.innerHTML = '';
+            loadingState.innerHTML = `<p class="text-xl">${rosterMode === 'active' ? 'Loading rosters...' : 'Loading archived classes...'}</p>`;
+            loadingState.classList.remove('hidden');
+
+            unsubscribeRoster = db.collection("students")
+                .where("teacherEmail", "==", currentUserEmail)
                 .onSnapshot(snapshot => {
-                    // Filter client-side to include those with matching teacherEmail OR no teacherEmail (legacy data defaults to klynch@mtps.us)
                     const allStudents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    const students = allStudents.filter(student => {
-                        const studentTeacher = student.teacherEmail ? student.teacherEmail.toLowerCase() : 'klynch@mtps.us';
-                        return studentTeacher === currentUserEmail;
-                    });
 
-                    if (students.length === 0) {
-                        loadingState.innerText = "No students found. Click '+ Add Student' to build your roster.";
-                        loadingState.classList.remove('hidden');
-                        rosterContainer.innerHTML = '';
-                        return;
-                    }
+                    if (rosterMode === 'active') {
+                        // Treat missing isArchived as active (backward compat)
+                        const students = allStudents.filter(s => !s.isArchived);
 
-                    loadingState.classList.add('hidden');
-
-                    const classData = {};
-                    students.forEach(student => {
-                        const className = student.class || 'Unassigned';
-                        if (!classData[className]) {
-                            classData[className] = [];
+                        if (students.length === 0) {
+                            loadingState.innerHTML = "<p class=\"text-xl\">No active students found. Click '+ Add Student' to build your roster.</p>";
+                            loadingState.classList.remove('hidden');
+                            rosterContainer.innerHTML = '';
+                            return;
                         }
-                        classData[className].push(student);
-                    });
+                        loadingState.classList.add('hidden');
 
-                    renderRoster(classData);
+                        rosterStudentsByClass = {};
+                        students.forEach(student => {
+                            const className = student.class || 'Unassigned';
+                            if (!rosterStudentsByClass[className]) rosterStudentsByClass[className] = [];
+                            rosterStudentsByClass[className].push(student);
+                        });
+                        renderActiveRoster(rosterStudentsByClass);
 
+                    } else {
+                        const students = allStudents.filter(s => s.isArchived === true);
+
+                        if (students.length === 0) {
+                            loadingState.innerHTML = "<p class=\"text-xl\">No archived classes found.</p>";
+                            loadingState.classList.remove('hidden');
+                            rosterContainer.innerHTML = '';
+                            return;
+                        }
+                        loadingState.classList.add('hidden');
+
+                        rosterArchivedGroups = {};
+                        students.forEach(student => {
+                            const key = student.archiveBatchId || ('__nogroup__' + (student.class || 'Unassigned'));
+                            if (!rosterArchivedGroups[key]) {
+                                rosterArchivedGroups[key] = {
+                                    batchId: student.archiveBatchId || null,
+                                    label: student.archiveLabel || student.class || 'Archived Class',
+                                    archivedAt: student.archivedAt || null,
+                                    students: []
+                                };
+                            }
+                            rosterArchivedGroups[key].students.push(student);
+                        });
+                        renderArchivedRoster(rosterArchivedGroups);
+                    }
                 }, error => {
                     console.error("Error fetching roster:", error);
-                    loadingState.innerText = "Error loading roster. See console for details.";
+                    loadingState.innerHTML = "<p class=\"text-xl text-red-400\">Error loading roster. See console for details.</p>";
                 });
         }
 
-        function renderRoster(classData) {
+        function renderActiveRoster(classData) {
             const rosterContainer = document.getElementById('rosterContainer');
             rosterContainer.innerHTML = '';
             const classNames = Object.keys(classData).sort();
@@ -623,8 +691,78 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
                     });
 
                 classCard.innerHTML = `
-                <h2 class="text-2xl font-bold text-yellow-400 mb-4">${className}</h2>
+                <div class="flex justify-between items-start mb-4">
+                    <h2 class="text-2xl font-bold text-yellow-400">${className}</h2>
+                    <button onclick="handleArchiveClass('${className.replace(/'/g, "\\'")}')"
+                        class="text-xs bg-amber-700 hover:bg-amber-600 text-white font-semibold px-3 py-1 rounded-lg whitespace-nowrap"
+                        title="Archive this class for end of year">🗂️ Archive Class</button>
+                </div>
                 <div class="text-xs text-gray-500 mb-2 flex justify-end pr-20">Balance / Lifetime</div>
+                <ul class="space-y-2">${studentListHTML}</ul>
+            `;
+                rosterContainer.appendChild(classCard);
+            });
+        }
+
+        function renderArchivedRoster(groups) {
+            const rosterContainer = document.getElementById('rosterContainer');
+            rosterContainer.innerHTML = '';
+
+            // Sort groups by archivedAt descending (most recent first)
+            const sortedKeys = Object.keys(groups).sort((a, b) => {
+                const dateA = groups[a].archivedAt ? (groups[a].archivedAt.toDate ? groups[a].archivedAt.toDate() : new Date(groups[a].archivedAt)) : new Date(0);
+                const dateB = groups[b].archivedAt ? (groups[b].archivedAt.toDate ? groups[b].archivedAt.toDate() : new Date(groups[b].archivedAt)) : new Date(0);
+                return dateB - dateA;
+            });
+
+            sortedKeys.forEach(key => {
+                const group = groups[key];
+                const archivedDate = group.archivedAt
+                    ? (group.archivedAt.toDate ? group.archivedAt.toDate() : new Date(group.archivedAt)).toLocaleDateString()
+                    : 'Unknown date';
+
+                const classCard = document.createElement('div');
+                classCard.className = "bg-gray-800 border border-amber-800/40 rounded-lg p-6 shadow-lg";
+
+                let studentListHTML = '';
+                group.students
+                    .sort((a, b) => a.name.localeCompare(b.name))
+                    .forEach(student => {
+                        const lifetime = student.auraLifetime || 0;
+                        const balance = student.auraBalance || 0;
+                        studentListHTML += `
+                    <li class="flex justify-between items-center py-2 border-b border-gray-700">
+                        <div class="flex-1">
+                            <p class="font-medium">
+                                <span class="text-blue-400 hover:underline cursor-pointer" onclick='openStudentPerformance("${student.id}", "${student.name.replace(/'/g, "\'").replace(/"/g, '&quot;')}", "${student.email}", "${lifetime}", "${student.class || ''}")'>${student.name}</span>
+                                ${student.hasModifications ? '<span title="Has Modifications (IEP/504)" class="ml-1 text-xs">🧩</span>' : ''}
+                            </p>
+                            <p class="text-sm text-gray-400">${student.email}</p>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <div class="text-right font-mono text-sm">
+                                <span class="text-yellow-400" title="Spendable Balance">${balance}</span>
+                                <span class="text-gray-500">/</span>
+                                <span class="text-purple-400" title="Lifetime Aura">${lifetime} ✧</span>
+                            </div>
+                            <button onclick="handleDeleteStudent('${student.id}', '${student.name}')" class="text-red-400 hover:text-red-300 text-xs">🗑️ Delete</button>
+                        </div>
+                    </li>
+                `;
+                    });
+
+                const batchIdSafe = (group.batchId || key).replace(/'/g, "\\'");
+                classCard.innerHTML = `
+                <div class="flex justify-between items-start mb-3">
+                    <div>
+                        <h2 class="text-xl font-bold text-amber-400">${group.label}</h2>
+                        <p class="text-xs text-gray-500 mt-0.5">Archived ${archivedDate} · ${group.students.length} student${group.students.length !== 1 ? 's' : ''}</p>
+                    </div>
+                    <button onclick="handleRestoreClass('${batchIdSafe}')"
+                        class="text-xs bg-green-700 hover:bg-green-600 text-white font-semibold px-3 py-1 rounded-lg whitespace-nowrap"
+                        title="Restore all students in this archived class">↩️ Restore Class</button>
+                </div>
+                <div class="text-xs text-gray-500 mb-2 flex justify-end pr-10">Balance / Lifetime</div>
                 <ul class="space-y-2">${studentListHTML}</ul>
             `;
                 rosterContainer.appendChild(classCard);
@@ -689,6 +827,12 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
                     await db.collection("students").doc(id).update(student);
                     showToast("Student updated successfully!", { color: 'green' });
                 } else {
+                    student.isArchived = false;
+                    student.archivedAt = null;
+                    student.archivedBy = null;
+                    student.archiveBatchId = null;
+                    student.archiveLabel = null;
+                    student.schoolYear = null;
                     await db.collection("students").add(student);
                     showToast("Student added successfully!", { color: 'green' });
                 }
@@ -700,14 +844,76 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
         }
 
         async function handleDeleteStudent(id, name) {
-            if (confirm(`Are you sure you want to delete ${name}? This action cannot be undone.`)) {
+            if (confirm(`⚠️ PERMANENTLY DELETE "${name}"?\n\nThis cannot be undone. All student data will be removed forever.\n\nConsider using "Archive Class" instead to preserve historical records.`)) {
                 try {
                     await db.collection("students").doc(id).delete();
-                    showToast("Student deleted successfully.", { color: 'blue' });
+                    showToast("Student permanently deleted.", { color: 'blue' });
                 } catch (error) {
                     console.error("Error deleting student:", error);
                     showToast("Could not delete student.", { color: 'red' });
                 }
+            }
+        }
+
+        async function handleArchiveClass(className) {
+            const students = rosterStudentsByClass[className];
+            if (!students || students.length === 0) {
+                showToast("No students found in this class.", { color: 'red' });
+                return;
+            }
+            const now = new Date();
+            const isNewSchoolYear = now.getMonth() >= 7; // August (7) or later starts new school year
+            const startYear = now.getFullYear() - (isNewSchoolYear ? 0 : 1);
+            const schoolYear = `${startYear}-${startYear + 1}`;
+            if (!confirm(`Archive "${className}" (${students.length} student${students.length !== 1 ? 's' : ''})?\n\nThis class will be labelled "${className} — ${schoolYear}" and hidden from active rosters, assignments, and dashboards.\n\nYou can restore it anytime from the Archived view.`)) return;
+
+            // Use a UUID-style ID to avoid special character issues
+            const batchId = `batch_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+            const archiveLabel = `${className} — ${schoolYear}`;
+            const archivedAt = firebase.firestore.Timestamp.now();
+
+            try {
+                const batch = db.batch();
+                students.forEach(student => {
+                    batch.update(db.collection("students").doc(student.id), {
+                        isArchived: true,
+                        archivedAt: archivedAt,
+                        archivedBy: currentUserEmail,
+                        archiveBatchId: batchId,
+                        archiveLabel: archiveLabel,
+                        schoolYear: schoolYear
+                    });
+                });
+                await batch.commit();
+                showToast(`"${className}" archived successfully.`, { color: 'green' });
+            } catch (error) {
+                console.error("Error archiving class:", error);
+                showToast("Could not archive class. See console.", { color: 'red' });
+            }
+        }
+
+        async function handleRestoreClass(batchId) {
+            const group = rosterArchivedGroups[batchId] || Object.values(rosterArchivedGroups).find(g => g.batchId === batchId);
+            if (!group) { showToast("Archive group not found.", { color: 'red' }); return; }
+            if (!confirm(`Restore "${group.label}" (${group.students.length} student${group.students.length !== 1 ? 's' : ''})?\n\nThese students will become active again and appear in rosters, assignments, and dashboards.`)) return;
+
+            try {
+                const batch = db.batch();
+                group.students.forEach(student => {
+                    batch.update(db.collection("students").doc(student.id), {
+                        isArchived: false,
+                        archivedAt: null,
+                        archivedBy: null,
+                        archiveBatchId: null,
+                        archiveLabel: null,
+                        schoolYear: null
+                    });
+                });
+                await batch.commit();
+                showToast(`"${group.label}" restored successfully.`, { color: 'green' });
+            } catch (error) {
+                console.error("Error restoring class:", error);
+                showToast("Could not restore class. See console.", { color: 'red' });
             }
         }
 
@@ -812,7 +1018,13 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
                     class: className,
                     auraLifetime: 0,
                     auraBalance: 0,
-                    teacherEmail: currentUserEmail || 'klynch@mtps.us'
+                    teacherEmail: currentUserEmail || 'klynch@mtps.us',
+                    isArchived: false,
+                    archivedAt: null,
+                    archivedBy: null,
+                    archiveBatchId: null,
+                    archiveLabel: null,
+                    schoolYear: null
                 });
             });
 
