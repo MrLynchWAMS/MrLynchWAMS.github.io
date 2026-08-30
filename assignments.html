@@ -578,7 +578,7 @@
             try {
                 let studentQuery = db.collection("students").where("teacherEmail", "==", currentUserEmail);
                 const studentSnapshot = await studentQuery.get();
-                studentRoster = studentSnapshot.docs.map(doc => doc.data());
+                studentRoster = studentSnapshot.docs.map(doc => doc.data()).filter(s => !s.isArchived);
                 allClassNames = [...new Set(studentRoster.map(s => String(s.class)))].sort();
             } catch (error) { console.error("Could not load class roster:", error); }
 
