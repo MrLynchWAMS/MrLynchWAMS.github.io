@@ -2515,10 +2515,12 @@
             ];
             try {
                 await db.collection('avatarCosmetics').doc(teacherEmail).set({ items: starterCatalog });
-                alert("✨ Starter avatar catalog successfully created!");
+                if (typeof showToast === 'function') showToast("✨ Starter avatar catalog successfully created!", { color: 'green' });
+                else alert("✨ Starter avatar catalog successfully created!");
             } catch(e) {
                 console.error("Seeding error:", e);
-                alert("Failed to seed catalog.");
+                if (typeof showToast === 'function') showToast("Failed to seed catalog.", { color: 'red' });
+                else alert("Failed to seed catalog.");
             }
         };
     </script>

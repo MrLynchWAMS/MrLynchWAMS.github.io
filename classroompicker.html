@@ -955,8 +955,12 @@
                 equippedTraits: (existing.equippedTraits && typeof existing.equippedTraits === 'object')
                     ? { ...existing.equippedTraits }
                     : {},
-                equippedTrinkets: (Array.isArray(existing.equippedTrinkets) && existing.equippedTrinkets.length === 3)
-                    ? existing.equippedTrinkets.slice()
+                equippedTrinkets: (Array.isArray(existing.equippedTrinkets))
+                    ? (() => {
+                        const arr = existing.equippedTrinkets.slice(0, 3);
+                        while (arr.length < 3) arr.push(null);
+                        return arr;
+                    })()
                     : [null, null, null]
             };
         }
@@ -3990,7 +3994,9 @@
                     showToast(`✦ "${item.name}" added to your inventory!`, { color: 'yellow' });
                 } catch (error) {
                     console.error("Cosmetic purchase error:", error);
-                    const message = error.message === "Insufficient balance" ? "Not enough Aura." : "Transaction failed. Try again.";
+                    const message = error.message === "Insufficient balance" ? "Not enough Aura."
+                        : error.message === "Already owned" ? "You already own this item."
+                        : "Transaction failed. Try again.";
                     showToast(message, { color: 'red' });
                 }
             });
