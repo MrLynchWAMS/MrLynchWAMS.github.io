@@ -945,6 +945,12 @@
         }
 
         const SUPPORTED_AVATAR_STYLES = ['avataaars', 'adventurer', 'bottts', 'pixel-art'];
+        const AVATAR_STYLE_TRAITS = {
+            avataaars: ['top', 'accessories', 'clothing', 'facialHair', 'skinColor', 'hairColor', 'clothesColor', 'eyes', 'eyebrows', 'mouth'],
+            adventurer: ['hair', 'eyes', 'eyebrows', 'mouth', 'skinColor', 'hairColor', 'glasses', 'glassesProbability'],
+            bottts: ['colors', 'primaryColorLevel', 'secondaryColorLevel', 'sides', 'top', 'eyes', 'mouth'],
+            'pixel-art': ['hair', 'hairColor', 'skinColor', 'accessories', 'accessoriesProbability', 'clothing', 'clothingColor', 'glasses', 'glassesProbability']
+        };
 
         function getDefaultInventory(user) {
             const existing = (user && user.inventory) || {};
@@ -967,12 +973,21 @@
 
         function buildAvatarUrl(style, seed, traits = {}) {
             const safeStyle = SUPPORTED_AVATAR_STYLES.includes(style) ? style : 'avataaars';
+            const allowedTraits = AVATAR_STYLE_TRAITS[safeStyle] || [];
             const params = new URLSearchParams({ seed: seed || 'default-seed' });
             Object.entries(traits || {}).forEach(([key, value]) => {
                 if (value === null || value === undefined || value === '') return;
+                if (!allowedTraits.includes(key)) return;
                 params.set(key, value);
             });
             return `https://api.dicebear.com/9.x/${safeStyle}/svg?${params.toString()}`;
+        }
+
+        function resolveAvatarTeacherEmail(profile = userProfile) {
+            const rawTeacherEmail = profile?.class === 'Teacher'
+                ? (profile?.email || profile?.teacherEmail)
+                : (profile?.teacherEmail || (assignmentData ? assignmentData.teacherEmail : 'klynch@mtps.us'));
+            return normalizeTeacherEmail(rawTeacherEmail);
         }
 
         async function loadActiveAvatarStyle(teacherEmail) {
@@ -3855,7 +3870,10 @@
                          class="w-24 h-24 mx-auto rounded-full border-4 border-purple-500 shadow-lg object-cover bg-gray-800">
                     <div class="mt-2 font-bold text-white text-sm" id="avatar-card-name"></div>
                     <div class="flex justify-center gap-2 mt-3" id="avatar-trinket-slots"></div>
-                    <button onclick="resetAvatarToDefault()" class="mt-3 text-xs text-gray-400 hover:text-white underline">Reset Avatar to Default</button>
+                    <div class="mt-3 flex flex-col items-center gap-2">
+                        <button onclick="changeBaseAvatarLook()" class="text-xs text-purple-300 hover:text-purple-200 underline">🎲 Change Base Look (50 ✧)</button>
+                        <button onclick="resetAvatarToDefault()" class="text-xs text-gray-400 hover:text-white underline">Reset Avatar to Default</button>
+                    </div>
                 </div>
                 <div id="avatar-store-items-list" class="space-y-2">
                     <div class="text-center py-4 text-gray-500">Loading cosmetics...</div>
@@ -3869,9 +3887,7 @@
             const cardImg = document.getElementById('avatar-card-img');
             if (!cardImg || !userProfile) return;
 
-            const teacherEmail = normalizeTeacherEmail(userProfile.class === 'Teacher'
-                ? userProfile.email
-                : (userProfile.teacherEmail || (assignmentData ? assignmentData.teacherEmail : 'klynch@mtps.us')));
+            const teacherEmail = resolveAvatarTeacherEmail(userProfile);
 
             const inventory = getDefaultInventory(userProfile);
             userProfile.inventory = inventory;
@@ -3893,9 +3909,7 @@
         }
 
         async function renderAvatarStoreTab() {
-            const teacherEmail = normalizeTeacherEmail(userProfile.class === 'Teacher'
-                ? userProfile.email
-                : (userProfile.teacherEmail || (assignmentData ? assignmentData.teacherEmail : 'klynch@mtps.us')));
+            const teacherEmail = resolveAvatarTeacherEmail(userProfile);
             const inventory = getDefaultInventory(userProfile);
             const container = document.getElementById('avatar-store-items-list');
             if (!container) return;
@@ -3916,6 +3930,11 @@
                     const cost = parseInt(item.cost, 10) || 0;
                     const canAfford = owned || cost === 0 || userProfile.auraBalance >= cost;
                     const actionLabel = owned ? 'Equip' : `${cost} ✧`;
+                    const typeBadge = item.type === 'perk'
+                        ? '<span class="px-2 py-0.5 rounded-full bg-indigo-900/60 border border-indigo-500/40 text-indigo-200 text-[10px] font-semibold uppercase tracking-wide">🎟️ Trinket Perk</span>'
+                        : item.type === 'cosmetic'
+                            ? '<span class="px-2 py-0.5 rounded-full bg-emerald-900/60 border border-emerald-500/40 text-emerald-200 text-[10px] font-semibold uppercase tracking-wide">👕 Worn Cosmetic</span>'
+                            : '';
                     const clickHandler = owned
                         ? `equipCosmeticTrait('${item.id}')`
                         : (canAfford ? `purchaseCosmeticItem('${item.id}')` : `showToast('Need more Aura!', {color: 'red'})`);
@@ -3923,7 +3942,10 @@
                         <div class="flex justify-between items-center p-3 rounded border ${canAfford ? 'bg-gray-700 border-gray-600' : 'bg-gray-800 border-gray-700 opacity-60'}">
                             <span class="flex items-center gap-2">
                                 <span class="text-xl">${item.icon || '✨'}</span>
-                                <span class="font-medium">${item.name}</span>
+                                <span class="flex items-center gap-2">
+                                    <span class="font-medium">${item.name}</span>
+                                    ${typeBadge}
+                                </span>
                             </span>
                             <button onclick="${clickHandler}"
                                     class="px-3 py-1 rounded text-sm font-bold ${owned ? 'bg-green-700 hover:bg-green-600' : 'bg-gray-900 hover:bg-gray-950 text-yellow-400'}">
@@ -3950,9 +3972,7 @@
                 try {
                     const studentId = userProfile.studentDocId;
                     if (!studentId) throw new Error("Student document ID not found");
-                    const teacherEmail = normalizeTeacherEmail(userProfile.class === 'Teacher'
-                        ? userProfile.email
-                        : (userProfile.teacherEmail || (assignmentData ? assignmentData.teacherEmail : 'klynch@mtps.us')));
+                    const teacherEmail = resolveAvatarTeacherEmail(userProfile);
                     const studentRef = db.collection('students').doc(studentId);
                     let updatedInventory;
 
@@ -4017,6 +4037,8 @@
             try {
                 await db.collection('students').doc(userProfile.studentDocId).update({ inventory: updatedInventory });
                 userProfile.inventory = updatedInventory;
+                const cardImg = document.getElementById('avatar-card-img');
+                if (cardImg) cardImg.src = await getStudentAvatarUrl(userProfile, resolveAvatarTeacherEmail(userProfile));
                 await renderAvatarCard();
                 showToast(`Equipped ${item.name}!`, { color: 'yellow' });
             } catch (error) {
@@ -4038,6 +4060,8 @@
             try {
                 await db.collection('students').doc(userProfile.studentDocId).update({ inventory: updatedInventory });
                 userProfile.inventory = updatedInventory;
+                const cardImg = document.getElementById('avatar-card-img');
+                if (cardImg) cardImg.src = await getStudentAvatarUrl(userProfile, resolveAvatarTeacherEmail(userProfile));
                 await renderAvatarCard();
             } catch (error) {
                 console.error("Trinket equip error:", error);
@@ -4045,7 +4069,19 @@
             }
         };
 
-        window.openTrinketPicker = function (slotIndex) {
+        window.openTrinketPicker = async function (slotIndex) {
+            if (!window._avatarCosmeticItems || Object.keys(window._avatarCosmeticItems).length === 0) {
+                try {
+                    const teacherEmail = resolveAvatarTeacherEmail(userProfile);
+                    const doc = await db.collection('avatarCosmetics').doc(teacherEmail).get();
+                    const items = (doc.exists && Array.isArray(doc.data().items)) ? doc.data().items : [];
+                    window._avatarCosmeticItems = {};
+                    items.forEach(item => { window._avatarCosmeticItems[item.id] = item; });
+                } catch (error) {
+                    console.error("Error loading trinket items:", error);
+                    showToast("Could not load perks right now.", { color: 'red' });
+                }
+            }
             const inventory = getDefaultInventory(userProfile);
             const ownedPerks = inventory.ownedCosmetics
                 .map(id => window._avatarCosmeticItems[id])
@@ -4084,6 +4120,8 @@
             try {
                 await db.collection('students').doc(userProfile.studentDocId).update({ inventory: resetInventory });
                 userProfile.inventory = resetInventory;
+                const cardImg = document.getElementById('avatar-card-img');
+                if (cardImg) cardImg.src = await getStudentAvatarUrl(userProfile, resolveAvatarTeacherEmail(userProfile));
                 await renderAvatarCard();
                 showToast("Avatar reset to class default!", { color: 'yellow' });
             } catch(err) {
@@ -4091,29 +4129,95 @@
             }
         };
 
-        function renderLeaderboardTab() {
+        window.changeBaseAvatarLook = async function () {
+            const rerollCost = 50;
+            if (!userProfile || !userProfile.studentDocId) return;
+            if (userProfile.auraBalance < rerollCost) {
+                showToast("Not enough Aura balance.", { color: 'red' });
+                return;
+            }
+
+            showConfirmationModal(`Spend <span class="text-yellow-400 font-bold">${rerollCost} ✧</span> to reroll your base avatar look?`, async () => {
+                const teacherEmail = resolveAvatarTeacherEmail(userProfile);
+                try {
+                    const studentRef = db.collection('students').doc(userProfile.studentDocId);
+                    let updatedInventory = null;
+
+                    await db.runTransaction(async (tx) => {
+                        const studentSnap = await tx.get(studentRef);
+                        const studentData = studentSnap.data() || {};
+                        const currentBalance = parseInt(studentData.auraBalance, 10) || 0;
+                        if (currentBalance < rerollCost) throw new Error("Insufficient balance");
+
+                        const currentInventory = getDefaultInventory(studentData);
+                        const newSeed = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+                        updatedInventory = {
+                            ...currentInventory,
+                            avatarSeed: newSeed
+                        };
+
+                        tx.update(studentRef, {
+                            auraBalance: firebase.firestore.FieldValue.increment(-rerollCost),
+                            inventory: updatedInventory
+                        });
+                    });
+
+                    await db.collection('auraPurchases').add({
+                        studentEmail: userProfile.email,
+                        studentName: userProfile.name,
+                        studentClass: userProfile.class || 'Unassigned',
+                        itemName: 'Change Base Look',
+                        cost: rerollCost,
+                        tierPerk: false,
+                        itemType: 'avatar_reroll',
+                        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                        teacherEmail: teacherEmail,
+                        status: 'auto_granted',
+                        used: false
+                    });
+
+                    userProfile.auraBalance -= rerollCost;
+                    userProfile.inventory = updatedInventory;
+                    await updateUserHeader();
+                    const cardImg = document.getElementById('avatar-card-img');
+                    if (cardImg) cardImg.src = await getStudentAvatarUrl(userProfile, teacherEmail);
+                    await renderAvatarCard();
+                    showToast("🎲 New base look unlocked!", { color: 'yellow' });
+                } catch (error) {
+                    console.error("Base avatar reroll error:", error);
+                    const message = error.message === "Insufficient balance"
+                        ? "Not enough Aura."
+                        : "Could not change base look right now.";
+                    showToast(message, { color: 'red' });
+                }
+            });
+        };
+
+        async function renderLeaderboardTab() {
             const container = document.getElementById('aura-content');
             container.innerHTML = '<div class="text-center text-gray-400">Loading...</div>';
 
             // Query logic: Fetch all students for the teacher to ensure we don't miss legacy/typo data
             // We then filter client-side to handle whitespace and casing inconsistencies
-            const targetTeacherEmail = normalizeTeacherEmail(userProfile.class === 'Teacher'
-                ? userProfile.teacherEmail
-                : (userProfile.teacherEmail || (assignmentData ? assignmentData.teacherEmail : 'klynch@mtps.us')));
+            const targetTeacherEmail = resolveAvatarTeacherEmail(userProfile);
 
             const targetClass = normalizeClassName(userProfile.class);
 
             let query = db.collection('students');
 
             // Optimization: If teacher mode, we can narrow down by assignedClasses if they exist
-            if (userProfile.class === 'Teacher' && assignmentData.assignedClasses && assignmentData.assignedClasses.length > 0) {
+            if (userProfile.class === 'Teacher' && assignmentData && assignmentData.assignedClasses && assignmentData.assignedClasses.length > 0) {
                 query = query.where('class', 'in', assignmentData.assignedClasses);
             } else {
                 // Otherwise, query by teacherEmail (most efficient common denominator)
                 query = query.where('teacherEmail', '==', targetTeacherEmail);
             }
 
-            query.get().then(snapshot => {
+            try {
+                const [snapshot, classStyle] = await Promise.all([
+                    query.get(),
+                    loadActiveAvatarStyle(targetTeacherEmail)
+                ]);
                 let allFetchedStudents = [];
                 snapshot.forEach(doc => {
                     const d = doc.data();
@@ -4125,10 +4229,17 @@
                     const classMatch = (userProfile.class === 'Teacher') || (studentClass === targetClass);
 
                     if (teacherMatch && classMatch) {
+                        const inventory = getDefaultInventory(d);
+                        const avatarUrl = buildAvatarUrl(
+                            inventory.equippedStyle || classStyle,
+                            inventory.avatarSeed,
+                            inventory.equippedTraits
+                        );
                         allFetchedStudents.push({
                             name: d.name || "Anonymous",
                             score: parseFloat(d.auraLifetime) || 0,
-                            isMe: d.email === userProfile.email
+                            isMe: d.email === userProfile.email,
+                            avatarUrl: avatarUrl
                         });
                     }
                 });
@@ -4152,6 +4263,7 @@
                     <div class="flex justify-between items-center p-2 rounded border ${bgClass}">
                         <div class="flex items-center gap-3">
                             <span class="w-6 text-center font-mono text-gray-400">${medal}</span>
+                            <img src="${s.avatarUrl}" alt="${escapeHtml(s.name)} avatar" class="w-8 h-8 rounded-full border border-gray-500 bg-gray-800 object-cover">
                             <span class="${s.isMe ? 'font-bold text-white' : 'text-gray-300'}">${s.name}</span>
                         </div>
                         <span class="font-mono text-purple-300 font-bold">${s.score}</span>
@@ -4159,7 +4271,7 @@
                 }
                 html += '</div>';
                 container.innerHTML = html;
-            }).catch(error => {
+            } catch (error) {
                 // Handle Firestore read errors gracefully
                 console.error("Error loading leaderboard:", error);
                 container.innerHTML = `
@@ -4168,7 +4280,7 @@
                     <p class="text-sm text-gray-500">Please try again later.</p>
                 </div>
             `;
-            });
+            }
         }
 
         // =======================================
