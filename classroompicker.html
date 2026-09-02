@@ -944,56 +944,6 @@
             return String(cls).toLowerCase().trim();
         }
 
-        const SUPPORTED_AVATAR_STYLES = ['avataaars', 'adventurer', 'bottts', 'pixel-art'];
-
-        function getDefaultInventory(user) {
-            const existing = (user && user.inventory) || {};
-            return {
-                avatarSeed: existing.avatarSeed || (user && user.email) || 'default-seed',
-                equippedStyle: SUPPORTED_AVATAR_STYLES.includes(existing.equippedStyle) ? existing.equippedStyle : null,
-                ownedCosmetics: Array.isArray(existing.ownedCosmetics) ? existing.ownedCosmetics.slice() : [],
-                equippedTraits: (existing.equippedTraits && typeof existing.equippedTraits === 'object')
-                    ? { ...existing.equippedTraits }
-                    : {},
-                equippedTrinkets: (Array.isArray(existing.equippedTrinkets))
-                    ? (() => {
-                        const arr = existing.equippedTrinkets.slice(0, 3);
-                        while (arr.length < 3) arr.push(null);
-                        return arr;
-                    })()
-                    : [null, null, null]
-            };
-        }
-
-        function buildAvatarUrl(style, seed, traits = {}) {
-            const safeStyle = SUPPORTED_AVATAR_STYLES.includes(style) ? style : 'avataaars';
-            const params = new URLSearchParams({ seed: seed || 'default-seed' });
-            Object.entries(traits || {}).forEach(([key, value]) => {
-                if (value === null || value === undefined || value === '') return;
-                params.set(key, value);
-            });
-            return `https://api.dicebear.com/9.x/${safeStyle}/svg?${params.toString()}`;
-        }
-
-        async function loadActiveAvatarStyle(teacherEmail) {
-            const normalizedTeacher = normalizeTeacherEmail(teacherEmail);
-            try {
-                const configDoc = await db.collection('avatarConfig').doc(normalizedTeacher).get();
-                const style = configDoc.exists ? configDoc.data().activeAvatarStyle : null;
-                return SUPPORTED_AVATAR_STYLES.includes(style) ? style : 'avataaars';
-            } catch (error) {
-                console.error("Error loading avatar style:", error);
-                return 'avataaars';
-            }
-        }
-
-        async function getStudentAvatarUrl(profile, teacherEmail) {
-            const inventory = getDefaultInventory(profile);
-            const classStyle = await loadActiveAvatarStyle(teacherEmail);
-            const style = inventory.equippedStyle || classStyle;
-            return buildAvatarUrl(style, inventory.avatarSeed, inventory.equippedTraits);
-        }
-
         function getDefaultAuraTiers() {
             return DEFAULT_AURA_TIERS.map(t => ({
                 ...t,
@@ -1594,7 +1544,6 @@
                 auraLifetime: studentData.auraLifetime || 0,
                 auraBalance: studentData.auraBalance || 0,
                 studentDocId: studentDoc.id,
-                inventory: getDefaultInventory(studentData),
                 teacherEmail: normalizeTeacherEmail(studentData.teacherEmail || (assignmentData ? assignmentData.teacherEmail : 'klynch@mtps.us'))
             };
         }
@@ -3662,9 +3611,8 @@
             <div class="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50" id="aura-modal">
                 <div class="bg-gray-800 rounded-xl max-w-lg w-full text-white border border-gray-600 shadow-2xl flex flex-col max-h-[90vh]">
                     <div class="flex border-b border-gray-600">
-                        <button onclick="switchAuraTab('store')" id="tab-btn-store" class="flex-1 py-3 font-bold text-yellow-400 border-b-2 border-yellow-400 bg-gray-700">Store</button>
+                        <button onclick="switchAuraTab('store')" id="tab-btn-store" class="${showLeaderboardTab ? 'flex-1' : 'w-full'} py-3 font-bold text-yellow-400 border-b-2 border-yellow-400 bg-gray-700">Store</button>
                         ${showLeaderboardTab ? '<button onclick="switchAuraTab(\'leaderboard\')" id="tab-btn-leaderboard" class="flex-1 py-3 font-bold text-gray-400 hover:bg-gray-700">Leaderboard</button>' : ''}
-                        <button onclick="switchAuraTab('avatar')" id="tab-btn-avatar" class="flex-1 py-3 font-bold text-gray-400 hover:bg-gray-700">Avatar</button>
                     </div>
                     <div id="aura-content" class="p-6 overflow-y-auto flex-1"></div>
                     <div class="p-4 bg-gray-900 border-t border-gray-700">
@@ -3682,17 +3630,16 @@
             currentAuraTab = tab;
             const storeBtn = document.getElementById('tab-btn-store');
             const leadBtn = document.getElementById('tab-btn-leaderboard');
-            const avatarBtn = document.getElementById('tab-btn-avatar');
-            const activeClass = (color) => `flex-1 py-3 font-bold text-${color}-400 border-b-2 border-${color}-400 bg-gray-700 transition`;
-            const inactiveClass = "flex-1 py-3 font-bold text-gray-400 hover:bg-gray-700 transition";
 
-            storeBtn.className = tab === 'store' ? activeClass('yellow') : inactiveClass;
-            if (leadBtn) leadBtn.className = tab === 'leaderboard' ? activeClass('purple') : inactiveClass;
-            if (avatarBtn) avatarBtn.className = tab === 'avatar' ? activeClass('pink') : inactiveClass;
-
-            if (tab === 'store') renderStoreTab();
-            else if (tab === 'leaderboard') renderLeaderboardTab();
-            else if (tab === 'avatar') renderAvatarTab();
+            if (tab === 'store') {
+                storeBtn.className = "flex-1 py-3 font-bold text-yellow-400 border-b-2 border-yellow-400 bg-gray-700 transition";
+                if (leadBtn) leadBtn.className = "flex-1 py-3 font-bold text-gray-400 hover:bg-gray-700 transition";
+                renderStoreTab();
+            } else {
+                storeBtn.className = "flex-1 py-3 font-bold text-gray-400 hover:bg-gray-700 transition";
+                if (leadBtn) leadBtn.className = "flex-1 py-3 font-bold text-purple-400 border-b-2 border-purple-400 bg-gray-700 transition";
+                renderLeaderboardTab();
+            }
         };
 
         async function renderStoreTab() {
@@ -3845,251 +3792,6 @@
                 }
             });
         }
-
-        window._avatarCosmeticItems = {};
-
-        async function renderAvatarTab() {
-            document.getElementById('aura-content').innerHTML = `
-                <div id="avatar-card" class="rounded-xl border border-gray-600 bg-gray-900/60 p-4 text-center mb-4">
-                    <img id="avatar-card-img" src="" alt="Your avatar"
-                         class="w-24 h-24 mx-auto rounded-full border-4 border-purple-500 shadow-lg object-cover bg-gray-800">
-                    <div class="mt-2 font-bold text-white text-sm" id="avatar-card-name"></div>
-                    <div class="flex justify-center gap-2 mt-3" id="avatar-trinket-slots"></div>
-                    <button onclick="resetAvatarToDefault()" class="mt-3 text-xs text-gray-400 hover:text-white underline">Reset Avatar to Default</button>
-                </div>
-                <div id="avatar-store-items-list" class="space-y-2">
-                    <div class="text-center py-4 text-gray-500">Loading cosmetics...</div>
-                </div>
-            `;
-            await renderAvatarCard();
-            await renderAvatarStoreTab();
-        }
-
-        async function renderAvatarCard() {
-            const cardImg = document.getElementById('avatar-card-img');
-            if (!cardImg || !userProfile) return;
-
-            const teacherEmail = normalizeTeacherEmail(userProfile.class === 'Teacher'
-                ? userProfile.email
-                : (userProfile.teacherEmail || (assignmentData ? assignmentData.teacherEmail : 'klynch@mtps.us')));
-
-            const inventory = getDefaultInventory(userProfile);
-            userProfile.inventory = inventory;
-            cardImg.src = await getStudentAvatarUrl(userProfile, teacherEmail);
-
-            const cardName = document.getElementById('avatar-card-name');
-            if (cardName) cardName.textContent = userProfile.name;
-
-            const slotsContainer = document.getElementById('avatar-trinket-slots');
-            if (slotsContainer) {
-                slotsContainer.innerHTML = inventory.equippedTrinkets.map((itemId, index) => {
-                    const item = itemId ? window._avatarCosmeticItems[itemId] : null;
-                    const label = item ? (item.icon || '🔮') : '➕';
-                    return `<button onclick="openTrinketPicker(${index})"
-                                class="w-10 h-10 rounded-lg border-2 border-dashed border-gray-500 flex items-center justify-center text-lg hover:border-purple-400 transition"
-                                title="Trinket slot ${index + 1}">${label}</button>`;
-                }).join('');
-            }
-        }
-
-        async function renderAvatarStoreTab() {
-            const teacherEmail = normalizeTeacherEmail(userProfile.class === 'Teacher'
-                ? userProfile.email
-                : (userProfile.teacherEmail || (assignmentData ? assignmentData.teacherEmail : 'klynch@mtps.us')));
-            const inventory = getDefaultInventory(userProfile);
-            const container = document.getElementById('avatar-store-items-list');
-            if (!container) return;
-
-            try {
-                const doc = await db.collection('avatarCosmetics').doc(teacherEmail).get();
-                const items = (doc.exists && Array.isArray(doc.data().items)) ? doc.data().items : [];
-                window._avatarCosmeticItems = {};
-                items.forEach(item => { window._avatarCosmeticItems[item.id] = item; });
-
-                if (items.length === 0) {
-                    container.innerHTML = '<div class="text-center text-gray-500 py-4">No cosmetics available yet.</div>';
-                    return;
-                }
-
-                container.innerHTML = items.map(item => {
-                    const owned = inventory.ownedCosmetics.includes(item.id);
-                    const cost = parseInt(item.cost, 10) || 0;
-                    const canAfford = owned || cost === 0 || userProfile.auraBalance >= cost;
-                    const actionLabel = owned ? 'Equip' : `${cost} ✧`;
-                    const clickHandler = owned
-                        ? `equipCosmeticTrait('${item.id}')`
-                        : (canAfford ? `purchaseCosmeticItem('${item.id}')` : `showToast('Need more Aura!', {color: 'red'})`);
-                    return `
-                        <div class="flex justify-between items-center p-3 rounded border ${canAfford ? 'bg-gray-700 border-gray-600' : 'bg-gray-800 border-gray-700 opacity-60'}">
-                            <span class="flex items-center gap-2">
-                                <span class="text-xl">${item.icon || '✨'}</span>
-                                <span class="font-medium">${item.name}</span>
-                            </span>
-                            <button onclick="${clickHandler}"
-                                    class="px-3 py-1 rounded text-sm font-bold ${owned ? 'bg-green-700 hover:bg-green-600' : 'bg-gray-900 hover:bg-gray-950 text-yellow-400'}">
-                                ${actionLabel}
-                            </button>
-                        </div>`;
-                }).join('');
-            } catch (error) {
-                console.error("Error loading cosmetics:", error);
-                container.innerHTML = '<div class="text-center text-red-400">Error loading cosmetics.</div>';
-            }
-        }
-
-        window.purchaseCosmeticItem = async function (itemId) {
-            const item = window._avatarCosmeticItems[itemId];
-            if (!item) return;
-            const cost = parseInt(item.cost, 10) || 0;
-            if (cost > 0 && userProfile.auraBalance < cost) {
-                showToast("Not enough Aura balance.", { color: 'red' });
-                return;
-            }
-
-            showConfirmationModal(`Spend <span class="text-yellow-400 font-bold">${cost} ✧</span> for <br><span class="text-xl font-bold">"${item.name}"</span>?`, async () => {
-                try {
-                    const studentId = userProfile.studentDocId;
-                    if (!studentId) throw new Error("Student document ID not found");
-                    const teacherEmail = normalizeTeacherEmail(userProfile.class === 'Teacher'
-                        ? userProfile.email
-                        : (userProfile.teacherEmail || (assignmentData ? assignmentData.teacherEmail : 'klynch@mtps.us')));
-                    const studentRef = db.collection('students').doc(studentId);
-                    let updatedInventory;
-
-                    await db.runTransaction(async (tx) => {
-                        const snap = await tx.get(studentRef);
-                        const data = snap.data() || {};
-                        const currentBalance = data.auraBalance || 0;
-                        if (cost > 0 && currentBalance < cost) throw new Error("Insufficient balance");
-                        const currentInventory = getDefaultInventory(data);
-                        if (currentInventory.ownedCosmetics.includes(itemId)) throw new Error("Already owned");
-                        currentInventory.ownedCosmetics.push(itemId);
-                        updatedInventory = currentInventory;
-                        tx.update(studentRef, {
-                            auraBalance: firebase.firestore.FieldValue.increment(-cost),
-                            inventory: updatedInventory
-                        });
-                    });
-
-                    await db.collection('auraPurchases').add({
-                        studentEmail: userProfile.email,
-                        studentName: userProfile.name,
-                        studentClass: userProfile.class || 'Unassigned',
-                        itemName: item.name,
-                        cost: cost,
-                        tierPerk: false,
-                        itemType: 'avatar_cosmetic',
-                        itemId: itemId,
-                        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-                        teacherEmail: teacherEmail,
-                        status: 'auto_granted',
-                        used: false
-                    });
-
-                    userProfile.auraBalance -= cost;
-                    userProfile.inventory = updatedInventory;
-                    await updateUserHeader();
-                    await renderAvatarCard();
-                    await renderAvatarStoreTab();
-                    showToast(`✦ "${item.name}" added to your inventory!`, { color: 'yellow' });
-                } catch (error) {
-                    console.error("Cosmetic purchase error:", error);
-                    const message = error.message === "Insufficient balance" ? "Not enough Aura."
-                        : error.message === "Already owned" ? "You already own this item."
-                        : "Transaction failed. Try again.";
-                    showToast(message, { color: 'red' });
-                }
-            });
-        };
-
-        window.equipCosmeticTrait = async function (itemId) {
-            const item = window._avatarCosmeticItems[itemId];
-            if (!item || !item.trait) return;
-            const inventory = getDefaultInventory(userProfile);
-            if (!inventory.ownedCosmetics.includes(itemId)) {
-                showToast("You don't own this item yet.", { color: 'red' });
-                return;
-            }
-            const updatedInventory = {
-                ...inventory,
-                equippedTraits: { ...inventory.equippedTraits, [item.trait]: item.value }
-            };
-            try {
-                await db.collection('students').doc(userProfile.studentDocId).update({ inventory: updatedInventory });
-                userProfile.inventory = updatedInventory;
-                await renderAvatarCard();
-                showToast(`Equipped ${item.name}!`, { color: 'yellow' });
-            } catch (error) {
-                console.error("Equip error:", error);
-                showToast("Could not equip item.", { color: 'red' });
-            }
-        };
-
-        window.equipTrinket = async function (slotIndex, itemId) {
-            if (slotIndex < 0 || slotIndex > 2) return;
-            const inventory = getDefaultInventory(userProfile);
-            if (itemId && !inventory.ownedCosmetics.includes(itemId)) {
-                showToast("You don't own this perk yet.", { color: 'red' });
-                return;
-            }
-            const updatedTrinkets = inventory.equippedTrinkets.slice();
-            updatedTrinkets[slotIndex] = itemId || null;
-            const updatedInventory = { ...inventory, equippedTrinkets: updatedTrinkets };
-            try {
-                await db.collection('students').doc(userProfile.studentDocId).update({ inventory: updatedInventory });
-                userProfile.inventory = updatedInventory;
-                await renderAvatarCard();
-            } catch (error) {
-                console.error("Trinket equip error:", error);
-                showToast("Could not equip trinket.", { color: 'red' });
-            }
-        };
-
-        window.openTrinketPicker = function (slotIndex) {
-            const inventory = getDefaultInventory(userProfile);
-            const ownedPerks = inventory.ownedCosmetics
-                .map(id => window._avatarCosmeticItems[id])
-                .filter(item => item && item.type === 'perk');
-
-            const optionsHTML = ownedPerks.length
-                ? ownedPerks.map(item => `
-                    <button onclick="equipTrinket(${slotIndex}, '${item.id}'); document.getElementById('trinket-picker-modal').remove();"
-                            class="w-full text-left p-2 rounded hover:bg-gray-700 flex items-center gap-2 text-white">
-                        <span>${item.icon || '🔮'}</span><span>${item.name}</span>
-                    </button>`).join('')
-                : '<div class="text-gray-500 text-sm p-2">No perks owned yet — visit the store!</div>';
-
-            const modalHTML = `
-                <div class="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-[60]" id="trinket-picker-modal">
-                    <div class="bg-gray-800 rounded-lg max-w-xs w-full border border-gray-600 p-4">
-                        <h3 class="font-bold text-white mb-2">Choose a Perk</h3>
-                        <div class="space-y-1 max-h-60 overflow-y-auto">${optionsHTML}</div>
-                        <button onclick="equipTrinket(${slotIndex}, null); document.getElementById('trinket-picker-modal').remove();"
-                                class="w-full mt-2 py-1 text-sm text-red-300 hover:bg-red-900/30 rounded">Clear Slot</button>
-                        <button onclick="document.getElementById('trinket-picker-modal').remove()"
-                                class="w-full mt-1 py-1 text-sm text-gray-400 hover:bg-gray-700 rounded">Cancel</button>
-                    </div>
-                </div>`;
-            document.body.insertAdjacentHTML('beforeend', modalHTML);
-        };
-
-        window.resetAvatarToDefault = async function() {
-            if (!userProfile || !userProfile.studentDocId) return;
-            const resetInventory = {
-                ...getDefaultInventory(userProfile),
-                equippedStyle: null,
-                equippedTraits: {},
-                equippedTrinkets: [null, null, null]
-            };
-            try {
-                await db.collection('students').doc(userProfile.studentDocId).update({ inventory: resetInventory });
-                userProfile.inventory = resetInventory;
-                await renderAvatarCard();
-                showToast("Avatar reset to class default!", { color: 'yellow' });
-            } catch(err) {
-                console.error("Reset error:", err);
-            }
-        };
 
         function renderLeaderboardTab() {
             const container = document.getElementById('aura-content');
