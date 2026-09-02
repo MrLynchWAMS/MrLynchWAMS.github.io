@@ -291,21 +291,6 @@
                 </div>
             </div>
 
-            <div class="mb-4 p-4 bg-gray-800 rounded-lg border border-gray-700">
-                <h3 class="font-bold text-white mb-2">Avatar &amp; Store Settings</h3>
-                <label class="block text-sm font-medium text-gray-300 mb-1">Class Avatar Theme</label>
-                <select id="avatarStyleSelect" onchange="saveActiveAvatarStyle(this.value)"
-                        class="w-full p-2 rounded bg-gray-700 border border-gray-600 text-white mb-3">
-                    <option value="avataaars">Avataaars (Classic cartoon)</option>
-                    <option value="adventurer">Adventurer (RPG)</option>
-                    <option value="bottts">Bottts (Robots)</option>
-                    <option value="pixel-art">Pixel Art</option>
-                </select>
-                <button onclick="seedStarterCosmetics()" class="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded shadow">
-                    ✨ Seed Starter Avatar Store Catalog
-                </button>
-            </div>
-
             <div class="overflow-x-auto bg-gray-800 rounded-lg shadow">
                 <table class="min-w-full divide-y divide-gray-700 table-fixed">
                     <thead id="tableHeader" class="bg-gray-700"></thead>
@@ -760,7 +745,6 @@
                     const tierDoc = await db.collection('auraTiers').doc(assignmentData.teacherEmail || currentUserEmail).get();
                     if (tierDoc.exists) window.auraTierConfig = tierDoc.data().tiers || [];
                 } catch (e) { }
-                loadAvatarStyleSelector(assignmentData.teacherEmail || currentUserEmail);
                 // Load Linked Assignments for Lessons
                 window.linkedAssignmentsData = {};
                 if (assignmentData.type === 'lesson' && assignmentData.sections) {
@@ -2473,56 +2457,6 @@
 
         document.getElementById('exportButton').onclick = exportToCSV;
         document.getElementById('copyGradesButton').onclick = copyGrades;
-
-        function normalizeTeacherEmail(email) {
-            if (!email) return 'klynch@mtps.us';
-            return email.toLowerCase().replace(/\s+/g, '').trim();
-        }
-
-        async function loadAvatarStyleSelector(teacherEmail) {
-            const normalizedTeacher = normalizeTeacherEmail(teacherEmail);
-            const select = document.getElementById('avatarStyleSelect');
-            if (!select) return;
-            try {
-                const doc = await db.collection('avatarConfig').doc(normalizedTeacher).get();
-                select.value = (doc.exists && doc.data().activeAvatarStyle) || 'avataaars';
-            } catch (error) {
-                console.error("Error loading avatar style:", error);
-            }
-        }
-
-        window.saveActiveAvatarStyle = async function (style) {
-            const teacherEmail = normalizeTeacherEmail(auth.currentUser?.email);
-            try {
-                await db.collection('avatarConfig').doc(teacherEmail).set({ activeAvatarStyle: style }, { merge: true });
-                if (typeof showToast === 'function') showToast("Avatar style saved!", { color: 'green' });
-            } catch (error) {
-                console.error("Error saving avatar style:", error);
-            }
-        };
-
-        window.seedStarterCosmetics = async function() {
-            const teacherEmail = normalizeTeacherEmail(auth.currentUser?.email || 'klynch@mtps.us');
-            const starterCatalog = [
-              { id: 'cosmetic:top:shortHairRound', name: 'Fresh Cut', icon: '💈', cost: 30, type: 'cosmetic', trait: 'top', value: 'shortHairRound' },
-              { id: 'cosmetic:top:theCzar', name: 'Crown', icon: '👑', cost: 100, type: 'cosmetic', trait: 'top', value: 'theCzar' },
-              { id: 'cosmetic:accessories:sunglasses', name: 'Cool Shades', icon: '🕶️', cost: 45, type: 'cosmetic', trait: 'accessories', value: 'sunglasses' },
-              { id: 'cosmetic:accessories:eyepatch', name: 'Pirate Patch', icon: '🏴‍☠️', cost: 60, type: 'cosmetic', trait: 'accessories', value: 'eyepatch' },
-              { id: 'cosmetic:clothing:overall', name: 'Lab Overalls', icon: '🥼', cost: 50, type: 'cosmetic', trait: 'clothing', value: 'overall' },
-              { id: 'perk:bathroom-pass', name: 'Emergency Pass', icon: '🎟️', cost: 40, type: 'perk' },
-              { id: 'perk:seat-upgrade', name: 'Throne Pass (Seat Switch)', icon: '💺', cost: 75, type: 'perk' },
-              { id: 'perk:hint-token', name: 'Quiz Hint Token', icon: '💡', cost: 120, type: 'perk' }
-            ];
-            try {
-                await db.collection('avatarCosmetics').doc(teacherEmail).set({ items: starterCatalog });
-                if (typeof showToast === 'function') showToast("✨ Starter avatar catalog successfully created!", { color: 'green' });
-                else alert("✨ Starter avatar catalog successfully created!");
-            } catch(e) {
-                console.error("Seeding error:", e);
-                if (typeof showToast === 'function') showToast("Failed to seed catalog.", { color: 'red' });
-                else alert("Failed to seed catalog.");
-            }
-        };
     </script>
 </body>
 
