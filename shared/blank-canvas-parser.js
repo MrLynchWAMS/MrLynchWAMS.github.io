@@ -505,6 +505,8 @@
             if (line.includes('@[')) {
                 const isYT = line.includes('@[youtube]');
                 const isIF = line.includes('@[iframe]');
+                const ytMatch = line.match(/^\s*@\[youtube\]\(([^\s)]+)(?:\s+"([^"]*)")?\)\s*$/i);
+                const ifMatch = line.match(/^\s*@\[iframe\]\(([^\s)]+)(?:\s+"([^"]*)")?\)\s*$/i);
                 if ((isYT || isIF) && !ytMatch && !ifMatch) {
                     warnings.push(`Line ${i + 1}: Malformed ${isYT ? 'YouTube' : 'Iframe'} tag. Ensure it follows the format: @[type](url) or @[type](url "height")`);
                 }
