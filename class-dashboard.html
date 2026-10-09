@@ -10,6 +10,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
+    <script src="./shared/teacher-badges.js"></script>
     <style>
         .hidden { display: none; }
 
@@ -102,6 +103,10 @@
                     class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-1.5 px-3 rounded text-sm transition-colors">Assignments</a>
                 <a href="./roster.html"
                     class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1.5 px-3 rounded text-sm transition-colors">Roster</a>
+                <a href="./aura-purchases.html"
+                    class="relative bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-1.5 px-3 rounded text-sm transition-colors">Aura Purchases<span id="aura-badge" class="hidden absolute -top-2 -right-2 bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full"></span></a>
+                <a href="./grade-reviews.html"
+                    class="relative bg-pink-600 hover:bg-pink-700 text-white font-bold py-1.5 px-3 rounded text-sm transition-colors">Grade Reviews<span id="grade-badge" class="hidden absolute -top-2 -right-2 bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full"></span></a>
                 <button id="exportCsv"
                     class="bg-green-600 hover:bg-green-700 text-white font-bold py-1.5 px-3 rounded text-sm transition-colors">Export CSV</button>
                 <button id="signOutButton"
@@ -348,6 +353,7 @@
                     const impersonated = localStorage.getItem('impersonatedUserEmail');
                     if (impersonated) emailToCheck = impersonated;
                     currentUserEmail = emailToCheck;
+                    startTeacherBadges(db, currentUserEmail, { auraBadgeId: 'aura-badge', gradeBadgeId: 'grade-badge' });
 
                     document.getElementById('pageLoader').classList.add('hidden');
                     document.getElementById('dashboardContent').classList.remove('hidden');

@@ -601,6 +601,9 @@
             <button onclick="openAuraStore()"
                 class="mt-6 w-full bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-3 px-4 rounded-lg transition">Open
                 Store</button>
+            <button onclick="openGradeReview({ assignmentId: gradeReviewAssignmentId })"
+                class="relative mt-4 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition">📝 Genesis Grade Review
+                <span id="gr-card-badge" class="hidden absolute -top-2 -right-2 bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">New</span></button>
             <button onclick="handleSignOut()"
                 class="mt-4 text-sm text-gray-400 hover:text-white underline">Sign Out</button>
         </div>
@@ -615,6 +618,8 @@
                 </div>
                 <div class="flex items-center gap-4">
                     <div id="user-info-container"></div>
+                    <button onclick="openGradeReview()"
+                        class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">📝 Request Grade Review</button>
                     <button onclick="handleSignOut()"
                         class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Sign Out</button>
                 </div>
@@ -818,6 +823,7 @@
                         Assignment</button>
                 </div>
                 <div class="mt-4 text-center">
+                    <button onclick="openGradeReview()" class="text-indigo-300 hover:text-indigo-200 text-sm underline mr-4">Request Grade Review</button>
                     <button onclick="handleSignOut()" class="text-gray-400 hover:text-white text-sm underline">Sign
                         Out</button>
                 </div>
@@ -1015,6 +1021,12 @@
             const urlParams = new URLSearchParams(window.location.search);
             assignmentId = urlParams.get('assignmentId');
             parentLessonId = urlParams.get('lessonId');
+            if (urlParams.get('view') === 'grade-review') {
+                // Direct grade-review link: use the portal flow (works even if the assignment is closed)
+                gradeReviewDirect = true;
+                gradeReviewAssignmentId = assignmentId;
+                assignmentId = null;
+            }
 
             if (parentLessonId) {
                 const banner = document.getElementById('lesson-child-banner');
@@ -1025,12 +1037,14 @@
             const errorP = document.getElementById('loadingError');
             if (!assignmentId) {
                 storeOnlyMode = true;
-                document.title = "Aura Store – IterātED";
+                document.title = gradeReviewDirect ? "Genesis Grade Review – IterātED" : "Aura Store – IterātED";
                 loader.classList.add('hidden');
-                document.getElementById('assignmentNameLogin').textContent = "✧ Aura Store";
+                document.getElementById('assignmentNameLogin').textContent = gradeReviewDirect ? "📝 Genesis Grade Review" : "✧ Aura Store";
                 const subtitle = document.getElementById('assignmentSubtitleLogin');
                 if (subtitle) {
-                    subtitle.textContent = "Sign in to view your balance and spend Aura.";
+                    subtitle.textContent = gradeReviewDirect
+                        ? "Sign in to request a Genesis grade review."
+                        : "Sign in to view your balance and spend Aura.";
                     subtitle.classList.remove('hidden');
                 }
                 document.getElementById('loginContainer').classList.remove('hidden');
@@ -1566,7 +1580,12 @@
                 storeOnlyContainer.classList.remove('hidden');
 
                 await updateUserHeader();
-                openAuraStore();
+                refreshGradeReviewBadge();
+                if (gradeReviewDirect) {
+                    openGradeReview({ assignmentId: gradeReviewAssignmentId });
+                } else {
+                    openAuraStore();
+                }
             } catch (error) {
                 console.error("Store-only mode init error:", error);
                 document.getElementById('store-only-container').classList.add('hidden');
@@ -6036,6 +6055,486 @@
             <!-- Words will be injected here -->
         </div>
     </div>
+
+    <script>
+        // ---------------- Genesis Grade Review (student side) ----------------
+        let gradeReviewDirect = false;
+        let gradeReviewAssignmentId = null;
+        let grCtx = null;          // { id, name, number, dueDate } when launched with an assignment
+        let grLinked = null;       // null = unanswered, true = request is about grCtx, false = manual entry
+        let grTab = 'new';
+        let grMyRequests = [];
+
+        function grAttr(text) {
+            return escapeHtml(text == null ? '' : String(text)).replace(/"/g, '&quot;');
+        }
+
+        function grDateInput(d) {
+            const pad = n => String(n).padStart(2, '0');
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        }
+
+        function grResolveDueDate(a, studentClass) {
+            const policy = a.deadlinePolicy || {};
+            let v = policy.perClass ? policy.classDueAt?.[studentClass] : policy.globalDueAt;
+            if (!v) v = a.auraDueAt;
+            if (!v) return '';
+            const d = v.toDate ? v.toDate() : new Date(v);
+            return isNaN(d.getTime()) ? '' : grDateInput(d);
+        }
+
+        function grStudentTeacherEmail() {
+            return normalizeTeacherEmail(userProfile.class === 'Teacher'
+                ? userProfile.email
+                : (userProfile.teacherEmail || (assignmentData ? assignmentData.teacherEmail : 'klynch@mtps.us')));
+        }
+
+        async function grLoadContext(requestedId) {
+            grCtx = null;
+            let a = null;
+            if (!storeOnlyMode && assignmentData && assignmentData.id) {
+                a = assignmentData;
+            } else if (requestedId) {
+                try {
+                    const d = await db.collection('assignments').doc(requestedId).get();
+                    if (d.exists) a = { id: d.id, ...d.data() };
+                } catch (e) {
+                    console.error('Grade review: could not load assignment context', e);
+                }
+            }
+            if (a) {
+                const num = a.assignmentNumber ?? a.number ?? '';
+                grCtx = { id: a.id, name: a.name || '', number: num, dueDate: grResolveDueDate(a, userProfile.class) };
+            }
+        }
+
+        async function grLoadMyRequests() {
+            try {
+                const snap = await db.collection('gradeReviewRequests')
+                    .where('studentEmail', '==', userProfile.email).get();
+                grMyRequests = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                grMyRequests.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+            } catch (e) {
+                console.error('Grade review: could not load requests', e);
+                grMyRequests = [];
+            }
+        }
+
+        function grUnseenDenied() {
+            return grMyRequests.filter(r => r.status === 'denied' && r.studentSeenResolution !== true);
+        }
+
+        window.refreshGradeReviewBadge = async function () {
+            const badge = document.getElementById('gr-card-badge');
+            if (!badge || !userProfile) return;
+            await grLoadMyRequests();
+            const n = grUnseenDenied().length;
+            badge.textContent = n > 0 ? `${n} denied` : '';
+            badge.classList.toggle('hidden', n === 0);
+        };
+
+        window.openGradeReview = async function (opts = {}) {
+            if (!userProfile) return;
+            const existing = document.getElementById('gr-modal');
+            if (existing) existing.remove();
+            grTab = 'new';
+            grLinked = null;
+            document.body.insertAdjacentHTML('beforeend', `
+            <div class="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-4" id="gr-modal">
+                <div class="bg-gray-800 rounded-xl max-w-2xl w-full text-white border border-gray-600 shadow-2xl flex flex-col max-h-[90vh]">
+                    <div class="flex border-b border-gray-600">
+                        <button onclick="switchGradeReviewTab('new')" id="gr-tab-new" class="flex-1 py-3 font-bold"></button>
+                        <button onclick="switchGradeReviewTab('mine')" id="gr-tab-mine" class="flex-1 py-3 font-bold"></button>
+                    </div>
+                    <div id="gr-content" class="p-6 overflow-y-auto flex-1"><div class="text-center py-4 text-gray-500">Loading...</div></div>
+                    <div class="p-4 bg-gray-900 border-t border-gray-700">
+                        <button onclick="document.getElementById('gr-modal').remove()" class="w-full py-2 bg-gray-700 hover:bg-gray-600 rounded text-gray-300">Close</button>
+                    </div>
+                </div>
+            </div>`);
+            await Promise.all([grLoadContext(opts.assignmentId), grLoadMyRequests()]);
+            if (!grCtx) grLinked = false;
+            switchGradeReviewTab('new');
+        };
+
+        function grRenderTabs() {
+            const unseen = grUnseenDenied().length;
+            const newBtn = document.getElementById('gr-tab-new');
+            const mineBtn = document.getElementById('gr-tab-mine');
+            if (!newBtn || !mineBtn) return;
+            const active = 'flex-1 py-3 font-bold text-yellow-400 border-b-2 border-yellow-400 bg-gray-700';
+            const inactive = 'flex-1 py-3 font-bold text-gray-400 hover:bg-gray-700';
+            newBtn.className = grTab === 'new' ? active : inactive;
+            mineBtn.className = grTab === 'mine' ? active : inactive;
+            newBtn.textContent = 'New Request';
+            mineBtn.innerHTML = `My Requests${unseen > 0 ? ` <span class="ml-1 bg-red-600 text-white text-[10px] px-1.5 py-0.5 rounded-full">${unseen}</span>` : ''}`;
+        }
+
+        window.switchGradeReviewTab = function (tab) {
+            grTab = tab;
+            grRenderTabs();
+            if (tab === 'new') renderGradeReviewForm();
+            else renderMyGradeRequests();
+        };
+
+        function grFieldError(id) {
+            return `<p id="gr-err-${id}" class="text-red-500 text-xs mt-1 hidden"></p>`;
+        }
+
+        const GR_INPUT = 'w-full bg-gray-700 border border-gray-600 rounded p-2 text-white text-sm focus:outline-none focus:border-yellow-400';
+
+        function renderGradeReviewForm() {
+            const el = document.getElementById('gr-content');
+            if (!el) return;
+            const ctxQuestion = grCtx ? `
+                <div id="gr-link-question" class="mb-4 p-3 rounded-lg border border-indigo-500/40 bg-gray-900/60">
+                    <p class="text-sm font-bold">Is this request about <span class="text-yellow-400">${escapeHtml(grCtx.name)}</span>?</p>
+                    <div class="flex gap-2 mt-2">
+                        <button type="button" onclick="grSetLinked(true)" id="gr-link-yes" class="px-4 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-sm font-bold">Yes</button>
+                        <button type="button" onclick="grSetLinked(false)" id="gr-link-no" class="px-4 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-sm font-bold">No</button>
+                    </div>
+                </div>` : '';
+            el.innerHTML = `
+            <h2 class="text-xl font-bold text-yellow-400 mb-1">📝 Genesis Grade Review Request</h2>
+            <p class="text-xs text-gray-400 mb-4">Ask your teacher to review a grade posted in Genesis. You can submit more than one request for an assignment.</p>
+            ${ctxQuestion}
+            <div id="gr-link-note" class="hidden mb-4 p-3 rounded-lg border border-yellow-500/40 bg-yellow-900/20 text-xs text-yellow-200"></div>
+            <div id="gr-body" class="${grLinked === null ? 'hidden' : ''}">
+                <div class="mb-4">
+                    <p class="text-sm font-bold mb-2">Is your score already posted in Genesis?</p>
+                    <label class="mr-4 text-sm cursor-pointer"><input type="radio" name="gr-posted" value="yes" onchange="grGateChange()" class="mr-1">Yes</label>
+                    <label class="text-sm cursor-pointer"><input type="radio" name="gr-posted" value="no" onchange="grGateChange()" class="mr-1">No</label>
+                    <div id="gr-gate-msg" class="hidden mt-3 p-3 rounded-lg border border-red-500/40 bg-red-900/20 text-sm text-red-200">Come back once it's posted.</div>
+                    ${grFieldError('posted')}
+                </div>
+                <div id="gr-form" class="hidden space-y-4">
+                    <div>
+                        <label class="block text-sm font-bold mb-1" for="gr-number">Assignment number</label>
+                        <input id="gr-number" type="text" class="${GR_INPUT}" placeholder="e.g. 12">
+                        <label class="block mt-2 text-xs text-gray-300 cursor-pointer"><input type="checkbox" id="gr-no-number" onchange="grToggleNoNumber()" class="mr-1">This assignment has no number</label>
+                        ${grFieldError('number')}
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold mb-1" for="gr-name">Assignment name</label>
+                        <input id="gr-name" type="text" class="${GR_INPUT}">
+                        ${grFieldError('name')}
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold mb-1" for="gr-score">Current score in Genesis</label>
+                        <input id="gr-score" type="text" class="${GR_INPUT}" placeholder="e.g. 7/10 or 70%">
+                        ${grFieldError('score')}
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold mb-1" for="gr-due">Original due date</label>
+                        <input id="gr-due" type="date" class="${GR_INPUT}">
+                        ${grFieldError('due')}
+                    </div>
+                    <div>
+                        <p class="text-sm font-bold mb-2">Reason for lateness</p>
+                        <label class="mr-4 text-sm cursor-pointer"><input type="radio" name="gr-late" value="absent" onchange="grLateChange()" class="mr-1">Absent</label>
+                        <label class="mr-4 text-sm cursor-pointer"><input type="radio" name="gr-late" value="other" onchange="grLateChange()" class="mr-1">Other</label>
+                        <label class="text-sm cursor-pointer"><input type="radio" name="gr-late" value="not-late" onchange="grLateChange()" class="mr-1">Not late</label>
+                        ${grFieldError('late')}
+                    </div>
+                    <div id="gr-absent" class="hidden space-y-3">
+                        <div>
+                            <label class="block text-sm font-bold mb-1" for="gr-days">Number of days absent</label>
+                            <input id="gr-days" type="number" min="1" step="1" class="${GR_INPUT}">
+                            ${grFieldError('days')}
+                        </div>
+                        <div class="p-3 rounded-lg border border-yellow-500/40 bg-yellow-900/20 text-xs text-yellow-200">
+                            If you were absent, you have the same number of days as you were absent to submit work, unless you made an arrangement with your teacher for an extenuating circumstance.
+                        </div>
+                        <label class="block text-sm cursor-pointer"><input type="checkbox" id="gr-arrangement" onchange="grToggleArrangement()" class="mr-1">I have an arrangement with my teacher</label>
+                        <div id="gr-arrangement-wrap" class="hidden">
+                            <textarea id="gr-arrangement-note" rows="2" class="${GR_INPUT}" placeholder="Describe the arrangement you made with your teacher"></textarea>
+                            ${grFieldError('arrangement')}
+                        </div>
+                    </div>
+                    <div id="gr-other" class="hidden">
+                        <label class="block text-sm font-bold mb-1" for="gr-explain">Why was the assignment late?</label>
+                        <textarea id="gr-explain" rows="2" class="${GR_INPUT}"></textarea>
+                        ${grFieldError('explain')}
+                    </div>
+                    <div id="gr-improve" class="hidden space-y-3">
+                        <div class="text-sm text-gray-200 space-y-2">
+                            <p class="font-bold">What work did you do to improve this assignment?</p>
+                            <p>If you came for extra help, list the date and what we worked on.</p>
+                            <p>If you worked on your own or with a peer, explain the work you did to figure out the issues above.</p>
+                            <p>How did your content knowledge or skills grow?</p>
+                            <p>In other words, what enabled you to do better now than when the assignment was originally submitted (or due to be submitted)?</p>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-300 mb-1" for="gr-help">Extra help (dates and what we worked on)</label>
+                            <textarea id="gr-help" rows="2" class="${GR_INPUT}"></textarea>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-300 mb-1" for="gr-indep">Work on your own or with a peer</label>
+                            <textarea id="gr-indep" rows="2" class="${GR_INPUT}"></textarea>
+                            ${grFieldError('work')}
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-300 mb-1" for="gr-growth">How did your content knowledge or skills grow?</label>
+                            <textarea id="gr-growth" rows="2" class="${GR_INPUT}"></textarea>
+                            ${grFieldError('growth')}
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-300 mb-1" for="gr-enabled">What enabled you to do better now than when it was originally submitted (or due)?</label>
+                            <textarea id="gr-enabled" rows="2" class="${GR_INPUT}"></textarea>
+                            ${grFieldError('enabled')}
+                        </div>
+                    </div>
+                    <p id="gr-err-form" class="text-red-500 text-sm hidden"></p>
+                    <button type="button" id="gr-submit" onclick="grSubmit()" class="w-full py-3 bg-indigo-600 hover:bg-indigo-700 rounded-lg font-bold transition">Submit Request</button>
+                </div>
+            </div>`;
+            if (grLinked !== null) grApplyLinked();
+        }
+
+        window.grSetLinked = function (value) {
+            if (value === false && grLinked === true && grCtx) {
+                const clearIfAutofilled = (id, v) => {
+                    const el = document.getElementById(id);
+                    if (el && v && el.value === String(v)) el.value = '';
+                };
+                clearIfAutofilled('gr-name', grCtx.name);
+                clearIfAutofilled('gr-number', grCtx.number);
+                clearIfAutofilled('gr-due', grCtx.dueDate);
+            }
+            grLinked = value;
+            grApplyLinked();
+            document.getElementById('gr-body')?.classList.remove('hidden');
+        };
+
+        function grApplyLinked() {
+            const yes = document.getElementById('gr-link-yes');
+            const no = document.getElementById('gr-link-no');
+            const sel = 'px-4 py-1.5 rounded text-sm font-bold bg-yellow-600 text-white';
+            const unsel = 'px-4 py-1.5 rounded text-sm font-bold bg-gray-700 hover:bg-gray-600';
+            if (yes) yes.className = grLinked === true ? sel : unsel;
+            if (no) no.className = grLinked === false ? sel : unsel;
+
+            const note = document.getElementById('gr-link-note');
+            const nameEl = document.getElementById('gr-name');
+            const numEl = document.getElementById('gr-number');
+            const dueEl = document.getElementById('gr-due');
+            if (!note || !nameEl) return;
+
+            if (grLinked === true && grCtx) {
+                nameEl.value = grCtx.name;
+                if (grCtx.number !== '' && grCtx.number != null) {
+                    numEl.value = String(grCtx.number);
+                    document.getElementById('gr-no-number').checked = false;
+                    numEl.disabled = false;
+                }
+                if (grCtx.dueDate) dueEl.value = grCtx.dueDate;
+                const hasPending = grMyRequests.some(r => r.assignmentId === grCtx.id && r.status === 'pending');
+                note.innerHTML = hasPending
+                    ? 'You already have a pending request for this assignment. You can still submit another one.'
+                    : 'This request will be linked to the assignment automatically.';
+                note.className = 'mb-4 p-3 rounded-lg border border-green-500/40 bg-green-900/20 text-xs text-green-200';
+            } else {
+                note.textContent = 'If this assignment is on iteratED, start your request from the assignment itself so we can link it automatically.';
+                note.className = 'mb-4 p-3 rounded-lg border border-yellow-500/40 bg-yellow-900/20 text-xs text-yellow-200';
+            }
+        }
+
+        window.grGateChange = function () {
+            const posted = document.querySelector('input[name="gr-posted"]:checked')?.value;
+            document.getElementById('gr-gate-msg').classList.toggle('hidden', posted !== 'no');
+            document.getElementById('gr-form').classList.toggle('hidden', posted !== 'yes');
+        };
+
+        window.grToggleNoNumber = function () {
+            const checked = document.getElementById('gr-no-number').checked;
+            const numEl = document.getElementById('gr-number');
+            numEl.disabled = checked;
+            if (checked) numEl.value = '';
+        };
+
+        window.grToggleArrangement = function () {
+            document.getElementById('gr-arrangement-wrap').classList.toggle('hidden', !document.getElementById('gr-arrangement').checked);
+        };
+
+        window.grLateChange = function () {
+            const reason = document.querySelector('input[name="gr-late"]:checked')?.value;
+            document.getElementById('gr-absent').classList.toggle('hidden', reason !== 'absent');
+            document.getElementById('gr-other').classList.toggle('hidden', reason !== 'other');
+            document.getElementById('gr-improve').classList.toggle('hidden', !(reason === 'other' || reason === 'not-late'));
+        };
+
+        function grVal(id) {
+            return (document.getElementById(id)?.value || '').trim();
+        }
+
+        async function grFetchSiteSnapshot(assignmentIdValue) {
+            const snapshot = { score: null, lastUpdated: null, submissionStatus: 'not-started' };
+            try {
+                const doc = await db.collection('submissionStatus').doc(`${assignmentIdValue}_${userProfile.email}`).get();
+                if (doc.exists) {
+                    const d = doc.data();
+                    snapshot.score = typeof d.score === 'number' ? d.score : null;
+                    snapshot.lastUpdated = d.timestamp || d.lastAccessed || null;
+                    snapshot.submissionStatus = d.status || 'in-progress';
+                }
+            } catch (e) {
+                console.error('Grade review: could not read submission status', e);
+            }
+            return snapshot;
+        }
+
+        window.grSubmit = async function () {
+            const errors = {};
+            const reason = document.querySelector('input[name="gr-late"]:checked')?.value || '';
+            const noNumber = document.getElementById('gr-no-number').checked;
+            const number = grVal('gr-number');
+            const name = grVal('gr-name');
+            const score = grVal('gr-score');
+            const due = grVal('gr-due');
+
+            if (!noNumber && !number) errors.number = 'Enter the assignment number or check "This assignment has no number".';
+            if (!name) errors.name = 'Enter the assignment name.';
+            if (!score) errors.score = 'Enter your current Genesis score.';
+            if (!due) errors.due = 'Enter the original due date.';
+            if (!reason) errors.late = 'Select a reason for lateness.';
+
+            let daysAbsent = null;
+            let arrangement = false;
+            let arrangementNote = '';
+            let lateExplanation = '';
+            let improvementWork = null;
+
+            if (reason === 'absent') {
+                daysAbsent = parseInt(grVal('gr-days'), 10);
+                if (!Number.isFinite(daysAbsent) || daysAbsent < 1) errors.days = 'Enter the number of days you were absent.';
+                arrangement = document.getElementById('gr-arrangement').checked;
+                arrangementNote = arrangement ? grVal('gr-arrangement-note') : '';
+                if (arrangement && !arrangementNote) errors.arrangement = 'Describe the arrangement you made with your teacher.';
+            } else if (reason === 'other' || reason === 'not-late') {
+                if (reason === 'other') {
+                    lateExplanation = grVal('gr-explain');
+                    if (!lateExplanation) errors.explain = 'Explain why the assignment was late.';
+                }
+                improvementWork = {
+                    extraHelp: grVal('gr-help'),
+                    independentWork: grVal('gr-indep'),
+                    contentGrowth: grVal('gr-growth'),
+                    whatEnabled: grVal('gr-enabled')
+                };
+                if (!improvementWork.extraHelp && !improvementWork.independentWork) errors.work = 'Describe the extra help you received or the work you did on your own or with a peer.';
+                if (!improvementWork.contentGrowth) errors.growth = 'Explain how your content knowledge or skills grew.';
+                if (!improvementWork.whatEnabled) errors.enabled = 'Explain what enabled you to do better now.';
+            }
+
+            ['number', 'name', 'score', 'due', 'late', 'days', 'arrangement', 'explain', 'work', 'growth', 'enabled'].forEach(key => {
+                const el = document.getElementById(`gr-err-${key}`);
+                if (!el) return;
+                el.textContent = errors[key] || '';
+                el.classList.toggle('hidden', !errors[key]);
+            });
+            const formErr = document.getElementById('gr-err-form');
+            if (Object.keys(errors).length > 0) {
+                formErr.textContent = 'Please fix the highlighted fields.';
+                formErr.classList.remove('hidden');
+                return;
+            }
+            formErr.classList.add('hidden');
+
+            const btn = document.getElementById('gr-submit');
+            btn.disabled = true;
+            btn.textContent = 'Submitting...';
+            try {
+                const isSite = grLinked === true && !!grCtx;
+                const data = {
+                    studentEmail: userProfile.email,
+                    studentName: userProfile.name,
+                    class: userProfile.class || 'Unassigned',
+                    teacherEmail: grStudentTeacherEmail(),
+                    assignmentId: isSite ? grCtx.id : null,
+                    isSiteAssignment: isSite,
+                    assignmentNumber: noNumber ? '' : number,
+                    noNumber: noNumber,
+                    assignmentName: name,
+                    genesisScore: score,
+                    originalDueDate: due,
+                    lateReason: reason,
+                    extenuatingArrangement: arrangement,
+                    arrangementNote: arrangementNote,
+                    lateExplanation: lateExplanation,
+                    improvementWork: improvementWork,
+                    siteSnapshot: isSite ? await grFetchSiteSnapshot(grCtx.id) : null,
+                    status: 'pending',
+                    teacherResponse: null,
+                    resolvedAt: null,
+                    resolvedBy: null,
+                    studentSeenResolution: false,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                };
+                if (reason === 'absent') data.daysAbsent = daysAbsent;
+                await db.collection('gradeReviewRequests').add(data);
+                showToast('Grade review request submitted!', { color: 'green' });
+                await grLoadMyRequests();
+                switchGradeReviewTab('mine');
+            } catch (e) {
+                console.error('Grade review submit error:', e);
+                showToast('Could not submit your request. Please try again.', { color: 'red' });
+                btn.disabled = false;
+                btn.textContent = 'Submit Request';
+            }
+        };
+
+        function renderMyGradeRequests() {
+            const el = document.getElementById('gr-content');
+            if (!el) return;
+            const badges = {
+                pending: 'bg-yellow-600 text-white',
+                approved: 'bg-green-600 text-white',
+                denied: 'bg-red-600 text-white',
+                'needs-info': 'bg-blue-600 text-white'
+            };
+            const labels = { pending: 'Pending', approved: 'Approved', denied: 'Denied', 'needs-info': 'Needs Info' };
+            const unseenIds = grUnseenDenied().map(r => r.id);
+
+            if (grMyRequests.length === 0) {
+                el.innerHTML = '<div class="text-center py-8 text-gray-500">You have not submitted any grade review requests yet.</div>';
+                return;
+            }
+            el.innerHTML = `<div class="space-y-3">${grMyRequests.map(r => {
+                const created = r.createdAt?.seconds ? new Date(r.createdAt.seconds * 1000).toLocaleDateString() : 'Just now';
+                const isDenied = r.status === 'denied';
+                const isNew = unseenIds.includes(r.id);
+                const num = r.noNumber ? '' : (r.assignmentNumber ? `#${escapeHtml(String(r.assignmentNumber))} ` : '');
+                const response = r.teacherResponse
+                    ? `<div class="mt-2 p-2 rounded ${isDenied ? 'bg-red-900/30 border border-red-500/40' : 'bg-gray-900/60 border border-gray-600'} text-xs"><span class="font-bold text-gray-300">Teacher note:</span> ${escapeHtml(r.teacherResponse)}</div>`
+                    : '';
+                return `
+                <div class="p-3 rounded-lg border ${isDenied ? 'border-red-500/60 bg-red-900/10' : 'border-gray-600 bg-gray-700/50'}">
+                    <div class="flex justify-between items-start gap-2">
+                        <div>
+                            <div class="font-bold text-white">${num}${escapeHtml(r.assignmentName || '')}</div>
+                            <div class="text-xs text-gray-400">Genesis score: ${escapeHtml(String(r.genesisScore ?? ''))} • Submitted ${created}</div>
+                        </div>
+                        <div class="flex items-center gap-1 shrink-0">
+                            ${isNew ? '<span class="bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full animate-pulse">NEW</span>' : ''}
+                            <span class="text-[10px] font-bold uppercase px-2 py-1 rounded ${badges[r.status] || 'bg-gray-600 text-white'}">${labels[r.status] || escapeHtml(r.status || '')}</span>
+                        </div>
+                    </div>
+                    ${response}
+                </div>`;
+            }).join('')}</div>`;
+
+            if (unseenIds.length > 0) {
+                unseenIds.forEach(id => {
+                    db.collection('gradeReviewRequests').doc(id).update({ studentSeenResolution: true })
+                        .catch(e => console.error('Grade review: could not mark seen', e));
+                });
+                grMyRequests.forEach(r => { if (unseenIds.includes(r.id)) r.studentSeenResolution = true; });
+                const badge = document.getElementById('gr-card-badge');
+                if (badge) badge.classList.add('hidden');
+                grRenderTabs();
+            }
+        }
+    </script>
 
 </body>
 
