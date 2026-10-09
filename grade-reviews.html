@@ -493,7 +493,7 @@
                     teacherResponse: note,
                     resolvedAt: firebase.firestore.FieldValue.serverTimestamp(),
                     resolvedBy: currentUserEmail,
-                    studentSeenResolution: false
+                    studentSeenResolution: status !== 'denied'
                 });
                 const messages = { approved: ['Request approved.', 'green'], denied: ['Request denied.', 'red'], 'needs-info': ['Marked as needs info.', 'blue'] };
                 showToast(...messages[status]);
