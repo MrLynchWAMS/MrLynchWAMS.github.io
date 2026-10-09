@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grade Review Requests - IterātED</title>
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📝</text></svg>">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
+    <script src="./shared/teacher-badges.js"></script>
+    <style>
+        .hidden {
+            display: none;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #1f2937;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #4b5563;
+            border-radius: 4px;
+        }
+
+        .btn-action {
+            transition: transform 0.1s ease, filter 0.1s ease;
+        }
+
+        .btn-action:active {
+            transform: scale(0.97);
+        }
+    </style>
+</head>
+
+<body class="bg-gray-900 text-white font-sans min-h-screen flex flex-col">
+
+    <div id="pageLoader" class="flex flex-col items-center justify-center h-screen bg-gray-900 fixed inset-0 z-50">
+        <h1 class="text-4xl font-bold text-yellow-400 mb-4">Grade Reviews</h1>
+        <p id="loading-text" class="text-lg text-gray-300">Initializing...</p>
+        <div id="signInButtonContainer" class="hidden mt-8">
+            <div id="g_id_onload"
+                data-client_id="1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com"
+                data-callback="handleCredentialResponse" data-auto_select="true" data-auto_prompt="false"></div>
+            <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_black"
+                data-text="signin_with" data-shape="rectangular" data-logo_alignment="left"></div>
+        </div>
+        <p id="auth-error" class="text-red-500 mt-4"></p>
+    </div>
+
+    <div id="pageContent" class="hidden flex-1 flex flex-col p-4 md:p-8 max-w-7xl mx-auto w-full">
+        <!-- Header -->
+        <div class="flex justify-between items-center mb-6 flex-wrap gap-4">
+            <h1 class="text-3xl font-bold text-yellow-400">Genesis Grade Review Requests</h1>
+            <div class="flex gap-2 flex-wrap">
+                <a href="./class-dashboard.html"
+                    class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg text-sm transition">Dashboard</a>
+                <a href="./assignments.html"
+                    class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg text-sm transition">Assignments</a>
+                <a href="./aura-purchases.html"
+                    class="relative bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg text-sm transition">Aura
+                    Purchases<span id="aura-badge"
+                        class="hidden absolute -top-2 -right-2 bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full"></span></a>
+                <button onclick="handleSignOut()"
+                    class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg text-sm transition">Sign
+                    Out</button>
+            </div>
+        </div>
+
+        <!-- Status tabs -->
+        <div id="statusTabs" class="flex border-b border-gray-700 mb-4 bg-gray-800/30 rounded-t-lg overflow-hidden flex-wrap"></div>
+
+        <!-- Filters -->
+        <div class="flex gap-3 mb-4 flex-wrap items-center">
+            <select id="classFilter" onchange="renderRequests()" aria-label="Filter by class"
+                class="bg-gray-800 border border-gray-700 text-white rounded px-3 py-2 text-sm">
+                <option value="">All Classes</option>
+            </select>
+            <select id="studentFilter" onchange="renderRequests()" aria-label="Filter by student"
+                class="bg-gray-800 border border-gray-700 text-white rounded px-3 py-2 text-sm">
+                <option value="">All Students</option>
+            </select>
+            <select id="assignmentFilter" onchange="renderRequests()" aria-label="Filter by assignment"
+                class="bg-gray-800 border border-gray-700 text-white rounded px-3 py-2 text-sm max-w-xs">
+                <option value="">All Assignments</option>
+            </select>
+            <div class="relative">
+                <input type="text" id="searchInput" placeholder="Search requests..." oninput="renderRequests()"
+                    aria-label="Search requests"
+                    class="bg-gray-800 border border-gray-700 text-white rounded px-4 py-2 text-sm w-64">
+            </div>
+            <select id="sortSelect" onchange="renderRequests()" aria-label="Sort requests"
+                class="bg-gray-800 border border-gray-700 text-white rounded px-3 py-2 text-sm">
+                <option value="newest">Newest first</option>
+                <option value="oldest">Oldest first</option>
+                <option value="student">Student A–Z</option>
+                <option value="assignment">Assignment A–Z</option>
+            </select>
+        </div>
+
+        <div id="loadingState" class="p-20 text-center flex flex-col items-center justify-center gap-4">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-400 mx-auto"></div>
+            <p class="text-gray-400 italic">Syncing grade review requests...</p>
+        </div>
+        <div id="emptyState" class="hidden p-20 text-center text-gray-500 italic">No requests match your filters.</div>
+        <div id="requestList" class="space-y-4"></div>
+
+        <div class="mt-4 text-xs text-gray-500 flex justify-between items-center">
+            <p>📝 Real-time tracking enabled. Approving only records your decision; no grades or submissions are changed.</p>
+            <p id="lastSync">Last updated: Just now</p>
+        </div>
+    </div>
+
+    <!-- Response Modal -->
+    <div id="responseModal"
+        class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-[100] p-4">
+        <div class="bg-gray-800 rounded-xl shadow-2xl p-6 max-w-md w-full border border-gray-700">
+            <h3 id="responseTitle" class="text-xl font-bold text-white mb-1">Respond</h3>
+            <p id="responseSubtitle" class="text-sm text-gray-400 mb-4"></p>
+            <label for="responseNote" class="block text-sm font-bold text-gray-300 mb-1">Response to student</label>
+            <textarea id="responseNote" rows="4"
+                class="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white text-sm focus:outline-none focus:border-yellow-400"></textarea>
+            <p id="responseError" class="text-red-500 text-sm mt-1 hidden"></p>
+            <div class="flex justify-end gap-3 mt-4">
+                <button onclick="closeResponseModal()"
+                    class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg font-medium transition">Cancel</button>
+                <button id="responseOk" onclick="submitResponse()"
+                    class="px-4 py-2 rounded-lg font-bold text-white transition">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast container -->
+    <div id="toast-wrapper" class="fixed top-4 right-4 z-[110] space-y-3 w-full max-w-sm"></div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyBnw3xU5aOSExv6dx7Kr-k2pvCXzn_1UyY",
+            authDomain: "mrlynch-slides-app.firebaseapp.com",
+            projectId: "mrlynch-slides-app",
+            storageBucket: "mrlynch-slides-app.appspot.com",
+            messagingSenderId: "223179627035",
+            appId: "1:223179627035:web:ff0f538f3029d829c3f6be"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const auth = firebase.auth();
+
+        const STATUS_META = {
+            pending: { label: 'Pending', badge: 'bg-yellow-600 text-white' },
+            'needs-info': { label: 'Needs Info', badge: 'bg-blue-600 text-white' },
+            approved: { label: 'Approved', badge: 'bg-green-600 text-white' },
+            denied: { label: 'Denied', badge: 'bg-red-600 text-white' }
+        };
+
+        let currentUserEmail = null;
+        let allRequests = [];
+        let currentStatus = 'pending';
+        let requestsListener = null;
+        let liveStatusCache = {};   // `${assignmentId}_${studentEmail}` -> submissionStatus data | null
+        let pendingAction = null;   // { id, status }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text == null ? '' : String(text);
+            return div.innerHTML;
+        }
+
+        function checkImpersonation() {
+            const impersonatedEmail = localStorage.getItem('impersonatedUserEmail');
+            if (impersonatedEmail) {
+                const banner = document.createElement('div');
+                banner.className = 'bg-red-600 text-white text-center p-2 font-bold fixed top-0 w-full z-[200] flex justify-center items-center gap-4';
+                banner.innerHTML = `<span>⚠️ IMPERSONATING: ${escapeHtml(impersonatedEmail)}</span><button onclick="stopImpersonating()" class="bg-white text-red-600 px-3 py-1 rounded text-xs hover:bg-gray-200">Stop</button>`;
+                document.body.prepend(banner);
+                document.body.style.paddingTop = '40px';
+                return impersonatedEmail;
+            }
+            return null;
+        }
+
+        function stopImpersonating() {
+            localStorage.removeItem('impersonatedUserEmail');
+            window.location.reload();
+        }
+
+        auth.onAuthStateChanged(async user => {
+            if (user) {
+                try {
+                    let emailToCheck = user.email.toLowerCase();
+                    const impersonated = checkImpersonation();
+                    if (impersonated) emailToCheck = impersonated.toLowerCase();
+
+                    let isTeacher = (await db.collection('teachers').doc(emailToCheck).get()).exists;
+                    if (!isTeacher) {
+                        const implicit = await db.collection('teachers').where('coTeachingFor', 'array-contains', emailToCheck).get();
+                        isTeacher = !implicit.empty;
+                    }
+
+                    if (isTeacher) {
+                        currentUserEmail = emailToCheck;
+                        document.getElementById('pageLoader').classList.add('hidden');
+                        document.getElementById('pageContent').classList.remove('hidden');
+                        startTeacherBadges(db, currentUserEmail, { auraBadgeId: 'aura-badge' });
+                        renderStatusTabs();
+                        listenToRequests();
+                    } else {
+                        document.getElementById('loading-text').textContent = `Access Denied: You (${emailToCheck}) are not registered as a teacher.`;
+                        document.getElementById('auth-error').textContent = 'Please contact an administrator.';
+                        document.getElementById('signInButtonContainer').classList.add('hidden');
+                    }
+                } catch (error) {
+                    console.error('Error checking teacher status:', error);
+                    document.getElementById('loading-text').textContent = 'Error verifying access.';
+                }
+            } else {
+                document.getElementById('signInButtonContainer').classList.remove('hidden');
+                document.getElementById('loading-text').textContent = 'Please sign in as a teacher.';
+            }
+        });
+
+        function listenToRequests() {
+            if (requestsListener) requestsListener();
+            requestsListener = listenGradeReviewRequests(db, currentUserEmail, list => {
+                allRequests = list;
+                document.getElementById('loadingState').classList.add('hidden');
+                populateFilters();
+                renderStatusTabs();
+                renderRequests();
+                loadLiveStatuses();
+                document.getElementById('lastSync').textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
+            }, err => {
+                console.error('Grade review listener error:', err);
+                document.getElementById('loadingState').classList.add('hidden');
+                showToast(err.code === 'failed-precondition'
+                    ? 'Server internal error: Indexing might be in progress.'
+                    : 'Error syncing requests. Check permissions.', 'red');
+            });
+        }
+
+        // --- Live lookup of the site's current score for linked assignments ---
+        async function loadLiveStatuses() {
+            const missing = allRequests
+                .filter(r => r.assignmentId)
+                .map(r => ({ key: `${r.assignmentId}_${r.studentEmail}`, r }))
+                .filter(x => !(x.key in liveStatusCache));
+            if (missing.length === 0) return;
+            const unique = new Map(missing.map(x => [x.key, x.r]));
+            unique.forEach((_, key) => { liveStatusCache[key] = null; });
+            await Promise.all(Array.from(unique.entries()).map(async ([key]) => {
+                try {
+                    const doc = await db.collection('submissionStatus').doc(key).get();
+                    liveStatusCache[key] = doc.exists ? doc.data() : null;
+                } catch (e) {
+                    console.error('Live status lookup failed:', e);
+                }
+            }));
+            renderRequests();
+        }
+
+        // --- Filters / tabs ---
+        function renderStatusTabs() {
+            const counts = { all: allRequests.length };
+            Object.keys(STATUS_META).forEach(s => { counts[s] = allRequests.filter(r => r.status === s).length; });
+            const tabs = [['pending', 'Pending'], ['needs-info', 'Needs Info'], ['approved', 'Approved'], ['denied', 'Denied'], ['all', 'All']];
+            document.getElementById('statusTabs').innerHTML = tabs.map(([key, label]) => {
+                const active = key === currentStatus;
+                const badge = key === 'pending' && counts.pending > 0
+                    ? `<span class="bg-red-600 text-white text-[10px] px-1.5 py-0.5 rounded-full">${counts.pending}</span>`
+                    : (key !== 'pending' ? `<span class="text-[10px] text-gray-500">${counts[key]}</span>` : '');
+                return `<button onclick="switchStatus('${key}')" class="flex-1 py-3 px-4 font-bold flex items-center justify-center gap-2 transition-all ${active ? 'text-yellow-400 border-b-2 border-yellow-400 bg-gray-800/60' : 'text-gray-400 hover:bg-gray-800'}">${label} ${badge}</button>`;
+            }).join('');
+        }
+
+        function switchStatus(status) {
+            currentStatus = status;
+            renderStatusTabs();
+            renderRequests();
+        }
+
+        function fillSelect(id, values, allLabel) {
+            const el = document.getElementById(id);
+            const prev = el.value;
+            el.innerHTML = `<option value="">${allLabel}</option>` + values.map(v => `<option value="${escapeHtml(v).replace(/"/g, '&quot;')}">${escapeHtml(v)}</option>`).join('');
+            if (values.includes(prev)) el.value = prev;
+        }
+
+        function populateFilters() {
+            const uniq = fn => [...new Set(allRequests.map(fn).filter(Boolean))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+            fillSelect('classFilter', uniq(r => String(r.class || 'Unassigned')), 'All Classes');
+            fillSelect('studentFilter', uniq(r => r.studentName || r.studentEmail), 'All Students');
+            fillSelect('assignmentFilter', uniq(r => r.assignmentName), 'All Assignments');
+        }
+
+        // --- Score comparison helpers ---
+        // Converts "85", "85%", "17/20" into a 0-100 percentage; null when not parseable.
+        function parseGenesisPercent(raw) {
+            if (raw == null) return null;
+            const str = String(raw).trim();
+            const frac = str.match(/^(-?\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)$/);
+            if (frac) return parseFloat(frac[2]) > 0 ? (parseFloat(frac[1]) / parseFloat(frac[2])) * 100 : null;
+            const num = str.match(/^(-?\d+(?:\.\d+)?)\s*%?$/);
+            return num ? parseFloat(num[1]) : null;
+        }
+
+        function toDateObj(ts) {
+            if (!ts) return null;
+            if (ts.toDate) return ts.toDate();
+            if (ts.seconds) return new Date(ts.seconds * 1000);
+            const d = new Date(ts);
+            return isNaN(d.getTime()) ? null : d;
+        }
+
+        function formatDateTime(ts) {
+            const d = toDateObj(ts);
+            return d ? d.toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+        }
+
+        function formatDueDate(str) {
+            const m = String(str || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (!m) return str || '—';
+            return new Date(+m[1], +m[2] - 1, +m[3]).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+        }
+
+        function formatSiteScore(score) {
+            return typeof score === 'number' ? `${Math.round(score * 10) / 10}%` : '—';
+        }
+
+        function renderSiteInfo(r) {
+            const snap = r.siteSnapshot || {};
+            const liveKey = `${r.assignmentId}_${r.studentEmail}`;
+            const live = liveStatusCache[liveKey];
+            const compareScore = live && typeof live.score === 'number' ? live.score : snap.score;
+            const reported = parseGenesisPercent(r.genesisScore);
+            let flag = '';
+            if (reported !== null && typeof compareScore === 'number') {
+                if (Math.abs(reported - compareScore) > 0.5) {
+                    flag = `<div class="mt-2 text-xs font-bold text-orange-300 bg-orange-900/30 border border-orange-500/50 rounded px-2 py-1">⚠️ Mismatch: student reported ${escapeHtml(String(r.genesisScore))} in Genesis, iteratED shows ${formatSiteScore(compareScore)}.</div>`;
+                } else {
+                    flag = `<div class="mt-2 text-xs text-green-300">✓ Genesis score matches iteratED.</div>`;
+                }
+            }
+            const liveBlock = live
+                ? `<div class="mt-2 pt-2 border-t border-gray-700 text-xs text-gray-300"><span class="text-gray-500 uppercase tracking-wider text-[10px]">Live now</span> — Score: ${formatSiteScore(live.score)} • Last updated: ${formatDateTime(live.timestamp || live.lastAccessed)} • Status: ${escapeHtml(live.status || 'in-progress')}</div>`
+                : '';
+            return `
+                <div class="p-3 rounded-lg bg-indigo-900/20 border border-indigo-500/40">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="text-[10px] uppercase tracking-wider text-indigo-300 font-bold">iteratED site data (at request time)</span>
+                        <a href="./dashboard.html?assignmentId=${encodeURIComponent(r.assignmentId)}" target="_blank" rel="noopener"
+                            class="text-xs text-indigo-300 hover:text-indigo-200 underline">Open in dashboard ↗</a>
+                    </div>
+                    <div class="text-sm text-gray-200">Score: <b>${formatSiteScore(snap.score)}</b> • Last updated: ${formatDateTime(snap.lastUpdated)} • Status: ${escapeHtml(snap.submissionStatus || '—')}</div>
+                    ${liveBlock}
+                    ${flag}
+                </div>`;
+        }
+
+        function renderStudentSection(title, text) {
+            if (!text) return '';
+            return `<div><div class="text-[10px] uppercase tracking-wider text-gray-500">${title}</div><div class="text-sm text-gray-200 whitespace-pre-wrap">${escapeHtml(text)}</div></div>`;
+        }
+
+        function renderLateness(r) {
+            if (r.lateReason === 'absent') {
+                return `
+                    ${renderStudentSection('Reason for lateness', `Absent — ${r.daysAbsent ?? '?'} day(s)`)}
+                    ${r.extenuatingArrangement ? renderStudentSection('Arrangement with teacher', r.arrangementNote || 'Yes (no details given)') : ''}`;
+            }
+            const iw = r.improvementWork || {};
+            return `
+                ${renderStudentSection('Reason for lateness', r.lateReason === 'other' ? 'Other' : 'Not late')}
+                ${renderStudentSection('Late explanation', r.lateExplanation)}
+                ${renderStudentSection('Extra help (dates / topics)', iw.extraHelp)}
+                ${renderStudentSection('Independent / peer work', iw.independentWork)}
+                ${renderStudentSection('Content / skill growth', iw.contentGrowth)}
+                ${renderStudentSection('What enabled improvement', iw.whatEnabled)}`;
+        }
+
+        function renderRequests() {
+            const cls = document.getElementById('classFilter').value;
+            const student = document.getElementById('studentFilter').value;
+            const assignment = document.getElementById('assignmentFilter').value;
+            const search = document.getElementById('searchInput').value.toLowerCase().trim();
+            const sort = document.getElementById('sortSelect').value;
+
+            const filtered = allRequests.filter(r => {
+                if (currentStatus !== 'all' && r.status !== currentStatus) return false;
+                if (cls && String(r.class || 'Unassigned') !== cls) return false;
+                if (student && (r.studentName || r.studentEmail) !== student) return false;
+                if (assignment && r.assignmentName !== assignment) return false;
+                if (search) {
+                    const hay = [r.studentName, r.studentEmail, r.assignmentName, r.assignmentNumber, r.genesisScore, r.teacherResponse]
+                        .map(v => String(v ?? '').toLowerCase()).join(' ');
+                    if (!hay.includes(search)) return false;
+                }
+                return true;
+            });
+
+            filtered.sort((a, b) => {
+                const ta = a.createdAt?.seconds || 0, tb = b.createdAt?.seconds || 0;
+                if (sort === 'oldest') return ta - tb;
+                if (sort === 'student') return String(a.studentName || '').localeCompare(String(b.studentName || ''));
+                if (sort === 'assignment') return String(a.assignmentName || '').localeCompare(String(b.assignmentName || ''));
+                return tb - ta;
+            });
+
+            const list = document.getElementById('requestList');
+            const empty = document.getElementById('emptyState');
+            if (filtered.length === 0) {
+                list.innerHTML = '';
+                empty.classList.toggle('hidden', document.getElementById('loadingState').classList.contains('hidden') === false);
+                return;
+            }
+            empty.classList.add('hidden');
+
+            list.innerHTML = filtered.map(r => {
+                const meta = STATUS_META[r.status] || { label: r.status || 'Unknown', badge: 'bg-gray-600 text-white' };
+                const num = r.noNumber ? 'No number' : (r.assignmentNumber ? `#${escapeHtml(String(r.assignmentNumber))}` : '');
+                const reported = `
+                    <div class="p-3 rounded-lg bg-gray-900/60 border border-gray-700">
+                        <div class="text-[10px] uppercase tracking-wider text-gray-400 font-bold mb-1">Student reported</div>
+                        <div class="text-sm text-gray-200">Genesis score: <b class="text-yellow-400">${escapeHtml(String(r.genesisScore ?? ''))}</b> • Original due date: ${escapeHtml(formatDueDate(r.originalDueDate))}</div>
+                    </div>`;
+                return `
+                <div class="bg-gray-800 border ${r.status === 'pending' ? 'border-yellow-500/50' : 'border-gray-700'} rounded-lg shadow-xl p-4">
+                    <div class="flex justify-between items-start gap-3 flex-wrap">
+                        <div>
+                            <div class="font-bold text-lg text-white">${escapeHtml(r.studentName || r.studentEmail || 'Unknown Student')}
+                                <span class="text-[10px] text-gray-400 uppercase tracking-tighter ml-1">${escapeHtml(String(r.class || 'Unassigned'))}</span></div>
+                            <div class="text-yellow-400 font-bold">${num} ${escapeHtml(r.assignmentName || '')}
+                                ${r.isSiteAssignment ? '<span class="text-[10px] bg-indigo-700 text-white px-1.5 py-0.5 rounded ml-1 align-middle">iteratED</span>' : ''}</div>
+                            <div class="text-xs text-gray-500">Submitted ${formatDateTime(r.createdAt)}</div>
+                        </div>
+                        <span class="text-xs font-bold uppercase px-3 py-1 rounded ${meta.badge}">${meta.label}</span>
+                    </div>
+                    <div class="grid md:grid-cols-2 gap-3 mt-3">
+                        <div class="space-y-2">${reported}${r.isSiteAssignment && r.assignmentId ? renderSiteInfo(r) : ''}</div>
+                        <div class="space-y-2">${renderLateness(r)}</div>
+                    </div>
+                    ${r.teacherResponse ? `<div class="mt-3 p-2 rounded bg-gray-900/60 border border-gray-700 text-sm"><span class="font-bold text-gray-300">Your response${r.resolvedBy ? ` (${escapeHtml(r.resolvedBy)})` : ''}:</span> ${escapeHtml(r.teacherResponse)}</div>` : ''}
+                    <div class="mt-3 flex gap-2 flex-wrap justify-end">
+                        <button onclick="openResponseModal('${r.id}', 'approved')" class="btn-action bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-1.5 px-3 rounded-lg">Approve</button>
+                        <button onclick="openResponseModal('${r.id}', 'needs-info')" class="btn-action bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-1.5 px-3 rounded-lg">Needs Info</button>
+                        <button onclick="openResponseModal('${r.id}', 'denied')" class="btn-action bg-red-600 hover:bg-red-700 text-white text-xs font-bold py-1.5 px-3 rounded-lg">Deny</button>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        // --- Actions ---
+        function openResponseModal(id, status) {
+            const r = allRequests.find(x => x.id === id);
+            if (!r) return;
+            pendingAction = { id, status };
+            const titles = { approved: 'Approve Request', denied: 'Deny Request', 'needs-info': 'Request More Info' };
+            const colors = { approved: 'bg-green-600 hover:bg-green-700', denied: 'bg-red-600 hover:bg-red-700', 'needs-info': 'bg-blue-600 hover:bg-blue-700' };
+            document.getElementById('responseTitle').textContent = titles[status];
+            document.getElementById('responseSubtitle').textContent = `${r.studentName || r.studentEmail} — ${r.assignmentName || ''}`;
+            document.getElementById('responseNote').value = r.teacherResponse || '';
+            document.getElementById('responseError').classList.add('hidden');
+            document.getElementById('responseOk').className = `px-4 py-2 rounded-lg font-bold text-white transition ${colors[status]}`;
+            document.getElementById('responseModal').classList.remove('hidden');
+        }
+
+        function closeResponseModal() {
+            document.getElementById('responseModal').classList.add('hidden');
+            pendingAction = null;
+        }
+
+        async function submitResponse() {
+            if (!pendingAction) return;
+            const note = document.getElementById('responseNote').value.trim();
+            const errEl = document.getElementById('responseError');
+            if (pendingAction.status !== 'approved' && !note) {
+                errEl.textContent = 'Please add a note for the student.';
+                errEl.classList.remove('hidden');
+                return;
+            }
+            const { id, status } = pendingAction;
+            try {
+                await db.collection('gradeReviewRequests').doc(id).update({
+                    status,
+                    teacherResponse: note,
+                    resolvedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    resolvedBy: currentUserEmail,
+                    studentSeenResolution: status !== 'denied'
+                });
+                const messages = { approved: ['Request approved.', 'green'], denied: ['Request denied.', 'red'], 'needs-info': ['Marked as needs info.', 'blue'] };
+                showToast(...messages[status]);
+                closeResponseModal();
+            } catch (err) {
+                console.error('Response error:', err);
+                showToast('Failed to save your response.', 'red');
+            }
+        }
+
+        // --- Helpers ---
+        function showToast(message, color) {
+            const wrapper = document.getElementById('toast-wrapper');
+            const toast = document.createElement('div');
+            toast.className = 'flex items-center justify-between p-4 rounded-lg shadow-lg text-white max-w-sm w-full pointer-events-auto';
+            const colors = { green: 'bg-green-600', red: 'bg-red-600', blue: 'bg-blue-600', yellow: 'bg-yellow-500' };
+            toast.classList.add(colors[color] || 'bg-gray-700');
+            toast.innerHTML = `<span>${escapeHtml(message)}</span><button class="ml-4 text-2xl font-bold leading-none" aria-label="Dismiss">&times;</button>`;
+            toast.querySelector('button').onclick = () => toast.remove();
+            wrapper.appendChild(toast);
+            setTimeout(() => toast.remove(), 4000);
+        }
+
+        function handleSignOut() {
+            if (window.google?.accounts?.id) google.accounts.id.disableAutoSelect();
+            auth.signOut().then(() => window.location.reload());
+        }
+
+        function handleCredentialResponse(response) {
+            const credential = firebase.auth.GoogleAuthProvider.credential(response.credential);
+            auth.signInWithCredential(credential);
+        }
+    </script>
+</body>
+
+</html>
