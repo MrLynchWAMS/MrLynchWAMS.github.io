@@ -2534,6 +2534,11 @@
                         if (checked) {
                             slideStates[qi] = { ...(slideStates[qi] || {}), answer: checked.value };
                         }
+                    } else if (block.questionType === 'multiselect') {
+                        const multi = readBlankMultiselectAnswer(block.id);
+                        if (multi) {
+                            slideStates[qi] = { ...(slideStates[qi] || {}), answer: multi };
+                        }
                     } else {
                         const el = document.getElementById(`blank-q-input-${block.id}`);
                         if (el && String(el.value).trim()) {
@@ -3954,6 +3959,14 @@
             blankQTimerIntervals.push(interval);
         }
 
+        // Multiple selection answers are stored as sorted, comma-separated choice indexes (e.g. "0,2")
+        function readBlankMultiselectAnswer(blockId) {
+            return Array.from(document.querySelectorAll(`input[name="blank-multi-${blockId}"]:checked`))
+                .map(el => parseInt(el.value, 10))
+                .sort((a, b) => a - b)
+                .join(',');
+        }
+
         function evaluateBlockInlineChecker(checker, studentAnswer) {
             const passed = window.evaluateInlineChecker(checker, studentAnswer, {
                 assignmentData,
@@ -4095,6 +4108,20 @@
                         inputHTML += `</div>`;
                         // Use first radio as the "input" for scroll targeting
                         inputHTML += `<span id="blank-q-input-${block.id}" tabindex="-1"></span>`;
+                    } else if (block.questionType === 'multiselect' && block.choices && block.choices.length > 0) {
+                        const savedSet = String(savedAnswer).split(',').map(v => v.trim()).filter(v => v !== '');
+                        inputHTML = `<p class="text-xs text-gray-400 mt-2">Select all that apply.</p><div class="space-y-2 mt-1" id="blank-q-choices-${block.id}">`;
+                        block.choices.forEach((choice, ci) => {
+                            const checked = savedSet.includes(String(ci)) ? 'checked' : '';
+                            inputHTML += `<label class="flex items-center gap-3 cursor-pointer p-2 rounded hover:bg-gray-700">
+                                <input type="checkbox" name="blank-multi-${block.id}" value="${ci}" ${checked} ${inputDisabled ? 'disabled' : ''}
+                                    id="blank-q-input-${block.id}-${ci}"
+                                    class="w-4 h-4 text-yellow-400">
+                                <span>${renderer.escapeHtml(choice)}</span>
+                            </label>`;
+                        });
+                        inputHTML += `</div>`;
+                        inputHTML += `<span id="blank-q-input-${block.id}" tabindex="-1"></span>`;
                     } else if (block.questionType === 'number') {
                         inputHTML = `<input type="number" id="blank-q-input-${block.id}" value="${renderer.escapeHtml(String(savedAnswer))}"
                             placeholder="Enter a number..."
@@ -4186,6 +4213,12 @@
                     return;
                 }
                 studentAnswer = checked.value;
+            } else if (block.questionType === 'multiselect') {
+                studentAnswer = readBlankMultiselectAnswer(block.id);
+                if (!studentAnswer) {
+                    showToast("Please select at least one answer first!", { color: 'red' });
+                    return;
+                }
             } else {
                 const inputEl = document.getElementById(`blank-q-input-${block.id}`);
                 if (!inputEl || !inputEl.value.trim()) {
@@ -4235,6 +4268,8 @@
             let score = 0;
             if (block.questionType === 'choice') {
                 score = parseInt(studentAnswer, 10) === block.correctChoiceIndex ? (block.points || 100) : 0;
+            } else if (block.questionType === 'multiselect') {
+                score = renderer.evaluateMultiselect(block, studentAnswer);
             } else if (block.inlineChecker) {
                 try {
                     const passed = evaluateBlockInlineChecker(block.inlineChecker, studentAnswer);

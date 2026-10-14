@@ -557,6 +557,7 @@
                         <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">![alt](url)</td><td class="py-1">Image block</td></tr>
                         <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: text]</td><td class="py-1">Open text question</td></tr>
                         <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: choice | A. opt, B. correct* | 100pts]</td><td class="py-1">Multiple choice</td></tr>
+                        <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: multiselect | A. opt*, B. opt, C. opt* | scoring:partial | 100pts]</td><td class="py-1">Multiple selection (mark each correct answer with *). Scoring is all-or-nothing by default; add <span class="font-mono">scoring:partial</span> for partial credit: (correct picks − wrong picks) ÷ total correct</td></tr>
                         <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: number | answer==5 ±0.1 | 100pts]</td><td class="py-1">Number with tolerance</td></tr>
                         <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: text | contains "a" AND contains "b" | 100pts]</td><td class="py-1">Both words required</td></tr>
                         <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: text | contains "a" OR contains "b" | 100pts]</td><td class="py-1">Either word sufficient</td></tr>
@@ -595,6 +596,7 @@ FORMAT RULES:
    Types:
    - [q: text] (Open text)
    - [q: choice | A. opt, B. correct*, C. opt | 100pts] (Mark correct with *)
+   - [q: multiselect | A. opt*, B. opt, C. opt* | 100pts] (Mark EVERY correct answer with *; add | scoring:partial for partial credit)
    - [q: number | answer==VALUE | 100pts] (Operators: ==, !=, >, <, between MIN and MAX)
    - [q: text | contains "word" | 100pts]
    - [q: text | contains "a" AND contains "b" | 100pts] (both words required)
@@ -1361,12 +1363,23 @@ Reading level: [GRADE LEVEL]</p>
                             const block = blocks.find(b => b.id === e.target.closest('[data-block-id]').dataset.blockId);
                             if (!block) return;
                             block.questionType = e.target.value;
-                            if (block.questionType !== 'choice') {
+                            const usesChoices = block.questionType === 'choice' || block.questionType === 'multiselect';
+                            if (!usesChoices) {
                                 delete block.choices;
-                                delete block.correctChoiceIndex;
                             } else if (!block.choices) {
                                 block.choices = ['', '', '', ''];
-                                block.correctChoiceIndex = 0;
+                            }
+                            if (block.questionType === 'choice') {
+                                if (!Number.isInteger(block.correctChoiceIndex)) block.correctChoiceIndex = (block.correctChoiceIndexes && block.correctChoiceIndexes[0]) || 0;
+                            } else {
+                                delete block.correctChoiceIndex;
+                            }
+                            if (block.questionType === 'multiselect') {
+                                if (!Array.isArray(block.correctChoiceIndexes) || block.correctChoiceIndexes.length === 0) block.correctChoiceIndexes = [0];
+                                if (!block.scoringMode) block.scoringMode = 'all-or-nothing';
+                            } else {
+                                delete block.correctChoiceIndexes;
+                                delete block.scoringMode;
                             }
                             renderBlocks();
                         });
@@ -1486,7 +1499,7 @@ Reading level: [GRADE LEVEL]</p>
             blocks.filter(b => b.type === 'question').forEach(block => {
                 const card = document.getElementById(`q-block-${block.id}`);
                 if (!card) return;
-                const isChoiceType = block.questionType === 'choice';
+                const isChoiceType = block.questionType === 'choice' || block.questionType === 'multiselect';
                 const hasInline = !!block.inlineChecker;
                 const stored = checkerFunctions[block.id];
                 const hasWidget = stored && (typeof stored === 'object' ? !!stored.code : !!stored);
@@ -1585,6 +1598,7 @@ Reading level: [GRADE LEVEL]</p>
                             <option value="text" ${block.questionType === 'text' ? 'selected' : ''}>Text</option>
                             <option value="number" ${block.questionType === 'number' ? 'selected' : ''}>Number</option>
                             <option value="choice" ${block.questionType === 'choice' ? 'selected' : ''}>Multiple Choice</option>
+                            <option value="multiselect" ${block.questionType === 'multiselect' ? 'selected' : ''}>Multiple Selection</option>
                         </select>
                     </div>
                     <div>
@@ -1613,6 +1627,34 @@ Reading level: [GRADE LEVEL]</p>
                 html += `<div class="flex gap-2 mt-1">
                     <button onclick="addChoice('${block.id}')" class="text-xs bg-gray-600 hover:bg-gray-500 px-2 py-1 rounded">+ Add Choice</button>
                     <button onclick="removeChoice('${block.id}')" class="text-xs bg-gray-600 hover:bg-gray-500 px-2 py-1 rounded">- Remove Last</button>
+                </div></div>`;
+            } else if (block.questionType === 'multiselect') {
+                const choices = block.choices || ['', '', '', ''];
+                const correct = Array.isArray(block.correctChoiceIndexes) ? block.correctChoiceIndexes : [];
+                html += `<div class="space-y-2">
+                    <label class="text-xs text-gray-400 block">Choices (check every correct answer)</label>`;
+                choices.forEach((choice, ci) => {
+                    html += `<div class="flex items-center gap-2">
+                        <input type="checkbox" value="${ci}" ${correct.includes(ci) ? 'checked' : ''}
+                            onchange="toggleCorrectChoice('${block.id}', ${ci}, this.checked)"
+                            class="w-4 h-4 text-yellow-500">
+                        <input type="text" value="${escapeHtml(choice)}"
+                            oninput="updateChoiceText('${block.id}', ${ci}, this.value)"
+                            placeholder="Choice ${ci + 1}"
+                            class="flex-1 p-1 bg-gray-700 border border-gray-600 rounded text-sm">
+                    </div>`;
+                });
+                html += `<div class="flex gap-2 mt-1">
+                    <button onclick="addChoice('${block.id}')" class="text-xs bg-gray-600 hover:bg-gray-500 px-2 py-1 rounded">+ Add Choice</button>
+                    <button onclick="removeChoice('${block.id}')" class="text-xs bg-gray-600 hover:bg-gray-500 px-2 py-1 rounded">- Remove Last</button>
+                </div>
+                <div>
+                    <label class="text-xs text-gray-400">Scoring</label>
+                    <select onchange="updateBlockField('${block.id}', 'scoringMode', this.value)" class="ml-1 p-1 bg-gray-700 border border-gray-600 rounded text-sm">
+                        <option value="all-or-nothing" ${block.scoringMode !== 'partial' ? 'selected' : ''}>All or nothing</option>
+                        <option value="partial" ${block.scoringMode === 'partial' ? 'selected' : ''}>Partial credit</option>
+                    </select>
+                    <span class="text-xs text-gray-500 ml-1">Partial = (correct picks − wrong picks) ÷ total correct, minimum 0</span>
                 </div></div>`;
             } else {
                 const ic = block.inlineChecker;
@@ -1737,6 +1779,14 @@ Reading level: [GRADE LEVEL]</p>
             block.choices[idx] = value;
         }
 
+        function toggleCorrectChoice(blockId, idx, checked) {
+            const block = blocks.find(b => b.id === blockId);
+            if (!block) return;
+            const set = new Set(block.correctChoiceIndexes || []);
+            if (checked) set.add(idx); else set.delete(idx);
+            block.correctChoiceIndexes = Array.from(set).sort((a, b) => a - b);
+        }
+
         function addChoice(blockId) {
             const block = blocks.find(b => b.id === blockId);
             if (!block) return;
@@ -1750,6 +1800,9 @@ Reading level: [GRADE LEVEL]</p>
             if (!block || !block.choices || block.choices.length <= 2) return;
             block.choices.pop();
             if ((block.correctChoiceIndex || 0) >= block.choices.length) block.correctChoiceIndex = 0;
+            if (Array.isArray(block.correctChoiceIndexes)) {
+                block.correctChoiceIndexes = block.correctChoiceIndexes.filter(i => i < block.choices.length);
+            }
             renderBlocks();
         }
 
@@ -1904,6 +1957,12 @@ Reading level: [GRADE LEVEL]</p>
                         const correctIdx = Number.isInteger(block.correctChoiceIndex) ? block.correctChoiceIndex : 0;
                         const pts = Number.isFinite(block.points) && block.points > 0 ? block.points : 100;
                         const code = `function checkAnswer(studentAnswer) {\n    return parseInt(studentAnswer, 10) === ${correctIdx} ? ${pts} : 0;\n}`;
+                        newCheckerFunctions[block.id] = { code, mode: 'auto' };
+                    } else if (block.questionType === 'multiselect') {
+                        const correct = Array.isArray(block.correctChoiceIndexes) ? block.correctChoiceIndexes : [];
+                        const pts = Number.isFinite(block.points) && block.points > 0 ? block.points : 100;
+                        const partial = block.scoringMode === 'partial';
+                        const code = `function checkAnswer(studentAnswer) {\n    const correct = ${JSON.stringify(correct)};\n    const picked = [...new Set(String(studentAnswer).split(',').map(v => parseInt(v, 10)).filter(Number.isInteger))];\n    const right = picked.filter(i => correct.includes(i)).length;\n    const wrong = picked.length - right;\n    ${partial ? `return correct.length ? Math.round(${pts} * Math.max(0, (right - wrong) / correct.length)) : 0;` : `return correct.length && right === correct.length && wrong === 0 ? ${pts} : 0;`}\n}`;
                         newCheckerFunctions[block.id] = { code, mode: 'auto' };
                     } else if (block.inlineChecker) {
                         return;
