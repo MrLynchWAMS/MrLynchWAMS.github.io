@@ -173,6 +173,27 @@
         return pass ? (points || 100) : 0;
     }
 
+    /**
+     * Scores a multiple selection question.
+     * Student answer is a comma-separated list of selected choice indexes (e.g. "0,2") or an array.
+     * - all-or-nothing (default): full points only if the selected set exactly equals the correct set.
+     * - partial: (correct picks - wrong picks) / total correct, clamped to [0, 1], times points.
+     */
+    function evaluateMultiselect(block, studentAnswer) {
+        const points = block.points || 100;
+        const correct = Array.isArray(block.correctChoiceIndexes) ? block.correctChoiceIndexes : [];
+        const raw = Array.isArray(studentAnswer) ? studentAnswer : String(studentAnswer == null ? '' : studentAnswer).split(',');
+        const selected = [...new Set(raw.map(v => parseInt(v, 10)).filter(n => Number.isInteger(n)))];
+        if (correct.length === 0 || selected.length === 0) return 0;
+        const right = selected.filter(i => correct.includes(i)).length;
+        const wrong = selected.length - right;
+        if (block.scoringMode === 'partial') {
+            const frac = Math.max(0, (right - wrong) / correct.length);
+            return Math.round(points * frac);
+        }
+        return (right === correct.length && wrong === 0) ? points : 0;
+    }
+
     function renderYoutube(url, options) {
         let videoId = '';
         const youtubeIdRegex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
@@ -212,6 +233,7 @@
         renderTextBlockContent,
         renderMathContent,
         evaluateInlineChecker,
+        evaluateMultiselect,
         renderYoutube,
         renderIframe,
         escapeHtml,

@@ -192,6 +192,15 @@
                             </label>`;
                         });
                         inputHTML += `</div>`;
+                    } else if (block.questionType === 'multiselect' && block.choices && block.choices.length > 0) {
+                        inputHTML = `<div class="space-y-2 mt-2" id="q-input-${block.id}">`;
+                        block.choices.forEach((choice, ci) => {
+                            inputHTML += `<label class="flex items-center gap-3 cursor-pointer p-2 rounded hover:bg-gray-800/50">
+                                <input type="checkbox" name="multi-${block.id}" value="${ci}" class="w-4 h-4 text-yellow-400">
+                                <span>${renderer.formatInline(choice)}</span>
+                            </label>`;
+                        });
+                        inputHTML += `</div>`;
                     } else if (block.questionType === 'number') {
                         inputHTML = `<input type="number" id="q-input-${block.id}" placeholder="Enter a number..." class="w-full mt-2 p-3 bg-gray-800 border border-gray-700 rounded focus:outline-none focus:ring-1 focus:ring-yellow-500">`;
                     } else {
@@ -224,6 +233,8 @@
             if (block.questionType === 'choice') {
                 const checked = document.querySelector(`input[name="choice-${blockId}"]:checked`);
                 studentAnswer = checked ? checked.value : '';
+            } else if (block.questionType === 'multiselect') {
+                studentAnswer = Array.from(document.querySelectorAll(`input[name="multi-${blockId}"]:checked`)).map(el => el.value).join(',');
             } else {
                 studentAnswer = document.getElementById(`q-input-${blockId}`).value;
             }
@@ -231,6 +242,8 @@
             let score = 0;
             if (block.questionType === 'choice') {
                 score = (parseInt(studentAnswer) === block.correctChoiceIndex) ? (block.points || 100) : 0;
+            } else if (block.questionType === 'multiselect') {
+                score = window.BlankRenderer.evaluateMultiselect(block, studentAnswer);
             } else if (block.inlineChecker) {
                 score = window.BlankRenderer.evaluateInlineChecker(studentAnswer, block.inlineChecker);
             } else {

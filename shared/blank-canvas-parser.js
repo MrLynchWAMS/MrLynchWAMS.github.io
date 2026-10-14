@@ -165,6 +165,8 @@
             let inlineChecker = null;
             let choices = null;
             let correctChoiceIndex = null;
+            let correctChoiceIndexes = null;
+            let scoringMode = 'all-or-nothing';
             let points = 100;
 
             // --- Modifier Parsing ---
@@ -188,9 +190,11 @@
                 const mPen = p.match(/^penalty[:=]\s*(\d+)$/i);
                 const mLock = p.match(/^lock[:=]\s*(true|false)$/i);
                 const mRetain = p.match(/^retain[:=]\s*(true|false)$/i);
+                const mScoring = p.match(/^scoring[:=]\s*(partial|all-or-nothing|all)$/i);
                 const mHelp = p.match(/^helpThreshold[:=]\s*(\d+)$/i);
 
-                if (mMax) { attemptOverrides.enabled = true; attemptOverrides.maxAttempts = parseInt(mMax[1], 10); }
+                if (mScoring) { scoringMode = mScoring[1].toLowerCase() === 'partial' ? 'partial' : 'all-or-nothing'; }
+                else if (mMax) { attemptOverrides.enabled = true; attemptOverrides.maxAttempts = parseInt(mMax[1], 10); }
                 else if (mPen) { attemptOverrides.enabled = true; attemptOverrides.attemptPenalty = parseInt(mPen[1], 10); }
                 else if (mLock) { attemptOverrides.enabled = true; attemptOverrides.lockOnMaxAttempts = mLock[1].toLowerCase() === 'true'; }
                 else if (mRetain) { attemptOverrides.enabled = true; attemptOverrides.retainHighestScore = mRetain[1].toLowerCase() === 'true'; }
@@ -235,12 +239,35 @@
                     warnings.push(`Multiple choice question has no choices: "${promptRaw}". Treating as text.`);
                     questionType = 'text';
                 }
+            } else if (typePart === 'multiselect') {
+                questionType = 'multiselect';
+                if (configParts.length > 0) {
+                    const rawChoices = configParts[0].split(/,\s*(?=[A-Za-z0-9]+\.\s)/).map(c => c.trim());
+                    choices = [];
+                    correctChoiceIndexes = [];
+                    rawChoices.forEach((raw, ci) => {
+                        const stripped = raw.replace(/^[A-Za-z0-9]+\.\s*/, '').trim();
+                        if (stripped.endsWith('*')) {
+                            correctChoiceIndexes.push(ci);
+                            choices.push(stripped.slice(0, -1).trim());
+                        } else {
+                            choices.push(stripped);
+                        }
+                    });
+                    if (correctChoiceIndexes.length === 0) {
+                        warnings.push(`Multiple selection question has no correct answers marked with *: "${promptRaw}"`);
+                        correctChoiceIndexes = [0];
+                    }
+                } else {
+                    warnings.push(`Multiple selection question has no choices: "${promptRaw}". Treating as text.`);
+                    questionType = 'text';
+                }
             } else {
                 warnings.push(`Unrecognized question type "[q: ${qTag}]". Treating as open text.`);
                 questionType = 'text';
             }
 
-            return { questionType, inlineChecker, choices, correctChoiceIndex, points, attemptOverrides };
+            return { questionType, inlineChecker, choices, correctChoiceIndex, correctChoiceIndexes, scoringMode, points, attemptOverrides };
         }
 
         for (let i = 0; i < lines.length; i++) {
@@ -343,7 +370,7 @@
     }
 
     function buildQuestionBlock(promptRaw, parsed, fingerprintMap, existingCheckerIds, usedIds, warnings, existingBlocks) {
-        const { questionType, inlineChecker, choices, correctChoiceIndex, points } = parsed;
+        const { questionType, inlineChecker, choices, correctChoiceIndex, correctChoiceIndexes, scoringMode, points } = parsed;
         const fp = (promptRaw.toLowerCase().trim()) + '|' + questionType;
         const candidate = fingerprintMap[fp];
         // Only reuse the existing ID if it hasn't been claimed already in this parse pass
@@ -363,6 +390,11 @@
         if (questionType === 'choice' && choices) {
             block.choices = choices;
             block.correctChoiceIndex = correctChoiceIndex !== null ? correctChoiceIndex : 0;
+        }
+        if (questionType === 'multiselect' && choices) {
+            block.choices = choices;
+            block.correctChoiceIndexes = correctChoiceIndexes || [0];
+            block.scoringMode = scoringMode === 'partial' ? 'partial' : 'all-or-nothing';
         }
         if (existingQuestion && typeof existingQuestion.questionWordBank === 'string') {
             block.questionWordBank = existingQuestion.questionWordBank;
@@ -433,6 +465,15 @@
                 return `${letter}. ${c}${star}`;
             }).join(', ');
             qTag = `[q: choice | ${choicesStr}`;
+        } else if (block.questionType === 'multiselect' && block.choices && block.choices.length > 0) {
+            const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+            const correct = Array.isArray(block.correctChoiceIndexes) ? block.correctChoiceIndexes : [];
+            const choicesStr = block.choices.map((c, i) => {
+                const letter = letters[i] || String(i + 1);
+                return `${letter}. ${c}${correct.includes(i) ? '*' : ''}`;
+            }).join(', ');
+            qTag = `[q: multiselect | ${choicesStr}`;
+            if (block.scoringMode === 'partial') qTag += ' | scoring:partial';
         } else if (block.inlineChecker) {
             const ic = block.inlineChecker;
             let configStr = '';
@@ -483,8 +524,11 @@
                 lastHeadingLineIdx = -1;
                 const inner = qTagMatch[1].trim();
                 const typePart = inner.split('|')[0].trim().toLowerCase();
-                if (!['text', 'number', 'choice'].includes(typePart)) {
+                if (!['text', 'number', 'choice', 'multiselect'].includes(typePart)) {
                     warnings.push(`Line ${i + 1}: Unrecognized question type "${typePart}".`);
+                }
+                if (typePart === 'multiselect' && !inner.includes('*')) {
+                    warnings.push(`Line ${i + 1}: Multiple selection question has no correct answers marked with *.`);
                 }
                 if (typePart === 'choice' && !inner.includes('*')) {
                     warnings.push(`Line ${i + 1}: Multiple choice question has no correct answer marked with *.`);
