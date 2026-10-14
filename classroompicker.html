@@ -3845,7 +3845,9 @@
                     const teacherMatch = studentTeacher === targetTeacherEmail;
                     const classMatch = (userProfile.class === 'Teacher') || (studentClass === targetClass);
 
-                    if (teacherMatch && classMatch) {
+                    const notArchived = d.isArchived !== true; // missing flag = active (same as roster.html)
+
+                    if (teacherMatch && classMatch && notArchived) {
                         allFetchedStudents.push({
                             name: d.name || "Anonymous",
                             score: parseFloat(d.auraLifetime) || 0,
