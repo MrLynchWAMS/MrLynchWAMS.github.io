@@ -395,6 +395,8 @@
                         <div class="mt-6 flex justify-between items-center">
                             <button onclick="addAuraRule()"
                                 class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm">+ Add Aura Condition</button>
+                            <button onclick="saveAuraDefaults()"
+                                class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg text-sm">Save as My Default</button>
                             <div class="flex items-center">
                                 <input type="checkbox" id="auraOnTime"
                                     class="w-4 h-4 text-yellow-500 rounded focus:ring-yellow-500 bg-gray-700 border-gray-500">
@@ -927,7 +929,13 @@ Reading level: [GRADE LEVEL]</p>
                 } else if (assignmentData.auraAmount !== undefined) {
                     addAuraRule({ amount: assignmentData.auraAmount, minScore: assignmentData.auraMinScore || 0 });
                 } else {
-                    addAuraRule({ amount: 1, minScore: 0 });
+                    // No saved rules: use teacher's aura defaults, or no aura (0) if none saved
+                    const defaultRules = teacherDefaults.auraDefaults && Array.isArray(teacherDefaults.auraDefaults.rules) ? teacherDefaults.auraDefaults.rules : [];
+                    defaultRules.forEach(rule => addAuraRule({ amount: rule.amount, minScore: rule.minScore }));
+                    if (teacherDefaults.auraDefaults && teacherDefaults.auraDefaults.onTime) {
+                        auraOnTimeEl.checked = true;
+                        auraGlobalDeadline.classList.remove('hidden');
+                    }
                 }
 
                 if (assignmentData.auraDueAt) {
@@ -2259,6 +2267,30 @@ Reading level: [GRADE LEVEL]</p>
                 showToast("Error saving defaults.", { color: 'red' });
             }
         }
+
+        async function saveAuraDefaults() {
+            try {
+                const auraDefaults = {
+                    rules: auraRules.map(({ amount, minScore }) => ({ amount, minScore })),
+                    onTime: document.getElementById('auraOnTime').checked
+                };
+                await db.collection("teachers").doc(auth.currentUser.email).set({ auraDefaults }, { merge: true });
+                teacherDefaults.auraDefaults = auraDefaults;
+                showToast("Default aura rules saved!", { color: 'green' });
+            } catch (e) {
+                console.error("Error saving aura defaults:", e);
+                showToast("Error saving aura defaults.", { color: 'red' });
+            }
+        }
+
+        // Ctrl+S / Cmd+S saves (saveAssignment re-parses canvas markup first)
+        document.addEventListener('keydown', e => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+                e.preventDefault();
+                const saveBtn = document.getElementById('saveBtn');
+                if (saveBtn && !saveBtn.disabled) saveAssignment();
+            }
+        });
 
         function startEditingTitle() {
             const titleDisplay = document.getElementById('titleDisplay');
