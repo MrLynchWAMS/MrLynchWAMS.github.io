@@ -4183,6 +4183,7 @@
         }
 
         async function blankCheckAndSave(blockId, qIndex) {
+            const renderer = window.BlankRenderer;
             if (!userProfile) {
                 showToast("Error: User not signed in.", { color: 'red' });
                 return;

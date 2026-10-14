@@ -13,6 +13,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
     <script src="./shared/checker-runner.js"></script>
+    <script src="./shared/blank-renderer.js"></script>
     <style>
         .modal-content::-webkit-scrollbar {
             width: 8px;
@@ -1431,6 +1432,9 @@
                         }
                         return 100;
                     }
+                }
+                if (dataToUse.type === 'blank' && questionBlock?.questionType === 'multiselect') {
+                    return window.BlankRenderer.evaluateMultiselect(questionBlock, submission.answer);
                 }
                 if (dataToUse.type === 'blank' && questionBlock?.inlineChecker) {
                     try {
