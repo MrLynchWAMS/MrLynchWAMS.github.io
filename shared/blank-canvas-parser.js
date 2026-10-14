@@ -125,14 +125,15 @@
         const warnings = [];
         const blocks = [];
 
-        // Build fingerprint → id map from existing blocks
-        const fingerprintMap = {};
+        // Build fingerprint → ordered queue of existing question blocks. Duplicate prompts are
+        // matched in document order (first canvas duplicate gets the first existing one, etc.).
+        const fingerprintQueues = {};
         existingBlocks.forEach(b => {
             const fp = fingerprint(b);
-            if (fp && b.id) fingerprintMap[fp] = b.id;
+            if (fp && b.id) (fingerprintQueues[fp] = fingerprintQueues[fp] || []).push(b);
         });
-        // Track IDs already claimed in this parse pass to avoid duplicate-fingerprint collisions
-        const usedIds = new Set();
+        const claimedExisting = new Set();
+        const questionEntries = [];
         const existingCheckerIds = new Set(
             existingBlocks
                 .filter(b => b.type === 'question')
@@ -192,8 +193,11 @@
                 const mRetain = p.match(/^retain[:=]\s*(true|false)$/i);
                 const mScoring = p.match(/^scoring[:=]\s*(partial|all-or-nothing|all)$/i);
                 const mHelp = p.match(/^helpThreshold[:=]\s*(\d+)$/i);
+                // Explicit marker: lets an override with all-zero/default values (e.g. unlimited, no penalty) round-trip.
+                const mOverride = p.match(/^override[:=]\s*(true|false)$/i);
 
-                if (mScoring) { scoringMode = mScoring[1].toLowerCase() === 'partial' ? 'partial' : 'all-or-nothing'; }
+                if (mOverride) { if (mOverride[1].toLowerCase() === 'true') attemptOverrides.enabled = true; }
+                else if (mScoring) { scoringMode = mScoring[1].toLowerCase() === 'partial' ? 'partial' : 'all-or-nothing'; }
                 else if (mMax) { attemptOverrides.enabled = true; attemptOverrides.maxAttempts = parseInt(mMax[1], 10); }
                 else if (mPen) { attemptOverrides.enabled = true; attemptOverrides.attemptPenalty = parseInt(mPen[1], 10); }
                 else if (mLock) { attemptOverrides.enabled = true; attemptOverrides.lockOnMaxAttempts = mLock[1].toLowerCase() === 'true'; }
@@ -270,6 +274,16 @@
             return { questionType, inlineChecker, choices, correctChoiceIndex, correctChoiceIndexes, scoringMode, points, attemptOverrides };
         }
 
+        function addQuestion(promptRaw, parsed) {
+            const fp = promptRaw.toLowerCase().trim() + '|' + parsed.questionType;
+            const queue = fingerprintQueues[fp] || [];
+            const existing = queue.find(b => !claimedExisting.has(b.id)) || null;
+            if (existing) claimedExisting.add(existing.id);
+            const block = buildQuestionBlock(promptRaw, parsed, existing);
+            questionEntries.push({ block, existing, parsed });
+            return block;
+        }
+
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
 
@@ -322,8 +336,7 @@
                 const promptRaw = qTagInlineMatch[1].trim();
                 const qTagRaw = qTagInlineMatch[2];
                 const parsed = parseQuestionLine(promptRaw, qTagRaw);
-                const qBlock = buildQuestionBlock(promptRaw, parsed, fingerprintMap, existingCheckerIds, usedIds, warnings, existingBlocks);
-                blocks.push(qBlock);
+                blocks.push(addQuestion(promptRaw, parsed));
                 continue;
             }
 
@@ -347,8 +360,7 @@
                 flushText();
                 const qTagRaw = qTagSeparateMatch[1];
                 const parsed = parseQuestionLine(promptRaw, qTagRaw);
-                const qBlock = buildQuestionBlock(promptRaw, parsed, fingerprintMap, existingCheckerIds, usedIds, warnings, existingBlocks);
-                blocks.push(qBlock);
+                blocks.push(addQuestion(promptRaw, parsed));
                 continue;
             }
 
@@ -357,6 +369,17 @@
         }
 
         flushText();
+
+        // Positional fallback: if the prompt was edited, fingerprint matching fails. When exactly one
+        // new question and exactly one existing question are left unmatched, they are the same question.
+        const unmatchedNew = questionEntries.filter(e => !e.existing);
+        const unmatchedOld = existingBlocks.filter(b => b && b.type === 'question' && b.id && !claimedExisting.has(b.id));
+        if (unmatchedNew.length === 1 && unmatchedOld.length === 1) {
+            unmatchedNew[0].existing = unmatchedOld[0];
+            unmatchedNew[0].block.id = unmatchedOld[0].id;
+            claimedExisting.add(unmatchedOld[0].id);
+        }
+        questionEntries.forEach(e => carryOverStructuredFields(e.block, e.existing, e.parsed));
 
         // Warn about dropped checker IDs
         const newQIds = new Set(blocks.filter(b => b.type === 'question').map(b => b.id));
@@ -369,17 +392,10 @@
         return { blocks, warnings };
     }
 
-    function buildQuestionBlock(promptRaw, parsed, fingerprintMap, existingCheckerIds, usedIds, warnings, existingBlocks) {
+    function buildQuestionBlock(promptRaw, parsed, existing) {
         const { questionType, inlineChecker, choices, correctChoiceIndex, correctChoiceIndexes, scoringMode, points } = parsed;
-        const fp = (promptRaw.toLowerCase().trim()) + '|' + questionType;
-        const candidate = fingerprintMap[fp];
-        // Only reuse the existing ID if it hasn't been claimed already in this parse pass
-        const id = (candidate && !usedIds.has(candidate)) ? candidate : genId('q');
-        usedIds.add(id);
-        const existingQuestion = (existingBlocks || []).find(b => b && b.id === id && b.type === 'question');
-
         const block = {
-            id,
+            id: existing ? existing.id : genId('q'),
             type: 'question',
             prompt: promptRaw,
             questionType,
@@ -396,10 +412,29 @@
             block.correctChoiceIndexes = correctChoiceIndexes || [0];
             block.scoringMode = scoringMode === 'partial' ? 'partial' : 'all-or-nothing';
         }
-        if (existingQuestion && typeof existingQuestion.questionWordBank === 'string') {
-            block.questionWordBank = existingQuestion.questionWordBank;
-        }
         return block;
+    }
+
+    // Fields the canvas syntax expresses itself. Anything else on a matched existing block
+    // (deadlineMinutes, penaltyType, penaltyValue, questionDeadline, questionWordBank, ...) is
+    // structured-only data and must survive a structured -> canvas -> structured round trip.
+    const CANVAS_MANAGED_FIELDS = new Set([
+        'id', 'type', 'prompt', 'questionType', 'points', 'inlineChecker', 'attemptOverrides',
+        'choices', 'correctChoiceIndex', 'correctChoiceIndexes', 'scoringMode'
+    ]);
+
+    function carryOverStructuredFields(block, existing, parsed) {
+        if (!existing) return;
+        Object.keys(existing).forEach(key => {
+            if (!CANVAS_MANAGED_FIELDS.has(key) && block[key] === undefined && existing[key] !== undefined) {
+                block[key] = existing[key];
+            }
+        });
+        // Canvas text with no override modifiers carries no override info, so keep the stored one.
+        const canvasHasOverride = parsed.attemptOverrides && parsed.attemptOverrides.enabled;
+        if (!canvasHasOverride && existing.attemptOverrides && existing.attemptOverrides.enabled) {
+            block.attemptOverrides = Object.assign({}, existing.attemptOverrides);
+        }
     }
 
     function formatConditionForCanvas(c) {
@@ -492,6 +527,8 @@
         
         if (block.attemptOverrides && block.attemptOverrides.enabled) {
             const ao = block.attemptOverrides;
+            // Always emit the marker: an enabled override with zero/default values would otherwise serialize to nothing.
+            qTag += ' | override:true';
             if (ao.maxAttempts) qTag += ` | maxAttempts:${ao.maxAttempts}`;
             if (ao.attemptPenalty) qTag += ` | penalty:${ao.attemptPenalty}`;
             if (ao.lockOnMaxAttempts) qTag += ` | lock:true`;

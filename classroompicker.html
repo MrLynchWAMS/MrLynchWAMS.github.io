@@ -1955,10 +1955,7 @@
                         });
                         // Re-evaluate locks
                         questionBlocks.forEach(block => {
-                            const at2 = assignmentData.attemptTracking || {};
-                            const qo = block.attemptOverrides?.enabled ? block.attemptOverrides : null;
-                            const mx = qo?.maxAttempts ?? (at2.maxAttempts || 0);
-                            const lk = qo?.lockOnMaxAttempts ?? (at2.lockOnMaxAttempts || false);
+                            const { maxAttempts: mx, lockOnMax: lk } = resolveBlankAttemptSettings(block);
                             const prog = questionProgressData[block.id];
                             if (prog && mx > 0 && prog.attemptCount >= mx && lk) prog.locked = true;
                         });
@@ -4079,9 +4076,7 @@
                     }
 
                     const prog = questionProgressData[block.id];
-                    const at = assignmentData.attemptTracking || {};
-                    const qOver = block.attemptOverrides?.enabled ? block.attemptOverrides : null;
-                    const maxAttempts = qOver?.maxAttempts ?? (at.maxAttempts || 0);
+                    const { maxAttempts } = resolveBlankAttemptSettings(block);
                     const attemptLabel = prog && prog.attemptCount > 0 && (prog.attemptCount > 1 || maxAttempts > 0)
                         ? ` • Attempt ${prog.attemptCount}${maxAttempts > 0 ? '/' + maxAttempts : ''}`
                         : '';
@@ -4182,6 +4177,23 @@
             qTimerData.forEach(({ blockId, dueAt }) => startBlankQTimer(blockId, dueAt));
         }
 
+        // Single source of truth for blank-assignment attempt settings (used by save logic and button labels).
+        // Precedence for maxAttempts/attemptPenalty: question override (enabled) > per-type > assignment-wide.
+        // Per-type only covers those two fields; the rest come from the question override or assignment-wide.
+        function resolveBlankAttemptSettings(block) {
+            const at = assignmentData.attemptTracking || {};
+            const qOver = block.attemptOverrides?.enabled ? block.attemptOverrides : null;
+            const typeCfg = at.perType?.[block.questionType || 'text'] || null;
+            const isNum = v => typeof v === 'number' && Number.isFinite(v);
+            return {
+                maxAttempts: qOver?.maxAttempts ?? (isNum(typeCfg?.maxAttempts) ? typeCfg.maxAttempts : (at.maxAttempts || 0)),
+                attemptPenalty: qOver?.attemptPenalty ?? (isNum(typeCfg?.attemptPenalty) ? typeCfg.attemptPenalty : (at.attemptPenalty || 0)),
+                helpThreshold: qOver?.helpThreshold ?? (at.helpThreshold || 3),
+                lockOnMax: qOver?.lockOnMaxAttempts ?? (at.lockOnMaxAttempts || false),
+                retainHighestScore: qOver?.retainHighestScore ?? (at.retainHighestScore !== false)
+            };
+        }
+
         async function blankCheckAndSave(blockId, qIndex) {
             const renderer = window.BlankRenderer;
             if (!userProfile) {
@@ -4230,12 +4242,7 @@
             }
 
             // Read attempt config
-            const at = assignmentData.attemptTracking || {};
-            const qOver = block.attemptOverrides?.enabled ? block.attemptOverrides : null;
-            const maxAttempts = qOver?.maxAttempts ?? (at.maxAttempts || 0);
-            const attemptPenalty = qOver?.attemptPenalty ?? (at.attemptPenalty || 0);
-            const helpThreshold = qOver?.helpThreshold ?? (at.helpThreshold || 3);
-            const lockOnMax = qOver?.lockOnMaxAttempts ?? (at.lockOnMaxAttempts || false);
+            const { maxAttempts, attemptPenalty, helpThreshold, lockOnMax, retainHighestScore } = resolveBlankAttemptSettings(block);
 
             // Track attempts
             const progressKey = block.id;
@@ -4247,8 +4254,6 @@
                 showToast("This question is locked — max attempts reached.", { color: 'red' });
                 return;
             }
-
-            const retainHighestScore = qOver?.retainHighestScore ?? (at.retainHighestScore !== false);
 
             const normalizedAnswer = normalizeAnswer(String(studentAnswer || ''), false, false);
             progress.normalizedAnswers = progress.normalizedAnswers || [];

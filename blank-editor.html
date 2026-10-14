@@ -223,6 +223,41 @@
                         <label for="retainHighestScore" class="text-sm text-white">Retain Highest Score (improving answer won't lower score)</label>
                     </div>
                 </div>
+                <div class="mt-6">
+                    <h3 class="text-sm font-semibold text-gray-300 mb-1">Per Question Type (optional)</h3>
+                    <p class="text-xs text-gray-500 mb-2">Leave blank to use the assignment-wide value above. A question's own Attempt Overrides take precedence over these. Example: deduct 25 per extra attempt on multiple choice to deter guessing.</p>
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="text-left text-xs text-gray-400">
+                                <th class="pb-1 pr-4 font-medium">Question Type</th>
+                                <th class="pb-1 pr-4 font-medium">Max Attempts (0 = unlimited)</th>
+                                <th class="pb-1 font-medium">Points Lost Per Extra Attempt</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="border-t border-gray-700/50">
+                                <td class="py-1 pr-4 text-gray-300">Open text</td>
+                                <td class="py-1 pr-4"><input type="number" id="perTypeMax-text" min="0" step="1" placeholder="Assignment-wide" aria-label="Max attempts for Open text" class="w-full p-1.5 bg-gray-700 border border-gray-600 rounded text-sm"></td>
+                                <td class="py-1"><input type="number" id="perTypePenalty-text" min="0" step="1" placeholder="Assignment-wide" aria-label="Points lost per extra attempt for Open text" class="w-full p-1.5 bg-gray-700 border border-gray-600 rounded text-sm"></td>
+                            </tr>
+                            <tr class="border-t border-gray-700/50">
+                                <td class="py-1 pr-4 text-gray-300">Number</td>
+                                <td class="py-1 pr-4"><input type="number" id="perTypeMax-number" min="0" step="1" placeholder="Assignment-wide" aria-label="Max attempts for Number" class="w-full p-1.5 bg-gray-700 border border-gray-600 rounded text-sm"></td>
+                                <td class="py-1"><input type="number" id="perTypePenalty-number" min="0" step="1" placeholder="Assignment-wide" aria-label="Points lost per extra attempt for Number" class="w-full p-1.5 bg-gray-700 border border-gray-600 rounded text-sm"></td>
+                            </tr>
+                            <tr class="border-t border-gray-700/50">
+                                <td class="py-1 pr-4 text-gray-300">Multiple choice</td>
+                                <td class="py-1 pr-4"><input type="number" id="perTypeMax-choice" min="0" step="1" placeholder="Assignment-wide" aria-label="Max attempts for Multiple choice" class="w-full p-1.5 bg-gray-700 border border-gray-600 rounded text-sm"></td>
+                                <td class="py-1"><input type="number" id="perTypePenalty-choice" min="0" step="1" placeholder="Assignment-wide" aria-label="Points lost per extra attempt for Multiple choice" class="w-full p-1.5 bg-gray-700 border border-gray-600 rounded text-sm"></td>
+                            </tr>
+                            <tr class="border-t border-gray-700/50">
+                                <td class="py-1 pr-4 text-gray-300">Multiple selection</td>
+                                <td class="py-1 pr-4"><input type="number" id="perTypeMax-multiselect" min="0" step="1" placeholder="Assignment-wide" aria-label="Max attempts for Multiple selection" class="w-full p-1.5 bg-gray-700 border border-gray-600 rounded text-sm"></td>
+                                <td class="py-1"><input type="number" id="perTypePenalty-multiselect" min="0" step="1" placeholder="Assignment-wide" aria-label="Points lost per extra attempt for Multiple selection" class="w-full p-1.5 bg-gray-700 border border-gray-600 rounded text-sm"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
             <!-- Class Start Times & Deadlines -->
@@ -558,6 +593,7 @@
                         <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: text]</td><td class="py-1">Open text question</td></tr>
                         <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: choice | A. opt, B. correct* | 100pts]</td><td class="py-1">Multiple choice</td></tr>
                         <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: multiselect | A. opt*, B. opt, C. opt* | scoring:partial | 100pts]</td><td class="py-1">Multiple selection (mark each correct answer with *). Scoring is all-or-nothing by default; add <span class="font-mono">scoring:partial</span> for partial credit: (correct picks − wrong picks) ÷ total correct</td></tr>
+                        <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">| override:true | maxAttempts:3 | penalty:10</td><td class="py-1">Per-question attempt override (append to any [q: ...] tag). <span class="font-mono">override:true</span> enables the override even when every value is 0 (unlimited attempts, no penalty). Also available: <span class="font-mono">lock:true</span>, <span class="font-mono">retain:false</span>, <span class="font-mono">helpThreshold:N</span></td></tr>
                         <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: number | answer==5 ±0.1 | 100pts]</td><td class="py-1">Number with tolerance</td></tr>
                         <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: text | contains "a" AND contains "b" | 100pts]</td><td class="py-1">Both words required</td></tr>
                         <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: text | contains "a" OR contains "b" | 100pts]</td><td class="py-1">Either word sufficient</td></tr>
@@ -851,7 +887,8 @@ Reading level: [GRADE LEVEL]</p>
                         if (block.type !== 'question') return;
                         qLoadIndex++;
                         const qPolicy = dp[`q${qLoadIndex}`];
-                        if (qPolicy) {
+                        // Positional (q1, q2...) policy only fills gaps; per-block saved values win so reordering can't overwrite them.
+                        if (qPolicy && block.deadlineMinutes === undefined) {
                             block.deadlineMinutes = qPolicy.deadlineMinutes || 0;
                             block.penaltyType = qPolicy.penaltyType || 'none';
                             block.penaltyValue = qPolicy.penaltyValue || 0;
@@ -966,6 +1003,11 @@ Reading level: [GRADE LEVEL]</p>
                 document.getElementById('blankHelpThreshold').value = attemptTracking.helpThreshold || 3;
                 document.getElementById('lockOnMaxAttempts').checked = attemptTracking.lockOnMaxAttempts || false;
                 document.getElementById('retainHighestScore').checked = attemptTracking.retainHighestScore !== false;
+                BLANK_ATTEMPT_TYPES.forEach(t => {
+                    const cfg = attemptTracking.perType?.[t] || {};
+                    document.getElementById(`perTypeMax-${t}`).value = Number.isFinite(cfg.maxAttempts) ? cfg.maxAttempts : '';
+                    document.getElementById(`perTypePenalty-${t}`).value = Number.isFinite(cfg.attemptPenalty) ? cfg.attemptPenalty : '';
+                });
 
                 // Modifications
                 const mods = assignmentData.modifications || {};
@@ -1921,11 +1963,45 @@ Reading level: [GRADE LEVEL]</p>
         // Stub retained so any lingering references (e.g. canvas-parser callbacks) don't throw.
         function updateCheckerSection() { }
 
+        const BLANK_ATTEMPT_TYPES = ['text', 'number', 'choice', 'multiselect'];
+
+        // Builds attemptTracking incl. perType; only fields the teacher filled in are stored (blank = use assignment-wide).
+        function readAttemptTrackingFromUI() {
+            const perType = {};
+            BLANK_ATTEMPT_TYPES.forEach(t => {
+                const cfg = {};
+                const maxVal = parseInt(document.getElementById(`perTypeMax-${t}`).value, 10);
+                const penVal = parseInt(document.getElementById(`perTypePenalty-${t}`).value, 10);
+                if (Number.isFinite(maxVal) && maxVal >= 0) cfg.maxAttempts = maxVal;
+                if (Number.isFinite(penVal) && penVal >= 0) cfg.attemptPenalty = penVal;
+                if (Object.keys(cfg).length) perType[t] = cfg;
+            });
+            const tracking = {
+                maxAttempts: parseInt(document.getElementById('maxAttempts').value, 10) || 0,
+                attemptPenalty: parseInt(document.getElementById('attemptPenalty').value, 10) || 0,
+                helpThreshold: parseInt(document.getElementById('blankHelpThreshold').value, 10) || 3,
+                lockOnMaxAttempts: document.getElementById('lockOnMaxAttempts').checked,
+                retainHighestScore: document.getElementById('retainHighestScore').checked
+            };
+            if (Object.keys(perType).length) tracking.perType = perType;
+            return tracking;
+        }
+
         async function saveAssignment() {
             const saveBtn = document.getElementById('saveBtn');
             saveBtn.disabled = true;
             saveBtn.textContent = 'Saving...';
             try {
+                // Guard against a stale tab overwriting newer edits made in another tab/session.
+                const latestSnap = await db.collection('assignments').doc(assignmentId).get();
+                const remoteEditedAt = latestSnap.exists ? (latestSnap.data().lastEditedAt || null) : null;
+                if (remoteEditedAt !== (assignmentData.lastEditedAt || null)) {
+                    if (!confirm("This assignment was saved from another tab or session since you opened it. Saving now will overwrite those newer changes (including question attempt overrides). Overwrite anyway?")) {
+                        saveBtn.disabled = false;
+                        saveBtn.textContent = 'Save Assignment';
+                        return;
+                    }
+                }
                 syncQuestionWordBanksFromUI();
                 let blocksToSave = blocks;
                 if (currentMode === 'canvas') {
@@ -2016,13 +2092,8 @@ Reading level: [GRADE LEVEL]</p>
                     toolsConfig,
                     auraRules: auraRules.map(({ id, ...rest }) => rest),
                     auraOnTime,
-                    attemptTracking: {
-                        maxAttempts: parseInt(document.getElementById('maxAttempts').value, 10) || 0,
-                        attemptPenalty: parseInt(document.getElementById('attemptPenalty').value, 10) || 0,
-                        helpThreshold: parseInt(document.getElementById('blankHelpThreshold').value, 10) || 3,
-                        lockOnMaxAttempts: document.getElementById('lockOnMaxAttempts').checked,
-                        retainHighestScore: document.getElementById('retainHighestScore').checked
-                    }
+                    attemptTracking: readAttemptTrackingFromUI(),
+                    lastEditedAt: Date.now()
                 };
 
                 const prevData = assignmentData;
@@ -2121,19 +2192,11 @@ Reading level: [GRADE LEVEL]</p>
                     updatePayload.modifications = firebase.firestore.FieldValue.delete();
                 }
 
-                // Global Attempt Tracking
-                updatePayload.attemptTracking = {
-                    maxAttempts: parseInt(document.getElementById('maxAttempts').value) || 0,
-                    attemptPenalty: parseInt(document.getElementById('attemptPenalty').value) || 0,
-                    helpThreshold: parseInt(document.getElementById('blankHelpThreshold').value) || 0,
-                    lockOnMaxAttempts: document.getElementById('lockOnMaxAttempts').checked,
-                    retainHighestScore: document.getElementById('retainHighestScore').checked
-                };
-
                 await db.collection('assignments').doc(assignmentId).update(updatePayload);
 
                 assignmentData.blocks = blocksToSave;
                 assignmentData.checkerFunctions = newCheckerFunctions;
+                assignmentData.lastEditedAt = updatePayload.lastEditedAt;
                 showToast('Assignment saved!', { color: 'green' });
             } catch (error) {
                 console.error(error);
