@@ -127,6 +127,9 @@
             z-index: 50;
             opacity: 0.95;
         }
+
+        .slide-editor-box.drop-before { box-shadow: 0 -4px 0 0 #facc15; }
+        .slide-editor-box.drop-after { box-shadow: 0 4px 0 0 #facc15; }
     </style>
 </head>
 
@@ -509,6 +512,11 @@
                 <div id="slidesContainer" class="space-y-8"></div>
                 <p id="noQuestionsMsg" class="text-gray-500 italic text-center py-4 hidden">No follow-up questions yet.
                 </p>
+                <div class="flex justify-center mt-6">
+                    <button onclick="addQuestion()"
+                        class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg">+ Add
+                        Question</button>
+                </div>
             </div>
         </div>
 
@@ -606,7 +614,6 @@
             let teacherDefaults = {};
             let currentUserEmail = null;
             let simQuestions = [];
-            let nextQuestionId = 1;
 
             // --- Impersonation Logic ---
             function checkImpersonation() {
@@ -749,8 +756,7 @@
                     document.getElementById('simulationUrlInput').value = assignmentData.simulationUrl || '';
                     refreshSimPreview();
 
-                    simQuestions = (assignmentData.simQuestions || []).map((q, i) => ({ id: q.id || `sq_${Date.now()}_${i}`, body: q.body || '', type: 'open-ended', showBeforeSim: q.showBeforeSim === true, isSimAutoField: q.isSimAutoField === true, simFieldPath: q.simFieldPath || '' }));
-                    nextQuestionId = simQuestions.length + 1;
+                    simQuestions = (assignmentData.simQuestions || []).map((q, i) => normalizeSimQuestion(q, i));
 
                     const auraOnTime = document.getElementById('auraOnTime');
                     const auraDueDateInput = document.getElementById('auraDueDate');
@@ -847,8 +853,7 @@
                 container.innerHTML = '';
                 let checkerFunctions = assignmentData.checkerFunctions || {};
                 let checkerMeta = assignmentData.checkerMeta || {};
-                let deadlinePolicy = assignmentData.deadlinePolicy || {};
-
+                
                 if (!simQuestions.length) {
                     noQuestionsMsg.classList.remove('hidden');
                     return;
@@ -857,13 +862,22 @@
 
                 simQuestions.forEach((q, index) => {
                     const qNum = index + 1;
-                    const slidePolicy = deadlinePolicy[`q${qNum}`] || {};
+                    const slidePolicy = q.policy || {};
                     const editorBox = document.createElement('div');
                     editorBox.className = "slide-editor-box bg-gray-800 p-4 rounded-lg";
+                    editorBox.dataset.qid = q.id;
                     editorBox.innerHTML = `
-      <div class="flex justify-between items-center mb-3">
-        <h3 class="text-xl font-semibold">Question ${qNum}</h3>
-        <button onclick="removeQuestion('${q.id}')" class="text-red-400 hover:text-red-300 font-bold">Delete</button>
+      <div class="flex justify-between items-center mb-3 gap-2">
+        <div class="flex items-center gap-2">
+          <span class="drag-handle cursor-grab text-gray-400 hover:text-gray-200 select-none text-xl" title="Drag to reorder" aria-label="Drag to reorder question ${qNum}">⠿</span>
+          <h3 class="question-number text-xl font-semibold">Question ${qNum}</h3>
+        </div>
+        <div class="flex items-center gap-2 text-sm">
+          <button type="button" onclick="moveQuestion('${q.id}', 'up')" ${index === 0 ? 'disabled' : ''} aria-label="Move question ${qNum} up" class="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded disabled:opacity-30 disabled:cursor-not-allowed">▲</button>
+          <button type="button" onclick="moveQuestion('${q.id}', 'down')" ${index === simQuestions.length - 1 ? 'disabled' : ''} aria-label="Move question ${qNum} down" class="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded disabled:opacity-30 disabled:cursor-not-allowed">▼</button>
+          <button type="button" onclick="duplicateQuestion('${q.id}')" aria-label="Duplicate question ${qNum}" class="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-blue-300">Duplicate</button>
+          <button type="button" onclick="removeQuestion('${q.id}')" aria-label="Delete question ${qNum}" class="text-red-400 hover:text-red-300 font-bold">Delete</button>
+        </div>
       </div>
       <textarea id="question-body-${q.id}" class="w-full p-2 bg-gray-700 border border-gray-600 rounded mb-4" rows="3" placeholder="Question prompt...">${escapeHtml(q.body || '')}</textarea>
       <label class="flex items-center gap-2 mb-2 text-sm text-gray-300">
@@ -876,13 +890,15 @@
         <span class="text-xs text-gray-500">(student input hidden; value pulled from sim data automatically)</span>
       </label>
       <div id="auto-fill-config-${q.id}" class="${q.isSimAutoField ? '' : 'hidden'} mb-4 p-3 bg-gray-900/60 border border-blue-700/40 rounded-lg">
-        <label class="block text-sm text-blue-300 font-semibold mb-1">Simulation Output Path</label>
+        <label class="block text-sm text-blue-300 font-semibold mb-1">Simulation Output Paths</label>
+        <div id="sim-field-paths-list-${q.id}" class="flex flex-wrap gap-1 mb-2"></div>
         <div class="flex gap-2 mb-1">
-          <input type="text" id="sim-field-path-${q.id}" value="${escapeHtml(q.simFieldPath || '')}" placeholder="e.g. result.score or totalFootprint" class="flex-1 p-2 bg-gray-800 border border-gray-600 rounded text-sm text-white">
+          <input type="text" id="sim-field-path-${q.id}" value="" placeholder="e.g. result.score or totalFootprint (Enter to add)" class="flex-1 p-2 bg-gray-800 border border-gray-600 rounded text-sm text-white">
+          <button type="button" id="sim-field-path-add-${q.id}" class="px-3 py-1 bg-blue-700 hover:bg-blue-600 rounded text-sm">Add</button>
         </div>
         <p class="text-xs text-gray-400 mb-2">Use dot notation for nested values. Examples: <code class="text-blue-300">score</code>, <code class="text-blue-300">result.temperature</code>, <code class="text-blue-300">outputs.co2</code>.<br>The checker evaluates the auto-filled value — e.g. <em>if contains("global warming") → score 100</em>.</p>
         <div id="detected-outputs-${q.id}" class="hidden">
-          <p class="text-xs text-blue-400 font-semibold mb-1">📡 Detected outputs from last sim run (click to insert):</p>
+          <p class="text-xs text-blue-400 font-semibold mb-1">📡 Detected outputs from last sim run (click to add/remove):</p>
           <div id="detected-outputs-list-${q.id}" class="flex flex-wrap gap-1"></div>
         </div>
       </div>
@@ -890,29 +906,29 @@
       <div class="mt-4 border-t border-gray-700 pt-4">
         <h4 class="font-semibold mb-2">Deadline & Late Policy</h4>
         <div class="grid grid-cols-3 gap-2 text-sm">
-          <div><label>Deadline (mins)</label><input type="number" id="deadline-minutes-${index}" value="${slidePolicy.deadlineMinutes || 0}" class="w-full mt-1 p-2 bg-gray-700 rounded border border-gray-600"></div>
-          <div><label>Penalty Type</label><select id="penalty-type-${index}" class="w-full mt-1 p-2 bg-gray-700 rounded border border-gray-600"><option value="none" ${!slidePolicy.penaltyType || slidePolicy.penaltyType === 'none' ? 'selected' : ''}>No penalty</option><option value="deduction" ${slidePolicy.penaltyType === 'deduction' || slidePolicy.penaltyType === 'percent' || slidePolicy.penaltyType === 'percentage' ? 'selected' : ''}>Percent deduction</option><option value="incremental" ${slidePolicy.penaltyType === 'incremental' || slidePolicy.penaltyType === 'points' || slidePolicy.penaltyType === 'per_minute' ? 'selected' : ''}>Points per minute</option><option value="zero" ${slidePolicy.penaltyType === 'zero' ? 'selected' : ''}>Zero if late</option></select></div>
-          <div><label>Penalty Value</label><input type="number" id="penalty-value-${index}" value="${slidePolicy.penaltyValue || 0}" class="w-full mt-1 p-2 bg-gray-700 rounded border border-gray-600"></div>
+          <div><label>Deadline (mins)</label><input type="number" id="deadline-minutes-${q.id}" value="${slidePolicy.deadlineMinutes || 0}" class="w-full mt-1 p-2 bg-gray-700 rounded border border-gray-600"></div>
+          <div><label>Penalty Type</label><select id="penalty-type-${q.id}" class="w-full mt-1 p-2 bg-gray-700 rounded border border-gray-600"><option value="none" ${!slidePolicy.penaltyType || slidePolicy.penaltyType === 'none' ? 'selected' : ''}>No penalty</option><option value="deduction" ${slidePolicy.penaltyType === 'deduction' || slidePolicy.penaltyType === 'percent' || slidePolicy.penaltyType === 'percentage' ? 'selected' : ''}>Percent deduction</option><option value="incremental" ${slidePolicy.penaltyType === 'incremental' || slidePolicy.penaltyType === 'points' || slidePolicy.penaltyType === 'per_minute' ? 'selected' : ''}>Points per minute</option><option value="zero" ${slidePolicy.penaltyType === 'zero' ? 'selected' : ''}>Zero if late</option></select></div>
+          <div><label>Penalty Value</label><input type="number" id="penalty-value-${q.id}" value="${slidePolicy.penaltyValue || 0}" class="w-full mt-1 p-2 bg-gray-700 rounded border border-gray-600"></div>
         </div>
       </div>
       <div class="mt-4 border-t border-gray-700 pt-4">
-        <div class="flex items-center justify-between mb-3"><h4 class="font-semibold">Attempt Tracking</h4><label class="flex items-center cursor-pointer"><input type="checkbox" id="attempts-enabled-${index}" ${slidePolicy.attempts?.enabled ? 'checked' : ''} class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500" onchange="toggleAttemptSection(${index})"><span class="ml-2 text-sm">Enable</span></label></div>
-        <div id="attempt-config-${index}" class="${slidePolicy.attempts?.enabled ? '' : 'hidden'} space-y-3">
-          <div class="grid grid-cols-2 gap-3 text-sm"><div><label>Max Attempts</label><input type="number" id="attempts-max-${index}" value="${slidePolicy.attempts?.maxAttempts || 5}" min="1" class="w-full mt-1 p-2 bg-gray-700 rounded border border-gray-600"></div><div><label>Deduction per Extra Attempt</label><input type="number" id="attempts-deduction-${index}" value="${slidePolicy.attempts?.deduction || 0}" min="0" class="w-full mt-1 p-2 bg-gray-700 rounded border border-gray-600"></div></div>
-          <div class="grid grid-cols-2 gap-3 text-sm"><label class="flex items-center cursor-pointer"><input type="checkbox" id="attempts-retain-best-${index}" ${slidePolicy.attempts?.retainBestScore !== false ? 'checked' : ''} class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"><span class="ml-2">Retain Best Score</span></label><label class="flex items-center cursor-pointer"><input type="checkbox" id="attempts-lock-${index}" ${slidePolicy.attempts?.lockOnMax ? 'checked' : ''} class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"><span class="ml-2">Lock When Max Reached</span></label></div>
-          <div><label class="text-sm">Lock Message (optional)</label><textarea id="attempts-lock-msg-${index}" rows="2" placeholder="Message shown when locked..." class="w-full mt-1 p-2 bg-gray-700 rounded border border-gray-600 text-sm">${slidePolicy.attempts?.lockMessage || ''}</textarea></div>
-          <div class="grid grid-cols-2 gap-3 text-sm"><div><label>Show Help After (attempts)</label><input type="number" id="attempts-show-help-${index}" value="${slidePolicy.attempts?.showHelpAfter || ''}" min="0" placeholder="Optional" class="w-full mt-1 p-2 bg-gray-700 rounded border border-gray-600"></div></div>
-          <div class="border-t border-gray-600 pt-3 mt-3"><h5 class="text-sm font-semibold mb-2">Uniqueness Options</h5><div class="grid grid-cols-2 gap-3 text-sm"><label class="flex items-center cursor-pointer"><input type="checkbox" id="attempts-case-sensitive-${index}" ${slidePolicy.attempts?.caseSensitive ? 'checked' : ''} class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"><span class="ml-2">Case-Sensitive</span></label><label class="flex items-center cursor-pointer"><input type="checkbox" id="attempts-punctuation-sensitive-${index}" ${slidePolicy.attempts?.punctuationSensitive ? 'checked' : ''} class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"><span class="ml-2">Punctuation-Sensitive</span></label></div></div>
+        <div class="flex items-center justify-between mb-3"><h4 class="font-semibold">Attempt Tracking</h4><label class="flex items-center cursor-pointer"><input type="checkbox" id="attempts-enabled-${q.id}" ${slidePolicy.attempts?.enabled ? 'checked' : ''} class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500" onchange="toggleAttemptSection('${q.id}')"><span class="ml-2 text-sm">Enable</span></label></div>
+        <div id="attempt-config-${q.id}" class="${slidePolicy.attempts?.enabled ? '' : 'hidden'} space-y-3">
+          <div class="grid grid-cols-2 gap-3 text-sm"><div><label>Max Attempts</label><input type="number" id="attempts-max-${q.id}" value="${slidePolicy.attempts?.maxAttempts || 5}" min="1" class="w-full mt-1 p-2 bg-gray-700 rounded border border-gray-600"></div><div><label>Deduction per Extra Attempt</label><input type="number" id="attempts-deduction-${q.id}" value="${slidePolicy.attempts?.deduction || 0}" min="0" class="w-full mt-1 p-2 bg-gray-700 rounded border border-gray-600"></div></div>
+          <div class="grid grid-cols-2 gap-3 text-sm"><label class="flex items-center cursor-pointer"><input type="checkbox" id="attempts-retain-best-${q.id}" ${slidePolicy.attempts?.retainBestScore !== false ? 'checked' : ''} class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"><span class="ml-2">Retain Best Score</span></label><label class="flex items-center cursor-pointer"><input type="checkbox" id="attempts-lock-${q.id}" ${slidePolicy.attempts?.lockOnMax ? 'checked' : ''} class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"><span class="ml-2">Lock When Max Reached</span></label></div>
+          <div><label class="text-sm">Lock Message (optional)</label><textarea id="attempts-lock-msg-${q.id}" rows="2" placeholder="Message shown when locked..." class="w-full mt-1 p-2 bg-gray-700 rounded border border-gray-600 text-sm">${slidePolicy.attempts?.lockMessage || ''}</textarea></div>
+          <div class="grid grid-cols-2 gap-3 text-sm"><div><label>Show Help After (attempts)</label><input type="number" id="attempts-show-help-${q.id}" value="${slidePolicy.attempts?.showHelpAfter || ''}" min="0" placeholder="Optional" class="w-full mt-1 p-2 bg-gray-700 rounded border border-gray-600"></div></div>
+          <div class="border-t border-gray-600 pt-3 mt-3"><h5 class="text-sm font-semibold mb-2">Uniqueness Options</h5><div class="grid grid-cols-2 gap-3 text-sm"><label class="flex items-center cursor-pointer"><input type="checkbox" id="attempts-case-sensitive-${q.id}" ${slidePolicy.attempts?.caseSensitive ? 'checked' : ''} class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"><span class="ml-2">Case-Sensitive</span></label><label class="flex items-center cursor-pointer"><input type="checkbox" id="attempts-punctuation-sensitive-${q.id}" ${slidePolicy.attempts?.punctuationSensitive ? 'checked' : ''} class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"><span class="ml-2">Punctuation-Sensitive</span></label></div></div>
         </div>
       </div>
-      <div class="mt-4 border-t border-gray-700 pt-4 word-bank-question-config hidden"><h4 class="font-semibold mb-2 text-sm text-purple-400">Word Bank for this Question</h4><textarea id="word-bank-list-${index}" rows="2" placeholder="Enter words separated by commas..." class="w-full p-2 bg-gray-700 border border-gray-600 rounded text-sm">${escapeHtml(slidePolicy.wordBankList || '')}</textarea><p class="text-[10px] text-gray-500 mt-1">Only active if "Per-Question" mode is selected in Tools & Features.</p></div>`;
+      <div class="mt-4 border-t border-gray-700 pt-4 word-bank-question-config hidden"><h4 class="font-semibold mb-2 text-sm text-purple-400">Word Bank for this Question</h4><textarea id="word-bank-list-${q.id}" rows="2" placeholder="Enter words separated by commas..." class="w-full p-2 bg-gray-700 border border-gray-600 rounded text-sm">${escapeHtml(slidePolicy.wordBankList || '')}</textarea><p class="text-[10px] text-gray-500 mt-1">Only active if "Per-Question" mode is selected in Tools & Features.</p></div>`;
 
                     const checkerTemplate = document.getElementById('checkerTemplate');
                     const checkerFragment = checkerTemplate.content.cloneNode(true);
                     const checkerWidgetDiv = checkerFragment.querySelector('.checker-widget');
 
-                    const initialCode = checkerFunctions[q.id] || '';
-                    const initialMeta = checkerMeta[q.id] || null;
+                    const initialCode = q.checker ? q.checker.code : (checkerFunctions[q.id] || '');
+                    const initialMeta = q.checker ? q.checker.meta : (checkerMeta[q.id] || null);
 
                     CheckerWidget(checkerWidgetDiv, initialCode, initialMeta);
                     editorBox.querySelector(`#checker-container-${q.id}`).appendChild(checkerWidgetDiv);
@@ -939,15 +955,62 @@
                     });
 
                     const simFieldPathInput = editorBox.querySelector(`#sim-field-path-${q.id}`);
-                    simFieldPathInput.addEventListener('input', (e) => {
-                        const qRef = simQuestions.find(it => it.id === q.id);
-                        if (qRef) qRef.simFieldPath = e.target.value;
+                    const addPendingPath = () => {
+                        const v = simFieldPathInput.value.trim();
+                        if (!v) return;
+                        addSimPath(q.id, v);
+                        simFieldPathInput.value = '';
+                    };
+                    simFieldPathInput.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter') { e.preventDefault(); addPendingPath(); }
+                    });
+                    editorBox.querySelector(`#sim-field-path-add-${q.id}`).addEventListener('click', addPendingPath);
+                    renderSimPathTags(q.id, editorBox);
+
+                    const handle = editorBox.querySelector('.drag-handle');
+                    handle.addEventListener('mousedown', () => { editorBox.draggable = true; });
+                    handle.addEventListener('touchstart', () => { editorBox.draggable = true; }, { passive: true });
+                    handle.addEventListener('mouseup', () => { editorBox.draggable = false; });
+                    editorBox.addEventListener('dragstart', (e) => {
+                        if (!editorBox.draggable) return;
+                        draggedQuestionId = q.id;
+                        e.dataTransfer.effectAllowed = 'move';
+                        e.dataTransfer.setData('text/plain', q.id);
+                        editorBox.classList.add('opacity-50');
+                    });
+                    editorBox.addEventListener('dragend', () => {
+                        draggedQuestionId = null;
+                        editorBox.draggable = false;
+                        editorBox.classList.remove('opacity-50');
+                        clearDropIndicators();
+                    });
+                    editorBox.addEventListener('dragover', (e) => {
+                        if (!draggedQuestionId || draggedQuestionId === q.id) return;
+                        e.preventDefault();
+                        const rect = editorBox.getBoundingClientRect();
+                        const after = e.clientY > rect.top + rect.height / 2;
+                        clearDropIndicators();
+                        editorBox.classList.add(after ? 'drop-after' : 'drop-before');
+                        if (e.clientY < 80) window.scrollBy(0, -20);
+                        else if (window.innerHeight - e.clientY < 80) window.scrollBy(0, 20);
+                    });
+                    editorBox.addEventListener('drop', (e) => {
+                        if (!draggedQuestionId || draggedQuestionId === q.id) return;
+                        e.preventDefault();
+                        const rect = editorBox.getBoundingClientRect();
+                        const after = e.clientY > rect.top + rect.height / 2;
+                        const fromId = draggedQuestionId;
+                        draggedQuestionId = null;
+                        clearDropIndicators();
+                        reorderQuestion(fromId, q.id, after);
                     });
 
                     if (q.isSimAutoField) refreshDetectedOutputsPanel(q.id);
 
                     container.appendChild(editorBox);
+                    container.appendChild(buildInsertBar(index + 1));
                 });
+                container.insertBefore(buildInsertBar(0), container.firstChild);
                 QuestionSettingsBar.init({
                     container: document.getElementById('question-settings-bar-container'),
                     getQuestionCount: () => simQuestions.length,
@@ -957,16 +1020,213 @@
                 });
             }
 
+            let draggedQuestionId = null;
+
+            function clearDropIndicators() {
+                document.querySelectorAll('.drop-before, .drop-after').forEach(el => el.classList.remove('drop-before', 'drop-after'));
+            }
+
+            function generateQuestionId() {
+                let id;
+                do {
+                    id = `sq_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+                } while (simQuestions.some(q => q.id === id));
+                return id;
+            }
+
+            function normalizeSimQuestion(q, i) {
+                const paths = Array.isArray(q.simFieldPaths) && q.simFieldPaths.length
+                    ? q.simFieldPaths.map(p => String(p).trim()).filter(Boolean)
+                    : (q.simFieldPath ? [String(q.simFieldPath)] : []);
+                const checkerFunctions = assignmentData.checkerFunctions || {};
+                const checkerMeta = assignmentData.checkerMeta || {};
+                const id = q.id || `sq_${Date.now().toString(36)}_${i}`;
+                return {
+                    id,
+                    body: q.body || '',
+                    type: 'open-ended',
+                    showBeforeSim: q.showBeforeSim === true,
+                    isSimAutoField: q.isSimAutoField === true,
+                    simFieldPaths: [...new Set(paths)],
+                    policy: q.policy || (assignmentData.deadlinePolicy || {})[`q${i + 1}`] || {},
+                    checker: q.checker || { code: checkerFunctions[id] || '', meta: checkerMeta[id] || null }
+                };
+            }
+
+            function readQuestionPolicy(id) {
+                const val = (name) => document.getElementById(`${name}-${id}`);
+                const policy = {
+                    deadlineMinutes: parseInt(val('deadline-minutes').value, 10) || 0,
+                    penaltyType: val('penalty-type').value,
+                    penaltyValue: parseInt(val('penalty-value').value, 10) || 0,
+                };
+                if (val('attempts-enabled').checked) {
+                    const showHelpAfterInput = val('attempts-show-help').value.trim();
+                    policy.attempts = {
+                        enabled: true,
+                        maxAttempts: parseInt(val('attempts-max').value, 10) || 5,
+                        deduction: parseInt(val('attempts-deduction').value, 10) || 0,
+                        retainBestScore: val('attempts-retain-best').checked,
+                        lockOnMax: val('attempts-lock').checked,
+                        lockMessage: val('attempts-lock-msg').value.trim() || '',
+                        showHelpAfter: showHelpAfterInput ? parseInt(showHelpAfterInput, 10) : null,
+                        caseSensitive: val('attempts-case-sensitive').checked || false,
+                        punctuationSensitive: val('attempts-punctuation-sensitive').checked || false
+                    };
+                } else {
+                    policy.attempts = { enabled: false };
+                }
+                const wbListInput = val('word-bank-list');
+                if (wbListInput) policy.wordBankList = wbListInput.value.trim();
+                return policy;
+            }
+
+            // Read per-card DOM state back into simQuestions so re-rendering/reordering never loses edits
+            function captureQuestionState() {
+                simQuestions.forEach(q => {
+                    const widgetContainer = document.getElementById(`checker-container-${q.id}`);
+                    const widget = widgetContainer && widgetContainer.querySelector('.checker-widget');
+                    if (!widget) return;
+                    const mode = widget.getMode();
+                    const meta = { mode };
+                    if (mode === 'simple') meta.simpleConfig = serializeSimpleConfig(widget);
+                    q.checker = { code: widget.getCode(), meta };
+                    q.policy = readQuestionPolicy(q.id);
+                    const pending = document.getElementById(`sim-field-path-${q.id}`);
+                    if (pending && pending.value.trim()) {
+                        const v = pending.value.trim();
+                        if (!q.simFieldPaths.includes(v)) q.simFieldPaths.push(v);
+                        pending.value = '';
+                    }
+                });
+            }
+
+            function buildInsertBar(position) {
+                const bar = document.createElement('div');
+                bar.className = 'insert-bar flex justify-center opacity-40 hover:opacity-100 focus-within:opacity-100 transition-opacity';
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.textContent = '+ Insert question here';
+                btn.setAttribute('aria-label', `Insert question at position ${position + 1}`);
+                btn.className = 'text-xs text-blue-300 hover:text-white border border-dashed border-gray-600 hover:border-blue-400 rounded px-3 py-0.5';
+                btn.addEventListener('click', () => insertQuestionAt(position));
+                bar.appendChild(btn);
+                return bar;
+            }
+
+            function focusQuestion(id) {
+                const card = document.querySelector(`.slide-editor-box[data-qid="${id}"]`);
+                if (!card) return;
+                card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                const body = document.getElementById(`question-body-${id}`);
+                if (body) body.focus({ preventScroll: true });
+            }
+
+            function insertQuestionAt(position, source) {
+                try {
+                    captureQuestionState();
+                    const base = source || { body: '', showBeforeSim: false, isSimAutoField: false, simFieldPaths: [], policy: {}, checker: { code: '', meta: null } };
+                    const newQ = {
+                        ...JSON.parse(JSON.stringify(base)),
+                        id: generateQuestionId(),
+                        type: 'open-ended'
+                    };
+                    simQuestions.splice(Math.max(0, Math.min(position, simQuestions.length)), 0, newQ);
+                    renderEditor();
+                    toggleWordBankSettings();
+                    focusQuestion(newQ.id);
+                    showToast(source ? 'Question duplicated' : 'Question added', { color: 'green' });
+                } catch (e) {
+                    console.error('Error adding question:', e);
+                    showToast('Could not add question.', { color: 'red' });
+                }
+            }
+
             function addQuestion() {
-                simQuestions.push({ id: `sq${nextQuestionId++}`, body: '', type: 'open-ended', showBeforeSim: false, isSimAutoField: false, simFieldPath: '' });
+                insertQuestionAt(simQuestions.length);
+            }
+
+            function duplicateQuestion(id) {
+                captureQuestionState();
+                const idx = simQuestions.findIndex(q => q.id === id);
+                if (idx === -1) return;
+                insertQuestionAt(idx + 1, simQuestions[idx]);
+            }
+
+            function reorderQuestion(fromId, toId, after) {
+                captureQuestionState();
+                const from = simQuestions.findIndex(q => q.id === fromId);
+                if (from === -1) return;
+                const [moved] = simQuestions.splice(from, 1);
+                let to = simQuestions.findIndex(q => q.id === toId);
+                if (to === -1) { simQuestions.splice(from, 0, moved); return; }
+                simQuestions.splice(after ? to + 1 : to, 0, moved);
                 renderEditor();
                 toggleWordBankSettings();
             }
 
+            function moveQuestion(id, dir) {
+                captureQuestionState();
+                const idx = simQuestions.findIndex(q => q.id === id);
+                const target = dir === 'up' ? idx - 1 : idx + 1;
+                if (idx === -1 || target < 0 || target >= simQuestions.length) return;
+                [simQuestions[idx], simQuestions[target]] = [simQuestions[target], simQuestions[idx]];
+                renderEditor();
+                toggleWordBankSettings();
+                const card = document.querySelector(`.slide-editor-box[data-qid="${id}"]`);
+                if (card) card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                const btn = card && card.querySelector(`button[aria-label^="Move question"][onclick*="'${dir}'"]:not([disabled])`);
+                if (btn) btn.focus({ preventScroll: true });
+            }
+
             function removeQuestion(id) {
+                captureQuestionState();
                 simQuestions = simQuestions.filter(q => q.id !== id);
                 renderEditor();
                 toggleWordBankSettings();
+            }
+
+            function addSimPath(qId, path) {
+                const q = simQuestions.find(it => it.id === qId);
+                if (!q || !path) return;
+                if (!q.simFieldPaths.includes(path)) q.simFieldPaths.push(path);
+                renderSimPathTags(qId);
+                refreshDetectedOutputsPanel(qId);
+            }
+
+            function removeSimPath(qId, path) {
+                const q = simQuestions.find(it => it.id === qId);
+                if (!q) return;
+                q.simFieldPaths = q.simFieldPaths.filter(p => p !== path);
+                renderSimPathTags(qId);
+                refreshDetectedOutputsPanel(qId);
+            }
+
+            function renderSimPathTags(qId, root) {
+                const q = simQuestions.find(it => it.id === qId);
+                const list = (root || document).querySelector(`#sim-field-paths-list-${qId}`);
+                if (!q || !list) return;
+                list.innerHTML = '';
+                if (!q.simFieldPaths.length) {
+                    const empty = document.createElement('span');
+                    empty.className = 'text-xs text-gray-500 italic';
+                    empty.textContent = 'No outputs selected yet.';
+                    list.appendChild(empty);
+                    return;
+                }
+                q.simFieldPaths.forEach(path => {
+                    const tag = document.createElement('span');
+                    tag.className = 'inline-flex items-center gap-1 text-xs bg-blue-800 text-blue-100 border border-blue-600 px-2 py-0.5 rounded';
+                    tag.appendChild(document.createTextNode(path));
+                    const x = document.createElement('button');
+                    x.type = 'button';
+                    x.textContent = '×';
+                    x.setAttribute('aria-label', `Remove output ${path}`);
+                    x.className = 'text-blue-200 hover:text-white font-bold';
+                    x.addEventListener('click', () => removeSimPath(qId, path));
+                    tag.appendChild(x);
+                    list.appendChild(tag);
+                });
             }
 
             function refreshSimPreview() {
@@ -1020,13 +1280,12 @@
                     chip.type = 'button';
                     chip.textContent = key;
                     chip.className = 'text-xs bg-blue-900/60 hover:bg-blue-700/80 text-blue-200 border border-blue-700 px-2 py-0.5 rounded cursor-pointer';
-                    chip.title = `Click to use "${key}" as the simulation output path`;
+                    const selected = (simQuestions.find(it => it.id === qId)?.simFieldPaths || []).includes(key);
+                    if (selected) chip.className = chip.className.replace('bg-blue-900/60', 'bg-blue-600');
+                    chip.title = selected ? `Click to remove "${key}"` : `Click to add "${key}" as a simulation output path`;
                     chip.addEventListener('click', () => {
-                        const pathInput = document.getElementById(`sim-field-path-${qId}`);
-                        if (pathInput) {
-                            pathInput.value = key;
-                            pathInput.dispatchEvent(new Event('input'));
-                        }
+                        if (selected) removeSimPath(qId, key);
+                        else addSimPath(qId, key);
                     });
                     list.appendChild(chip);
                 });
@@ -1110,60 +1369,12 @@
 
                     // Per-class deadline data is already read from the widget above
 
+                    captureQuestionState();
                     simQuestions.forEach((q, index) => {
                         const qNum = index + 1;
-                        const checkerWidgetDiv = document
-                            .getElementById(`checker-container-${q.id}`)
-                            .querySelector('.checker-widget');
-
-                        const mode = checkerWidgetDiv.getMode();
-                        const code = checkerWidgetDiv.getCode();
-
-                        checkerFunctions[q.id] = code;
-
-                        const metaForThis = { mode };
-                        if (mode === "simple") {
-                            metaForThis.simpleConfig = serializeSimpleConfig(checkerWidgetDiv);
-                        }
-                        checkerMeta[q.id] = metaForThis;
-
-                        deadlinePolicy[`q${qNum}`] = {
-                            deadlineMinutes: parseInt(document.getElementById(`deadline-minutes-${index}`).value, 10) || 0,
-                            penaltyType: document.getElementById(`penalty-type-${index}`).value,
-                            penaltyValue: parseInt(document.getElementById(`penalty-value-${index}`).value, 10) || 0,
-                        };
-
-                        const attemptsEnabled = document.getElementById(`attempts-enabled-${index}`).checked;
-                        if (attemptsEnabled) {
-                            const maxAttempts = parseInt(document.getElementById(`attempts-max-${index}`).value, 10) || 5;
-                            const deduction = parseInt(document.getElementById(`attempts-deduction-${index}`).value, 10) || 0;
-                            const retainBestScore = document.getElementById(`attempts-retain-best-${index}`).checked;
-                            const lockOnMax = document.getElementById(`attempts-lock-${index}`).checked;
-                            const lockMessage = document.getElementById(`attempts-lock-msg-${index}`).value.trim();
-                            const showHelpAfterInput = document.getElementById(`attempts-show-help-${index}`).value.trim();
-                            const showHelpAfter = showHelpAfterInput ? parseInt(showHelpAfterInput, 10) : null;
-                            const caseSensitive = document.getElementById(`attempts-case-sensitive-${index}`).checked || false;
-                            const punctuationSensitive = document.getElementById(`attempts-punctuation-sensitive-${index}`).checked || false;
-
-                            deadlinePolicy[`q${qNum}`].attempts = {
-                                enabled: true,
-                                maxAttempts,
-                                deduction,
-                                retainBestScore,
-                                lockOnMax,
-                                lockMessage: lockMessage || '',
-                                showHelpAfter,
-                                caseSensitive,
-                                punctuationSensitive
-                            };
-                        } else {
-                            deadlinePolicy[`q${qNum}`].attempts = { enabled: false };
-                        }
-
-                        const wbListInput = document.getElementById(`word-bank-list-${index}`);
-                        if (wbListInput) {
-                            deadlinePolicy[`q${qNum}`].wordBankList = wbListInput.value.trim();
-                        }
+                        checkerFunctions[q.id] = q.checker.code;
+                        checkerMeta[q.id] = q.checker.meta;
+                        deadlinePolicy[`q${qNum}`] = q.policy;
                     });
 
                     const auraOnTime = document.getElementById('auraOnTime').checked;
@@ -1191,7 +1402,7 @@
 
                     const updatePayload = {
                         simulationUrl,
-                        simQuestions: simQuestions.map(q => ({ id: q.id, body: q.body || '', type: 'open-ended', showBeforeSim: q.showBeforeSim === true, isSimAutoField: q.isSimAutoField === true, simFieldPath: q.simFieldPath || '' })),
+                        simQuestions: simQuestions.map(q => ({ id: q.id, body: q.body || '', type: 'open-ended', showBeforeSim: q.showBeforeSim === true, isSimAutoField: q.isSimAutoField === true, simFieldPath: q.simFieldPaths[0] || '', simFieldPaths: q.simFieldPaths })),
                         checkerFunctions,
                         checkerMeta,
                         deadlinePolicy,
@@ -1344,9 +1555,9 @@
 
             // toggleDeadlineSection & saveTeacherDefaults — now handled by DeadlineWidget
 
-            function toggleAttemptSection(index) {
-                const checkbox = document.getElementById(`attempts-enabled-${index}`);
-                const config = document.getElementById(`attempt-config-${index}`);
+            function toggleAttemptSection(id) {
+                const checkbox = document.getElementById(`attempts-enabled-${id}`);
+                const config = document.getElementById(`attempt-config-${id}`);
                 if (checkbox.checked) {
                     config.classList.remove('hidden');
                 } else {
