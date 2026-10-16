@@ -18,6 +18,7 @@
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
     <script src="./shared/blank-renderer.js"></script>
+    <script src="./shared/similarity.js"></script>
     <style>
         .hidden {
             display: none;
@@ -1943,14 +1944,22 @@
                             .get();
                         progressSnap.docs.forEach(doc => {
                             const data = doc.data();
-                            const blockId = data.blockId;
+                            const blockId = data.blockId || questionBlocks[parseInt(data.slideIndex, 10)]?.id;
                             if (blockId) {
                                 questionProgressData[blockId] = {
                                     attemptCount: data.attemptCount || 0,
                                     bestScore: data.bestScore || 0,
                                     locked: data.locked || false,
-                                    normalizedAnswers: data.normalizedAnswers || []
+                                    normalizedAnswers: data.normalizedAnswers || [],
+                                    ...(data.teacherLocked === true ? { teacherLocked: true, lockedScore: Number(data.lockedScore) || 0 } : {})
                                 };
+                            }
+                        });
+                        // Teacher-locked questions always show the teacher's score (never the latest check)
+                        questionBlocks.forEach((block, qi) => {
+                            const prog = questionProgressData[block.id];
+                            if (prog?.teacherLocked) {
+                                slideStates[qi] = { ...(slideStates[qi] || {}), score: prog.lockedScore };
                             }
                         });
                         // Re-evaluate locks
@@ -3999,6 +4008,12 @@
                 slideStates = extended;
             }
 
+            const blankBlocksEl = document.getElementById('blank-student-blocks');
+            if (blankBlocksEl && !blankBlocksEl.dataset.pasteTracking) {
+                blankBlocksEl.dataset.pasteTracking = '1';
+                blankBlocksEl.addEventListener('paste', trackBlankPaste, true);
+            }
+
             renderBlankStudentView();
         }
 
@@ -4047,7 +4062,8 @@
                     const qKey = `q${idx + 1}`;
                     const state = slideStates[idx] || {};
                     const savedAnswer = state.answer || '';
-                    const savedScore = state.score;
+                    const teacherLocked = questionProgressData[block.id]?.teacherLocked === true;
+                    const savedScore = teacherLocked ? questionProgressData[block.id].lockedScore : state.score;
 
                     // Per-question deadline check (legacy absolute openAt/closeAt)
                     const qDl = block.questionDeadline;
@@ -4087,7 +4103,7 @@
                             : `<span class="font-bold ${savedScore >= 90 ? 'text-green-400' : savedScore > 0 ? 'text-yellow-400' : 'text-red-400'}">Score: ${savedScore}</span><span class="text-xs text-gray-500 ml-1">${attemptLabel}</span>`
                         : '';
 
-                    const inputDisabled = isLocked || !qOpen;
+                    const inputDisabled = isLocked || !qOpen || teacherLocked;
                     let inputHTML = '';
                     if (block.questionType === 'choice' && block.choices && block.choices.length > 0) {
                         inputHTML = `<div class="space-y-2 mt-2" id="blank-q-choices-${block.id}">`;
@@ -4133,6 +4149,9 @@
                     if (!qOpen) {
                         inputHTML += `<p class="text-xs text-orange-400 mt-1">🔒 ${renderer.escapeHtml(qDeadlineMsg)}</p>`;
                     }
+                    if (teacherLocked) {
+                        inputHTML += `<p class="text-xs text-blue-300 mt-1">🔒 Your teacher has reviewed this answer.</p>`;
+                    }
 
                     const pts = block.points || 100;
                     const wbTools = assignmentData.toolsConfig || {};
@@ -4154,6 +4173,9 @@
                         ${inputHTML}
                         <div class="mt-3 flex items-center gap-3">
                             ${(!isLocked && qOpen) ? (() => {
+                                if (teacherLocked) {
+                                    return `<button disabled aria-label="Your teacher has reviewed this answer" class="blank-check-btn bg-green-600 text-white font-bold py-2 px-4 rounded opacity-50 cursor-not-allowed">🔒 Reviewed by Teacher</button>`;
+                                }
                                 if (prog && prog.locked) {
                                     return `<button disabled aria-label="Maximum attempts reached for this question" class="blank-check-btn bg-green-600 text-white font-bold py-2 px-4 rounded opacity-50 cursor-not-allowed">🔒 Max Attempts Reached</button>`;
                                 }
@@ -4194,6 +4216,99 @@
             };
         }
 
+        // --- Copy/paste detection (blank assignments) ---
+        // Paste activity per question since the last accepted check: { [blockId]: { pasteCount, pastedChars } }
+        let blankPasteStats = {};
+        const BLANK_MIN_WORDS_FOR_OVERLAP = 8; // very short answers legitimately quote the passage
+
+        function trackBlankPaste(e) {
+            try {
+                const id = e.target && e.target.id;
+                if (!id || !id.startsWith('blank-q-input-')) return;
+                const blockId = id.slice('blank-q-input-'.length);
+                const text = e.clipboardData ? e.clipboardData.getData('text') : '';
+                const stats = blankPasteStats[blockId] || (blankPasteStats[blockId] = { pasteCount: 0, pastedChars: 0 });
+                stats.pasteCount += 1;
+                stats.pastedChars += text ? text.length : 0;
+            } catch (err) {
+                console.warn('Paste tracking error:', err);
+            }
+        }
+
+        // Question override (when enabled) > assignment-wide integrityConfig > defaults. Missing config = flag only.
+        function resolveBlankIntegritySettings(block) {
+            const cfg = assignmentData.integrityConfig || {};
+            const o = block.integrityOverride && block.integrityOverride.enabled ? block.integrityOverride : null;
+            const isNum = v => typeof v === 'number' && Number.isFinite(v);
+            const validAction = a => ['flag', 'cap', 'reject'].includes(a) ? a : null;
+            return {
+                enabled: o ? !o.allowCopy : cfg.enabled !== false,
+                overlapThreshold: isNum(o?.overlapThreshold) ? o.overlapThreshold : (isNum(cfg.overlapThreshold) ? cfg.overlapThreshold : 60),
+                longestRunThreshold: isNum(cfg.longestRunThreshold) ? cfg.longestRunThreshold : 12,
+                maxWords: isNum(o?.maxWords) ? o.maxWords : (isNum(cfg.maxWords) ? cfg.maxWords : 0),
+                action: validAction(o?.action) || validAction(cfg.action) || 'flag',
+                capScore: isNum(cfg.capScore) ? cfg.capScore : 50
+            };
+        }
+
+        // Returns { integrity, settings } for a free-form text answer, or null if detection is off/unavailable.
+        // Never throws: an error here must not stop a student from checking their answer.
+        function evaluateBlankIntegrity(block, answer) {
+            try {
+                if (block.questionType === 'choice' || block.questionType === 'multiselect' || block.questionType === 'number') return null;
+                const sim = window.Similarity;
+                if (!sim) return null;
+                const settings = resolveBlankIntegritySettings(block);
+                if (!settings.enabled) return null;
+
+                const passages = (assignmentData.blocks || [])
+                    .filter(b => b.type === 'text' && b.content && b.content !== '<hr>')
+                    .map(b => sim.stripMarkup(b.content));
+                const words = sim.wordCount(answer);
+                const overlap = sim.passageOverlap(answer, passages);
+                const paste = blankPasteStats[block.id] || { pasteCount: 0, pastedChars: 0 };
+
+                const reasons = [];
+                if (words >= BLANK_MIN_WORDS_FOR_OVERLAP) {
+                    if (settings.overlapThreshold > 0 && overlap.ratio * 100 >= settings.overlapThreshold) reasons.push('passage-overlap');
+                    if (settings.longestRunThreshold > 0 && overlap.longestRun >= settings.longestRunThreshold) reasons.push('verbatim-run');
+                }
+                if (settings.maxWords > 0 && words > settings.maxWords) reasons.push('max-words');
+
+                return {
+                    settings,
+                    integrity: {
+                        pasteCount: paste.pasteCount,
+                        pastedChars: paste.pastedChars,
+                        overlapRatio: Math.round(overlap.ratio * 100) / 100,
+                        longestRun: overlap.longestRun,
+                        wordCount: words,
+                        flagged: reasons.length > 0,
+                        reasons
+                    }
+                };
+            } catch (e) {
+                console.warn('Copy/paste detection error:', e);
+                return null;
+            }
+        }
+
+        // Fresh read of the teacher lock so a stale page can't overwrite a teacher's score.
+        async function refreshBlankTeacherLock(block, qIndex) {
+            try {
+                const doc = await db.collection("questionProgress").doc(`${assignmentData.id}_${userProfile.email}_${qIndex}`).get();
+                const data = doc.exists ? doc.data() : null;
+                if (data && data.teacherLocked === true) {
+                    const prog = questionProgressData[block.id] || (questionProgressData[block.id] = { attemptCount: data.attemptCount || 0, bestScore: data.bestScore || 0, locked: !!data.locked, normalizedAnswers: data.normalizedAnswers || [] });
+                    prog.teacherLocked = true;
+                    prog.lockedScore = Number(data.lockedScore) || 0;
+                    slideStates[qIndex] = { ...(slideStates[qIndex] || {}), score: prog.lockedScore };
+                }
+            } catch (e) {
+                console.warn('Could not refresh teacher lock:', e);
+            }
+        }
+
         async function blankCheckAndSave(blockId, qIndex) {
             const renderer = window.BlankRenderer;
             if (!userProfile) {
@@ -4218,6 +4333,14 @@
                 if (qDl.closeAt && now > new Date(qDl.closeAt)) { showToast("This question has closed.", { color: 'red' }); return; }
             }
 
+            // Teacher-locked questions are never re-scored or overwritten
+            if (!questionProgressData[block.id]?.teacherLocked) await refreshBlankTeacherLock(block, qIndex);
+            if (questionProgressData[block.id]?.teacherLocked) {
+                showToast("Your teacher has reviewed this answer.", { color: 'blue' });
+                renderBlankStudentView();
+                return;
+            }
+
             let studentAnswer;
             if (block.questionType === 'choice') {
                 const checked = document.querySelector(`input[name="blank-choice-${block.id}"]:checked`);
@@ -4239,6 +4362,17 @@
                     return;
                 }
                 studentAnswer = inputEl.value.trim();
+            }
+
+            // Copy/paste detection (default action is flag-only: no effect on scoring)
+            const integrityResult = evaluateBlankIntegrity(block, studentAnswer);
+            const integrity = integrityResult ? integrityResult.integrity : null;
+            const integrityAction = integrityResult ? integrityResult.settings.action : 'flag';
+            if (integrity && integrity.flagged && integrityAction === 'reject') {
+                showToast("Please put this in your own words.", { color: 'red', duration: 5000 });
+                const rejectEl = document.getElementById(`blank-q-result-${block.id}`);
+                if (rejectEl) rejectEl.innerHTML = `<span class="font-bold text-red-400">Please put this in your own words.</span>`;
+                return;
             }
 
             // Read attempt config
@@ -4358,6 +4492,11 @@
                 }
             }
 
+            if (integrity && integrity.flagged && integrityAction === 'cap') {
+                const capPoints = Math.round((block.points || 100) * integrityResult.settings.capScore / 100);
+                score = Math.min(score, capPoints);
+            }
+
             if (retainHighestScore) {
                 score = Math.max(score, progress.bestScore || 0);
             }
@@ -4407,9 +4546,11 @@
                     attemptIndex: attemptCount,
                     normalizedAnswer: normalizedAnswer,
                     attemptsEnabled: maxAttempts > 0,
-                    locked: progress.locked
+                    locked: progress.locked,
+                    ...(integrity ? { integrity } : {})
                 };
                 await db.collection("submissions").add(submission);
+                delete blankPasteStats[block.id];
 
                 // Also upsert a questionProgress doc so the dashboard live view picks it up
                 const progressDocId = `${assignmentData.id}_${userProfile.email}_${qIndex}`;
@@ -4424,6 +4565,7 @@
                     attemptCount: attemptCount,
                     normalizedAnswers: progress.normalizedAnswers,
                     locked: progress.locked,
+                    ...(integrity ? { integrity } : {}),
                     ...(shouldFlagHelp ? { helpFlag: true } : {}),
                     timestamp: firebase.firestore.FieldValue.serverTimestamp()
                 }, { merge: true });
