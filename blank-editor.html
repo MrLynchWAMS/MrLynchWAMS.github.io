@@ -260,6 +260,62 @@
                 </div>
             </div>
 
+            <!-- Copy / Paste Detection -->
+            <div id="integrity-section" class="bg-gray-800 rounded-lg mb-6 overflow-hidden border border-red-900/30">
+                <div id="integrity-header" class="p-6 cursor-pointer" onclick="toggleIntegritySection()">
+                    <div class="flex justify-between items-center">
+                        <h2 class="text-2xl font-bold text-yellow-400">📋 Copy / Paste Detection</h2>
+                        <span id="integrity-chevron" class="text-2xl transform transition-transform">▶</span>
+                    </div>
+                    <p class="text-gray-400 mt-2">Detect answers copied from the passage text or pasted in bulk. By default answers are only flagged on the dashboard; scoring is not changed.</p>
+                </div>
+                <div id="integrity-content" class="collapsible-content">
+                    <div class="px-6 pb-6 space-y-4">
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" id="integrityEnabled" checked class="w-4 h-4 rounded bg-gray-700 border-gray-600">
+                            <label for="integrityEnabled" class="text-sm text-white">Record copy/paste detection for open text questions</label>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label for="integrityOverlap" class="block text-sm font-medium text-gray-300 mb-1">Passage Overlap Threshold (%)</label>
+                                <input type="number" id="integrityOverlap" value="60" min="0" max="100" step="1"
+                                    class="w-full p-2 bg-gray-700 border border-gray-600 rounded">
+                                <p class="text-xs text-gray-500 mt-1">Flag when this share of the answer's 5-word phrases appear in the passage. 0 = off.</p>
+                            </div>
+                            <div>
+                                <label for="integrityLongestRun" class="block text-sm font-medium text-gray-300 mb-1">Longest Copied Run (words)</label>
+                                <input type="number" id="integrityLongestRun" value="12" min="0" step="1"
+                                    class="w-full p-2 bg-gray-700 border border-gray-600 rounded">
+                                <p class="text-xs text-gray-500 mt-1">Flag when this many consecutive words match the passage. 0 = off.</p>
+                            </div>
+                            <div>
+                                <label for="integrityMaxWords" class="block text-sm font-medium text-gray-300 mb-1">Max Words Per Answer</label>
+                                <input type="number" id="integrityMaxWords" value="0" min="0" step="1"
+                                    class="w-full p-2 bg-gray-700 border border-gray-600 rounded">
+                                <p class="text-xs text-gray-500 mt-1">0 = no limit.</p>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label for="integrityAction" class="block text-sm font-medium text-gray-300 mb-1">When an answer is flagged</label>
+                                <select id="integrityAction" onchange="toggleIntegrityCapField()"
+                                    class="w-full p-2 bg-gray-700 border border-gray-600 rounded">
+                                    <option value="flag">Flag only (no change to score)</option>
+                                    <option value="cap">Cap the score</option>
+                                    <option value="reject">Reject the check ("Please put this in your own words.")</option>
+                                </select>
+                            </div>
+                            <div id="integrityCapWrap" class="hidden">
+                                <label for="integrityCapScore" class="block text-sm font-medium text-gray-300 mb-1">Cap Score (% of question points)</label>
+                                <input type="number" id="integrityCapScore" value="50" min="0" max="100" step="1"
+                                    class="w-full p-2 bg-gray-700 border border-gray-600 rounded">
+                            </div>
+                        </div>
+                        <p class="text-xs text-gray-500">Applies to open text questions only. Each question can override these settings (or allow copying/pasting) from its own question block.</p>
+                    </div>
+                </div>
+            </div>
+
             <!-- Class Start Times & Deadlines -->
             <div id="deadline-section" class="bg-gray-800 rounded-lg mb-6 overflow-hidden">
                 <div id="deadline-header" class="p-6 cursor-pointer" onclick="toggleDeadlineSection()">
@@ -594,6 +650,7 @@
                         <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: choice | A. opt, B. correct* | 100pts]</td><td class="py-1">Multiple choice</td></tr>
                         <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: multiselect | A. opt*, B. opt, C. opt* | scoring:partial | 100pts]</td><td class="py-1">Multiple selection (mark each correct answer with *). Scoring is all-or-nothing by default; add <span class="font-mono">scoring:partial</span> for partial credit: (correct picks − wrong picks) ÷ total correct</td></tr>
                         <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">| override:true | maxAttempts:3 | penalty:10</td><td class="py-1">Per-question attempt override (append to any [q: ...] tag). <span class="font-mono">override:true</span> enables the override even when every value is 0 (unlimited attempts, no penalty). Also available: <span class="font-mono">lock:true</span>, <span class="font-mono">retain:false</span>, <span class="font-mono">helpThreshold:N</span></td></tr>
+                        <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">| maxwords:60 | copycheck:cap | overlap:60</td><td class="py-1">Per-question copy/paste detection for open text questions (append to any [q: text ...] tag). <span class="font-mono">copycheck:</span> <span class="font-mono">flag</span> (record only), <span class="font-mono">cap</span> (cap score), <span class="font-mono">reject</span> (ask student to reword) or <span class="font-mono">off</span> (allow copying/pasting). <span class="font-mono">overlap:N</span> is the % copied from the passage; <span class="font-mono">maxwords:N</span> limits answer length. Anything omitted uses the assignment-wide setting.</td></tr>
                         <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: number | answer==5 ±0.1 | 100pts]</td><td class="py-1">Number with tolerance</td></tr>
                         <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: text | contains "a" AND contains "b" | 100pts]</td><td class="py-1">Both words required</td></tr>
                         <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: text | contains "a" OR contains "b" | 100pts]</td><td class="py-1">Either word sufficient</td></tr>
@@ -638,6 +695,11 @@ FORMAT RULES:
    - [q: text | contains "a" AND contains "b" | 100pts] (both words required)
    - [q: text | contains "a" OR contains "b" | 100pts] (either word sufficient)
    - [q: text | is "exact answer" | 100pts] (exact match)
+
+   Optional copy/paste detection for [q: text] questions (append, separated by |):
+   - maxwords:60 (answer length limit)
+   - copycheck:flag|cap|reject|off (what to do when an answer is copied from the passage; off allows copying)
+   - overlap:60 (% copied from the passage that triggers the check)
 
 Separate sections with blank lines. 
 
@@ -1008,6 +1070,9 @@ Reading level: [GRADE LEVEL]</p>
                     document.getElementById(`perTypeMax-${t}`).value = Number.isFinite(cfg.maxAttempts) ? cfg.maxAttempts : '';
                     document.getElementById(`perTypePenalty-${t}`).value = Number.isFinite(cfg.attemptPenalty) ? cfg.attemptPenalty : '';
                 });
+
+                // Copy / Paste Detection
+                loadIntegrityConfigToUI(assignmentData.integrityConfig);
 
                 // Modifications
                 const mods = assignmentData.modifications || {};
@@ -1758,6 +1823,51 @@ Reading level: [GRADE LEVEL]</p>
   </div>
 </div>`;
 
+            if (!block.questionType || block.questionType === 'text') {
+                const io = block.integrityOverride || {};
+                html += `
+<div class="mt-2 pt-2 border-t border-gray-700/30">
+  <button class="text-xs text-gray-500 hover:text-red-400" onclick="toggleQIntegrityOverride('${block.id}')">
+    📋 Copy / Paste Detection ▶
+  </button>
+  <div id="q-integrity-override-${block.id}" class="hidden mt-2 space-y-2 bg-gray-900/40 p-3 rounded">
+    <label class="flex items-center gap-2">
+      <input type="checkbox" class="q-cc-enabled w-4 h-4 rounded bg-gray-700 border-gray-600" ${io.enabled ? 'checked' : ''}
+        onchange="updateBlockIntegrityOverride('${block.id}')">
+      <span class="text-sm text-white">Override copy-detection settings for this question</span>
+    </label>
+    <div class="q-cc-fields ${io.enabled ? '' : 'hidden'} space-y-2 mt-2">
+      <label class="flex items-center gap-2">
+        <input type="checkbox" class="q-cc-allow w-4 h-4 rounded bg-gray-700 border-gray-600" ${io.allowCopy ? 'checked' : ''}
+          onchange="updateBlockIntegrityOverride('${block.id}')">
+        <span class="text-sm text-white">Allow copying/pasting for this question</span>
+      </label>
+      <div class="q-cc-detail ${io.allowCopy ? 'hidden' : ''} grid grid-cols-3 gap-2">
+        <div>
+          <label class="text-xs text-gray-400">Overlap % (blank = assignment)</label>
+          <input type="number" class="q-cc-overlap w-full p-1.5 bg-gray-700 border border-gray-600 rounded text-sm" min="0" max="100" placeholder="Assignment-wide"
+            value="${Number.isFinite(io.overlapThreshold) ? io.overlapThreshold : ''}" oninput="updateBlockIntegrityOverride('${block.id}')">
+        </div>
+        <div>
+          <label class="text-xs text-gray-400">Max Words (0=∞)</label>
+          <input type="number" class="q-cc-maxwords w-full p-1.5 bg-gray-700 border border-gray-600 rounded text-sm" min="0" placeholder="Assignment-wide"
+            value="${Number.isFinite(io.maxWords) ? io.maxWords : ''}" oninput="updateBlockIntegrityOverride('${block.id}')">
+        </div>
+        <div>
+          <label class="text-xs text-gray-400">Action</label>
+          <select class="q-cc-action w-full p-1.5 bg-gray-700 border border-gray-600 rounded text-sm" onchange="updateBlockIntegrityOverride('${block.id}')">
+            <option value="" ${!io.action ? 'selected' : ''}>Assignment-wide</option>
+            <option value="flag" ${io.action === 'flag' ? 'selected' : ''}>Flag only</option>
+            <option value="cap" ${io.action === 'cap' ? 'selected' : ''}>Cap score</option>
+            <option value="reject" ${io.action === 'reject' ? 'selected' : ''}>Reject</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>`;
+            }
+
             html += `
 <div class="mt-2 pt-2 border-t border-gray-700/30">
   <button class="text-xs text-gray-500 hover:text-yellow-400" onclick="toggleQDeadline('${block.id}')">
@@ -1963,6 +2073,74 @@ Reading level: [GRADE LEVEL]</p>
         // Stub retained so any lingering references (e.g. canvas-parser callbacks) don't throw.
         function updateCheckerSection() { }
 
+        function toggleIntegritySection() {
+            const content = document.getElementById('integrity-content');
+            const chevron = document.getElementById('integrity-chevron');
+            if (content.style.maxHeight && content.style.maxHeight !== '0px') {
+                content.style.maxHeight = '0';
+                chevron.style.transform = 'rotate(0deg)';
+            } else {
+                content.style.maxHeight = '2000px';
+                chevron.style.transform = 'rotate(90deg)';
+            }
+        }
+
+        function toggleIntegrityCapField() {
+            document.getElementById('integrityCapWrap').classList.toggle('hidden', document.getElementById('integrityAction').value !== 'cap');
+        }
+
+        function loadIntegrityConfigToUI(cfg) {
+            cfg = cfg || {};
+            const num = (v, d) => Number.isFinite(v) ? v : d;
+            document.getElementById('integrityEnabled').checked = cfg.enabled !== false;
+            document.getElementById('integrityOverlap').value = num(cfg.overlapThreshold, 60);
+            document.getElementById('integrityLongestRun').value = num(cfg.longestRunThreshold, 12);
+            document.getElementById('integrityMaxWords').value = num(cfg.maxWords, 0);
+            document.getElementById('integrityAction').value = ['flag', 'cap', 'reject'].includes(cfg.action) ? cfg.action : 'flag';
+            document.getElementById('integrityCapScore').value = num(cfg.capScore, 50);
+            toggleIntegrityCapField();
+        }
+
+        function readIntegrityConfigFromUI() {
+            const int = (id, d, max) => {
+                const v = parseInt(document.getElementById(id).value, 10);
+                if (!Number.isFinite(v) || v < 0) return d;
+                return max !== undefined ? Math.min(v, max) : v;
+            };
+            return {
+                enabled: document.getElementById('integrityEnabled').checked,
+                overlapThreshold: int('integrityOverlap', 60, 100),
+                longestRunThreshold: int('integrityLongestRun', 12),
+                maxWords: int('integrityMaxWords', 0),
+                action: document.getElementById('integrityAction').value || 'flag',
+                capScore: int('integrityCapScore', 50, 100)
+            };
+        }
+
+        function toggleQIntegrityOverride(blockId) {
+            const panel = document.getElementById(`q-integrity-override-${blockId}`);
+            if (panel) panel.classList.toggle('hidden');
+        }
+
+        // Stores only the fields the teacher filled in; blank fields fall back to the assignment-wide setting.
+        function updateBlockIntegrityOverride(blockId) {
+            const panel = document.getElementById(`q-integrity-override-${blockId}`);
+            const block = blocks.find(b => b.id === blockId);
+            if (!panel || !block) return;
+            const enabled = panel.querySelector('.q-cc-enabled')?.checked || false;
+            const allowCopy = panel.querySelector('.q-cc-allow')?.checked || false;
+            const override = { enabled, allowCopy };
+            const overlap = parseInt(panel.querySelector('.q-cc-overlap')?.value, 10);
+            const maxWords = parseInt(panel.querySelector('.q-cc-maxwords')?.value, 10);
+            const action = panel.querySelector('.q-cc-action')?.value;
+            if (Number.isFinite(overlap) && overlap >= 0) override.overlapThreshold = Math.min(overlap, 100);
+            if (Number.isFinite(maxWords) && maxWords >= 0) override.maxWords = maxWords;
+            if (['flag', 'cap', 'reject'].includes(action)) override.action = action;
+            block.integrityOverride = override;
+            panel.querySelector('.q-cc-fields')?.classList.toggle('hidden', !enabled);
+            panel.querySelector('.q-cc-detail')?.classList.toggle('hidden', allowCopy);
+        }
+
         const BLANK_ATTEMPT_TYPES = ['text', 'number', 'choice', 'multiselect'];
 
         // Builds attemptTracking incl. perType; only fields the teacher filled in are stored (blank = use assignment-wide).
@@ -2093,6 +2271,7 @@ Reading level: [GRADE LEVEL]</p>
                     auraRules: auraRules.map(({ id, ...rest }) => rest),
                     auraOnTime,
                     attemptTracking: readAttemptTrackingFromUI(),
+                    integrityConfig: readIntegrityConfigFromUI(),
                     lastEditedAt: Date.now()
                 };
 

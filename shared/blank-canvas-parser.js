@@ -175,6 +175,7 @@
             // Remaining parts are used for question type configuration.
             const attemptOverrides = { enabled: false, maxAttempts: 0, attemptPenalty: 0, lockOnMaxAttempts: false, retainHighestScore: true, helpThreshold: 3 };
             const configParts = [];
+            const integrityOverride = {};
 
             for (let j = 1; j < parts.length; j++) {
                 const p = parts[j].trim();
@@ -183,6 +184,13 @@
                 const ptsMatch = p.match(/^(\d+)\s*pts?$/i);
                 if (ptsMatch) {
                     points = parseInt(ptsMatch[1], 10);
+                    continue;
+                }
+
+                // Copy/paste detection overrides (free-form text questions only)
+                const mIntegrity = p.match(/^(maxwords|copycheck|overlap)[:=]\s*(.*)$/i);
+                if (mIntegrity) {
+                    applyIntegrityToken(integrityOverride, mIntegrity[1].toLowerCase(), mIntegrity[2].trim(), promptRaw, warnings);
                     continue;
                 }
 
@@ -271,7 +279,12 @@
                 questionType = 'text';
             }
 
-            return { questionType, inlineChecker, choices, correctChoiceIndex, correctChoiceIndexes, scoringMode, points, attemptOverrides };
+            if (Object.keys(integrityOverride).length && questionType !== 'text') {
+                warnings.push(`Copy/paste detection options (maxwords, copycheck, overlap) only apply to open text questions and were ignored: "${promptRaw}"`);
+                Object.keys(integrityOverride).forEach(k => delete integrityOverride[k]);
+            }
+
+            return { questionType, inlineChecker, choices, correctChoiceIndex, correctChoiceIndexes, scoringMode, points, attemptOverrides, integrityOverride };
         }
 
         function addQuestion(promptRaw, parsed) {
@@ -392,6 +405,25 @@
         return { blocks, warnings };
     }
 
+    const COPYCHECK_ACTIONS = ['flag', 'cap', 'reject'];
+
+    // Parses one copy-detection token into `target`; invalid values are reported and ignored.
+    function applyIntegrityToken(target, key, value, promptRaw, warnings) {
+        if (key === 'maxwords') {
+            if (/^\d+$/.test(value)) target.maxWords = parseInt(value, 10);
+            else warnings.push(`Invalid maxwords value "${value}" (expected a whole number): "${promptRaw}"`);
+        } else if (key === 'overlap') {
+            const n = /^\d+$/.test(value) ? parseInt(value, 10) : NaN;
+            if (n >= 0 && n <= 100) target.overlapThreshold = n;
+            else warnings.push(`Invalid overlap value "${value}" (expected a percent from 0 to 100): "${promptRaw}"`);
+        } else if (key === 'copycheck') {
+            const v = value.toLowerCase();
+            if (v === 'off') target.allowCopy = true;
+            else if (COPYCHECK_ACTIONS.includes(v)) target.action = v;
+            else warnings.push(`Invalid copycheck value "${value}" (expected flag, cap, reject or off): "${promptRaw}"`);
+        }
+    }
+
     function buildQuestionBlock(promptRaw, parsed, existing) {
         const { questionType, inlineChecker, choices, correctChoiceIndex, correctChoiceIndexes, scoringMode, points } = parsed;
         const block = {
@@ -403,6 +435,9 @@
             inlineChecker: inlineChecker || null,
             attemptOverrides: parsed.attemptOverrides || { enabled: false }
         };
+        if (parsed.integrityOverride && Object.keys(parsed.integrityOverride).length) {
+            block.integrityOverride = Object.assign({ enabled: true }, parsed.integrityOverride);
+        }
         if (questionType === 'choice' && choices) {
             block.choices = choices;
             block.correctChoiceIndex = correctChoiceIndex !== null ? correctChoiceIndex : 0;
@@ -420,7 +455,7 @@
     // structured-only data and must survive a structured -> canvas -> structured round trip.
     const CANVAS_MANAGED_FIELDS = new Set([
         'id', 'type', 'prompt', 'questionType', 'points', 'inlineChecker', 'attemptOverrides',
-        'choices', 'correctChoiceIndex', 'correctChoiceIndexes', 'scoringMode'
+        'choices', 'correctChoiceIndex', 'correctChoiceIndexes', 'scoringMode', 'integrityOverride'
     ]);
 
     function carryOverStructuredFields(block, existing, parsed) {
@@ -536,6 +571,14 @@
             if (ao.helpThreshold && ao.helpThreshold !== 3) qTag += ` | helpThreshold:${ao.helpThreshold}`;
         }
 
+        const io = block.integrityOverride;
+        if (io && io.enabled && (!block.questionType || block.questionType === 'text')) {
+            if (io.allowCopy) qTag += ' | copycheck:off';
+            else if (COPYCHECK_ACTIONS.includes(io.action)) qTag += ` | copycheck:${io.action}`;
+            if (Number.isFinite(io.overlapThreshold)) qTag += ` | overlap:${io.overlapThreshold}`;
+            if (Number.isFinite(io.maxWords)) qTag += ` | maxwords:${io.maxWords}`;
+        }
+
         return qTag + ']';
     }
 
@@ -564,6 +607,15 @@
                 if (!['text', 'number', 'choice', 'multiselect'].includes(typePart)) {
                     warnings.push(`Line ${i + 1}: Unrecognized question type "${typePart}".`);
                 }
+                const integrityWarnings = [];
+                inner.split('|').slice(1).forEach(part => {
+                    const m = part.trim().match(/^(maxwords|copycheck|overlap)[:=]\s*(.*)$/i);
+                    if (m) applyIntegrityToken({}, m[1].toLowerCase(), m[2].trim(), '', integrityWarnings);
+                });
+                if (typePart !== 'text' && inner.split('|').slice(1).some(part => /^\s*(maxwords|copycheck|overlap)[:=]/i.test(part))) {
+                    integrityWarnings.push('Copy/paste detection options only apply to open text questions and will be ignored: ""');
+                }
+                integrityWarnings.forEach(w => warnings.push(`Line ${i + 1}: ${w.replace(/: ""$/, '.')}`));
                 if (typePart === 'multiselect' && !inner.includes('*')) {
                     warnings.push(`Line ${i + 1}: Multiple selection question has no correct answers marked with *.`);
                 }

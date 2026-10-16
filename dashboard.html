@@ -14,6 +14,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
     <script src="./shared/checker-runner.js"></script>
     <script src="./shared/blank-renderer.js"></script>
+    <script src="./shared/similarity.js"></script>
     <style>
         .modal-content::-webkit-scrollbar {
             width: 8px;
@@ -245,6 +246,10 @@
                                 onchange="toggleDisplayOptions()"
                                 class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"><span
                                 class="ml-2">Show Attempts</span></label>
+                        <label class="flex items-center"><input type="checkbox" id="showIntegrity"
+                                onchange="toggleDisplayOptions()"
+                                class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"><span
+                                class="ml-2">Show Integrity Flags</span></label>
                         <label id="watchTimeToggleContainer" class="flex items-center hidden"><input type="checkbox"
                                 id="showWatchTime" onchange="toggleDisplayOptions()"
                                 class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"><span
@@ -355,6 +360,7 @@
         let blackoutMode = false;
         let showBehavior = false;
         let showAttempts = false;
+        let showIntegrity = false;
         let sortMode = 'lastName';
         let staticRandomOrder = [];
         let showAllAttempts = localStorage.getItem('dashboardShowAllAttempts') === 'true';
@@ -674,6 +680,26 @@
                 unsubscribeArray.push(unSim);
             });
 
+            // The latest submission of a teacher-locked question reports the teacher's lockedScore everywhere
+            // (cells, averages, modal), matching what the student sees.
+            function applyTeacherLockScores(subs, progressMap) {
+                if (!progressMap || !progressMap.size) return subs;
+                const latest = new Map();
+                subs.forEach(sub => {
+                    const key = `${sub.assignmentId}_${sub.slideIndex}`;
+                    if (progressMap.get(key)?.teacherLocked !== true) return;
+                    const cur = latest.get(key);
+                    if (!cur || (sub.timestamp?.seconds || 0) > (cur.timestamp?.seconds || 0)) latest.set(key, sub);
+                });
+                if (!latest.size) return subs;
+                return subs.map(sub => {
+                    const key = `${sub.assignmentId}_${sub.slideIndex}`;
+                    return latest.get(key) === sub
+                        ? { ...sub, score: Number(progressMap.get(key).lockedScore) || 0 }
+                        : sub;
+                });
+            }
+
             function rebuildAllStudentData() {
                 allStudentData = Array.from(studentsMap.values()).map(student => {
                     const auraData = auraByStudent.get(student.email) || { auraAwarded: false, auraAmount: 0 };
@@ -694,7 +720,7 @@
                     return {
                         ...student,
                         auraLifetime: student.auraLifetime || 0,
-                        submissions: submissionsByStudent.get(student.email) || [],
+                        submissions: applyTeacherLockScores(submissionsByStudent.get(student.email) || [], questionProgress),
                         isSubmitted: submittedEmails.has(student.email),
                         violations: violationsByStudent.get(student.email) || [],
                         auraAwarded: auraData.auraAwarded,
@@ -1077,6 +1103,7 @@
             showTierIndicators = document.getElementById('showTierIndicators').checked;
             localStorage.setItem('dashboardShowTierIndicators', showTierIndicators);
             showAttempts = document.getElementById('showAttempts').checked;
+            showIntegrity = document.getElementById('showIntegrity').checked;
             const avgEl = document.getElementById('activeClassAvg');
             if (avgEl) avgEl.classList.toggle('hidden', !showScores);
             displayStudentData();
@@ -1359,13 +1386,18 @@
                                 attemptDisplay = `<span class="text-xs text-red-600 ml-1">🔒</span>`;
                             }
                             
+                            const lockIcon = questionProgress?.teacherLocked === true
+                                ? `<span class="text-[10px] ml-1" title="Score locked by teacher">🔒</span>` : '';
+                            const integrityFlag = showIntegrity && latestSubmission.integrity?.flagged
+                                ? `<span class="text-[10px] ml-1" title="${escapeHtml(describeIntegrity(latestSubmission.integrity))}">⚠</span>` : '';
+
                             const clickFn = assignmentData.type === 'lesson' 
                                 ? `showSubmissions('${escapedEmail}', ${qInfo.slideIndex}, '${qInfo.assignmentId}')`
                                 : `showSubmissions('${escapedEmail}', ${i})`;
 
                             tableHtml += `<td class="px-2 py-4 whitespace-nowrap text-sm font-semibold cursor-pointer ${borderClass}" onclick="${clickFn}">
                             <div class="w-full bg-gray-600 rounded-full h-6 relative">
-                                <div class="${color} ${textColor} h-6 rounded-full text-center text-xs flex items-center justify-center font-bold" style="width: ${score}%">${scoreDisplay}${attemptDisplay}</div>
+                                <div class="${color} ${textColor} h-6 rounded-full text-center text-xs flex items-center justify-center font-bold" style="width: ${score}%">${scoreDisplay}${attemptDisplay}${lockIcon}${integrityFlag}</div>
                             </div></td>`;
                         } else {
                             tableHtml += `<td class="px-2 py-4 ${borderClass}"><div class="bg-gray-700 h-6 rounded-full flex items-center justify-center text-gray-500 text-xs">-</div></td>`;
@@ -1463,6 +1495,100 @@
             }
         }
 
+        // --- Teacher score locks & integrity helpers ---
+        function getQuestionProgressFor(studentEmail, targetAssignmentId, slideIndex) {
+            return questionProgressByStudent.get(String(studentEmail || '').toLowerCase())?.get(`${targetAssignmentId}_${slideIndex}`);
+        }
+
+        function isTeacherLockedQuestion(studentEmail, targetAssignmentId, slideIndex) {
+            return getQuestionProgressFor(studentEmail, targetAssignmentId, slideIndex)?.teacherLocked === true;
+        }
+
+        function getAssignmentDataFor(targetAssignmentId) {
+            return (window.linkedAssignmentsData && window.linkedAssignmentsData[targetAssignmentId]) || assignmentData;
+        }
+
+        // Teacher locks are only honored by the blank-assignment student view
+        function isBlankAssignmentId(targetAssignmentId) {
+            return getAssignmentDataFor(targetAssignmentId)?.type === 'blank';
+        }
+
+        function describeIntegrity(integrity) {
+            const parts = [];
+            const pct = Math.round((integrity.overlapRatio || 0) * 100);
+            const reasons = integrity.reasons || [];
+            if (reasons.includes('passage-overlap') || pct > 0) parts.push(`${pct}% copied from passage`);
+            if (reasons.includes('verbatim-run')) parts.push(`${integrity.longestRun}-word verbatim run`);
+            if (reasons.includes('max-words')) parts.push(`${integrity.wordCount} words (over limit)`);
+            if (integrity.pastedChars > 0) parts.push(`pasted ${integrity.pastedChars} chars`);
+            return `⚠ ${parts.join(', ') || 'Flagged'}`;
+        }
+
+        // Stored integrity data, or (for older blank submissions) a computed estimate using default thresholds.
+        function getSubmissionIntegrity(sub) {
+            if (sub.integrity) return sub.integrity;
+            try {
+                const data = getAssignmentDataFor(sub.assignmentId);
+                if (!data || data.type !== 'blank' || !window.Similarity) return null;
+                const block = (data.blocks || []).filter(b => b.type === 'question')[sub.slideIndex];
+                if (!block || ['choice', 'multiselect', 'number'].includes(block.questionType)) return null;
+                if (block.integrityOverride?.enabled && block.integrityOverride.allowCopy) return null;
+                const passages = (data.blocks || []).filter(b => b.type === 'text' && b.content && b.content !== '<hr>').map(b => window.Similarity.stripMarkup(b.content));
+                const words = window.Similarity.wordCount(sub.answer);
+                const overlap = window.Similarity.passageOverlap(sub.answer, passages);
+                const reasons = [];
+                if (words >= 8 && overlap.ratio >= 0.6) reasons.push('passage-overlap');
+                if (words >= 8 && overlap.longestRun >= 12) reasons.push('verbatim-run');
+                return reasons.length ? { overlapRatio: overlap.ratio, longestRun: overlap.longestRun, wordCount: words, pasteCount: 0, pastedChars: 0, flagged: true, reasons } : null;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        async function toggleTeacherLock(submissionId, checkbox) {
+            const sub = allStudentData.flatMap(s => s.submissions).find(x => x.id === submissionId);
+            const scoreInput = document.getElementById(`score-${submissionId}`);
+            const lockedScore = parseInt(scoreInput?.value, 10);
+            const lock = checkbox.checked;
+            if (!sub) { checkbox.checked = !lock; showToast("Submission not found.", { color: 'red' }); return; }
+            if (lock && (isNaN(lockedScore) || lockedScore < 0)) {
+                checkbox.checked = false;
+                showToast("Enter a valid score before locking.", { color: 'red' });
+                return;
+            }
+            checkbox.disabled = true;
+            try {
+                const FieldValue = firebase.firestore.FieldValue;
+                const progressData = lock
+                    ? { teacherLocked: true, lockedScore, lockedBy: currentUserEmail, lockedAt: FieldValue.serverTimestamp() }
+                    : { teacherLocked: false, lockedScore: FieldValue.delete(), lockedBy: FieldValue.delete(), lockedAt: FieldValue.delete() };
+                const batch = db.batch();
+                const progressRef = db.collection("questionProgress").doc(`${sub.assignmentId}_${sub.studentEmail}_${sub.slideIndex}`);
+                const blockId = (getAssignmentDataFor(sub.assignmentId).blocks || []).filter(b => b.type === 'question')[sub.slideIndex]?.id;
+                batch.set(progressRef, {
+                    studentEmail: sub.studentEmail,
+                    studentName: sub.studentName || '',
+                    assignmentId: sub.assignmentId,
+                    slideIndex: sub.slideIndex,
+                    ...(blockId ? { blockId } : {}),
+                    ...progressData
+                }, { merge: true });
+                const subData = lock
+                    ? { ...progressData, score: lockedScore, maxScore: parseInt(document.getElementById(`maxscore-${submissionId}`)?.value, 10) || sub.maxScore || 100, isManualGrade: true }
+                    : progressData;
+                batch.set(db.collection("submissions").doc(submissionId), subData, { merge: true });
+                await batch.commit();
+                checkbox.parentElement.classList.toggle('text-yellow-400', lock);
+                showToast(lock ? "Score locked. The student can no longer change it." : "Score unlocked.", { color: 'green' });
+            } catch (error) {
+                console.error("Error toggling score lock:", error);
+                checkbox.checked = !lock;
+                showToast("Failed to update score lock.", { color: 'red' });
+            } finally {
+                checkbox.disabled = false;
+            }
+        }
+
         async function regradeAllSubmissions() {
             if (!confirm("Are you sure you want to regrade ALL submissions for this assignment? This cannot be undone.")) return;
 
@@ -1500,12 +1626,14 @@
                         showToast("No submissions found to regrade.", { color: 'default' });
                         return;
                     }
-                    const updates = allSubmissions.map(sub => ({
+                    const unlockedSubs = allSubmissions.filter(sub => !isTeacherLockedQuestion(sub.studentEmail, sub.assignmentId, sub.slideIndex));
+                    const skippedLocked = allSubmissions.length - unlockedSubs.length;
+                    const updates = unlockedSubs.map(sub => ({
                         ref: db.collection("submissions").doc(sub.id),
                         data: { score: executeChecker(sub) ?? 0, isManualGrade: false }
                     }));
                     await commitBatches(buildBatches(updates));
-                    showToast(`Successfully regraded ${updates.length} submissions!`, { color: 'green' });
+                    showToast(`Successfully regraded ${updates.length} submissions!${skippedLocked ? ` Skipped ${skippedLocked} teacher-locked.` : ''}`, { color: 'green' });
                     return;
                 }
 
@@ -1519,8 +1647,13 @@
                 }
 
                 const updates = [];
+                let skippedLocked = 0;
                 submissionsSnapshot.forEach(doc => {
                     const submission = { id: doc.id, ...doc.data() };
+                    if (isTeacherLockedQuestion(submission.studentEmail, submission.assignmentId, submission.slideIndex)) {
+                        skippedLocked++;
+                        return;
+                    }
                     updates.push({
                         ref: db.collection("submissions").doc(doc.id),
                         data: { score: executeChecker(submission) ?? 0, isManualGrade: false }
@@ -1528,7 +1661,7 @@
                 });
 
                 await commitBatches(buildBatches(updates));
-                showToast(`Successfully regraded ${updates.length} submissions!`, { color: 'green' });
+                showToast(`Successfully regraded ${updates.length} submissions!${skippedLocked ? ` Skipped ${skippedLocked} teacher-locked.` : ''}`, { color: 'green' });
             } catch (error) {
                 console.error("Error during regrade all:", error);
                 showToast("An error occurred during regrading.", { color: 'red' });
@@ -1557,8 +1690,13 @@
 
                 const batch = db.batch();
                 let count = 0;
+                let skippedLocked = 0;
                 submissionsSnapshot.forEach(doc => {
                     const submission = { id: doc.id, ...doc.data() };
+                    if (isTeacherLockedQuestion(submission.studentEmail, submission.assignmentId, submission.slideIndex)) {
+                        skippedLocked++;
+                        return;
+                    }
                     const newScore = executeChecker(submission) ?? 0;
                     const submissionRef = db.collection("submissions").doc(doc.id);
                     batch.update(submissionRef, { score: newScore, isManualGrade: false });
@@ -1566,7 +1704,7 @@
                 });
 
                 await batch.commit();
-                showToast(`Successfully regraded ${count} submission(s) for Q${slideIndex + 1}!`, { color: 'green' });
+                showToast(`Successfully regraded ${count} submission(s) for Q${slideIndex + 1}!${skippedLocked ? ` Skipped ${skippedLocked} teacher-locked.` : ''}`, { color: 'green' });
             } catch (error) {
                 console.error(`Error regrading question ${slideIndex + 1}:`, error);
                 showToast("An error occurred during regrading.", { color: 'red' });
@@ -1586,6 +1724,10 @@
                     return;
                 }
                 const submission = { id: submissionDoc.id, ...submissionDoc.data() };
+                if (isTeacherLockedQuestion(submission.studentEmail, submission.assignmentId, submission.slideIndex)) {
+                    showToast("This score is locked. Unlock it before regrading.", { color: 'red' });
+                    return;
+                }
                 const newScore = executeChecker(submission);
                 await db.collection("submissions").doc(submissionId).update({
                     score: newScore,
@@ -1631,6 +1773,10 @@
                     if (subToUpdate) subToUpdate.answer = newAnswer;
                 }
 
+                if (isTeacherLockedQuestion(submissionData.studentEmail, submissionData.assignmentId, submissionData.slideIndex)) {
+                    showToast("Answer saved. Score not regraded because it is locked.", { color: 'blue' });
+                    return;
+                }
                 const newScore = executeChecker({ id: submissionId, ...submissionData, answer: newAnswer });
                 await db.collection("submissions").doc(submissionId).update({
                     score: newScore,
@@ -1679,7 +1825,12 @@
                 const student = allStudentData.find(s => s.submissions.some(sub => sub.id === submissionId));
                 if (student) {
                     const subToUpdate = student.submissions.find(s => s.id === submissionId);
-                    if (subToUpdate) { subToUpdate.score = newScore; subToUpdate.maxScore = newMax; }
+                    if (subToUpdate) {
+                        subToUpdate.score = newScore; subToUpdate.maxScore = newMax;
+                        if (isTeacherLockedQuestion(subToUpdate.studentEmail, subToUpdate.assignmentId, subToUpdate.slideIndex)) {
+                            await db.collection("questionProgress").doc(`${subToUpdate.assignmentId}_${subToUpdate.studentEmail}_${subToUpdate.slideIndex}`).set({ lockedScore: newScore }, { merge: true });
+                        }
+                    }
                 }
 
                 calculateAllClassAverages();
@@ -1745,6 +1896,7 @@
             let updatedCount = 0;
             for (const student of targetStudents) {
                 if (onlyAttempted && !attemptedEmails.has(student.email)) continue;
+                if (isTeacherLockedQuestion(student.email, targetAssignmentId, slideIndex)) continue;
                 const docId = `${targetAssignmentId}_${student.email}_${slideIndex}`;
                 const ref = db.collection("submissions").doc(docId);
                 batch.set(ref, {
@@ -2154,15 +2306,29 @@
                         unlockButton = `<button onclick="unlockQuestion('${sub.studentEmail}', ${sub.slideIndex}, '${sub.assignmentId}', event)" class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-1 px-3 rounded-lg text-sm">🔓 Unlock</button>`;
                     }
 
+                    let lockControl = '';
+                    if (isBlankAssignmentId(sub.assignmentId)) {
+                        const teacherLocked = isTeacherLockedQuestion(sub.studentEmail, sub.assignmentId, sub.slideIndex);
+                        lockControl = `<label class="flex items-center gap-1 text-sm ${teacherLocked ? 'text-yellow-400' : 'text-gray-300'}" title="Locked scores can't be changed by the student re-checking, and are skipped by Regrade.">
+                            <input type="checkbox" ${teacherLocked ? 'checked' : ''} onchange="toggleTeacherLock('${sub.id}', this)" class="h-4 w-4 rounded border-gray-600 bg-gray-700">
+                            <span>🔒 Lock this score</span></label>`;
+                    }
+
+                    const integrity = getSubmissionIntegrity(sub);
+                    const integrityNote = integrity && integrity.flagged
+                        ? `<p class="text-xs text-orange-300 mt-1">${escapeHtml(describeIntegrity(integrity))}</p>` : '';
+
                     contentHtml += `<div class="bg-gray-700 p-4 rounded-lg">
                     <div class="flex justify-between items-center mb-2">
                         <p class="font-bold text-lg">${headerText}${attemptInfo}</p>
                         <p class="text-sm text-gray-400">${date}</p>
                     </div>
-                    <textarea id="answer-${sub.id}" class="w-full bg-gray-900 p-3 rounded font-mono text-white border border-gray-600">${sub.answer}</textarea>
+                    <textarea id="answer-${sub.id}" class="w-full bg-gray-900 p-3 rounded font-mono text-white border border-gray-600">${escapeHtml(sub.answer)}</textarea>
+                    ${integrityNote}
                     <div class="flex items-center justify-between mt-2">
-                        <div class="flex items-center gap-2">
+                        <div class="flex items-center gap-3">
                             ${unlockButton}
+                            ${lockControl}
                         </div>
                         <div class="flex items-center gap-2">
                             <button onclick="saveAnswer('${sub.id}', event)" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded-lg text-sm">Save Answer</button>
