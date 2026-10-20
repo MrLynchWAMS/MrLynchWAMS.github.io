@@ -1017,6 +1017,8 @@
         let deadlineTimerInterval = null;
         let isDeadlineReached = false;
         let submissionStatusListener = null;
+        let submissionScoresListener = null;
+        let lastTeacherScoreToastAt = 0;
 
         window.onload = async function () {
             const urlParams = new URLSearchParams(window.location.search);
@@ -1144,6 +1146,7 @@
                         const profile = { name: user.displayName, email: email };
                         authorizeAndStart(profile);
                     } else {
+                        stopSubmissionScoresListener();
                         loader.classList.add('hidden');
                         document.getElementById('assignmentNameLogin').textContent = assignmentData.name;
                         const subtitle = document.getElementById('assignmentSubtitleLogin');
@@ -1547,6 +1550,8 @@
                             updateSlideDisplay();
                         }
                     });
+
+                startSubmissionScoresListener();
 
                 evaluateAccess();
 
@@ -2481,7 +2486,83 @@
             }
         }
 
+        function stopSubmissionScoresListener() {
+            if (submissionScoresListener) {
+                submissionScoresListener();
+                submissionScoresListener = null;
+            }
+        }
+
+        // Live teacher score edits: updates only score/maxScore/isManualGrade in memory, never answers.
+        function startSubmissionScoresListener() {
+            stopSubmissionScoresListener();
+            if (!userProfile || !userProfile.email || !assignmentData || !assignmentData.id) return;
+            submissionScoresListener = db.collection("submissions")
+                .where("studentEmail", "==", userProfile.email)
+                .where("assignmentId", "==", assignmentData.id)
+                .onSnapshot(snapshot => {
+                    if (snapshot.metadata.hasPendingWrites) return;
+                    try {
+                        let changed = false;
+                        snapshot.docChanges().forEach(change => {
+                            if (change.type !== 'modified' || change.doc.metadata.hasPendingWrites) return;
+                            const sub = change.doc.data();
+                            const idx = parseInt(sub.slideIndex, 10);
+                            if (isNaN(idx) || typeof sub.score !== 'number') return;
+                            // Only the newest submission per slide drives the displayed score
+                            const ts = sub.timestamp?.seconds || 0;
+                            const hasNewer = snapshot.docs.some(d => {
+                                if (d.id === change.doc.id) return false;
+                                const o = d.data();
+                                return parseInt(o.slideIndex, 10) === idx && (o.timestamp?.seconds || 0) > ts;
+                            });
+                            if (hasNewer) return;
+                            const prev = slideStates[idx];
+                            if (!prev || prev.score === sub.score) return;
+                            slideStates[idx] = { ...prev, score: sub.score };
+                            if (sub.maxScore !== undefined) slideStates[idx].maxScore = sub.maxScore;
+                            if (sub.isManualGrade !== undefined) slideStates[idx].isManualGrade = sub.isManualGrade;
+                            updateRemoteScoreDisplay(idx);
+                            changed = true;
+                        });
+                        if (changed) {
+                            const summary = document.getElementById('summaryContainer');
+                            if (summary && !summary.classList.contains('hidden') && assignmentData.type !== 'blank') showSummary();
+                            const nowMs = Date.now();
+                            if (nowMs - lastTeacherScoreToastAt > 5000) {
+                                lastTeacherScoreToastAt = nowMs;
+                                showToast("Your teacher updated a score", { color: 'blue' });
+                            }
+                        }
+                    } catch (err) {
+                        console.error("Error applying live score update:", err);
+                    }
+                }, err => console.error("Submission score listener error:", err));
+        }
+
+        // Targeted score-label update only; never touches answer inputs.
+        function updateRemoteScoreDisplay(idx) {
+            if (isHiddenScoring() && !isSubmitted) return;
+            const state = slideStates[idx];
+            if (!state) return;
+            const type = assignmentData.type;
+            const setText = (el, text) => { if (el && el.textContent.trim() !== '') el.textContent = text; };
+            if (type === 'pdf') {
+                if (idx === activePdfZoneIndex) setText(document.getElementById('pdf-result-display'), `Score: ${state.score}%`);
+            } else if (type === 'simulation') {
+                setText(document.getElementById(`sim-result-${idx}`), `Score: ${state.score}`);
+            } else if (type !== 'blank' && idx === currentSlideIndex) {
+                const el = document.getElementById('result');
+                if (el && el.textContent.startsWith('Your Score:')) {
+                    el.textContent = "Your Score: " + state.score;
+                    el.classList.remove('text-green-400', 'text-orange-400');
+                    el.classList.add(state.score >= 90 ? 'text-green-400' : 'text-orange-400');
+                }
+            }
+        }
+
         function handleSignOut() {
+            stopSubmissionScoresListener();
             if (simulationMessageListener) {
                 window.removeEventListener('message', simulationMessageListener);
                 simulationMessageListener = null;
