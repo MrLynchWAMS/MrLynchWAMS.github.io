@@ -547,7 +547,6 @@
                         document.getElementById('gridColsSelect').value = currentGridCols;
                         setViewMode(currentViewMode);
 
-                        await runMigration();
                         loadInitialData();
                     } else {
                         document.getElementById('loading-text').textContent = `Access Denied: You (${emailToCheck}) are not registered as a teacher.`;
@@ -566,6 +565,7 @@
             }
         });
 
+        // One-time admin migration; intentionally not run on page load (full collection scan).
         async function runMigration() {
             try {
                 const snapshot = await db.collection("assignments").get();
@@ -587,18 +587,71 @@
                 allClassNames = [...new Set(studentRoster.map(s => String(s.class)))].sort();
             } catch (error) { console.error("Could not load class roster:", error); }
 
+            expectedSources = new Set(['owned', 'coTaught']);
+            readySources = new Set();
+            parentsResolved = false;
+            const sourceError = name => error => { readySources.add(name); handleError(error); scheduleRender(); };
             db.collection("assignments").where("teacherEmail", "==", currentUserEmail)
-                .onSnapshot(snapshot => handleAssignmentsUpdate(snapshot, 'owned'), handleError);
+                .onSnapshot(snapshot => handleAssignmentsUpdate(snapshot, 'owned'), sourceError('owned'));
             db.collection("assignments").where("coTeachers", "array-contains", currentUserEmail)
-                .onSnapshot(snapshot => handleAssignmentsUpdate(snapshot, 'coTaught'), handleError);
+                .onSnapshot(snapshot => handleAssignmentsUpdate(snapshot, 'coTaught'), sourceError('coTaught'));
             try {
                 const parentsSnapshot = await db.collection("teachers").where("coTeachingFor", "array-contains", currentUserEmail).get();
                 parentsSnapshot.docs.forEach(doc => {
+                    const name = `parent-${doc.id}`;
+                    expectedSources.add(name);
                     db.collection("assignments").where("teacherEmail", "==", doc.id)
-                        .onSnapshot(snapshot => handleAssignmentsUpdate(snapshot, `parent-${doc.id}`), handleError);
+                        .onSnapshot(snapshot => handleAssignmentsUpdate(snapshot, name), sourceError(name));
                 });
             } catch (e) { console.error("Error fetching parent teachers:", e); }
-            db.collection("submissionStatus").onSnapshot(handleStatusUpdate, handleError);
+            parentsResolved = true;
+            scheduleRender();
+        }
+
+        let expectedSources = new Set();
+        let readySources = new Set();
+        let parentsResolved = false;
+        function isAssignmentsLoading() {
+            if (!parentsResolved) return true;
+            for (const name of expectedSources) {
+                if (!readySources.has(name)) return true;
+            }
+            return false;
+        }
+
+        let renderTimer = null;
+        function scheduleRender() {
+            if (renderTimer) return;
+            renderTimer = setTimeout(() => {
+                renderTimer = null;
+                displayFilteredAssignments();
+            }, 50);
+        }
+
+        let statusUnsubscribers = [];
+        let statusChunkSignature = null;
+        let statusRefreshTimer = null;
+        function scheduleStatusListenerRefresh() {
+            clearTimeout(statusRefreshTimer);
+            statusRefreshTimer = setTimeout(refreshStatusListeners, 200);
+        }
+
+        function refreshStatusListeners() {
+            const ids = allAssignments.map(a => a.id).sort();
+            const signature = ids.join('|');
+            if (signature === statusChunkSignature) return;
+            statusChunkSignature = signature;
+            statusUnsubscribers.forEach(unsub => unsub());
+            statusUnsubscribers = [];
+            const idSet = new Set(ids);
+            Object.keys(submissionStatuses).forEach(id => { if (!idSet.has(id)) delete submissionStatuses[id]; });
+            for (let i = 0; i < ids.length; i += 10) {
+                const chunk = ids.slice(i, i + 10);
+                const unsub = db.collection("submissionStatus").where("assignmentId", "in", chunk)
+                    .onSnapshot(snapshot => handleStatusUpdate(snapshot, chunk), handleError);
+                statusUnsubscribers.push(unsub);
+            }
+            scheduleRender();
         }
 
         let assignmentsBySource = {};
@@ -609,18 +662,20 @@
                 assignmentsBySource[sourceKey].forEach(assignment => combinedAssignments.set(assignment.id, assignment));
             }
             allAssignments = Array.from(combinedAssignments.values());
+            readySources.add(sourceName);
             populateFolderDropdown();
-            displayFilteredAssignments();
+            scheduleStatusListenerRefresh();
+            scheduleRender();
         }
 
-        function handleStatusUpdate(snapshot) {
-            submissionStatuses = {};
+        function handleStatusUpdate(snapshot, chunkIds) {
+            chunkIds.forEach(id => { delete submissionStatuses[id]; });
             snapshot.forEach(doc => {
                 const data = doc.data();
                 if (!submissionStatuses[data.assignmentId]) submissionStatuses[data.assignmentId] = {};
                 submissionStatuses[data.assignmentId][data.studentEmail] = data.status;
             });
-            displayFilteredAssignments();
+            scheduleRender();
         }
 
         function handleError(error) { console.error("Real-time listener failed:", error); }
@@ -683,7 +738,10 @@
             }
 
             listContainer.innerHTML = '';
-            if (filteredAssignments.length === 0) {
+            if (isAssignmentsLoading() && filteredAssignments.length === 0) {
+                loadingState.innerText = "Loading assignments...";
+                loadingState.classList.remove('hidden');
+            } else if (filteredAssignments.length === 0) {
                 loadingState.innerText = searchTerm ? "No assignments found matching your search." : "No assignments found.";
                 loadingState.classList.remove('hidden');
             } else {
