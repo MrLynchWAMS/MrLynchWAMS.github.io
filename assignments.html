@@ -140,6 +140,7 @@
                 <div class="w-48 md:w-56">
                     <select id="sortBySelect" onchange="displayFilteredAssignments()"
                         class="w-full p-3 bg-gray-700 rounded border border-gray-600 text-gray-300 focus:outline-none focus:ring-2 focus:ring-yellow-500">
+                        <option value="recent-activity" selected>Recent Activity</option>
                         <option value="date-desc">Newest First</option>
                         <option value="date-asc">Oldest First</option>
                         <option value="alpha-asc">Name (A-Z)</option>
@@ -700,8 +701,10 @@
                 const matchesFolder = !selectedFolder || a.folder === selectedFolder;
                 return matchesSearch && matchesSub && matchesArchive && matchesFolder;
             }).sort((a, b) => {
-                const sortBy = document.getElementById('sortBySelect')?.value || 'date-desc';
-                if (sortBy === 'date-desc') {
+                const sortBy = document.getElementById('sortBySelect')?.value || 'recent-activity';
+                if (sortBy === 'recent-activity') {
+                    return getEffectiveActivitySeconds(b) - getEffectiveActivitySeconds(a);
+                } else if (sortBy === 'date-desc') {
                     const ta = a.createdAt ? (a.createdAt.seconds || 0) : 0;
                     const tb = b.createdAt ? (b.createdAt.seconds || 0) : 0;
                     return tb - ta;
@@ -806,7 +809,7 @@
                                     </span>
                                 `}
                             </div>
-                            <p class="text-gray-500 text-[11px] mt-1">Created: ${date}${assignment.lastAccessed ? ` | Accessed: ${new Date(assignment.lastAccessed.seconds * 1000).toLocaleDateString()}` : ''}</p>
+                            <p class="text-gray-500 text-[11px] mt-1">Created: ${date}${assignment.lastTeacherActivityAt && tsToSeconds(assignment.lastTeacherActivityAt) ? ` | Active: ${new Date(tsToSeconds(assignment.lastTeacherActivityAt) * 1000).toLocaleDateString()}` : ''}${assignment.lastAccessed ? ` | Accessed: ${new Date(assignment.lastAccessed.seconds * 1000).toLocaleDateString()}` : ''}</p>
                         </div>
                     </div>
                     <div class="flex items-center gap-4 shrink-0 justify-between lg:justify-end">
@@ -849,7 +852,7 @@
                             `}
                         </div>
                         <div class="mb-2">${statusHTML}</div>
-                        <p class="text-gray-500 text-[10px] mt-2">Created: ${date}${assignment.lastAccessed ? ` | Accessed: ${new Date(assignment.lastAccessed.seconds * 1000).toLocaleDateString()}` : ''}</p>
+                        <p class="text-gray-500 text-[10px] mt-2">Created: ${date}${assignment.lastTeacherActivityAt && tsToSeconds(assignment.lastTeacherActivityAt) ? ` | Active: ${new Date(tsToSeconds(assignment.lastTeacherActivityAt) * 1000).toLocaleDateString()}` : ''}${assignment.lastAccessed ? ` | Accessed: ${new Date(assignment.lastAccessed.seconds * 1000).toLocaleDateString()}` : ''}</p>
                         <div class="flex gap-2 flex-wrap mt-1">
                             ${assignment.isPublic ? '<span class="text-purple-400 text-[10px] font-semibold">🌐 Public</span>' : ''}
                             ${assignment.isArchived ? '<span class="text-yellow-500 text-[10px] font-semibold">📁 Archived</span>' : ''}
@@ -1051,6 +1054,7 @@
             const assignment = allAssignments.find(a => a.id === assignmentId);
             if (!assignment) { showToast("Could not find assignment data.", { color: 'red' }); return; }
             activeAssignmentId = assignment.id;
+            touchTeacherActivity(assignment.id);
             document.getElementById('statusModalTitle').innerText = `Manage Status for: ${assignment.name}`;
             document.getElementById('studentShareLink').value = `https://custom.scienceclass.rocks/classroompicker.html?assignmentId=${assignment.id}`;
             document.getElementById('isPublicToggle').checked = assignment.isPublic || false;
@@ -1510,7 +1514,41 @@
             }
         }
 
+        const TEACHER_ACTIVITY_THROTTLE_MS = 10 * 60 * 1000;
+        const teacherActivityTouched = {};
+
+        function tsToSeconds(ts) {
+            if (!ts) return 0;
+            if (typeof ts.seconds === 'number') return ts.seconds;
+            if (typeof ts.toMillis === 'function') return Math.floor(ts.toMillis() / 1000);
+            return 0;
+        }
+
+        function getEffectiveActivitySeconds(a) {
+            return tsToSeconds(a.lastTeacherActivityAt) || tsToSeconds(a.lastAccessed) ||
+                tsToSeconds(a.updatedAt) || tsToSeconds(a.createdAt) || 0;
+        }
+
+        async function touchTeacherActivity(assignmentId) {
+            if (!assignmentId) return;
+            const now = Date.now();
+            const key = `teacherActivityTouch_${assignmentId}`;
+            let last = teacherActivityTouched[assignmentId] || 0;
+            try { last = Math.max(last, parseInt(sessionStorage.getItem(key) || '0', 10) || 0); } catch (e) { /* storage unavailable */ }
+            if (now - last < TEACHER_ACTIVITY_THROTTLE_MS) return;
+            teacherActivityTouched[assignmentId] = now;
+            try { sessionStorage.setItem(key, String(now)); } catch (e) { /* storage unavailable */ }
+            try {
+                await db.collection("assignments").doc(assignmentId).update({
+                    lastTeacherActivityAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            } catch (e) {
+                console.warn("Could not update teacher activity:", e);
+            }
+        }
+
         async function updateLastAccessed(id) {
+            touchTeacherActivity(id);
             try {
                 await db.collection("assignments").doc(id).update({
                     lastAccessed: firebase.firestore.FieldValue.serverTimestamp()
