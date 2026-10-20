@@ -701,6 +701,8 @@
                 const matchesFolder = !selectedFolder || a.folder === selectedFolder;
                 return matchesSearch && matchesSub && matchesArchive && matchesFolder;
             }).sort((a, b) => {
+                const pinDiff = (b.isPinned === true ? 1 : 0) - (a.isPinned === true ? 1 : 0);
+                if (pinDiff !== 0) return pinDiff;
                 const sortBy = document.getElementById('sortBySelect')?.value || 'recent-activity';
                 if (sortBy === 'recent-activity') {
                     return getEffectiveActivitySeconds(b) - getEffectiveActivitySeconds(a);
@@ -798,6 +800,7 @@
                             <div class="flex items-center gap-2 flex-wrap">
                                 <h3 class="text-lg font-bold text-yellow-400 truncate max-w-[280px]" title="${escapedName}">${escapedName}</h3>
                                 <span class="text-[10px] uppercase px-1.5 py-0.5 bg-gray-700 text-gray-300 rounded border border-gray-600 font-semibold tracking-wider">${typeLabel}</span>
+                                ${assignment.isPinned === true ? '<span class="text-[10px] px-1.5 py-0.5 bg-yellow-600/30 text-yellow-400 rounded border border-yellow-600/50 font-semibold">📌 Pinned</span>' : ''}
                                 ${assignment.folder ? `
                                     <span class="inline-block text-xs px-2.5 py-0.5 rounded-full bg-blue-900/50 text-blue-300 border border-blue-700/30">
                                         📁 ${escapeHtml(assignment.folder)} 
@@ -819,6 +822,7 @@
                             <a href="./${editUrl}" onclick="updateLastAccessed('${assignment.id}')" class="text-xs bg-gray-600 hover:bg-gray-700 text-white font-bold py-1.5 px-2.5 rounded btn-action">Edit</a>
                             <a href="./classroompicker.html?assignmentId=${assignment.id}" onclick="updateLastAccessed('${assignment.id}')" target="_blank" class="text-xs bg-green-700 hover:bg-green-800 text-white font-bold py-1.5 px-2.5 rounded btn-action">Preview</a>
                             <button onclick="openStatusModal('${assignment.id}')" class="text-xs bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-1.5 px-2.5 rounded btn-action">Assign</button>
+                            <button onclick="togglePin('${assignment.id}', ${assignment.isPinned === true})" ${pinsInFlight.has(assignment.id) ? 'disabled' : ''} title="${assignment.isPinned === true ? 'Unpin assignment' : 'Pin assignment to top'}" aria-label="${assignment.isPinned === true ? 'Unpin assignment' : 'Pin assignment to top'}" aria-pressed="${assignment.isPinned === true}" class="text-xs py-1.5 px-2.5 ${assignment.isPinned === true ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-gray-700 hover:bg-gray-600'} text-white font-bold rounded btn-action disabled:opacity-50">📌 ${assignment.isPinned === true ? 'Unpin' : 'Pin'}</button>
                             <button onclick="toggleArchive('${assignment.id}', ${assignment.isArchived || false})" class="text-xs bg-gray-700 hover:bg-gray-600 text-white font-bold py-1.5 px-2.5 rounded btn-action">${assignment.isArchived ? 'Unarchive' : 'Archive'}</button>
                             <button onclick="deleteAssignment('${assignment.id}', '${escapedName}')" class="text-xs bg-red-700 hover:bg-red-800 text-white font-bold py-1.5 px-2.5 rounded btn-action">Delete</button>
                         </div>
@@ -854,6 +858,7 @@
                         <div class="mb-2">${statusHTML}</div>
                         <p class="text-gray-500 text-[10px] mt-2">Created: ${date}${assignment.lastTeacherActivityAt && tsToSeconds(assignment.lastTeacherActivityAt) ? ` | Active: ${new Date(tsToSeconds(assignment.lastTeacherActivityAt) * 1000).toLocaleDateString()}` : ''}${assignment.lastAccessed ? ` | Accessed: ${new Date(assignment.lastAccessed.seconds * 1000).toLocaleDateString()}` : ''}</p>
                         <div class="flex gap-2 flex-wrap mt-1">
+                            ${assignment.isPinned === true ? '<span class="text-yellow-400 text-[10px] font-semibold">📌 Pinned</span>' : ''}
                             ${assignment.isPublic ? '<span class="text-purple-400 text-[10px] font-semibold">🌐 Public</span>' : ''}
                             ${assignment.isArchived ? '<span class="text-yellow-500 text-[10px] font-semibold">📁 Archived</span>' : ''}
                         </div>
@@ -872,6 +877,7 @@
                             <button onclick="openCoTeacherModal('${assignment.id}')" class="flex-1 text-center bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold py-1.5 px-1 rounded btn-action truncate">Co-Teachers</button>
                             <button onclick="openShareModal('${assignment.id}')" class="flex-1 text-center bg-green-600 hover:bg-green-700 text-white text-[10px] font-bold py-1.5 px-1 rounded btn-action truncate">Share</button>
                             <button onclick="togglePublic('${assignment.id}', ${assignment.isPublic || false})" class="flex-1 text-center bg-purple-600 hover:bg-purple-700 text-white text-[10px] font-bold py-1.5 px-1 rounded btn-action truncate">Public</button>
+                            <button onclick="togglePin('${assignment.id}', ${assignment.isPinned === true})" ${pinsInFlight.has(assignment.id) ? 'disabled' : ''} title="${assignment.isPinned === true ? 'Unpin assignment' : 'Pin assignment to top'}" aria-label="${assignment.isPinned === true ? 'Unpin assignment' : 'Pin assignment to top'}" aria-pressed="${assignment.isPinned === true}" class="flex-1 text-center text-[10px] py-1.5 px-1 truncate ${assignment.isPinned === true ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-gray-700 hover:bg-gray-600'} text-white font-bold rounded btn-action disabled:opacity-50">📌 ${assignment.isPinned === true ? 'Unpin' : 'Pin'}</button>
                             <button onclick="toggleArchive('${assignment.id}', ${assignment.isArchived || false})" class="flex-1 text-center ${assignment.isArchived ? 'bg-gray-600 hover:bg-gray-500' : 'bg-yellow-700/80 hover:bg-yellow-700'} text-white text-[10px] font-bold py-1.5 px-1 rounded btn-action truncate">${assignment.isArchived ? 'Unarchive' : 'Archive'}</button>
                         </div>
                     </div>`;
@@ -1267,6 +1273,23 @@
         async function togglePublic(id, current) {
             await db.collection("assignments").doc(id).update({ isPublic: !current });
             showToast("Public status updated!", { color: 'blue' });
+        }
+
+        const pinsInFlight = new Set();
+        async function togglePin(id, current) {
+            if (pinsInFlight.has(id)) return;
+            pinsInFlight.add(id);
+            displayFilteredAssignments();
+            try {
+                await db.collection("assignments").doc(id).update({ isPinned: !current });
+                showToast(current ? "Assignment unpinned!" : "Assignment pinned!", { color: 'blue' });
+            } catch (e) {
+                console.error("Error toggling pin status:", e);
+                showToast("Failed to update pin status.", { color: 'red' });
+            } finally {
+                pinsInFlight.delete(id);
+                displayFilteredAssignments();
+            }
         }
 
         async function toggleArchive(id, current) {
