@@ -175,6 +175,14 @@
                     <option value="lock">Lock (Students can review but not edit)</option>
                     <option value="hide">Lock &amp; Hide (Students cannot see answers or scores)</option>
                 </select>
+                <div class="mt-4 flex items-start gap-3">
+                    <input type="checkbox" id="hideScoresAfterSubmission" aria-describedby="hideScoresAfterSubmissionHelp"
+                        class="mt-1 h-4 w-4 accent-yellow-400">
+                    <div>
+                        <label for="hideScoresAfterSubmission" class="font-semibold text-white">Hide scores even after submission</label>
+                        <p id="hideScoresAfterSubmissionHelp" class="text-gray-400 text-sm">Students can see which questions they've answered, but not whether they were marked correct, on the assignment or the summary. Turn this off later (e.g., after the test) so students can reopen the assignment and see their results.</p>
+                    </div>
+                </div>
             </div>
             <div class="bg-gray-800 p-6 rounded-lg mb-8">
                 <label for="scoringMode" class="block text-2xl font-bold text-yellow-400 mb-2">Scoring Mode</label>
@@ -964,6 +972,7 @@ Reading level: [GRADE LEVEL]</p>
                 // Post-Submission Policy
                 document.getElementById('postSubmissionRule').value = assignmentData.postSubmissionRule || 'open';
                 document.getElementById('scoringMode').value = assignmentData.scoringMode || 'instant';
+                document.getElementById('hideScoresAfterSubmission').checked = assignmentData.hideScoresAfterSubmission === true;
 
                 // Load teacher defaults and student list for Deadlines and Modifications
                 try {
@@ -2265,6 +2274,7 @@ Reading level: [GRADE LEVEL]</p>
                     lastEditorMode: currentMode,
                     postSubmissionRule: document.getElementById('postSubmissionRule').value || 'open',
                     scoringMode: document.getElementById('scoringMode').value || 'instant',
+                    hideScoresAfterSubmission: document.getElementById('hideScoresAfterSubmission').checked,
                     focusModeEnabled: document.getElementById('focusModeEnabled').checked,
                     focusModeAction: document.getElementById('focusModeAction').value || 'log',
                     toolsConfig,
