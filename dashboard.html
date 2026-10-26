@@ -313,7 +313,18 @@
                 <button onclick="closeModal()"
                     class="text-gray-400 hover:text-white text-3xl leading-none">&times;</button>
             </div>
-            <div class="flex justify-end items-center mb-2">
+            <div class="flex justify-between items-center mb-2 gap-4 flex-wrap">
+                <div id="bulkLockControls" class="flex items-center gap-3 flex-wrap">
+                    <button onclick="bulkTeacherLock(true)"
+                        class="bulk-lock-btn bg-yellow-600 hover:bg-yellow-700 disabled:opacity-50 text-white font-bold py-1 px-3 rounded-lg text-sm">🔒 Lock All</button>
+                    <button onclick="bulkTeacherLock(false)"
+                        class="bulk-lock-btn bg-gray-600 hover:bg-gray-700 disabled:opacity-50 text-white font-bold py-1 px-3 rounded-lg text-sm">🔓 Unlock All</button>
+                    <label class="flex items-center text-sm" title="Also lock questions with no submission, with a score of 0.">
+                        <input type="checkbox" id="bulkLockIncludeUnattempted"
+                            class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500">
+                        <span class="ml-2">Include unattempted (score 0)</span>
+                    </label>
+                </div>
                 <label class="flex items-center text-sm">
                     <input type="checkbox" id="showAllAttemptsToggle" onchange="toggleShowAllAttempts(this.checked)"
                         class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500">
@@ -1589,6 +1600,94 @@
             }
         }
 
+        // --- Bulk teacher lock / unlock (modal scope) ---
+        function getModalLockTargets(includeUnattempted) {
+            const view = currentModalView;
+            if (!view) return [];
+            const targets = [];
+            const questionBlocks = (targetId) => (getAssignmentDataFor(targetId).blocks || []).filter(b => b.type === 'question');
+
+            const addTarget = (student, targetId, slideIndex) => {
+                if (!isBlankAssignmentId(targetId)) return;
+                const sub = (student.submissions || [])
+                    .filter(s => s.assignmentId === targetId && s.slideIndex === slideIndex)
+                    .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0] || null;
+                if (!sub && !includeUnattempted) return;
+                targets.push({ studentEmail: student.email, studentName: student.name || '', assignmentId: targetId, slideIndex, sub });
+            };
+
+            if (view.type === 'question') {
+                const targetId = view.targetAssignmentId || assignmentId;
+                getCurrentlySortedStudents().forEach(st => addTarget(st, targetId, view.slide));
+            } else if (view.type === 'student') {
+                const student = allStudentData.find(s => s.email === view.email);
+                if (!student) return [];
+                const targetIds = view.targetAssignmentId
+                    ? [view.targetAssignmentId]
+                    : [assignmentId, ...Object.keys(window.linkedAssignmentsData || {}).filter(id => id !== assignmentId)];
+                targetIds.forEach(targetId => {
+                    const count = questionBlocks(targetId).length;
+                    for (let i = 0; i < count; i++) addTarget(student, targetId, i);
+                });
+            }
+            return targets;
+        }
+
+        async function bulkTeacherLock(lock) {
+            const verb = lock ? 'lock' : 'unlock';
+            const includeUnattempted = document.getElementById('bulkLockIncludeUnattempted')?.checked === true;
+            let targets = getModalLockTargets(includeUnattempted);
+            if (!lock) targets = targets.filter(t => isTeacherLockedQuestion(t.studentEmail, t.assignmentId, t.slideIndex) || t.sub?.teacherLocked === true);
+            if (!targets.length) { showToast(`Nothing to ${verb}.`, { color: 'blue' }); return; }
+            if (!confirm(`${verb[0].toUpperCase() + verb.slice(1)} ${targets.length} answer(s)${lock && includeUnattempted ? ' (unattempted ones get a score of 0)' : ''}?`)) return;
+
+            const FieldValue = firebase.firestore.FieldValue;
+            const btns = document.querySelectorAll('.bulk-lock-btn');
+            btns.forEach(b => b.disabled = true);
+            let done = 0, failed = 0;
+            // Each target writes up to 2 docs; Firestore batches allow 500 writes
+            for (const chunk of chunkArray(targets, 200)) {
+                try {
+                    const batch = db.batch();
+                    chunk.forEach(t => {
+                        const blockId = (getAssignmentDataFor(t.assignmentId).blocks || []).filter(b => b.type === 'question')[t.slideIndex]?.id;
+                        let score = 0;
+                        if (t.sub) {
+                            const typed = parseInt(document.getElementById(`score-${t.sub.id}`)?.value, 10);
+                            score = !isNaN(typed) && typed >= 0 ? typed : (Number(t.sub.score) || 0);
+                        }
+                        const progressData = lock
+                            ? { teacherLocked: true, lockedScore: score, lockedBy: currentUserEmail, lockedAt: FieldValue.serverTimestamp() }
+                            : { teacherLocked: false, lockedScore: FieldValue.delete(), lockedBy: FieldValue.delete(), lockedAt: FieldValue.delete() };
+                        batch.set(db.collection("questionProgress").doc(`${t.assignmentId}_${t.studentEmail}_${t.slideIndex}`), {
+                            studentEmail: t.studentEmail,
+                            studentName: t.studentName,
+                            assignmentId: t.assignmentId,
+                            slideIndex: t.slideIndex,
+                            ...(blockId ? { blockId } : {}),
+                            ...progressData
+                        }, { merge: true });
+                        if (t.sub) {
+                            const subData = lock
+                                ? { ...progressData, score, maxScore: t.sub.maxScore || 100, isManualGrade: true }
+                                : progressData;
+                            batch.set(db.collection("submissions").doc(t.sub.id), subData, { merge: true });
+                        }
+                    });
+                    await batch.commit();
+                    done += chunk.length;
+                } catch (error) {
+                    console.error("Error bulk toggling score locks:", error);
+                    failed += chunk.length;
+                }
+            }
+            btns.forEach(b => b.disabled = false);
+            if (failed) showToast(`Bulk ${verb}: ${done} succeeded, ${failed} failed.`, { color: 'red' });
+            else showToast(`${done} answer(s) ${lock ? 'locked' : 'unlocked'}.`, { color: 'green' });
+            if (currentModalView?.type === 'student') showStudentSubmissions(currentModalView.email, currentModalView.slide, currentModalView.targetAssignmentId);
+            else if (currentModalView?.type === 'question') showQuestionSubmissions(currentModalView.targetAssignmentId || assignmentId, currentModalView.slide);
+        }
+
         async function regradeAllSubmissions() {
             if (!confirm("Are you sure you want to regrade ALL submissions for this assignment? This cannot be undone.")) return;
 
@@ -2069,6 +2168,7 @@
             currentModalView = { type: 'student', email: studentEmail, slide: specificSlide, targetAssignmentId: targetAssignmentId };
             document.getElementById('showAllAttemptsToggle').checked = showAllAttempts;
             document.getElementById('showAllAttemptsToggle').parentElement.classList.remove('hidden');
+            document.getElementById('bulkLockControls').classList.remove('hidden');
             const student = allStudentData.find(s => s.email === studentEmail);
             if (!student) return;
 
@@ -2110,6 +2210,7 @@
             currentModalView = { type: 'question', slide: slideIndex, targetAssignmentId: targetAssignmentId };
             document.getElementById('showAllAttemptsToggle').checked = showAllAttempts;
             document.getElementById('showAllAttemptsToggle').parentElement.classList.remove('hidden');
+            document.getElementById('bulkLockControls').classList.remove('hidden');
             const qLabel = escapeHtml(getQuestionLabel(slideIndex, targetAssignmentId));
             
             // Regrade button needs to regrade specifically for this targetAssignmentId if it's a lesson. 
@@ -2432,6 +2533,7 @@
 
             document.getElementById('modalTitle').innerHTML = `🔒 Focus Mode Violations for ${displayName}`;
             document.getElementById('showAllAttemptsToggle').parentElement.classList.add('hidden');
+            document.getElementById('bulkLockControls').classList.add('hidden');
 
             const violations = (student.violations || []).sort((a, b) =>
                 (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0)
