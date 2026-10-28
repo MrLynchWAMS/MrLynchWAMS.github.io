@@ -1,0 +1,184 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isTeacher() {
+      return request.auth != null && (
+        request.auth.token.email.lower() in [
+          "klynch@mtps.us",
+          "mstuart@mtps.us",
+          "cfiori@mtps.us",
+          "mlock@mtps.us",
+          "cheine@mtps.us",
+          "kgray@mtps.us"
+        ] || exists(/databases/$(database)/documents/teachers/$(request.auth.token.email.lower()))
+      );
+    }
+
+    // Lower-cased email of the signed-in user (Google sign-in or the passcodeSignIn custom token).
+    function authEmail() {
+      return request.auth.token.email.lower();
+    }
+
+    // Co-teachers who are not in /teachers (listed on the assignment, or in the owner's coTeachingFor list).
+    function isCoTeacherFor(assignmentId) {
+      let assignment = get(/databases/$(database)/documents/assignments/$(assignmentId)).data;
+      return request.auth != null && (
+        authEmail() in assignment.get('coTeachers', []) ||
+        (exists(/databases/$(database)/documents/teachers/$(assignment.get('teacherEmail', ''))) &&
+          authEmail() in get(/databases/$(database)/documents/teachers/$(assignment.get('teacherEmail', ''))).data.get('coTeachingFor', []))
+      );
+    }
+
+    // Aura economy fields are written only by Cloud Functions (Admin SDK) or teachers.
+    // NOTE: the app stores lifetime aura as `auraLifetime`; `lifetimeAura` is blocked as well.
+    match /students/{studentId} {
+      allow read: if request.auth != null;
+      allow write, delete: if isTeacher();
+      allow update: if request.auth != null
+        && authEmail() == resource.data.email.lower()
+        && !request.resource.data.diff(resource.data).affectedKeys()
+             .hasAny(['auraBalance', 'auraLifetime', 'lifetimeAura', 'auraTier',
+                      'email', 'class', 'teacherEmail', 'studentDocId',
+                      'passcode', 'isArchived']);
+    }
+
+    match /assignments/{assignmentId} {
+      allow read: if true;
+      allow write, delete: if isTeacher();
+    }
+
+    match /teachers/{docId} {
+      allow read: if request.auth != null;
+      allow write: if isTeacher();
+    }
+
+    // Doc ids: {assignmentId}_{studentEmail}
+    match /submissions/{submissionId} {
+      allow read, write, delete: if isTeacher();
+      allow read: if request.auth != null && resource.data.studentEmail == authEmail();
+      allow create: if request.auth != null
+        && request.resource.data.studentEmail.lower() == authEmail();
+      allow read, delete: if request.auth != null && isCoTeacherFor(resource.data.assignmentId);
+      allow create, update: if request.auth != null && isCoTeacherFor(request.resource.data.assignmentId);
+    }
+
+    // Doc ids: {assignmentId}_{studentEmail}. auraAwarded/auraAmount/awardedAuraRuleIds are server-written.
+    match /submissionStatus/{statusId} {
+      allow read, write, delete: if isTeacher();
+      allow read: if request.auth != null
+        && (resource == null || resource.data.studentEmail == authEmail());
+      allow create: if request.auth != null
+        && request.resource.data.studentEmail.lower() == authEmail()
+        && statusId == request.resource.data.assignmentId + '_' + authEmail()
+        && !request.resource.data.keys().hasAny(['auraAwarded', 'auraAmount', 'awardedAuraRuleIds']);
+      allow update: if request.auth != null
+        && resource.data.studentEmail.lower() == authEmail()
+        && request.resource.data.studentEmail.lower() == authEmail()
+        && statusId == request.resource.data.assignmentId + '_' + authEmail()
+        && !request.resource.data.diff(resource.data).affectedKeys()
+             .hasAny(['auraAwarded', 'auraAmount', 'awardedAuraRuleIds']);
+      allow read, delete: if request.auth != null && isCoTeacherFor(resource.data.assignmentId);
+      allow create, update: if request.auth != null && isCoTeacherFor(request.resource.data.assignmentId);
+    }
+
+    match /focusViolations/{violationId} {
+      allow read, write, delete: if isTeacher();
+      allow read: if request.auth != null && resource.data.studentEmail == authEmail();
+      allow create: if request.auth != null
+        && request.resource.data.studentEmail.lower() == authEmail();
+    }
+
+    // Doc ids: {assignmentId}_{studentEmail}_{slideIndex}
+    match /questionProgress/{progressId} {
+      allow read, write, delete: if isTeacher();
+      allow read: if request.auth != null
+        && (resource == null || resource.data.studentEmail == authEmail());
+      allow create: if request.auth != null
+        && request.resource.data.studentEmail.lower() == authEmail()
+        && progressId == request.resource.data.assignmentId + '_' + authEmail() + '_' + string(request.resource.data.slideIndex)
+        && !request.resource.data.keys().hasAny(['lockedScore']);
+      allow update: if request.auth != null
+        && resource.data.studentEmail.lower() == authEmail()
+        && request.resource.data.studentEmail.lower() == authEmail()
+        && progressId == request.resource.data.assignmentId + '_' + authEmail() + '_' + string(request.resource.data.slideIndex)
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['lockedScore'])
+        && request.resource.data.get('attemptCount', 0) >= resource.data.get('attemptCount', 0)
+        && !(resource.data.get('locked', false) == true && request.resource.data.get('locked', false) != true);
+      allow read, delete: if request.auth != null && isCoTeacherFor(resource.data.assignmentId);
+      allow create, update: if request.auth != null && isCoTeacherFor(request.resource.data.assignmentId);
+    }
+
+    // Written only by Cloud Functions (Admin SDK); students can read their own.
+    match /auraTransactions/{transactionId} {
+      allow read, write, delete: if isTeacher();
+      allow read: if request.auth != null && resource.data.studentEmail == authEmail();
+    }
+
+    // Written only by Cloud Functions (Admin SDK); students can read their own.
+    match /earnedAura/{docId} {
+      allow read, write, delete: if isTeacher();
+      allow read: if request.auth != null && resource.data.studentEmail == authEmail();
+    }
+
+    match /auraStores/{teacherEmail} {
+      allow read: if request.auth != null;
+      allow write: if isTeacher() && request.auth.token.email.lower() == teacherEmail.lower();
+    }
+
+    // Created only by the purchaseAuraItem Cloud Function (Admin SDK); no client create.
+    match /auraPurchases/{purchaseId} {
+      allow read, write, delete: if isTeacher();
+      allow read: if request.auth != null
+        && request.auth.token.email.lower() == resource.data.studentEmail.lower();
+    }
+
+    // Doc ids: {assignmentId}_{encodeURIComponent(studentEmail)}
+    match /simulationData/{docId} {
+      allow read, write, delete: if isTeacher();
+      allow read: if request.auth != null
+        && (resource == null || resource.data.studentEmail == authEmail());
+      allow create, update: if request.auth != null
+        && request.resource.data.studentEmail.lower() == authEmail()
+        && docId == request.resource.data.assignmentId + '_' + authEmail().replace('@', '%40').replace('+', '%2B')
+        && (resource == null || resource.data.studentEmail.lower() == authEmail());
+      allow read: if request.auth != null && isCoTeacherFor(resource.data.assignmentId);
+    }
+
+    match /auraTiers/{teacherEmail} {
+      allow read: if request.auth != null;
+      allow write: if isTeacher() &&
+                request.auth.token.email.lower() == teacherEmail.lower();
+    }
+
+    match /gradeReviewRequests/{requestId} {
+      // Teachers: read, respond to (update) and delete any request
+      allow read, update, delete: if isTeacher();
+
+      // Students: create their own request, starting as "pending"
+      allow create: if request.auth != null
+                    && request.resource.data.studentEmail.lower() == request.auth.token.email.lower()
+                    && request.resource.data.status == 'pending';
+
+      // Students: read only their own requests
+      // (no .lower() on purpose, so the "My Requests" query can pass rule evaluation)
+      allow read: if request.auth != null
+                  && resource.data.studentEmail == request.auth.token.email;
+
+      // Students: may only flip studentSeenResolution on their own request
+      allow update: if request.auth != null
+                    && resource.data.studentEmail == request.auth.token.email
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['studentSeenResolution']);
+    }
+
+    match /avatarCosmetics/{teacherEmail} {
+      allow read: if request.auth != null;
+      allow write: if isTeacher() && request.auth.token.email.lower() == teacherEmail.lower();
+    }
+
+    match /avatarConfig/{teacherEmail} {
+      allow read: if request.auth != null;
+      allow write: if isTeacher() && request.auth.token.email.lower() == teacherEmail.lower();
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "iterated-aura-functions",
+  "description": "Cloud Functions that own the Aura economy (awards, purchases, passcode sign-in)",
+  "private": true,
+  "main": "index.js",
+  "engines": {
+    "node": "20"
+  },
+  "scripts": {
+    "test": "node --test",
+    "deploy": "firebase deploy --only functions,firestore:rules"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.7.0",
+    "firebase-functions": "^6.1.0"
+  }
+}
