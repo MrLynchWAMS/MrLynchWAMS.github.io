@@ -2,8 +2,11 @@
 
 const crypto = require('crypto');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { setGlobalOptions } = require('firebase-functions/v2');
 const admin = require('firebase-admin');
 const aura = require('./aura');
+
+setGlobalOptions({ region: 'us-central1', cors: true, invoker: 'public' });
 
 admin.initializeApp();
 const db = admin.firestore();
