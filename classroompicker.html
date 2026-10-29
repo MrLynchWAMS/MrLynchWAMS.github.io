@@ -2291,8 +2291,9 @@
                 checkButton.textContent = 'Check & Save Answer';
             }
             const currentState = slideStates[currentSlideIndex];
+            inputBox.dataset.slideIndex = String(currentSlideIndex);
             if (currentState) {
-                inputBox.value = currentState.answer;
+                inputBox.value = currentState.answer ?? '';
                 if (currentState.score !== undefined) {
                     resultElement.classList.remove('text-blue-400', 'text-green-400', 'text-yellow-400', 'text-orange-400');
                     if (shouldHideScoreFeedback() && hasSavedAnswer(currentState)) {
@@ -2463,7 +2464,11 @@
                 // Do not overwrite slideStates with the hidden/empty #inputbox value.
                 return;
             }
-            const currentAnswer = document.getElementById('inputbox').value;
+            const inputEl = document.getElementById('inputbox');
+            // Only persist what the input actually shows for this slide; before the slide is rendered
+            // (e.g. summary shown on reload) the box is empty and would wipe the restored answer.
+            if (inputEl.dataset.slideIndex !== String(currentSlideIndex)) return;
+            const currentAnswer = inputEl.value;
             slideStates[currentSlideIndex] = { ...slideStates[currentSlideIndex], answer: currentAnswer };
         }
 
