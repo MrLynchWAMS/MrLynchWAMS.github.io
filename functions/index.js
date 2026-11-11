@@ -213,8 +213,9 @@ exports.awardAura = onCall(async (request) => {
     uniqueKey = 'overall';
     if (aura.isOnTime(assignment)) {
       const submissions = await loadSubmissions(assignmentId, student.email);
+      const questionCount = aura.getQuestionCount(assignment);
       amount = aura.computeSubmissionAward(assignment, {
-        overallAverage: aura.computeOverallAverage(submissions, aura.getQuestionCount(assignment)),
+        overallAverage: aura.computeOverallAverage(submissions, questionCount, aura.getQuestionWeights(assignment, questionCount)),
         watchTimeSeconds: Number(status.watchTime) || 0
       });
     }

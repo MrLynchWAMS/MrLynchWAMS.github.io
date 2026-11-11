@@ -658,6 +658,7 @@
                         <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: choice | A. opt, B. correct* | 100pts]</td><td class="py-1">Multiple choice</td></tr>
                         <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: multiselect | A. opt*, B. opt, C. opt* | scoring:partial | 100pts]</td><td class="py-1">Multiple selection (mark each correct answer with *). Scoring is all-or-nothing by default; add <span class="font-mono">scoring:partial</span> for partial credit: (correct picks − wrong picks) ÷ total correct</td></tr>
                         <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">| override:true | maxAttempts:3 | penalty:10</td><td class="py-1">Per-question attempt override (append to any [q: ...] tag). <span class="font-mono">override:true</span> enables the override even when every value is 0 (unlimited attempts, no penalty). Also available: <span class="font-mono">lock:true</span>, <span class="font-mono">retain:false</span>, <span class="font-mono">helpThreshold:N</span></td></tr>
+                        <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">| weight:2</td><td class="py-1">How much the question counts toward the overall score (append to any [q: ...] tag). Default is 1; <span class="font-mono">weight:2</span> counts double and <span class="font-mono">weight:0.5</span> counts half. The question itself is still scored out of its points, so leave points at 100 and use weight to make a question matter more or less.</td></tr>
                         <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">| maxwords:60 | copycheck:cap | overlap:60</td><td class="py-1">Per-question copy/paste detection for open text questions (append to any [q: text ...] tag). <span class="font-mono">copycheck:</span> <span class="font-mono">flag</span> (record only), <span class="font-mono">cap</span> (cap score), <span class="font-mono">reject</span> (ask student to reword) or <span class="font-mono">off</span> (allow copying/pasting). <span class="font-mono">overlap:N</span> is the % copied from the passage; <span class="font-mono">maxwords:N</span> limits answer length. Anything omitted uses the assignment-wide setting.</td></tr>
                         <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: number | answer==5 ±0.1 | 100pts]</td><td class="py-1">Number with tolerance</td></tr>
                         <tr class="border-b border-gray-700/50"><td class="py-1 pr-4 font-mono text-yellow-300">[q: text | contains "a" AND contains "b" | 100pts]</td><td class="py-1">Both words required</td></tr>
@@ -708,6 +709,9 @@ FORMAT RULES:
    - maxwords:60 (answer length limit)
    - copycheck:flag|cap|reject|off (what to do when an answer is copied from the passage; off allows copying)
    - overlap:60 (% copied from the passage that triggers the check)
+
+   Optional weighting for any [q: ...] question (append, separated by |):
+   - weight:2 (counts double toward the overall score; default 1, weight:0.5 counts half; keep points at 100pts)
 
 Separate sections with blank lines. 
 
@@ -810,6 +814,7 @@ Reading level: [GRADE LEVEL]</p>
     <div id="toast-wrapper"></div>
     <script src="./shared/checker-widget.js"></script>
     <script src="./shared/checker-runner.js"></script>
+    <script src="./shared/question-weights.js"></script>
     <script src="./shared/blank-canvas-parser.js"></script>
     <script>
         const TEACHER_EMAILS = ["klynch@mtps.us", "mstuart@mtps.us", "cfiori@mtps.us", "mlock@mtps.us", "cheine@mtps.us", "kgray@mtps.us"];
@@ -1717,10 +1722,16 @@ Reading level: [GRADE LEVEL]</p>
                             <option value="multiselect" ${block.questionType === 'multiselect' ? 'selected' : ''}>Multiple Selection</option>
                         </select>
                     </div>
-                    <div>
+                    <div title="The most this question can award. The overall score still counts every question out of 100, so use Weight to make a question count more or less.">
                         <label class="text-xs text-gray-400">Points</label>
                         <input type="number" value="${block.points || 100}" min="0"
                             oninput="updateBlockField('${block.id}', 'points', parseInt(this.value)||100)"
+                            class="ml-1 w-20 p-1 bg-gray-700 border border-gray-600 rounded text-sm">
+                    </div>
+                    <div title="How much this question counts toward the overall score. 1 = normal, 2 = counts double, 0.5 = counts half.">
+                        <label class="text-xs text-gray-400" for="weight-${block.id}">Weight</label>
+                        <input type="number" id="weight-${block.id}" value="${QuestionWeights.normalizeWeight(block.weight)}" min="0" max="${QuestionWeights.MAX_WEIGHT}" step="0.5"
+                            oninput="updateBlockField('${block.id}', 'weight', QuestionWeights.normalizeWeight(this.value))"
                             class="ml-1 w-20 p-1 bg-gray-700 border border-gray-600 rounded text-sm">
                     </div>
                 </div>`;
@@ -2271,6 +2282,7 @@ Reading level: [GRADE LEVEL]</p>
                     name,
                     blocks: blocksToSave,
                     checkerFunctions: newCheckerFunctions,
+                    questionWeights: QuestionWeights.weightsForSave(blocksToSave.filter(b => b.type === 'question').map(b => b.weight)) || firebase.firestore.FieldValue.delete(),
                     lastEditorMode: currentMode,
                     postSubmissionRule: document.getElementById('postSubmissionRule').value || 'open',
                     scoringMode: document.getElementById('scoringMode').value || 'instant',

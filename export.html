@@ -10,6 +10,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
+    <script src="./shared/question-weights.js"></script>
     <style>
         .modal-content::-webkit-scrollbar { width: 8px; }
         .modal-content::-webkit-scrollbar-track { background: #374151; }
@@ -273,6 +274,7 @@
         const assignedClasses = assignmentData.assignedClasses || [];
         const studentsInAssignment = Object.values(studentDataMap).filter(s => assignedClasses.includes(String(s.class)));
         const numQuestions = assignmentData.slideIds.length;
+        const weights = QuestionWeights.getWeights(assignmentData, numQuestions);
 
         const classes = [...new Set(studentsInAssignment.map(s => String(s.class)))];
         classes.forEach(c => {
@@ -283,8 +285,8 @@
                 for (let i = 0; i < numQuestions; i++) {
                     const latestSubmission = student.submissions.filter(sub => sub.slideIndex === i).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
                     if (latestSubmission) {
-                        totalScore += latestSubmission.score;
-                        attemptedQuestions++;
+                        totalScore += latestSubmission.score * weights[i];
+                        attemptedQuestions += weights[i];
                     }
                 }
             });
@@ -297,8 +299,8 @@
              for (let i = 0; i < numQuestions; i++) {
                 const latestSubmission = student.submissions.filter(s => s.slideIndex === i).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
                 if (latestSubmission) {
-                    allTotalScore += latestSubmission.score;
-                    allAttemptedQuestions++;
+                    allTotalScore += latestSubmission.score * weights[i];
+                    allAttemptedQuestions += weights[i];
                 }
             }
         });
@@ -488,6 +490,7 @@
     function exportStandard() {
         const studentsToExport = getCurrentlySortedStudents();
         const numQuestions = assignmentData.slideIds.length;
+        const weights = QuestionWeights.getWeights(assignmentData, numQuestions);
         let csvContent = "data:text/csv;charset=utf-8,";
         
         let headers = ["Email", "Last Name", "First Name", "Last, First", "Class", "Average Score", "Completion %"];
@@ -501,19 +504,21 @@
             const lastFirst = `"${lastName}, ${firstName}"`;
             
             let totalScore = 0;
+            let weightSum = 0;
             let attemptedQuestions = 0;
             let questionScores = [];
             for (let i = 0; i < numQuestions; i++) {
                 const latestSubmission = student.submissions.filter(s => s.slideIndex === i).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
                 if (latestSubmission) {
                     questionScores.push(latestSubmission.score);
-                    totalScore += latestSubmission.score;
+                    totalScore += latestSubmission.score * weights[i];
+                    weightSum += weights[i];
                     attemptedQuestions++;
                 } else {
                     questionScores.push("");
                 }
             }
-            const averageScore = attemptedQuestions > 0 ? (totalScore / attemptedQuestions).toFixed(2) : "";
+            const averageScore = weightSum > 0 ? (totalScore / weightSum).toFixed(2) : "";
             const completionPercentage = numQuestions > 0 ? ((attemptedQuestions / numQuestions) * 100).toFixed(2) : "0.00";
             let row = [student.email, `"${lastName}"`, `"${firstName}"`, lastFirst, student.class, averageScore, completionPercentage, ...questionScores].join(',');
             csvContent += row + "\r\n";

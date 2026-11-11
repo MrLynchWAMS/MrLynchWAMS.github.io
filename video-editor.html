@@ -508,6 +508,7 @@
   <script src="./shared/deadline-widget.js"></script>
   <script src="./shared/checker-widget.js"></script>
   <script src="./shared/checker-runner.js"></script>
+  <script src="./shared/question-weights.js"></script>
   <script src="./shared/question-settings-bar.js"></script>
   <script>
     const firebaseConfig = {
@@ -848,7 +849,7 @@
         }
 
         // Load questions & notes
-        videoQuestions = (assignmentData.videoQuestions || []).map((q, i) => ({ ...q, id: q.id || `vq${i + 1}` }));
+        videoQuestions = (assignmentData.videoQuestions || []).map((q, i) => ({ ...q, id: q.id || `vq${i + 1}`, weight: QuestionWeights.normalizeWeight((assignmentData.questionWeights || [])[i]) }));
         videoNotes = (assignmentData.videoNotes || []).map((n, i) => ({ ...n, id: n.id || `vn${i + 1}` }));
         nextQId = videoQuestions.length + 1;
         nextNId = videoNotes.length + 1;
@@ -1338,6 +1339,10 @@
                 <span class="text-gray-400 text-sm">⏱</span>
                 <input type="text" value="${timeStr}" data-qid="${q.id}" class="time-input w-16 bg-gray-700 border border-gray-600 rounded text-center text-sm p-1" placeholder="0:00">
               </div>
+              <div class="flex items-center gap-1" title="How much this question counts toward the overall score. 1 = normal, 2 = counts double, 0.5 = counts half. The question's own score is still out of 100.">
+                <label for="weight-${q.id}" class="text-gray-400 text-sm">Weight</label>
+                <input type="number" id="weight-${q.id}" data-qid="${q.id}" value="${QuestionWeights.normalizeWeight(q.weight)}" min="0" max="${QuestionWeights.MAX_WEIGHT}" step="0.5" class="weight-input w-16 bg-gray-700 border border-gray-600 rounded text-center text-sm p-1">
+              </div>
             </div>
             <div class="flex items-center gap-2">
               <div class="flex flex-col">
@@ -1440,6 +1445,12 @@
         input.addEventListener('change', e => {
           const n = videoNotes.find(n => n.id === e.target.dataset.nid);
           if (n) n.time = parseTime(e.target.value);
+        });
+      });
+      document.querySelectorAll('.weight-input').forEach(input => {
+        input.addEventListener('input', e => {
+          const q = videoQuestions.find(q => q.id === e.target.dataset.qid);
+          if (q) q.weight = QuestionWeights.normalizeWeight(e.target.value);
         });
       });
       // Body inputs for questions
@@ -1627,6 +1638,7 @@
           checkerFunctions: checkerFunctions,
           checkerMeta: checkerMeta,
           auraRules: auraRules,
+          questionWeights: QuestionWeights.weightsForSave(videoQuestions.map(q => q.weight)) || firebase.firestore.FieldValue.delete(),
           playbackSettings: playbackSettings,
           scoringMode: document.getElementById('scoringMode').value,
           postSubmissionRule: document.getElementById('postSubmissionRule').value,
@@ -1674,6 +1686,10 @@
       document.querySelectorAll('.note-time-input').forEach(input => {
         const n = videoNotes.find(n => n.id === input.dataset.nid);
         if (n) n.time = parseTime(input.value);
+      });
+      document.querySelectorAll('.weight-input').forEach(input => {
+        const q = videoQuestions.find(q => q.id === input.dataset.qid);
+        if (q) q.weight = QuestionWeights.normalizeWeight(input.value);
       });
       // Sync body inputs
       document.querySelectorAll('.body-input').forEach(ta => {

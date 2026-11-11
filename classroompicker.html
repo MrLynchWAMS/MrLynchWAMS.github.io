@@ -20,6 +20,7 @@
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
     <script src="./shared/blank-renderer.js"></script>
     <script src="./shared/similarity.js"></script>
+    <script src="./shared/question-weights.js"></script>
     <style>
         .hidden {
             display: none;
@@ -2575,10 +2576,13 @@
                             ? blankQuestionBlocks.length
                             : (assignmentData.slideIds || []).length;
 
+            const questionWeights = QuestionWeights.getWeights(assignmentData, questionCount);
+            const summaryScores = [];
             for (let index = 0; index < questionCount; index++) {
                 const state = slideStates[index];
                 let score = (state && state.score !== undefined) ? state.score : 0;
                 totalScore += score;
+                summaryScores.push(score);
                 const attempted = hasSavedAnswer(state);
                 let displayScore = 'Unattempted ⚠️';
                 let color = 'text-orange-400 font-bold';
@@ -2619,9 +2623,10 @@
                         ? (blankQuestionBlocks[index]?.prompt || `Question ${index + 1}`)
                         : `Question ${index + 1}`;
 
-                perQuestionHTML += `<div ${clickHandler} class="flex justify-between items-center bg-gray-700 p-3 rounded-lg ${cursorClass} ${hoverClass} ${opacityClass} transition-colors"><span class="font-medium">${escapeHtml(questionLabel)}</span><span class="font-bold ${color}">${displayScore}</span></div>`;
+                const weightTag = questionWeights[index] !== 1 ? ` <span class="text-xs text-gray-400 font-normal" title="This question counts ${questionWeights[index]}× toward your overall score">(×${questionWeights[index]})</span>` : '';
+                perQuestionHTML += `<div ${clickHandler} class="flex justify-between items-center bg-gray-700 p-3 rounded-lg ${cursorClass} ${hoverClass} ${opacityClass} transition-colors"><span class="font-medium">${escapeHtml(questionLabel)}${weightTag}</span><span class="font-bold ${color}">${displayScore}</span></div>`;
             }
-            const overallAverage = questionCount > 0 ? (totalScore / questionCount).toFixed(1) : '0.0';
+            const overallAverage = questionCount > 0 ? QuestionWeights.weightedAverage(summaryScores, questionWeights).toFixed(1) : '0.0';
             const overallColor = overallAverage >= 90 ? 'text-green-400' : overallAverage >= 60 ? 'text-yellow-400' : 'text-red-400';
 
             if (hideScores) {
@@ -3489,7 +3494,9 @@
                                 : assignmentData.type === 'blank'
                                     ? (assignmentData.blocks || []).filter(b => b.type === 'question')
                                     : (assignmentData.slideIds || [])).length;
-                    const overallAverage = qCountSubmit > 0 ? totalScore / qCountSubmit : 0;
+                    const overallAverage = qCountSubmit > 0
+                        ? QuestionWeights.weightedAverage(slideStates.map(s => (s && typeof s.score === 'number') ? s.score : 0), QuestionWeights.getWeights(assignmentData, qCountSubmit))
+                        : 0;
 
                     // Create submissionStatus document and keep the reference
                     const statusRef = db.collection("submissionStatus").doc(`${assignmentData.id}_${userProfile.email}`);
@@ -5654,7 +5661,9 @@
                     }
                 });
                 const qCountSync = (assignmentData.type === 'video' ? (assignmentData.videoQuestions || []) : []).length;
-                const currentAvg = qCountSync > 0 ? currentTotalScore / qCountSync : 0;
+                const currentAvg = qCountSync > 0
+                    ? QuestionWeights.weightedAverage(slideStates.map(s => (s && typeof s.score === 'number') ? s.score : 0), QuestionWeights.getWeights(assignmentData, qCountSync))
+                    : 0;
 
                 await db.collection("submissionStatus").doc(statusId).set({
                     assignmentId: assignmentData.id,

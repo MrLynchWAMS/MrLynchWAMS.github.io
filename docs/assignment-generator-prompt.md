@@ -117,6 +117,7 @@ Even for similar repeated questions (e.g., ten "calculate the speed of light" pr
 | Text (shorthand AND) | `[q: text \| contains "a", "b", "c" \| 100pts]` | All three required |
 | Text (exact match) | `[q: text \| is "exact answer" \| 100pts]` | Case-insensitive |
 | Open text | `[q: text]` | No auto-grading |
+| Question weight | `[q: choice \| A. opt, B. correct* \| 100pts \| weight:2]` | Optional, append to any `[q: ...]` tag. Default is 1; `weight:2` counts double toward the overall score, `weight:0.5` counts half. Keep points at `100pts` and use `weight` to make a question matter more or less |
 
 ---
 

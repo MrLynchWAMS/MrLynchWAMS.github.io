@@ -34,6 +34,25 @@ test('computeOverallAverage uses the latest score per slide', () => {
   assert.strictEqual(aura.computeOverallAverage(subs, 0), 0);
 });
 
+test('computeOverallAverage applies question weights and matches the shared helper', () => {
+  const QuestionWeights = require('../shared/question-weights.js');
+  const subs = [
+    { slideIndex: 0, score: 100, timestamp: new Date(1000) },
+    { slideIndex: 1, score: 0, timestamp: new Date(1000) }
+  ];
+  assert.strictEqual(aura.computeOverallAverage(subs, 2, [1, 1]), 50);
+  assert.ok(Math.abs(aura.computeOverallAverage(subs, 2, [2, 1]) - 200 / 3) < 1e-9);
+  // Unattempted questions still count as 0 at their weight.
+  assert.ok(Math.abs(aura.computeOverallAverage(subs.slice(0, 1), 3, [1, 1, 2]) - 25) < 1e-9);
+  assert.strictEqual(aura.computeOverallAverage(subs, 2, [0, 0]), 50);
+
+  const assignment = { questionWeights: [2, '0.5', 'bad', -1, 500] };
+  const server = aura.getQuestionWeights(assignment, 6);
+  assert.deepStrictEqual(server, QuestionWeights.getWeights(assignment, 6));
+  const scores = [100, 50, 80, 10];
+  assert.strictEqual(aura.weightedAverage(scores, server), QuestionWeights.weightedAverage(scores, server));
+});
+
 test('computeSubmissionAward picks the best matching rule and ignores question rules', () => {
   const assignment = { auraRules: [
     { amount: 5, minScore: 70 },
