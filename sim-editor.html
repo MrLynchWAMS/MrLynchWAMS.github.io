@@ -594,6 +594,7 @@
         <script src="./shared/deadline-widget.js"></script>
         <script src="./shared/checker-widget.js"></script>
         <script src="./shared/checker-runner.js"></script>
+        <script src="./shared/question-weights.js"></script>
         <script src="./shared/question-settings-bar.js"></script>
         <script>
             const firebaseConfig = {
@@ -904,6 +905,7 @@
       </div>
       <div id="checker-container-${q.id}"></div>
       <div class="mt-4 border-t border-gray-700 pt-4">
+        <div class="grid grid-cols-3 gap-2 text-sm mb-4">${QuestionWeights.inputHTML(`weight-${q.id}`, q.weight)}</div>
         <h4 class="font-semibold mb-2">Deadline & Late Policy</h4>
         <div class="grid grid-cols-3 gap-2 text-sm">
           <div><label>Deadline (mins)</label><input type="number" id="deadline-minutes-${q.id}" value="${slidePolicy.deadlineMinutes || 0}" class="w-full mt-1 p-2 bg-gray-700 rounded border border-gray-600"></div>
@@ -1048,6 +1050,7 @@
                     showBeforeSim: q.showBeforeSim === true,
                     isSimAutoField: q.isSimAutoField === true,
                     simFieldPaths: [...new Set(paths)],
+                    weight: QuestionWeights.normalizeWeight(q.weight !== undefined ? q.weight : (assignmentData.questionWeights || [])[i]),
                     policy: q.policy || (assignmentData.deadlinePolicy || {})[`q${i + 1}`] || {},
                     checker: q.checker || { code: checkerFunctions[id] || '', meta: checkerMeta[id] || null }
                 };
@@ -1084,6 +1087,8 @@
             // Read per-card DOM state back into simQuestions so re-rendering/reordering never loses edits
             function captureQuestionState() {
                 simQuestions.forEach(q => {
+                    const weightEl = document.getElementById(`weight-${q.id}`);
+                    if (weightEl) q.weight = QuestionWeights.normalizeWeight(weightEl.value);
                     const widgetContainer = document.getElementById(`checker-container-${q.id}`);
                     const widget = widgetContainer && widgetContainer.querySelector('.checker-widget');
                     if (!widget) return;
@@ -1410,6 +1415,7 @@
                         scoringMode: document.getElementById('scoringMode').value,
                         auraOnTime,
                         auraRules: auraRules.map(({ id, ...rest }) => rest),
+                        questionWeights: QuestionWeights.weightsForSave(simQuestions.map(q => q.weight)) || firebase.firestore.FieldValue.delete(),
                         focusModeEnabled,
                         focusModeAction,
                         toolsConfig

@@ -672,6 +672,7 @@
     <div id="toast-wrapper"></div>
     <script src="./shared/checker-widget.js"></script>
     <script src="./shared/checker-runner.js"></script>
+    <script src="./shared/question-weights.js"></script>
     <script src="./shared/question-settings-bar.js"></script>
     <script>
       const CLIENT_ID = "1032478689007-9gk70vsn7i58l6f0qn5sr8q78sne1al5.apps.googleusercontent.com";
@@ -1434,6 +1435,10 @@
 
           questionIdentifiers.forEach((id, index) => {
             const qNum = index + 1;
+            const weightEl = document.getElementById(`weight-${index}`);
+            if (weightEl && assignmentData.type === 'pdf' && questionZones[index]) {
+              questionZones[index].weight = QuestionWeights.normalizeWeight(weightEl.value);
+            }
             const checkerContainer = document.getElementById(`checker-container-${qNum}`);
             if (!checkerContainer) return;
 
@@ -1694,6 +1699,7 @@
       </div>
       <div id="checker-container-${qNum}"></div>
       <div class="mt-4 border-t border-gray-700 pt-4">
+        <div class="grid grid-cols-3 gap-2 text-sm mb-4">${QuestionWeights.inputHTML(`weight-${index}`, assignmentData.type === 'pdf' ? (questionZones[index] || {}).weight : (assignmentData.questionWeights || [])[index])}</div>
         <h4 class="font-semibold mb-2">Deadline & Late Policy</h4>
         <div class="grid grid-cols-3 gap-2 text-sm">
           <div>
@@ -2016,6 +2022,15 @@
             }
           }
 
+          const weightKeys = (assignmentData.type === 'pdf' ? questionZones : (assignmentData.slideIds || [])).map((_, i) => i);
+          const questionWeights = QuestionWeights.readWeightInputs(weightKeys);
+          if (assignmentData.type === 'pdf') {
+            questionZones.forEach((z, i) => {
+              if (questionWeights[i] !== QuestionWeights.DEFAULT_WEIGHT) z.weight = questionWeights[i];
+              else delete z.weight;
+            });
+          }
+
           const updatePayload = {
             slideIds: assignmentData.slideIds,
             checkerFunctions: checkerFunctions,
@@ -2025,6 +2040,7 @@
             scoringMode: scoringMode,
             auraOnTime: auraOnTime,
             auraRules: auraRules.map(({ id, ...rest }) => rest), // Remove internal IDs
+            questionWeights: QuestionWeights.weightsForSave(questionWeights) || firebase.firestore.FieldValue.delete(),
             focusModeEnabled: focusModeEnabled,
             focusModeAction: focusModeAction,
             toolsConfig: toolsConfig,

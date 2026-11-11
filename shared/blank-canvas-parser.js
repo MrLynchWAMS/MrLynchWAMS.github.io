@@ -169,6 +169,7 @@
             let correctChoiceIndexes = null;
             let scoringMode = 'all-or-nothing';
             let points = 100;
+            let weight;
 
             // --- Modifier Parsing ---
             // Iterate through all parts to find modifiers like "100pts", "maxAttempts:3", etc.
@@ -184,6 +185,15 @@
                 const ptsMatch = p.match(/^(\d+)\s*pts?$/i);
                 if (ptsMatch) {
                     points = parseInt(ptsMatch[1], 10);
+                    continue;
+                }
+
+                // Weight: how much this question counts toward the overall score (default 1)
+                const mWeight = p.match(/^weight[:=]\s*(.*)$/i);
+                if (mWeight) {
+                    const w = /^\d+(\.\d+)?$/.test(mWeight[1].trim()) ? parseFloat(mWeight[1]) : NaN;
+                    if (Number.isFinite(w) && w <= 100) weight = w;
+                    else warnings.push(`Invalid weight value "${mWeight[1]}" (expected a number from 0 to 100): "${promptRaw}"`);
                     continue;
                 }
 
@@ -284,7 +294,7 @@
                 Object.keys(integrityOverride).forEach(k => delete integrityOverride[k]);
             }
 
-            return { questionType, inlineChecker, choices, correctChoiceIndex, correctChoiceIndexes, scoringMode, points, attemptOverrides, integrityOverride };
+            return { questionType, inlineChecker, choices, correctChoiceIndex, correctChoiceIndexes, scoringMode, points, weight, attemptOverrides, integrityOverride };
         }
 
         function addQuestion(promptRaw, parsed) {
@@ -435,6 +445,7 @@
             inlineChecker: inlineChecker || null,
             attemptOverrides: parsed.attemptOverrides || { enabled: false }
         };
+        if (parsed.weight !== undefined && parsed.weight !== 1) block.weight = parsed.weight;
         if (parsed.integrityOverride && Object.keys(parsed.integrityOverride).length) {
             block.integrityOverride = Object.assign({ enabled: true }, parsed.integrityOverride);
         }
@@ -455,7 +466,7 @@
     // structured-only data and must survive a structured -> canvas -> structured round trip.
     const CANVAS_MANAGED_FIELDS = new Set([
         'id', 'type', 'prompt', 'questionType', 'points', 'inlineChecker', 'attemptOverrides',
-        'choices', 'correctChoiceIndex', 'correctChoiceIndexes', 'scoringMode', 'integrityOverride'
+        'choices', 'correctChoiceIndex', 'correctChoiceIndexes', 'scoringMode', 'integrityOverride', 'weight'
     ]);
 
     function carryOverStructuredFields(block, existing, parsed) {
@@ -559,6 +570,7 @@
 
         // Add Modifiers
         if (pts !== 100) qTag += ` | ${pts}pts`;
+        if (Number.isFinite(block.weight) && block.weight !== 1) qTag += ` | weight:${block.weight}`;
         
         if (block.attemptOverrides && block.attemptOverrides.enabled) {
             const ao = block.attemptOverrides;

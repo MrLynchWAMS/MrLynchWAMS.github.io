@@ -11,6 +11,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
     <script src="./shared/teacher-badges.js"></script>
+    <script src="./shared/question-weights.js"></script>
     <style>
         .hidden { display: none; }
 
@@ -343,6 +344,17 @@
             return Math.max(1, (a.slideIds || []).length);
         }
 
+        // Overall % from best-per-question scores; unweighted assignments keep the original sum / count.
+        function overallFromBestScores(assignment, bestScores, numQuestions) {
+            const weights = QuestionWeights.getWeights(assignment, numQuestions);
+            if (!QuestionWeights.hasCustomWeights(weights)) {
+                let sum = 0;
+                Object.values(bestScores).forEach(v => sum += v);
+                return sum / numQuestions;
+            }
+            return QuestionWeights.weightedAverage(weights.map((_, i) => bestScores[i]), weights);
+        }
+
         // ─────────────────────────────────────────────────────────────────────
         // Auth
         // ─────────────────────────────────────────────────────────────────────
@@ -498,7 +510,7 @@
                         const attempted = Object.keys(studentData.slides).length;
                         Object.values(studentData.slides).forEach(s => rawSum += s);
                         statuses[assignment.id][email] = {
-                            score:        rawSum / numQuestions,  // percentage 0–100
+                            score:        overallFromBestScores(assignment, studentData.slides, numQuestions),  // percentage 0–100
                             rawSum,
                             numQuestions,
                             attempted,
@@ -849,9 +861,7 @@
                         }
                     });
 
-                    let sum = 0;
-                    Object.values(bestScores).forEach(v => sum += v);
-                    const avg = sum / numQ;
+                    const avg = overallFromBestScores(assignment, bestScores, numQ);
                     totalGradeSum += avg;
                     activeCount++;
 

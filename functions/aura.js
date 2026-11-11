@@ -102,13 +102,54 @@ function latestScoresBySlide(submissions) {
   return latest;
 }
 
-function computeOverallAverage(submissions, questionCount) {
+function computeOverallAverage(submissions, questionCount, weights) {
   if (questionCount <= 0) return 0;
-  let total = 0;
-  latestScoresBySlide(submissions).forEach(sub => {
-    if (typeof sub.score === 'number' && Number.isFinite(sub.score)) total += sub.score;
+  const latest = latestScoresBySlide(submissions);
+  if (!hasCustomWeights(weights)) {
+    let total = 0;
+    latest.forEach(sub => {
+      if (typeof sub.score === 'number' && Number.isFinite(sub.score)) total += sub.score;
+    });
+    return total / questionCount;
+  }
+  const scores = [];
+  latest.forEach((sub, index) => {
+    if (typeof sub.score === 'number' && Number.isFinite(sub.score)) scores[index] = sub.score;
   });
-  return total / questionCount;
+  return weightedAverage(scores, weights.slice(0, questionCount));
+}
+
+// Copy of shared/question-weights.js (Cloud Functions cannot import ../shared). aura.test.js keeps them in sync.
+function normalizeWeight(value) {
+  if (value === null || value === undefined || value === '') return 1;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return 1;
+  return Math.min(n, 100);
+}
+
+function getQuestionWeights(assignment, count) {
+  const stored = Array.isArray(assignment && assignment.questionWeights) ? assignment.questionWeights : [];
+  return Array.from({ length: count }, (_, i) => normalizeWeight(stored[i]));
+}
+
+function hasCustomWeights(weights) {
+  return Array.isArray(weights) && weights.some(w => normalizeWeight(w) !== 1);
+}
+
+function weightedAverage(scores, weights) {
+  const count = weights.length;
+  if (count === 0) return 0;
+  let total = 0;
+  let weightSum = 0;
+  let plain = 0;
+  for (let i = 0; i < count; i++) {
+    const w = normalizeWeight(weights[i]);
+    const s = typeof scores[i] === 'number' && Number.isFinite(scores[i]) ? scores[i] : 0;
+    total += s * w;
+    weightSum += w;
+    plain += s;
+  }
+  return weightSum === 0 ? plain / count : total / weightSum;
 }
 
 function isOnTime(assignment, now = new Date()) {
@@ -161,6 +202,8 @@ module.exports = {
   getQuestionCount,
   latestScoresBySlide,
   computeOverallAverage,
+  getQuestionWeights,
+  weightedAverage,
   isOnTime,
   validAmount,
   watchTimeRuleKey,

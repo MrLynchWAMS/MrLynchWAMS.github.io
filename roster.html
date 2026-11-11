@@ -10,6 +10,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
+    <script src="./shared/question-weights.js"></script>
     <style>
         .hidden {
             display: none;
@@ -554,6 +555,12 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
                     assignmentMap[doc.id] = {
                         name: data.name || data.title || "Untitled",
                         slideCount: (data.slideIds || []).length,
+                        questionWeights: data.questionWeights,
+                        questionCount: data.type === 'pdf' ? (data.questionZones || []).length
+                            : data.type === 'video' ? (data.videoQuestions || []).length
+                            : data.type === 'simulation' ? (data.simQuestions || []).length
+                            : data.type === 'blank' ? (data.blocks || []).filter(b => b.type === 'question').length
+                            : (data.slideIds || []).length,
                         assignedClasses: data.assignedClasses || []
                     };
                 });
@@ -1204,12 +1211,16 @@ John Smith, john@example.com, 5678, Period 1"></textarea>
 
             Object.values(assignmentGroups).forEach(g => {
                 const meta = assignmentMap[g.id];
-                const totalSlides = meta?.slideCount || 1;
+                const weights = QuestionWeights.getWeights(meta, meta?.questionCount || 0);
+                const isWeighted = QuestionWeights.hasCustomWeights(weights);
+                const totalSlides = isWeighted ? weights.length : (meta?.slideCount || 1);
 
-                // Score = sum(best scores) / total slides in assignment
+                // Score = sum(best scores) / total slides in assignment (weighted average when the teacher set question weights)
                 let sumOfBest = 0;
                 Object.values(g.slides).forEach(s => sumOfBest += s);
-                const assignmentScore = (sumOfBest / totalSlides);
+                const assignmentScore = isWeighted
+                    ? QuestionWeights.weightedAverage(weights.map((_, i) => g.slides[i]), weights)
+                    : (sumOfBest / totalSlides);
                 totalGradeSum += assignmentScore;
 
                 const status = statusMap[g.id] || {};

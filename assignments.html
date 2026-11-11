@@ -1235,6 +1235,8 @@
                     focusModeAction: source.focusModeAction || 'log'
                 };
 
+                if (Array.isArray(source.questionWeights)) shareData.questionWeights = source.questionWeights;
+
                 // Type-specific field copies
                 if (source.type === 'video') {
                     shareData.videoUrl = source.videoUrl || "";

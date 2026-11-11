@@ -45,6 +45,10 @@ Deploy the functions **before or together with** the rules and the updated `clas
    ```
    Manual teacher adjustments are not tracked, so review the dry-run report first.
 
+### Question weights
+
+Every question is scored out of 100, and the overall score is the average. Teachers can optionally give a question a **weight** (default 1; `2` counts double, `0.5` counts half, `0` excludes it from the overall score). Weights are stored as `assignment.questionWeights`, an array aligned with the question index (`slideIndex`) and omitted when every weight is 1, so existing assignments are unchanged. The shared logic lives in `shared/question-weights.js` and is used by every editor, the student player and the teacher dashboards. Cloud Functions cannot import `shared/`, so `functions/aura.js` keeps a small copy that `functions/aura.test.js` checks against the shared module. Deploy `functions/` together with the site so Aura eligibility uses the same weighted score. In the blank editor, leave **Points** at 100 and use **Weight** instead: points only cap what a question can award.
+
 ### Manual test plan
 
 1. As a student (Google and passcode), open the console and try `firebase.firestore().collection('students').doc(id).update({auraBalance: 1e5})` → must be `permission-denied`. Same for `auraPurchases.add(...)`, `earnedAura`, `auraTransactions`, and reading/writing another student's `submissions`.

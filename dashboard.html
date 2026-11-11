@@ -15,6 +15,7 @@
     <script src="./shared/checker-runner.js"></script>
     <script src="./shared/blank-renderer.js"></script>
     <script src="./shared/similarity.js"></script>
+    <script src="./shared/question-weights.js"></script>
     <style>
         .modal-content::-webkit-scrollbar {
             width: 8px;
@@ -899,6 +900,17 @@
             auth.signOut().then(() => window.location.reload());
         }
 
+        // Per-question weights aligned with numQuestions (lessons use each linked assignment's own weights).
+        function getQuestionWeightList(numQuestions, questionsList) {
+            if (assignmentData.type === 'lesson' && questionsList) {
+                return questionsList.map(q => {
+                    const linked = window.linkedAssignmentsData && window.linkedAssignmentsData[q.assignmentId];
+                    return QuestionWeights.getWeights(linked, q.slideIndex + 1)[q.slideIndex];
+                });
+            }
+            return QuestionWeights.getWeights(assignmentData, numQuestions);
+        }
+
         function calculateAllClassAverages() {
             const averages = {};
             const assignedClasses = assignmentData.assignedClasses || [];
@@ -921,6 +933,7 @@
                 numQuestions = assignmentData.type === 'pdf' ? (assignmentData.questionZones ? assignmentData.questionZones.length : 0) : assignmentData.type === 'video' ? (assignmentData.videoQuestions ? assignmentData.videoQuestions.length : 0) : assignmentData.type === 'simulation' ? (assignmentData.simQuestions ? assignmentData.simQuestions.length : 0) : assignmentData.type === 'blank' ? (assignmentData.blocks || []).filter(b => b.type === 'question').length : (assignmentData.slideIds ? assignmentData.slideIds.length : 0);
             }
 
+            const weights = getQuestionWeightList(numQuestions, questionsList);
             const classes = [...new Set(studentsInAssignment.map(s => String(s.class)))];
             classes.forEach(c => {
                 const studentsInClass = studentsInAssignment.filter(s => String(s.class) === c);
@@ -936,8 +949,8 @@
                             latestSubmission = student.submissions.filter(sub => sub.slideIndex === i).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
                         }
                         if (latestSubmission) {
-                            totalScore += latestSubmission.score;
-                            attemptedQuestions++;
+                            totalScore += latestSubmission.score * weights[i];
+                            attemptedQuestions += weights[i];
                         }
                     }
                 });
@@ -956,8 +969,8 @@
                         latestSubmission = student.submissions.filter(sub => sub.slideIndex === i).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
                     }
                     if (latestSubmission) {
-                        allTotalScore += latestSubmission.score;
-                        allAttemptedQuestions++;
+                        allTotalScore += latestSubmission.score * weights[i];
+                        allAttemptedQuestions += weights[i];
                     }
                 }
             });
@@ -1253,6 +1266,7 @@
             }
             tableHeader.innerHTML = headerHtml + classAverageRowHtml;
 
+            const questionWeights = getQuestionWeightList(numQuestions, questionsList);
             let tableHtml = '';
             sortedStudents.forEach((student, index) => {
                 const rawDisplayName = hideNames ? `Student ${index + 1}` : student.name;
@@ -1267,7 +1281,7 @@
                     }
                     return subs.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0]?.score || 0;
                 });
-                const studentAvg = latestScores.length > 0 ? (latestScores.reduce((a, b) => a + b, 0) / latestScores.length).toFixed(0) : '-';
+                const studentAvg = latestScores.length > 0 ? QuestionWeights.weightedAverage(latestScores, questionWeights).toFixed(0) : '-';
 
                 let avgScoreDisplay = '';
                 if (showScores) {
@@ -2619,6 +2633,7 @@
             const decimalPlaces = parseInt(document.getElementById('decimalPlaces').value, 10) || 0;
             const studentsToExport = getCurrentlySortedStudents();
             const numQuestions = assignmentData.type === 'pdf' ? (assignmentData.questionZones ? assignmentData.questionZones.length : 0) : assignmentData.type === 'video' ? (assignmentData.videoQuestions ? assignmentData.videoQuestions.length : 0) : assignmentData.type === 'simulation' ? (assignmentData.simQuestions ? assignmentData.simQuestions.length : 0) : assignmentData.type === 'blank' ? (assignmentData.blocks || []).filter(b => b.type === 'question').length : (assignmentData.slideIds ? assignmentData.slideIds.length : 0);
+            const questionWeights = QuestionWeights.getWeights(assignmentData, numQuestions);
 
             const outputData = studentsToExport.map(student => {
                 const nameParts = student.name.split(' ').filter(Boolean);
@@ -2626,14 +2641,12 @@
                 const lastName = nameParts.slice(1).join(' ') || "";
                 const formattedName = lastName ? `${lastName}, ${firstName}` : firstName;
 
-                let totalScore = 0;
+                const gradeScores = [];
                 for (let i = 0; i < numQuestions; i++) {
                     const latestSubmission = student.submissions.filter(s => s.slideIndex === i).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
-                    if (latestSubmission) {
-                        totalScore += latestSubmission.score;
-                    }
+                    gradeScores.push(latestSubmission ? latestSubmission.score : 0);
                 }
-                const rawPercentage = numQuestions > 0 ? totalScore / numQuestions : 0;
+                const rawPercentage = QuestionWeights.weightedAverage(gradeScores, questionWeights);
                 const scaledScore = ((rawPercentage / 100) * maxPoints).toFixed(decimalPlaces);
 
                 return `${formattedName}\t${scaledScore}`;
@@ -2660,6 +2673,7 @@
             let csvContent = "\uFEFF"; // Add BOM for Excel UTF-8 support
             const numQuestions = assignmentData.type === 'pdf' ? (assignmentData.questionZones ? assignmentData.questionZones.length : 0) : assignmentData.type === 'video' ? (assignmentData.videoQuestions ? assignmentData.videoQuestions.length : 0) : assignmentData.type === 'simulation' ? (assignmentData.simQuestions ? assignmentData.simQuestions.length : 0) : assignmentData.type === 'blank' ? (assignmentData.blocks || []).filter(b => b.type === 'question').length : (assignmentData.slideIds ? assignmentData.slideIds.length : 0);
             const hasFocusMode = assignmentData.focusModeEnabled;
+            const questionWeights = QuestionWeights.getWeights(assignmentData, numQuestions);
 
             let headers = ["Email", "Last Name", "First Name", "Full Name (Last, First)", "Class", "Average Score %", "Completion %"];
             if (hasFocusMode) headers.push("Focus Violations");
@@ -2691,7 +2705,7 @@
                     }
                 }
 
-                const averageScore = numQuestions > 0 ? (totalScore / numQuestions).toFixed(2) : "0.00";
+                const averageScore = numQuestions > 0 ? QuestionWeights.weightedAverage(questionScores, questionWeights).toFixed(2) : "0.00";
                 const completionPercentage = numQuestions > 0 ? ((attemptedQuestions / numQuestions) * 100).toFixed(2) : "0.00";
 
                 let row = [
