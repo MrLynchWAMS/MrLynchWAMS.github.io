@@ -194,6 +194,73 @@
         return (right === correct.length && wrong === 0) ? points : 0;
     }
 
+    function validateChoiceGrading(block, checkerEntry) {
+        const grading = block.choiceGrading || {};
+        const mode = grading.mode || 'builtin';
+        if (mode === 'builtin') return;
+        if (mode === 'checker') {
+            const code = typeof checkerEntry === 'string' ? checkerEntry : checkerEntry?.code;
+            if (!code || !code.trim() || checkerEntry?.mode === 'auto') {
+                throw new Error('Configure a custom checker before saving.');
+            }
+            if (!/function\s+[a-zA-Z0-9_]+\s*\(/.test(code)) throw new Error('Checker must define a named function.');
+            try {
+                new Function(code);
+            } catch (e) {
+                throw new Error(`Invalid checker code: ${e.message}`);
+            }
+            return;
+        }
+        if (mode !== 'rules') throw new Error('Unknown choice grading mode.');
+        if (grading.questionType !== block.questionType || !Array.isArray(grading.choiceSnapshot) ||
+            JSON.stringify(grading.choiceSnapshot) !== JSON.stringify(block.choices || [])) {
+            throw new Error('Choices changed. Review and confirm the custom scoring rules.');
+        }
+        if (!['builtin', 'zero'].includes(grading.fallback)) throw new Error('Choose a scoring fallback.');
+        if (!Array.isArray(grading.rules) || !grading.rules.length) throw new Error('Add at least one scoring rule.');
+        const keys = new Set();
+        const max = block.points || 100;
+        grading.rules.forEach(rule => {
+            if (!Array.isArray(rule.indexes) || !rule.indexes.length ||
+                rule.indexes.some(i => !Number.isInteger(i) || i < 0 || i >= (block.choices || []).length) ||
+                new Set(rule.indexes).size !== rule.indexes.length ||
+                (block.questionType === 'choice' && rule.indexes.length !== 1)) {
+                throw new Error('Each rule must select valid choices.');
+            }
+            if (typeof rule.points !== 'number' || !Number.isFinite(rule.points) || rule.points < 0 || rule.points > max) {
+                throw new Error(`Rule points must be between 0 and ${max}.`);
+            }
+            const key = [...rule.indexes].sort((a, b) => a - b).join(',');
+            if (keys.has(key)) throw new Error('Remove duplicate scoring rules.');
+            keys.add(key);
+        });
+    }
+
+    function scoreChoice(block, studentAnswer, checkerEntry, options = {}) {
+        const answer = String(studentAnswer == null ? '' : studentAnswer);
+        if (!answer.trim()) return 0;
+        const grading = block.choiceGrading || {};
+        validateChoiceGrading(block, checkerEntry);
+        if (grading.mode === 'checker') {
+            const code = typeof checkerEntry === 'string' ? checkerEntry : checkerEntry.code;
+            const score = executeCheckerFunction(code, answer, options);
+            if (typeof score !== 'number' || !Number.isFinite(score) || score < 0 || score > (block.points || 100)) {
+                throw new Error(`Checker must return a number between 0 and ${block.points || 100}.`);
+            }
+            return score;
+        }
+        if (grading.mode === 'rules') {
+            const key = answer.split(',').map(v => v.trim()).sort((a, b) => Number(a) - Number(b)).join(',');
+            const rule = grading.rules.find(r => [...r.indexes].sort((a, b) => a - b).join(',') === key);
+            if (rule) return rule.points;
+            if (grading.fallback === 'zero') return 0;
+        }
+        if (block.questionType === 'choice') {
+            return parseInt(answer, 10) === block.correctChoiceIndex ? (block.points || 100) : 0;
+        }
+        return evaluateMultiselect(block, answer);
+    }
+
     function renderYoutube(url, options) {
         let videoId = '';
         const youtubeIdRegex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
@@ -234,6 +301,8 @@
         renderMathContent,
         evaluateInlineChecker,
         evaluateMultiselect,
+        validateChoiceGrading,
+        scoreChoice,
         renderYoutube,
         renderIframe,
         escapeHtml,

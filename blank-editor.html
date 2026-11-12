@@ -1561,7 +1561,10 @@ Reading level: [GRADE LEVEL]</p>
             const isHidden = panel.style.display === 'none' || panel.style.display === '';
             if (isHidden) {
                 panel.style.display = 'block';
-                if (!checkerWidgets[blockId]) initCheckerWidget(blockId);
+                const block = blocks.find(b => b.id === blockId);
+                if (block && ['choice', 'multiselect'].includes(block.questionType)) {
+                    renderChoiceGrader(blockId);
+                } else if (!checkerWidgets[blockId]) initCheckerWidget(blockId);
                 panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             } else {
                 flushCheckerWidget(blockId);
@@ -1579,7 +1582,8 @@ Reading level: [GRADE LEVEL]</p>
             host.appendChild(clone);
             const widgetContainer = host.querySelector('.checker-widget');
             checkerWidgetContainers[blockId] = widgetContainer;
-            const stored = checkerFunctions[blockId];
+            const entry = checkerFunctions[blockId];
+            const stored = entry && entry.mode === 'auto' ? null : entry;
             let initialCode = '';
             let initialMeta = null;
             if (stored && typeof stored === 'object') {
@@ -1607,7 +1611,10 @@ Reading level: [GRADE LEVEL]</p>
             const btn = document.querySelector(`#q-block-${blockId} .checker-toggle-btn`);
             if (!btn) return;
             const stored = checkerFunctions[blockId];
-            const hasChecker = stored && (typeof stored === 'object' ? stored.code : stored);
+            const block = blocks.find(b => b.id === blockId);
+            const isChoice = block && ['choice', 'multiselect'].includes(block.questionType);
+            const hasChecker = isChoice ? block.choiceGrading?.mode && block.choiceGrading.mode !== 'builtin' :
+                stored && (typeof stored === 'object' ? stored.code : stored);
             const dot = btn.querySelector('.checker-dot');
             if (dot) dot.style.display = hasChecker ? 'inline-block' : 'none';
         }
@@ -1939,6 +1946,7 @@ Reading level: [GRADE LEVEL]</p>
     <div class="mb-2">
         <a href="#" onclick="event.preventDefault(); document.getElementById('q-block-${block.id}').scrollIntoView({behavior:'smooth',block:'nearest'})" class="text-xs text-gray-500 hover:text-gray-300">↑ Back to question</a>
     </div>
+    ${['choice', 'multiselect'].includes(block.questionType) ? `<div class="choice-grader-host-${block.id}"></div>` : ''}
     <div class="checker-widget-host-${block.id}"></div>
 </div>`;
 
@@ -1949,6 +1957,121 @@ Reading level: [GRADE LEVEL]</p>
             const block = blocks.find(b => b.id === blockId);
             if (!block || !block.choices) return;
             block.choices[idx] = value;
+            if (document.getElementById(`checker-panel-${blockId}`)?.style.display === 'block') renderChoiceGrader(blockId);
+        }
+
+        function choiceGradingFor(block) {
+            if (!block.choiceGrading) block.choiceGrading = { mode: 'builtin', fallback: 'builtin', rules: [], questionType: block.questionType, choiceSnapshot: [...(block.choices || [])] };
+            return block.choiceGrading;
+        }
+
+        function renderChoiceGrader(blockId) {
+            const block = blocks.find(b => b.id === blockId);
+            const host = document.querySelector(`.choice-grader-host-${blockId}`);
+            const widgetHost = document.querySelector(`.checker-widget-host-${blockId}`);
+            if (!block || !host || !widgetHost) return;
+            const grading = choiceGradingFor(block);
+            const mode = grading.mode || 'builtin';
+            const choices = block.choices || [];
+            const stale = grading.questionType !== block.questionType || JSON.stringify(grading.choiceSnapshot) !== JSON.stringify(choices);
+            let html = `<label class="text-sm font-semibold">Choice scoring
+                <select aria-label="Choice scoring" onchange="setChoiceGradingMode('${blockId}', this.value)" class="ml-2 p-1 bg-gray-700 border border-gray-600 rounded text-sm">
+                    <option value="builtin" ${mode === 'builtin' ? 'selected' : ''}>Built-in</option>
+                    <option value="rules" ${mode === 'rules' ? 'selected' : ''}>Simple custom rules</option>
+                    <option value="checker" ${mode === 'checker' ? 'selected' : ''}>Custom checker</option>
+                </select></label>
+                <p class="text-xs text-gray-400 mt-1">Built-in uses the marked answers and the scoring setting above. Custom scoring overrides it.</p>`;
+            if (mode === 'rules') {
+                html += `<p class="text-xs text-yellow-300 mt-2">Rules match the exact selected set. Choice positions are used; review rules whenever choices change.</p>
+                    ${stale ? `<p class="text-xs text-red-400 mt-1">Choices changed. Review the rules and confirm them before saving or testing.</p>` : ''}
+                    <div class="space-y-3 mt-2">`;
+                (grading.rules || []).forEach((rule, ri) => {
+                    html += `<div class="p-2 bg-gray-700/50 rounded"><div class="flex flex-wrap gap-3">`;
+                    choices.forEach((choice, ci) => {
+                        html += `<label class="text-sm"><input type="${block.questionType === 'choice' ? 'radio' : 'checkbox'}"
+                            name="rule-${blockId}-${ri}" ${rule.indexes.includes(ci) ? 'checked' : ''}
+                            onchange="updateChoiceRuleSelection('${blockId}', ${ri}, ${ci}, this.checked)"> ${escapeHtml(choice || `Choice ${ci + 1}`)}</label>`;
+                    });
+                    html += `</div><label class="text-sm">Points <input type="number" min="0" max="${block.points || 100}" step="any"
+                        value="${rule.points == null ? '' : rule.points}" oninput="updateChoiceRulePoints('${blockId}', ${ri}, this.value)"
+                        class="w-20 p-1 bg-gray-700 border border-gray-600 rounded"></label>
+                        <button type="button" onclick="removeChoiceRule('${blockId}', ${ri})" class="ml-2 text-sm text-red-400">Remove rule</button></div>`;
+                });
+                html += `</div><div class="flex flex-wrap gap-2 mt-2">
+                    <button type="button" onclick="addChoiceRule('${blockId}')" class="text-xs bg-blue-700 px-2 py-1 rounded">+ Add exact-set rule</button>
+                    <button type="button" onclick="confirmChoiceRules('${blockId}')" class="text-xs bg-gray-600 px-2 py-1 rounded">Confirm rules for current choices</button>
+                    </div><label class="text-sm block mt-2">For other answers
+                    <select onchange="choiceGradingFor(blocks.find(b => b.id === '${blockId}')).fallback = this.value" class="ml-1 p-1 bg-gray-700 border border-gray-600 rounded">
+                    <option value="builtin" ${grading.fallback === 'builtin' ? 'selected' : ''}>Use built-in scoring</option>
+                    <option value="zero" ${grading.fallback === 'zero' ? 'selected' : ''}>Award zero</option></select></label>`;
+            } else if (mode === 'checker') {
+                html += `<p class="text-xs text-yellow-300 mt-2">The checker receives zero-based choice indexes, not answer text: first choice = "0"; multiple selections = "0,2" in ascending order. Return points from 0 to ${block.points || 100}. Review code if choices change.</p>`;
+            }
+            html += `<div class="mt-3 pt-2 border-t border-gray-700"><p class="text-xs font-semibold text-gray-400">Test current scoring (before penalties)</p>
+                <div class="flex flex-wrap gap-3 mt-1">${choices.map((choice, ci) => `<label class="text-sm"><input type="${block.questionType === 'choice' ? 'radio' : 'checkbox'}" name="choice-test-${blockId}" value="${ci}"> ${escapeHtml(choice || `Choice ${ci + 1}`)}</label>`).join('')}</div>
+                <button type="button" onclick="testChoiceGrading('${blockId}')" class="mt-2 text-xs bg-indigo-700 px-2 py-1 rounded">Test scoring</button>
+                <span id="choice-test-result-${blockId}" class="ml-2 text-sm" role="status"></span></div>`;
+            host.innerHTML = html;
+            widgetHost.style.display = mode === 'checker' ? 'block' : 'none';
+            if (mode === 'checker' && !checkerWidgets[blockId]) initCheckerWidget(blockId);
+        }
+
+        function setChoiceGradingMode(blockId, mode) {
+            if (checkerWidgets[blockId]) flushCheckerWidget(blockId);
+            choiceGradingFor(blocks.find(b => b.id === blockId)).mode = mode;
+            renderChoiceGrader(blockId);
+            updateBlockCheckerIndicator(blockId);
+        }
+
+        function addChoiceRule(blockId) {
+            const grading = choiceGradingFor(blocks.find(b => b.id === blockId));
+            grading.rules.push({ indexes: [], points: null });
+            renderChoiceGrader(blockId);
+        }
+
+        function removeChoiceRule(blockId, index) {
+            choiceGradingFor(blocks.find(b => b.id === blockId)).rules.splice(index, 1);
+            renderChoiceGrader(blockId);
+        }
+
+        function updateChoiceRuleSelection(blockId, ruleIndex, choiceIndex, checked) {
+            const block = blocks.find(b => b.id === blockId);
+            const rule = choiceGradingFor(block).rules[ruleIndex];
+            if (block.questionType === 'choice') rule.indexes = [choiceIndex];
+            else {
+                const selected = new Set(rule.indexes);
+                if (checked) selected.add(choiceIndex); else selected.delete(choiceIndex);
+                rule.indexes = [...selected].sort((a, b) => a - b);
+            }
+        }
+
+        function updateChoiceRulePoints(blockId, ruleIndex, value) {
+            choiceGradingFor(blocks.find(b => b.id === blockId)).rules[ruleIndex].points = value === '' ? null : Number(value);
+        }
+
+        function confirmChoiceRules(blockId) {
+            const block = blocks.find(b => b.id === blockId);
+            const grading = choiceGradingFor(block);
+            grading.questionType = block.questionType;
+            grading.choiceSnapshot = [...(block.choices || [])];
+            renderChoiceGrader(blockId);
+        }
+
+        function testChoiceGrading(blockId) {
+            const block = blocks.find(b => b.id === blockId);
+            const result = document.getElementById(`choice-test-result-${blockId}`);
+            const answer = Array.from(document.querySelectorAll(`input[name="choice-test-${blockId}"]:checked`))
+                .map(el => Number(el.value)).sort((a, b) => a - b).join(',');
+            if (!answer) {
+                result.textContent = 'Select at least one answer.';
+                return;
+            }
+            if (checkerWidgets[blockId]) flushCheckerWidget(blockId);
+            try {
+                result.textContent = `Score: ${window.BlankRenderer.scoreChoice(block, answer, checkerFunctions[blockId], { assignmentData, showToast })}`;
+            } catch (e) {
+                result.textContent = `Grader error: ${e.message}`;
+            }
         }
 
         function toggleCorrectChoice(blockId, idx, checked) {
@@ -2224,10 +2347,21 @@ Reading level: [GRADE LEVEL]</p>
                 const name = assignmentData.name || '';
                 // Flush all open checker widgets before saving
                 Object.keys(checkerWidgets).forEach(id => flushCheckerWidget(id));
+                blocksToSave.filter(block => block.type === 'question' && ['choice', 'multiselect'].includes(block.questionType))
+                    .forEach(block => {
+                        try {
+                            window.BlankRenderer.validateChoiceGrading(block, checkerFunctions[block.id]);
+                        } catch (e) {
+                            throw new Error(`Question "${block.prompt || block.id}": ${e.message}`);
+                        }
+                    });
                 const newCheckerFunctions = {};
                 blocksToSave.forEach(block => {
                     if (block.type !== 'question') return;
-                    if (block.questionType === 'choice') {
+                    const stored = checkerFunctions[block.id];
+                    if (['choice', 'multiselect'].includes(block.questionType) && stored && stored.mode !== 'auto') {
+                        newCheckerFunctions[block.id] = stored;
+                    } else if (block.questionType === 'choice') {
                         const correctIdx = Number.isInteger(block.correctChoiceIndex) ? block.correctChoiceIndex : 0;
                         const pts = Number.isFinite(block.points) && block.points > 0 ? block.points : 100;
                         const code = `function checkAnswer(studentAnswer) {\n    return parseInt(studentAnswer, 10) === ${correctIdx} ? ${pts} : 0;\n}`;
@@ -2401,7 +2535,7 @@ Reading level: [GRADE LEVEL]</p>
                 showToast('Assignment saved!', { color: 'green' });
             } catch (error) {
                 console.error(error);
-                showToast('Error saving assignment.', { color: 'red' });
+                showToast(`Error saving assignment: ${error.message}`, { color: 'red' });
             } finally {
                 saveBtn.disabled = false;
                 saveBtn.textContent = 'Save Assignment';
@@ -2800,6 +2934,8 @@ Reading level: [GRADE LEVEL]</p>
             }
             if (confirm("Restore the last saved version of this assignment? Any unsaved changes will be lost.")) {
                 const lastRev = assignmentData.revisions[assignmentData.revisions.length - 1];
+                checkerWidgets = {};
+                checkerWidgetContainers = {};
                 blocks = lastRev.blocks || [];
                 checkerFunctions = lastRev.checkerFunctions || {};
                 

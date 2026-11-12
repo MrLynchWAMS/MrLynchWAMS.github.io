@@ -49,6 +49,12 @@ Deploy the functions **before or together with** the rules and the updated `clas
 
 Every question is scored out of 100, and the overall score is the average. Teachers can optionally give a question a **weight** (default 1; `2` counts double, `0.5` counts half, `0` excludes it from the overall score). Weights are stored as `assignment.questionWeights`, an array aligned with the question index (`slideIndex`) and omitted when every weight is 1, so existing assignments are unchanged. The shared logic lives in `shared/question-weights.js` and is used by every editor, the student player and the teacher dashboards. Cloud Functions cannot import `shared/`, so `functions/aura.js` keeps a small copy that `functions/aura.test.js` checks against the shared module. Deploy `functions/` together with the site so Aura eligibility uses the same weighted score. In the blank editor, leave **Points** at 100 and use **Weight** instead: points only cap what a question can award.
 
+### Blank assignment choice scoring
+
+Choice questions default to the marked-answer scorer. In **Grader**, choose **Simple custom rules** to award points for individual choices or exact multiple-selection sets; unmatched answers can use built-in scoring or zero. For example, assign 90 points to the exact set A+B+C and leave the built-in fallback to grade all four correct answers normally. Rules use choice positions: after changing choices or their order, review and confirm the rules before saving. Canvas mode preserves these rules, but choice changes must be confirmed in structured mode.
+
+**Custom checker** enables the existing Simple/Advanced checker widget instead. The answer is a zero-based index as a string (`"1"` for the second choice) or sorted comma-separated indexes (`"0,1,2"`). Return a number from zero through the question's Points. The grader's test uses the same base scoring as student checks and dashboard regrading; student attempt, lateness and integrity adjustments are applied afterwards and are not replayed by dashboard regrading. Students must select at least one choice. The standalone markup tester only tests markup and built-in scoring, not saved custom graders.
+
 ### Manual test plan
 
 1. As a student (Google and passcode), open the console and try `firebase.firestore().collection('students').doc(id).update({auraBalance: 1e5})` → must be `permission-denied`. Same for `auraPurchases.add(...)`, `earnedAura`, `auraTransactions`, and reading/writing another student's `submissions`.
