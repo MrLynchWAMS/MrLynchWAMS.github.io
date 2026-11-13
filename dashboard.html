@@ -1468,6 +1468,14 @@
             const funcEntry = dataToUse.checkerFunctions?.[checkerKey] ?? dataToUse.checkerFunctions?.[`calc${slideIndex + 1}`];
             const funcString = funcEntry ? (typeof funcEntry === 'object' ? funcEntry.code : funcEntry) : null;
 
+            if (dataToUse.type === 'blank' && ['choice', 'multiselect'].includes(questionBlock?.questionType)) {
+                return window.BlankRenderer.scoreChoice(questionBlock, submission.answer, funcEntry, {
+                    userProfile: { name: submission.studentName, email: submission.studentEmail },
+                    assignmentData: dataToUse,
+                    showToast: () => {}
+                });
+            }
+
             if (!funcString) {
                 if (dataToUse.type === 'video') {
                     const videoQuestion = dataToUse.videoQuestions?.[slideIndex];
@@ -1489,9 +1497,6 @@
                         }
                         return 100;
                     }
-                }
-                if (dataToUse.type === 'blank' && questionBlock?.questionType === 'multiselect') {
-                    return window.BlankRenderer.evaluateMultiselect(questionBlock, submission.answer);
                 }
                 if (dataToUse.type === 'blank' && questionBlock?.inlineChecker) {
                     try {
@@ -1777,7 +1782,7 @@
                 showToast(`Successfully regraded ${updates.length} submissions!${skippedLocked ? ` Skipped ${skippedLocked} teacher-locked.` : ''}`, { color: 'green' });
             } catch (error) {
                 console.error("Error during regrade all:", error);
-                showToast("An error occurred during regrading.", { color: 'red' });
+                showToast(`Regrading failed: ${error.message}`, { color: 'red' });
             } finally {
                 regradeBtn.disabled = false;
                 regradeBtn.textContent = 'Regrade All';
@@ -1820,7 +1825,7 @@
                 showToast(`Successfully regraded ${count} submission(s) for Q${slideIndex + 1}!${skippedLocked ? ` Skipped ${skippedLocked} teacher-locked.` : ''}`, { color: 'green' });
             } catch (error) {
                 console.error(`Error regrading question ${slideIndex + 1}:`, error);
-                showToast("An error occurred during regrading.", { color: 'red' });
+                showToast(`Regrading failed: ${error.message}`, { color: 'red' });
             } finally {
                 // No need to refetch, listeners will update view
             }
@@ -1863,7 +1868,7 @@
                 showToast("Submission regraded successfully!", { color: 'green' });
             } catch (error) {
                 console.error("Error regrading single submission:", error);
-                showToast("Failed to regrade submission.", { color: 'red' });
+                showToast(`Failed to regrade submission: ${error.message}`, { color: 'red' });
             } finally {
                 button.disabled = false;
             }
@@ -1876,29 +1881,28 @@
             button.disabled = true;
 
             try {
-                await db.collection("submissions").doc(submissionId).update({ answer: newAnswer });
-
                 const subDoc = await db.collection("submissions").doc(submissionId).get();
+                if (!subDoc.exists) throw new Error('Submission not found.');
                 const submissionData = subDoc.data();
                 const student = allStudentData.find(s => s.email === submissionData.studentEmail);
-                if (student) {
-                    const subToUpdate = student.submissions.find(s => s.id === submissionId);
-                    if (subToUpdate) subToUpdate.answer = newAnswer;
-                }
+                const subToUpdate = student?.submissions.find(s => s.id === submissionId);
 
                 if (isTeacherLockedQuestion(submissionData.studentEmail, submissionData.assignmentId, submissionData.slideIndex)) {
+                    await db.collection("submissions").doc(submissionId).update({ answer: newAnswer });
+                    if (subToUpdate) subToUpdate.answer = newAnswer;
                     showToast("Answer saved. Score not regraded because it is locked.", { color: 'blue' });
                     return;
                 }
                 const newScore = executeChecker({ id: submissionId, ...submissionData, answer: newAnswer });
                 await db.collection("submissions").doc(submissionId).update({
+                    answer: newAnswer,
                     score: newScore,
                     isManualGrade: false
                 });
 
-                if (student) {
-                    const subToUpdate = student.submissions.find(s => s.id === submissionId);
-                    if (subToUpdate) subToUpdate.score = newScore;
+                if (subToUpdate) {
+                    subToUpdate.answer = newAnswer;
+                    subToUpdate.score = newScore;
                 }
                 const scoreInput = document.getElementById(`score-${submissionId}`);
                 if (scoreInput) scoreInput.value = newScore;
@@ -1910,7 +1914,7 @@
 
             } catch (error) {
                 console.error("Error saving answer:", error);
-                showToast("Failed to save answer.", { color: 'red' });
+                showToast(`Failed to save answer: ${error.message}`, { color: 'red' });
             } finally {
                 button.disabled = false;
             }

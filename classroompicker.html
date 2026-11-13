@@ -4289,27 +4289,20 @@
                 return;
             }
 
-            const normalizedAnswer = normalizeAnswer(String(studentAnswer || ''), false, false);
-            progress.normalizedAnswers = progress.normalizedAnswers || [];
-            
-            let isUniqueAttempt = true;
-            if (progress.normalizedAnswers.includes(normalizedAnswer)) {
-                isUniqueAttempt = false;
-            } else {
-                progress.normalizedAnswers.push(normalizedAnswer);
-            }
-
-            if (isUniqueAttempt) {
-                progress.attemptCount += 1;
-            }
-            const attemptCount = progress.attemptCount;
-
             // Compute score
             let score = 0;
-            if (block.questionType === 'choice') {
-                score = parseInt(studentAnswer, 10) === block.correctChoiceIndex ? (block.points || 100) : 0;
-            } else if (block.questionType === 'multiselect') {
-                score = renderer.evaluateMultiselect(block, studentAnswer);
+            if (block.questionType === 'choice' || block.questionType === 'multiselect') {
+                try {
+                    score = renderer.scoreChoice(block, studentAnswer, checkerFunctionStrings[block.id], {
+                        showToast: shouldHideScoreFeedback() ? () => {} : showToast,
+                        userProfile,
+                        assignmentData
+                    });
+                } catch (e) {
+                    console.error('Choice grader error for block', block.id, e);
+                    showToast(`Grader error: ${e.message}. Your answer was not saved; contact your teacher.`, { color: 'red' });
+                    return;
+                }
             } else if (block.inlineChecker) {
                 try {
                     const passed = evaluateBlockInlineChecker(block.inlineChecker, studentAnswer);
@@ -4340,6 +4333,14 @@
                     score = 0;
                 }
             }
+
+            const normalizedAnswer = normalizeAnswer(String(studentAnswer || ''), false, false);
+            progress.normalizedAnswers = progress.normalizedAnswers || [];
+            if (!progress.normalizedAnswers.includes(normalizedAnswer)) {
+                progress.normalizedAnswers.push(normalizedAnswer);
+                progress.attemptCount += 1;
+            }
+            const attemptCount = progress.attemptCount;
 
             // Apply attempt penalty
             const extraAttempts = Math.max(0, attemptCount - 1);
