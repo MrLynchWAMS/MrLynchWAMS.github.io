@@ -1917,7 +1917,7 @@
                             if (blockId) {
                                 questionProgressData[blockId] = {
                                     attemptCount: data.attemptCount || 0,
-                                    bestScore: data.bestScore || 0,
+                                    bestScore: data.bestScore || 0, bestRawScore: data.bestRawScore,
                                     locked: data.locked || false,
                                     normalizedAnswers: data.normalizedAnswers || [],
                                     ...(data.teacherLocked === true ? { teacherLocked: true, lockedScore: Number(data.lockedScore) || 0 } : {})
@@ -4232,7 +4232,7 @@
                 const doc = await db.collection("questionProgress").doc(`${assignmentData.id}_${userProfile.email}_${qIndex}`).get();
                 const data = doc.exists ? doc.data() : null;
                 if (data && data.teacherLocked === true) {
-                    const prog = questionProgressData[block.id] || (questionProgressData[block.id] = { attemptCount: data.attemptCount || 0, bestScore: data.bestScore || 0, locked: !!data.locked, normalizedAnswers: data.normalizedAnswers || [] });
+                    const prog = questionProgressData[block.id] || (questionProgressData[block.id] = { attemptCount: data.attemptCount || 0, bestScore: data.bestScore || 0, bestRawScore: data.bestRawScore, locked: !!data.locked, normalizedAnswers: data.normalizedAnswers || [] });
                     prog.teacherLocked = true;
                     prog.lockedScore = Number(data.lockedScore) || 0;
                     slideStates[qIndex] = { ...(slideStates[qIndex] || {}), score: prog.lockedScore };
@@ -4377,7 +4377,9 @@
 
             // Apply attempt penalty
             const extraAttempts = Math.max(0, attemptCount - 1);
+            const rawScore = score;
             score = Math.max(0, score - extraAttempts * attemptPenalty);
+            const attemptPointsLost = rawScore - score;
 
             // Apply per-question lateness penalty (deadlinePolicy.q{N})
             const policy = assignmentData.deadlinePolicy || {};
@@ -4431,9 +4433,14 @@
                 score = Math.min(score, capPoints);
             }
 
-            if (retainHighestScore) {
-                score = Math.max(score, progress.bestScore || 0);
+            // Retain the best score only when this answer is at least as good (before attempt penalties) as the one that earned it
+            let scoreRetained = false;
+            const previousBestRaw = Number.isFinite(progress.bestRawScore) ? progress.bestRawScore : (progress.bestScore || 0);
+            if (retainHighestScore && rawScore >= previousBestRaw && (progress.bestScore || 0) > score) {
+                score = progress.bestScore;
+                scoreRetained = true;
             }
+            if (rawScore >= previousBestRaw) progress.bestRawScore = rawScore;
             progress.bestScore = Math.max(progress.bestScore || 0, score);
             if (maxAttempts > 0 && attemptCount >= maxAttempts && lockOnMax) {
                 progress.locked = true;
@@ -4462,6 +4469,13 @@
                     resultEl.innerHTML = `<span class="font-bold text-blue-400">✓ Answer Saved!</span><span class="text-xs text-gray-500 ml-1">${attemptLabel}</span>`;
                 } else {
                     resultEl.innerHTML = `<span class="font-bold ${score >= 90 ? 'text-green-400' : score > 0 ? 'text-yellow-400' : 'text-red-400'}">Score: ${score}</span><span class="text-xs text-gray-500 ml-1">${attemptLabel}</span>`;
+                    const fullPoints = block.points || 100;
+                    if (attemptPointsLost > 0) {
+                        resultEl.innerHTML += `<div class="text-xs text-orange-400 mt-1">${rawScore >= fullPoints ? 'Your answer is correct, but ' : ''}${attemptPointsLost} point${attemptPointsLost !== 1 ? 's were' : ' was'} deducted for multiple attempts (${extraAttempts} extra × ${attemptPenalty}).${rawScore < fullPoints ? ` Your answer itself earned ${rawScore} before this deduction, so it is not fully correct.` : ''}</div>`;
+                    }
+                    if (scoreRetained) {
+                        resultEl.innerHTML += `<div class="text-xs text-blue-400 mt-1">Your previous best score was kept because this answer is as good or better.</div>`;
+                    }
                 }
             }
 
@@ -4495,6 +4509,7 @@
                     slideIndex: qIndex,
                     blockId: block.id,
                     bestScore: progress.bestScore,
+                    bestRawScore: Number.isFinite(progress.bestRawScore) ? progress.bestRawScore : progress.bestScore,
                     latestScore: score,
                     attemptCount: attemptCount,
                     normalizedAnswers: progress.normalizedAnswers,
