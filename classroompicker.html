@@ -555,6 +555,16 @@
         .blank-text-content li { margin: 0.2rem 0; }
         .blank-text-content a { color: #60a5fa; text-decoration: underline; }
         .blank-text-content hr { border-color: #4b5563; margin: 1rem 0; }
+    
+        /* Blank assignments: passage/questions split sections (opt-in via block.splitGroup) */
+        .blank-split { display: grid; grid-template-columns: 1fr; gap: 1rem; position: relative; left: 50%; transform: translateX(-50%); width: min(96vw, 84rem); }
+        .blank-split-ref { background: #1f2937; border: 1px solid #374151; border-radius: 0.5rem; padding: 1rem; max-height: 40vh; overflow-y: auto; position: sticky; top: 0; z-index: 5; }
+        .blank-split-ref img, .blank-split-ref figure { max-width: 100%; }
+        @media (min-width: 768px) {
+            .blank-split { grid-template-columns: 1fr 1fr; align-items: start; }
+            .blank-split-ref, .blank-split-q { max-height: calc(100vh - 6rem); overflow-y: auto; position: sticky; top: 1rem; }
+            .blank-split-q { padding-right: 0.25rem; }
+        }
     </style>
 </head>
 
@@ -3941,7 +3951,24 @@
             let qIndex = 0;
             const qTimerData = []; // [{blockId, dueAt}] — timers started after innerHTML set
 
+            // Blocks sharing a splitGroup render as a two-pane section (passage left, questions right).
+            let openGroup = null, groupRef = '', groupQ = '';
+            const closeSplitGroup = () => {
+                if (!openGroup) return;
+                html += `<section class="blank-split" data-split-group="${renderer.escapeHtml(openGroup)}">
+                    <div class="blank-split-ref space-y-4" tabindex="0" aria-label="Reference material">${groupRef}</div>
+                    <div class="blank-split-q space-y-6">${groupQ}</div>
+                </section>`;
+                openGroup = null; groupRef = ''; groupQ = '';
+            };
+
             blocks.forEach(block => {
+                const blockGroup = block.splitGroup || null;
+                if (blockGroup !== openGroup) {
+                    closeSplitGroup();
+                    openGroup = blockGroup;
+                }
+                const htmlBefore = html.length;
                 if (block.type === 'text') {
                     const rendered = renderer.renderTextBlockContent(block.content || '');
                     html += `<div class="blank-text-content bg-gray-800 p-4 rounded-lg text-gray-200 leading-relaxed">${rendered}</div>`;
@@ -4090,7 +4117,13 @@
                     </div>`;
                     qIndex++;
                 }
+                if (openGroup) {
+                    const piece = html.slice(htmlBefore);
+                    html = html.slice(0, htmlBefore);
+                    if (block.type === 'question') groupQ += piece; else groupRef += piece;
+                }
             });
+            closeSplitGroup();
 
             container.innerHTML = html;
             renderer.renderMathContent(container);

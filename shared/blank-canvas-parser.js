@@ -307,8 +307,30 @@
             return block;
         }
 
+        // :::split ... :::end wraps blocks in a passage/questions split group.
+        let splitStart = -1;
+        function closeSplit() {
+            flushText();
+            if (splitStart < 0) return;
+            const gid = genId('g');
+            for (let k = splitStart; k < blocks.length; k++) blocks[k].splitGroup = gid;
+            splitStart = -1;
+        }
+
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
+
+            if (/^\s*:::split\s*$/i.test(line)) {
+                if (splitStart >= 0) closeSplit();
+                flushText();
+                splitStart = blocks.length;
+                continue;
+            }
+            if (/^\s*:::end\s*$/i.test(line)) {
+                if (splitStart >= 0) closeSplit();
+                else warnings.push(`Line ${i + 1}: ":::end" without a matching ":::split".`);
+                continue;
+            }
 
             // --- Image block ---
             const imgMatch = line.match(/^!\[([^\]]*)\]\(([^\s)]+)(?:\s+"([^"]*)")?\)\s*$/);
@@ -391,6 +413,10 @@
             pendingTextLines.push(line);
         }
 
+        if (splitStart >= 0) {
+            warnings.push('":::split" was never closed with ":::end"; closed at end of document.');
+            closeSplit();
+        }
         flushText();
 
         // Positional fallback: if the prompt was edited, fingerprint matching fails. When exactly one
@@ -506,7 +532,10 @@
         if (!blocks || !blocks.length) return '';
         const lines = [];
 
-        blocks.forEach(block => {
+        blocks.forEach((block, bi) => {
+            if (block.splitGroup && block.splitGroup !== (blocks[bi - 1] || {}).splitGroup) {
+                lines.push(':::split');
+            }
             if (block.type === 'text') {
                 if (block.content === '<hr>') {
                     lines.push('---');
@@ -529,6 +558,10 @@
                 lines.push(qTag);
             }
             lines.push('');
+            if (block.splitGroup && block.splitGroup !== (blocks[bi + 1] || {}).splitGroup) {
+                lines.push(':::end');
+                lines.push('');
+            }
         });
 
         return lines.join('\n').trimEnd();
