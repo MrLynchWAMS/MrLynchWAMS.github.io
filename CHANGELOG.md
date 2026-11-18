@@ -1,3 +1,5 @@
+// Blank assignments: added opt-in "Add Passage + Questions" split view. Blocks sharing a `splitGroup` render with the passage/image on the left and questions on the right, scrolling independently (stacked on narrow screens). Canvas syntax: `:::split` ... `:::end`. Existing assignments are unchanged.
+
 // classroompicker.html change: sort video questions by timestamp and derive score/submission display from saved state instead of showing N/A before submit.
 
 // In the video assignment summary rendering, keep the question order consistent with timestamps and show Saved/Submitted when the student has work saved even if scoring is hidden.

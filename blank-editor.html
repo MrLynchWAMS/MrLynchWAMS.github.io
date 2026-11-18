@@ -584,6 +584,7 @@
                     <button onclick="addBlock('youtube')" class="bg-red-700 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg text-sm">+ Add YouTube</button>
                     <button onclick="addBlock('iframe')" class="bg-indigo-700 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg text-sm">+ Add Embed</button>
                     <button onclick="addBlock('question')" class="bg-green-700 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg text-sm">+ Add Question</button>
+                    <button onclick="addSplitGroup()" class="bg-cyan-700 hover:bg-cyan-600 text-white font-bold py-2 px-4 rounded-lg text-sm" title="Passage/image on the left, questions on the right. Each side scrolls independently for students.">+ Add Passage + Questions</button>
                 </div>
             </div>
 
@@ -1204,7 +1205,7 @@ Reading level: [GRADE LEVEL]</p>
             showToast(warnings.length > 3 ? msg + `\n...and ${warnings.length - 3} more` : msg, { color: 'yellow', duration: 8000 });
         }
 
-        function addBlock(type) {
+        function addBlock(type, groupId) {
             let block;
             if (type === 'text') {
                 block = { id: genId('b'), type: 'text', content: '', textFormat: 'markdown' };
@@ -1217,7 +1218,13 @@ Reading level: [GRADE LEVEL]</p>
             } else if (type === 'question') {
                 block = { id: genId('q'), type: 'question', prompt: '', questionType: 'text', points: 100, inlineChecker: null };
             }
-            blocks.push(block);
+            if (groupId) {
+                block.splitGroup = groupId;
+                const lastIdx = blocks.map(b => b.splitGroup).lastIndexOf(groupId);
+                blocks.splice(lastIdx + 1, 0, block);
+            } else {
+                blocks.push(block);
+            }
             renderBlocks();
             renumberQuestionBlocks();
             setTimeout(() => {
@@ -1230,6 +1237,50 @@ Reading level: [GRADE LEVEL]</p>
                     document.getElementById('add-block-bar')?.scrollIntoView({ behavior: 'smooth', block: 'end' });
                 }
             }, 50);
+        }
+
+        // Split groups: blocks sharing `splitGroup` render side by side for students
+        // (non-question blocks on the left, questions on the right). Absent = normal layout.
+        function addSplitGroup() {
+            const gid = genId('g');
+            addBlock('text', gid);
+            addBlock('question', gid);
+        }
+
+        function toggleBlockSplit(id) {
+            const idx = blocks.findIndex(b => b.id === id);
+            if (idx < 0) return;
+            const block = blocks[idx];
+            if (block.splitGroup) {
+                delete block.splitGroup;
+            } else if (idx > 0) {
+                const prev = blocks[idx - 1];
+                if (!prev.splitGroup) prev.splitGroup = genId('g');
+                block.splitGroup = prev.splitGroup;
+            } else if (blocks[1]) {
+                const next = blocks[1];
+                if (!next.splitGroup) next.splitGroup = genId('g');
+                block.splitGroup = next.splitGroup;
+            }
+            renderBlocks();
+        }
+
+        function splitControlsHtml(block) {
+            const label = block.splitGroup ? '⛓ Unlink' : '⛓ Link to split';
+            const title = block.splitGroup
+                ? 'Remove from the passage/questions split'
+                : 'Join the split group of the neighboring block';
+            return `<button onclick="toggleBlockSplit('${block.id}')" class="text-xs bg-cyan-800 hover:bg-cyan-700 text-white px-2 py-1 rounded" title="${title}">${label}</button>`;
+        }
+
+        function splitAddBarHtml(block) {
+            return `<div class="mt-3 pt-3 border-t border-cyan-900 flex flex-wrap gap-2 items-center text-xs">
+                <span class="text-cyan-300 font-semibold">Add to this split:</span>
+                <button onclick="addBlock('text','${block.splitGroup}')" class="bg-blue-700 hover:bg-blue-600 text-white px-2 py-1 rounded">+ Text</button>
+                <button onclick="addBlock('image','${block.splitGroup}')" class="bg-purple-700 hover:bg-purple-600 text-white px-2 py-1 rounded">+ Image</button>
+                <button onclick="addBlock('iframe','${block.splitGroup}')" class="bg-indigo-700 hover:bg-indigo-600 text-white px-2 py-1 rounded">+ Embed</button>
+                <button onclick="addBlock('question','${block.splitGroup}')" class="bg-green-700 hover:bg-green-600 text-white px-2 py-1 rounded">+ Question</button>
+            </div>`;
         }
 
         function deleteBlock(id) {
@@ -1370,11 +1421,15 @@ Reading level: [GRADE LEVEL]</p>
             blocks.forEach((block, idx) => {
                 const card = document.createElement('div');
                 card.className = 'block-card bg-gray-800 rounded-lg border border-gray-700 p-4';
+                if (block.splitGroup) card.className += ' border-l-4 border-l-cyan-500';
                 card.dataset.blockId = block.id;
                 if (block.type === 'question') card.id = `q-block-${block.id}`;
 
                 let innerHTML = '';
-                const typeLabel = block.type === 'text' ? '📝 Text' : block.type === 'image' ? '🖼️ Image' : '❓ Question';
+                const baseLabel = block.type === 'text' ? '📝 Text' : block.type === 'image' ? '🖼️ Image' : '❓ Question';
+                const typeLabel = block.splitGroup
+                    ? `${baseLabel} <span class="ml-2 text-xs text-cyan-300 font-normal">${block.type === 'question' ? '→ right pane' : '→ left pane (scrolls)'}</span>`
+                    : baseLabel;
                 if (block.type === 'question') {
                     innerHTML += `
                     <div class="block-card-header flex justify-between items-center mb-3">
@@ -1386,6 +1441,7 @@ Reading level: [GRADE LEVEL]</p>
                                 <span aria-hidden="true">⚙</span> Grader
                                 <span class="checker-dot absolute -top-1 -right-1 w-2 h-2 rounded-full bg-green-400" style="display:none" aria-hidden="true"></span>
                             </button>
+                            ${splitControlsHtml(block)}
                             <button onclick="deleteBlock('${block.id}')" class="text-red-400 hover:text-red-300 font-bold px-2 py-1 rounded text-sm" title="Delete">🗑</button>
                         </div>
                     </div>`;
@@ -1396,6 +1452,7 @@ Reading level: [GRADE LEVEL]</p>
                         <div class="flex gap-2">
                             <button onclick="moveBlock('${block.id}', 'up')" ${idx === 0 ? 'disabled' : ''} class="text-gray-400 hover:text-white disabled:opacity-30 px-2 py-1 rounded text-lg" title="Move Up">▲</button>
                             <button onclick="moveBlock('${block.id}', 'down')" ${idx === blocks.length - 1 ? 'disabled' : ''} class="text-gray-400 hover:text-white disabled:opacity-30 px-2 py-1 rounded text-lg" title="Move Down">▼</button>
+                            ${splitControlsHtml(block)}
                             <button onclick="deleteBlock('${block.id}')" class="text-red-400 hover:text-red-300 font-bold px-2 py-1 rounded text-sm" title="Delete">🗑</button>
                         </div>
                     </div>`;
@@ -1466,6 +1523,9 @@ Reading level: [GRADE LEVEL]</p>
                     innerHTML += renderQuestionCard(block);
                 }
 
+                if (block.splitGroup && block.splitGroup !== (blocks[idx + 1] || {}).splitGroup) {
+                    innerHTML += splitAddBarHtml(block);
+                }
                 card.innerHTML = innerHTML;
                 container.appendChild(card);
 

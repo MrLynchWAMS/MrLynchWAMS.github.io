@@ -43,6 +43,18 @@ Embed YouTube videos or interactive simulations/websites using the `@` prefix sy
 - Always use a full YouTube URL or youtu.be short link for videos.
 - Use `@[iframe]` for PhET simulations, Desmos graphs, Google Maps, or any embeddable web tool.
 
+### 4. SPLIT VIEW (OPTIONAL — passage beside questions)
+Wrap a passage/image and its questions between `:::split` and `:::end` to show them side by side (reference on the left, questions on the right, each scrolling independently). Use only when asked; otherwise omit.
+
+```
+:::split
+Passage text or ![diagram](https://...)
+
+## Question one prompt?
+[q: text]
+:::end
+```
+
 ---
 
 ## QUESTIONS — READ THIS SECTION CAREFULLY
