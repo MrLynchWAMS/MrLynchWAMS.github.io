@@ -772,11 +772,17 @@
             <!-- Simulation Student UI -->
             <div id="simulation-student-content" class="hidden">
                 <div class="bg-gray-800 p-4 rounded-lg mb-4">
-                    <div id="simulation-iframe-container"
-                        class="w-full min-h-[60vh] bg-black rounded border border-gray-700 overflow-hidden"></div>
-                    <div id="simulation-complete-indicator" class="mt-3 text-sm text-blue-300">Complete the simulation
+                    <div id="simulation-complete-indicator" role="status" aria-live="polite"
+                        class="mb-3 px-4 py-3 rounded-lg border-2 text-base font-semibold border-blue-500 bg-blue-900/40 text-blue-200">Complete the simulation
                         to unlock follow-up questions.</div>
+                    <div class="overflow-auto">
+                        <div id="simulation-iframe-container"
+                            class="bg-black rounded border border-gray-700 overflow-hidden mx-auto" style="width:100%;max-width:100%;"></div>
+                    </div>
                 </div>
+                <button id="sim-jump-questions" type="button" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 hover:bg-green-500 text-white font-bold py-3 px-6 rounded-full shadow-2xl border-2 border-green-300 animate-bounce">
+                    ⬇ Follow-up questions are open — click to jump
+                </button>
                 <div id="simulation-questions-section" class="hidden bg-gray-800 p-4 rounded-lg">
                     <h3 class="text-xl font-bold text-yellow-400 mb-4">Follow-up Questions</h3>
                     <div id="simulation-questions-list" class="space-y-4"></div>
@@ -5206,6 +5212,38 @@
             }
         }
 
+        function setSimIndicator(state, text, flash) {
+            const indicator = document.getElementById('simulation-complete-indicator');
+            if (!indicator) return;
+            const styles = {
+                locked: 'border-blue-500 bg-blue-900/40 text-blue-200',
+                open: 'border-green-400 bg-green-900/50 text-green-200',
+                error: 'border-red-500 bg-red-900/40 text-red-200',
+                neutral: 'border-gray-500 bg-gray-700/40 text-gray-200'
+            };
+            indicator.className = `mb-3 px-4 py-3 rounded-lg border-2 text-base font-semibold ${styles[state] || styles.neutral}`;
+            if (flash) indicator.classList.add('animate-pulse');
+            indicator.textContent = text;
+            updateSimJumpButton();
+        }
+
+        let simJumpObserver = null;
+        // Shows a floating "jump" button while questions are open but off-screen
+        function updateSimJumpButton() {
+            const btn = document.getElementById('sim-jump-questions');
+            const section = document.getElementById('simulation-questions-section');
+            if (!btn || !section) return;
+            if (simJumpObserver) simJumpObserver.disconnect();
+            const hasOpenQuestions = () => !section.classList.contains('hidden')
+                && section.querySelector('#simulation-questions-list > :not(.hidden)');
+            if (!hasOpenQuestions()) { btn.classList.add('hidden'); return; }
+            btn.onclick = () => section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            simJumpObserver = new IntersectionObserver(([entry]) => {
+                btn.classList.toggle('hidden', entry.isIntersecting || !hasOpenQuestions());
+            });
+            simJumpObserver.observe(section);
+        }
+
         async function initializeSimulationStudentView() {
             simulationCompleted = false;
             const iframeContainer = document.getElementById('simulation-iframe-container');
@@ -5218,22 +5256,26 @@
 
             const simUrl = assignmentData.simulationUrl || '';
             if (!simUrl) {
-                indicator.textContent = 'Simulation URL is missing. Please contact your teacher.';
-                indicator.classList.remove('text-blue-300');
-                indicator.classList.add('text-red-400');
+                setSimIndicator('error', '⚠️ Simulation URL is missing. Please contact your teacher.');
                 return;
             }
 
+            const size = assignmentData.simulationSize || {};
+            const wUnit = size.widthUnit === 'px' ? 'px' : '%';
+            const hUnit = size.heightUnit === 'vh' ? 'vh' : 'px';
+            const wVal = Number(size.width) > 0 ? Number(size.width) : 100;
+            const hVal = Number(size.height) > 0 ? Number(size.height) : 80;
+            iframeContainer.style.width = `${wVal}${wUnit}`;
+            iframeContainer.style.height = `${hVal}${hUnit}`;
             const iframe = document.createElement('iframe');
             iframe.src = simUrl;
-            iframe.className = 'w-full min-h-[80vh] rounded';
+            iframe.className = 'w-full h-full block rounded';
             iframe.setAttribute('allow', 'fullscreen');
             iframeContainer.appendChild(iframe);
 
             const simQuestions = assignmentData.simQuestions || [];
             const lockedQuestionCount = simQuestions.filter(q => !q.showBeforeSim).length;
             const hasPreSimQuestions = simQuestions.some(q => q.showBeforeSim);
-            indicator.classList.remove('text-red-400', 'text-blue-300', 'text-green-400', 'text-gray-300');
             const hideScores = shouldHideScoreFeedback();
 
             simQuestions.forEach((q, index) => {
@@ -5277,17 +5319,13 @@
             });
 
             if (!simQuestions.length) {
-                indicator.textContent = 'No follow-up questions for this simulation.';
-                indicator.classList.add('text-gray-300');
+                setSimIndicator('neutral', 'No follow-up questions for this simulation.');
             } else if (lockedQuestionCount === 0) {
-                indicator.textContent = 'All follow-up questions are available now.';
-                indicator.classList.add('text-green-400');
+                setSimIndicator('open', '✅ Follow-up questions are OPEN — scroll down or use the green button to answer them.');
             } else if (hasPreSimQuestions) {
-                indicator.textContent = 'Complete the simulation to unlock remaining questions.';
-                indicator.classList.add('text-blue-300');
+                setSimIndicator('locked', '🔒 Some follow-up questions are open now; the rest unlock when you complete the simulation.');
             } else {
-                indicator.textContent = 'Complete the simulation to unlock follow-up questions.';
-                indicator.classList.add('text-blue-300');
+                setSimIndicator('locked', '🔒 Follow-up questions are locked. Complete the simulation to unlock them.');
             }
 
             if (hasPreSimQuestions || (simQuestions.length && lockedQuestionCount === 0)) {
@@ -5295,6 +5333,7 @@
             } else {
                 questionsSection.classList.add('hidden');
             }
+            updateSimJumpButton();
 
             // Check if simulation was already completed (persisted in Firestore)
             try {
@@ -5302,14 +5341,13 @@
                 const existingSimDoc = await db.collection('simulationData').doc(simDocId).get();
                 if (existingSimDoc.exists) {
                     simulationCompleted = true;
-                    indicator.textContent = '✅ Simulation marked complete.';
-                    indicator.classList.remove('text-blue-300');
-                    indicator.classList.add('text-green-400');
+                    setSimIndicator('open', '✅ Simulation complete — follow-up questions are OPEN below.');
                     questionsSection.classList.remove('hidden');
                     questionsList.querySelectorAll('[data-sim-locked="true"]').forEach((el) => {
                         el.classList.remove('hidden');
                         delete el.dataset.simLocked;
                     });
+                    updateSimJumpButton();
                     // Restore auto-fill answers from previously saved simData
                     const storedSimData = existingSimDoc.data().simData;
                     if (storedSimData && typeof storedSimData === 'object') {
@@ -5335,14 +5373,13 @@
                 if (!event.data || event.data.action !== 'SIM_COMPLETE') return;
 
                 simulationCompleted = true;
-                indicator.textContent = '✅ Simulation marked complete.';
-                indicator.classList.remove('text-blue-300');
-                indicator.classList.add('text-green-400');
+                setSimIndicator('open', '✅ Simulation complete — follow-up questions are OPEN below.', true);
                 questionsSection.classList.remove('hidden');
                 questionsList.querySelectorAll('[data-sim-locked="true"]').forEach((el) => {
                     el.classList.remove('hidden');
                     delete el.dataset.simLocked;
                 });
+                updateSimJumpButton();
 
                 // Always save completion record (simData may or may not be present)
                 try {
@@ -5400,22 +5437,30 @@
             for (let index = 0; index < simQuestions.length; index++) {
                 const q = simQuestions[index];
                 if (!q.isSimAutoField) continue;
-                const fieldPath = q.simFieldPath || '';
-                let rawValue;
-                if (fieldPath) {
-                    rawValue = getNestedValue(simData, fieldPath);
-                }
-                // Convert to a string answer (support strings, numbers, booleans).
-                // Objects are JSON-stringified so checker can receive the full value;
-                // teachers should configure their checker to handle the string format accordingly.
+                const fieldPaths = (Array.isArray(q.simFieldPaths) && q.simFieldPaths.length)
+                    ? q.simFieldPaths
+                    : (q.simFieldPath ? [q.simFieldPath] : []);
+                const fieldPath = fieldPaths.join(', ');
                 let answer;
-                if (rawValue === undefined || rawValue === null) {
-                    console.warn(`[SimAutoField] No value found at path "${fieldPath}" in simData for question ${index + 1}`);
-                    answer = '';
-                } else if (typeof rawValue === 'object') {
-                    answer = JSON.stringify(rawValue);
+                if (fieldPaths.length > 1) {
+                    // Multiple outputs: pass a JSON object keyed by path
+                    const combined = {};
+                    fieldPaths.forEach(fp => {
+                        const v = getNestedValue(simData, fp);
+                        if (v !== undefined) combined[fp] = v;
+                    });
+                    answer = Object.keys(combined).length ? JSON.stringify(combined) : '';
+                    if (!answer) console.warn(`[SimAutoField] No values found at paths "${fieldPath}" for question ${index + 1}`);
                 } else {
-                    answer = String(rawValue);
+                    const rawValue = fieldPaths.length ? getNestedValue(simData, fieldPaths[0]) : undefined;
+                    if (rawValue === undefined || rawValue === null) {
+                        console.warn(`[SimAutoField] No value found at path "${fieldPath}" in simData for question ${index + 1}`);
+                        answer = '';
+                    } else if (typeof rawValue === 'object') {
+                        answer = JSON.stringify(rawValue);
+                    } else {
+                        answer = String(rawValue);
+                    }
                 }
 
                 // Run checker using existing pipeline (bypass myfunction() to avoid empty-answer toast)

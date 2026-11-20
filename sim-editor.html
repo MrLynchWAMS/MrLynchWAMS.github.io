@@ -497,8 +497,49 @@
                             class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded inline-flex items-center">Open</a>
                     </div>
                 </div>
-                <iframe id="simulationPreview" class="w-full min-h-[80vh] bg-black rounded border border-gray-700"
-                    sandbox="allow-scripts allow-forms allow-popups allow-same-origin"></iframe>
+                <div class="bg-gray-900/60 border border-gray-700 rounded p-3 mb-3">
+                    <div class="flex flex-wrap items-end gap-3">
+                        <div>
+                            <span class="block text-sm text-gray-400 mb-1">Window size</span>
+                            <div class="flex gap-1" id="simSizePresets">
+                                <button type="button" data-preset="small" class="bg-gray-700 hover:bg-gray-600 text-sm px-2 py-1 rounded">Small</button>
+                                <button type="button" data-preset="medium" class="bg-gray-700 hover:bg-gray-600 text-sm px-2 py-1 rounded">Medium</button>
+                                <button type="button" data-preset="large" class="bg-gray-700 hover:bg-gray-600 text-sm px-2 py-1 rounded">Large</button>
+                                <button type="button" data-preset="xl" class="bg-gray-700 hover:bg-gray-600 text-sm px-2 py-1 rounded">Extra large</button>
+                            </div>
+                        </div>
+                        <div>
+                            <label for="simWidthValue" class="block text-sm text-gray-400 mb-1">Width</label>
+                            <div class="flex gap-1">
+                                <input id="simWidthValue" type="number" min="1" step="1" class="w-20 p-1 bg-gray-700 border border-gray-600 rounded">
+                                <select id="simWidthUnit" class="p-1 bg-gray-700 border border-gray-600 rounded">
+                                    <option value="%">%</option>
+                                    <option value="px">px</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div>
+                            <label for="simHeightValue" class="block text-sm text-gray-400 mb-1">Height</label>
+                            <div class="flex gap-1">
+                                <input id="simHeightValue" type="number" min="1" step="1" class="w-20 p-1 bg-gray-700 border border-gray-600 rounded">
+                                <select id="simHeightUnit" class="p-1 bg-gray-700 border border-gray-600 rounded">
+                                    <option value="px">px</option>
+                                    <option value="vh">vh</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button type="button" id="simSizeReset" class="text-sm text-gray-300 underline">Reset</button>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-2">Choose a preset, type exact values, or drag the
+                        bottom-right corner of the preview. Students see the same size (shrunk to fit narrow screens).</p>
+                </div>
+                <div class="overflow-auto">
+                    <div id="simPreviewWrap" class="bg-black rounded border border-gray-700"
+                        style="resize:both;overflow:hidden;max-width:100%;min-width:200px;min-height:150px;">
+                        <iframe id="simulationPreview" class="w-full h-full block"
+                            sandbox="allow-scripts allow-forms allow-popups allow-same-origin"></iframe>
+                    </div>
+                </div>
             </div>
 
             <div class="bg-gray-800 p-6 rounded-lg mb-8">
@@ -755,6 +796,8 @@
                     document.getElementById('scoringMode').value = assignmentData.scoringMode || 'instant';
 
                     document.getElementById('simulationUrlInput').value = assignmentData.simulationUrl || '';
+                    if (!window.__simSizeInit) { window.__simSizeInit = true; initSimSizeControls(); }
+                    setSimSize(assignmentData.simulationSize || SIM_SIZE_DEFAULT);
                     refreshSimPreview();
 
                     simQuestions = (assignmentData.simQuestions || []).map((q, i) => normalizeSimQuestion(q, i));
@@ -897,7 +940,7 @@
           <input type="text" id="sim-field-path-${q.id}" value="" placeholder="e.g. result.score or totalFootprint (Enter to add)" class="flex-1 p-2 bg-gray-800 border border-gray-600 rounded text-sm text-white">
           <button type="button" id="sim-field-path-add-${q.id}" class="px-3 py-1 bg-blue-700 hover:bg-blue-600 rounded text-sm">Add</button>
         </div>
-        <p class="text-xs text-gray-400 mb-2">Use dot notation for nested values. Examples: <code class="text-blue-300">score</code>, <code class="text-blue-300">result.temperature</code>, <code class="text-blue-300">outputs.co2</code>.<br>The checker evaluates the auto-filled value — e.g. <em>if contains("global warming") → score 100</em>.</p>
+        <p class="text-xs text-gray-400 mb-2">Use dot notation for nested values. Examples: <code class="text-blue-300">score</code>, <code class="text-blue-300">result.temperature</code>, <code class="text-blue-300">outputs.co2</code>.<br><strong class="text-blue-300">Multiple paths:</strong> add several to evaluate multiple conditions in one question. With 2+ paths the checker receives a JSON object keyed by path, e.g. <code class="text-blue-300">{"outputs.co2":410,"result.temperature":22}</code> (a single path passes just the value).<br>The checker evaluates the auto-filled value — e.g. <em>if contains("global warming") → score 100</em>.</p>
         <div id="detected-outputs-${q.id}" class="hidden">
           <p class="text-xs text-blue-400 font-semibold mb-1">📡 Detected outputs from last sim run (click to add/remove):</p>
           <div id="detected-outputs-list-${q.id}" class="flex flex-wrap gap-1"></div>
@@ -1234,6 +1277,92 @@
                 });
             }
 
+            // ── Simulation window size ──────────────────────────────────────────────
+            const SIM_SIZE_DEFAULT = { width: 100, widthUnit: '%', height: 80, heightUnit: 'vh' };
+            const SIM_SIZE_PRESETS = {
+                small: { width: 60, widthUnit: '%', height: 400, heightUnit: 'px' },
+                medium: { width: 80, widthUnit: '%', height: 600, heightUnit: 'px' },
+                large: { width: 100, widthUnit: '%', height: 80, heightUnit: 'vh' },
+                xl: { width: 100, widthUnit: '%', height: 1000, heightUnit: 'px' }
+            };
+
+            function sanitizeSimSize(size) {
+                const s = size && typeof size === 'object' ? size : {};
+                const widthUnit = s.widthUnit === 'px' ? 'px' : '%';
+                const heightUnit = s.heightUnit === 'vh' ? 'vh' : 'px';
+                const clamp = (v, unit, fallback) => {
+                    const n = Number(v);
+                    if (!isFinite(n) || n <= 0) return fallback;
+                    const max = unit === '%' ? 100 : unit === 'vh' ? 300 : 5000;
+                    return Math.round(Math.min(n, max));
+                };
+                return {
+                    width: clamp(s.width, widthUnit, SIM_SIZE_DEFAULT.width),
+                    widthUnit,
+                    height: clamp(s.height, heightUnit, SIM_SIZE_DEFAULT.height),
+                    heightUnit
+                };
+            }
+
+            function readSimSizeInputs() {
+                return sanitizeSimSize({
+                    width: document.getElementById('simWidthValue').value,
+                    widthUnit: document.getElementById('simWidthUnit').value,
+                    height: document.getElementById('simHeightValue').value,
+                    heightUnit: document.getElementById('simHeightUnit').value
+                });
+            }
+
+            function writeSimSizeInputs(size) {
+                document.getElementById('simWidthValue').value = size.width;
+                document.getElementById('simWidthUnit').value = size.widthUnit;
+                document.getElementById('simHeightValue').value = size.height;
+                document.getElementById('simHeightUnit').value = size.heightUnit;
+            }
+
+            function applySimSizeToPreview(size) {
+                const wrap = document.getElementById('simPreviewWrap');
+                wrap.style.width = `${size.width}${size.widthUnit}`;
+                wrap.style.height = `${size.height}${size.heightUnit}`;
+            }
+
+            function setSimSize(size) {
+                const clean = sanitizeSimSize(size);
+                writeSimSizeInputs(clean);
+                applySimSizeToPreview(clean);
+            }
+
+            function initSimSizeControls() {
+                const wrap = document.getElementById('simPreviewWrap');
+                ['simWidthValue', 'simWidthUnit', 'simHeightValue', 'simHeightUnit'].forEach(id => {
+                    document.getElementById(id).addEventListener('input', () => applySimSizeToPreview(readSimSizeInputs()));
+                    document.getElementById(id).addEventListener('change', () => setSimSize(readSimSizeInputs()));
+                });
+                document.querySelectorAll('#simSizePresets [data-preset]').forEach(btn => {
+                    btn.addEventListener('click', () => setSimSize(SIM_SIZE_PRESETS[btn.dataset.preset]));
+                });
+                document.getElementById('simSizeReset').addEventListener('click', () => setSimSize(SIM_SIZE_DEFAULT));
+                // Dragging the corner handle switches to exact pixel values
+                let dragging = false;
+                wrap.addEventListener('mousedown', () => { dragging = true; });
+                window.addEventListener('mouseup', () => {
+                    if (!dragging) return;
+                    dragging = false;
+                    const r = wrap.getBoundingClientRect();
+                    const parentW = wrap.parentElement.clientWidth || r.width;
+                    const asPct = Math.round((r.width / parentW) * 100);
+                    const next = {
+                        width: asPct >= 99 ? 100 : Math.round(r.width),
+                        widthUnit: asPct >= 99 ? '%' : 'px',
+                        height: Math.round(r.height),
+                        heightUnit: 'px'
+                    };
+                    if (next.width === parseInt(wrap.style.width, 10) && next.height === parseInt(wrap.style.height, 10)) return;
+                    setSimSize(next);
+                });
+                setSimSize(SIM_SIZE_DEFAULT);
+            }
+
             function refreshSimPreview() {
                 const rawUrl = document.getElementById('simulationUrlInput').value.trim();
                 const safeUrl = normalizeSimulationUrl(rawUrl);
@@ -1407,6 +1536,7 @@
 
                     const updatePayload = {
                         simulationUrl,
+                        simulationSize: readSimSizeInputs(),
                         simQuestions: simQuestions.map(q => ({ id: q.id, body: q.body || '', type: 'open-ended', showBeforeSim: q.showBeforeSim === true, isSimAutoField: q.isSimAutoField === true, simFieldPath: q.simFieldPaths[0] || '', simFieldPaths: q.simFieldPaths })),
                         checkerFunctions,
                         checkerMeta,
